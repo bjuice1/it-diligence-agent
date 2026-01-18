@@ -29,6 +29,53 @@ st.set_page_config(
 )
 
 # =============================================================================
+# PASSWORD PROTECTION
+# =============================================================================
+def check_password():
+    """Returns True if the user has entered the correct password."""
+
+    def password_entered():
+        """Checks whether a password entered by the user is correct."""
+        entered = st.session_state.get("password", "")
+        correct_password = os.getenv("APP_PASSWORD", "")
+
+        # Also check Streamlit secrets
+        if not correct_password:
+            try:
+                correct_password = st.secrets.get("APP_PASSWORD", "")
+            except Exception:
+                pass
+
+        # If no password configured, allow access (for local dev)
+        if not correct_password:
+            st.session_state["password_correct"] = True
+            return
+
+        if entered == correct_password:
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]  # Don't store password
+        else:
+            st.session_state["password_correct"] = False
+
+    if st.session_state.get("password_correct", False):
+        return True
+
+    # Show password input
+    st.markdown("### 🔐 IT Due Diligence Agent")
+    st.text_input(
+        "Password",
+        type="password",
+        on_change=password_entered,
+        key="password"
+    )
+
+    if "password_correct" in st.session_state and not st.session_state["password_correct"]:
+        st.error("Incorrect password")
+
+    return False
+
+
+# =============================================================================
 # MODERN UI STYLING
 # =============================================================================
 def inject_custom_css():
@@ -814,6 +861,10 @@ def render_stepper(step_statuses: dict):
 # =============================================================================
 
 def main():
+    # Check password first (if APP_PASSWORD is set)
+    if not check_password():
+        return
+
     # Inject custom CSS
     inject_custom_css()
 
