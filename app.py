@@ -862,8 +862,9 @@ def render_stepper(step_statuses: dict):
 
 def main():
     # Check password first (if APP_PASSWORD is set)
-    if not check_password():
-        return
+    # TEMPORARILY DISABLED FOR TESTING - uncomment to re-enable
+    # if not check_password():
+    #     return
 
     # Inject custom CSS
     inject_custom_css()
