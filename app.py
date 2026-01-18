@@ -335,7 +335,19 @@ def check_api_key() -> bool:
     """Check if API key is configured."""
     if not CONFIG_LOADED:
         return False
-    return bool(ANTHROPIC_API_KEY)
+
+    # Check imported value first
+    if ANTHROPIC_API_KEY:
+        return True
+
+    # Fallback: check Streamlit secrets directly (for cloud deployment)
+    try:
+        if 'ANTHROPIC_API_KEY' in st.secrets:
+            return bool(st.secrets['ANTHROPIC_API_KEY'])
+    except Exception:
+        pass
+
+    return False
 
 
 def save_uploaded_files(uploaded_files, target_dir: Path, entity: str = "target") -> list:
@@ -861,6 +873,13 @@ def render_stepper(step_statuses: dict):
 # =============================================================================
 
 def main():
+    # Load secrets into environment for downstream modules
+    try:
+        if 'ANTHROPIC_API_KEY' in st.secrets:
+            os.environ['ANTHROPIC_API_KEY'] = st.secrets['ANTHROPIC_API_KEY']
+    except Exception:
+        pass
+
     # Check password first (if APP_PASSWORD is set)
     # TEMPORARILY DISABLED FOR TESTING - uncomment to re-enable
     # if not check_password():
