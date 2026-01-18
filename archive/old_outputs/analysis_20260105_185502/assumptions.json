@@ -1,0 +1,72 @@
+[
+  {
+    "id": "A-001",
+    "timestamp": "2026-01-05T18:55:08.730066",
+    "assumption": "TargetCo is fully integrated into ParentCo's infrastructure with no standalone systems",
+    "basis": "All infrastructure domains (cloud, network, identity, security) are listed as \"ParentCo\" owned, and TargetCo operates as a business unit within ParentCo with shared ERP/CRM/HCM platforms",
+    "domain": "infrastructure",
+    "confidence": "high",
+    "impact": "high",
+    "validation_needed": "Detailed infrastructure dependency mapping and shared service inventory"
+  },
+  {
+    "id": "A-002",
+    "timestamp": "2026-01-05T18:55:38.862760",
+    "assumption": "TargetCo workloads are primarily in Azure cloud given ParentCo Azure AD usage",
+    "basis": "ParentCo uses Azure AD for identity, and BuyerCo is Azure-primary, suggesting cloud alignment",
+    "domain": "infrastructure",
+    "confidence": "medium",
+    "impact": "medium",
+    "validation_needed": "Confirm actual workload placement - could be hybrid or multi-cloud"
+  },
+  {
+    "id": "A-003",
+    "timestamp": "2026-01-05T18:56:18.579874",
+    "assumption": "SaaS applications (45 for TargetCo, 60 for BuyerCo) will require license consolidation and user migration",
+    "basis": "Both entities have significant SaaS footprints that likely have overlapping applications requiring consolidation",
+    "domain": "infrastructure",
+    "confidence": "high",
+    "impact": "medium",
+    "validation_needed": "SaaS application inventory comparison and license audit"
+  },
+  {
+    "id": "A-004",
+    "timestamp": "2026-01-05T18:57:18.665024",
+    "assumption": "TargetCo network infrastructure is fully integrated with ParentCo and requires complete separation",
+    "basis": "Documents clearly state ParentCo owns network infrastructure and TargetCo operates as business unit within ParentCo environment",
+    "domain": "network",
+    "confidence": "high",
+    "impact": "high",
+    "validation_needed": "Network architecture review to confirm level of integration and shared infrastructure"
+  },
+  {
+    "id": "A-005",
+    "timestamp": "2026-01-05T18:57:23.344272",
+    "assumption": "IP address conflicts likely exist between ParentCo and BuyerCo networks",
+    "basis": "Both environments are enterprise-scale (650+ and 1200+ users respectively) and likely use common RFC1918 ranges like 10.x.x.x which have high conflict probability",
+    "domain": "network",
+    "confidence": "medium",
+    "impact": "high",
+    "validation_needed": "IP address scheme documentation from both environments"
+  },
+  {
+    "id": "A-006",
+    "timestamp": "2026-01-05T18:58:37.318686",
+    "assumption": "TargetCo will need complete IAM separation from ParentCo Azure AD tenant",
+    "basis": "Document states all identity services provided through ParentCo-owned Azure AD tenant, and buyer has separate Azure AD environment",
+    "domain": "cybersecurity",
+    "confidence": "high",
+    "impact": "high",
+    "validation_needed": "Confirm ParentCo will not provide ongoing IAM services post-acquisition"
+  },
+  {
+    "id": "A-007",
+    "timestamp": "2026-01-05T18:58:41.079225",
+    "assumption": "All security tooling and monitoring will need to be replaced or migrated",
+    "basis": "Document indicates all cybersecurity operations are centrally managed by ParentCo with no independent security tooling",
+    "domain": "cybersecurity",
+    "confidence": "high",
+    "impact": "high",
+    "validation_needed": "Confirm ParentCo will not provide ongoing security services post-close"
+  }
+]

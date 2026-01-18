@@ -1,0 +1,19 @@
+{
+  "valid": false,
+  "issues": [
+    "Missing summary for infrastructure",
+    "Missing summary for cybersecurity"
+  ],
+  "warnings": [],
+  "quality_score": 95.0,
+  "dd_completeness": {
+    "dd_completeness_check": "fail",
+    "missing_lenses": [],
+    "missing_domains": [
+      "infrastructure",
+      "cybersecurity"
+    ],
+    "non_integration_risks_evaluated": true,
+    "standalone_risk_count": 11
+  }
+}

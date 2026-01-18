@@ -1,0 +1,287 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - IT Due Diligence{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Analysis Dashboard</h1>
+    <p>Overview of IT due diligence findings for this deal</p>
+</div>
+
+<!-- Metrics Row -->
+<div class="metrics-row">
+    <div class="metric-card">
+        <span class="metric-label">Facts Discovered</span>
+        <span class="metric-value">{{ summary.total_facts }}</span>
+        <span class="metric-subtext">Across {{ summary.domains|length if summary.domains else 6 }} domains</span>
+    </div>
+    <div class="metric-card {{ 'metric-warning' if summary.total_gaps > 10 else '' }}">
+        <span class="metric-label">Information Gaps</span>
+        <span class="metric-value">{{ summary.total_gaps }}</span>
+        <span class="metric-subtext">Requiring VDR requests</span>
+    </div>
+    <div class="metric-card {{ 'metric-warning' if summary.critical_risks > 0 else '' }}">
+        <span class="metric-label">Risks Identified</span>
+        <span class="metric-value">{{ summary.total_risks }}</span>
+        <span class="metric-subtext">{{ summary.critical_risks|default(0) }} critical, {{ summary.high_risks|default(0) }} high</span>
+    </div>
+    <div class="metric-card">
+        <span class="metric-label">Work Items</span>
+        <span class="metric-value">{{ summary.total_work_items }}</span>
+        <span class="metric-subtext">{{ summary.day1_items|default(0) }} for Day 1</span>
+    </div>
+</div>
+
+<!-- Main Content Grid -->
+<div class="grid grid-2 gap-4">
+    <!-- Cost Summary Card -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Cost Summary</span>
+            <a href="{{ url_for('work_items') }}" class="link text-sm">View all work items</a>
+        </div>
+        <div class="card-body">
+            <div class="table-container" style="border: none; box-shadow: none;">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Phase</th>
+                            <th>Items</th>
+                            <th style="text-align: right;">Cost Range</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% set total_count = 0 %}
+                        {% set total_low = 0 %}
+                        {% set total_high = 0 %}
+                        {% for phase, data in summary.cost_summary.items() %}
+                        {% set total_count = total_count + data.count %}
+                        {% set total_low = total_low + data.low %}
+                        {% set total_high = total_high + data.high %}
+                        <tr style="cursor: default;">
+                            <td>
+                                <span class="badge badge-{{ phase|lower|replace('_', '') }}">{{ phase|replace('_', ' ') }}</span>
+                            </td>
+                            <td>{{ data.count }}</td>
+                            <td style="text-align: right;" class="cost-range">${{ "{:,.0f}".format(data.low) }} - ${{ "{:,.0f}".format(data.high) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot style="background: var(--bg-surface-sunken);">
+                        <tr style="cursor: default;">
+                            <td><strong>Total</strong></td>
+                            <td><strong>{{ summary.cost_summary.values()|sum(attribute='count') }}</strong></td>
+                            <td style="text-align: right;" class="cost-range">
+                                <strong>${{ "{:,.0f}".format(summary.cost_summary.values()|sum(attribute='low')) }} - ${{ "{:,.0f}".format(summary.cost_summary.values()|sum(attribute='high')) }}</strong>
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Risks Card -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Top Risks</span>
+            <a href="{{ url_for('risks') }}" class="link text-sm">View all risks</a>
+        </div>
+        <div class="card-body" style="padding: 0;">
+            {% if top_risks %}
+            <div class="table-container" style="border: none; border-radius: 0; box-shadow: none;">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Severity</th>
+                            <th>Risk</th>
+                            <th>Domain</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for risk in top_risks %}
+                        <tr data-id="{{ risk.risk_id }}" data-type="risk">
+                            <td>
+                                <span class="badge badge-{{ risk.severity }}">{{ risk.severity }}</span>
+                            </td>
+                            <td class="truncate" style="max-width: 200px;">{{ risk.title }}</td>
+                            <td class="text-muted text-sm">{{ risk.domain }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <div class="empty-state-icon">&#x1F389;</div>
+                <div class="empty-state-title">No risks identified</div>
+                <div class="empty-state-text">The analysis hasn't found any significant risks yet.</div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Day 1 Work Items -->
+<div class="card mt-4">
+    <div class="card-header">
+        <span class="card-title">Day 1 Work Items</span>
+        <a href="{{ url_for('work_items') }}?phase=Day_1" class="link text-sm">View all Day 1 items</a>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        {% if day1_items %}
+        <div class="table-container" style="border: none; border-radius: 0; box-shadow: none;">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Title</th>
+                        <th>Domain</th>
+                        <th>Owner</th>
+                        <th style="text-align: right;">Cost Estimate</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for wi in day1_items %}
+                    <tr data-id="{{ wi.work_item_id }}" data-type="work_item">
+                        <td class="font-mono text-sm">{{ wi.work_item_id }}</td>
+                        <td class="truncate" style="max-width: 300px;">{{ wi.title }}</td>
+                        <td class="text-muted text-sm">{{ wi.domain }}</td>
+                        <td>
+                            <span class="badge badge-outline badge-info">{{ wi.owner }}</span>
+                        </td>
+                        <td style="text-align: right;" class="cost-range">{{ wi.cost_estimate }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-state-icon">&#x2705;</div>
+            <div class="empty-state-title">No Day 1 work items</div>
+            <div class="empty-state-text">No critical items requiring immediate attention after close.</div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="flex gap-3 mt-4">
+    <form action="{{ url_for('export') }}" method="POST" style="display: inline;">
+        <button type="submit" class="btn btn-primary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            Export Session
+        </button>
+    </form>
+    <a href="{{ url_for('gaps') }}" class="btn btn-secondary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+        Review Gaps ({{ summary.total_gaps }})
+    </a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Store data for drawer
+    const risksData = {
+        {% for risk in top_risks %}
+        "{{ risk.risk_id }}": {
+            id: "{{ risk.risk_id }}",
+            title: "{{ risk.title|e }}",
+            severity: "{{ risk.severity }}",
+            domain: "{{ risk.domain }}",
+            description: "{{ risk.description|e if risk.description else 'No description available' }}",
+            mitigation: "{{ risk.mitigation|e if risk.mitigation else 'No mitigation specified' }}",
+            based_on: "{{ risk.based_on_facts|join(', ') if risk.based_on_facts else 'N/A' }}"
+        },
+        {% endfor %}
+    };
+
+    const workItemsData = {
+        {% for wi in day1_items %}
+        "{{ wi.work_item_id }}": {
+            id: "{{ wi.work_item_id }}",
+            title: "{{ wi.title|e }}",
+            domain: "{{ wi.domain }}",
+            phase: "{{ wi.phase }}",
+            owner: "{{ wi.owner }}",
+            cost: "{{ wi.cost_estimate }}",
+            description: "{{ wi.description|e if wi.description else 'No description available' }}",
+            priority: "{{ wi.priority|default('medium') }}"
+        },
+        {% endfor %}
+    };
+
+    document.addEventListener('rowSelected', function(e) {
+        const { id, row } = e.detail;
+        const type = row.dataset.type;
+
+        if (type === 'risk' && risksData[id]) {
+            const r = risksData[id];
+            openDrawer(
+                r.title,
+                `
+                <div class="drawer-section">
+                    <div class="drawer-section-title">Severity</div>
+                    <div class="drawer-section-content">
+                        <span class="badge badge-${r.severity}">${r.severity.toUpperCase()}</span>
+                    </div>
+                </div>
+                <div class="drawer-section">
+                    <div class="drawer-section-title">Domain</div>
+                    <div class="drawer-section-content">${r.domain}</div>
+                </div>
+                <div class="drawer-section">
+                    <div class="drawer-section-title">Description</div>
+                    <div class="drawer-section-content">${r.description}</div>
+                </div>
+                <div class="drawer-section">
+                    <div class="drawer-section-title">Mitigation</div>
+                    <div class="drawer-section-content">${r.mitigation}</div>
+                </div>
+                <div class="drawer-section">
+                    <div class="drawer-section-title">Based On Facts</div>
+                    <div class="drawer-section-content font-mono text-sm">${r.based_on}</div>
+                </div>
+                `,
+                `<a href="{{ url_for('risk_detail', risk_id='') }}${r.id}" class="btn btn-primary">View Full Details</a>`
+            );
+        } else if (type === 'work_item' && workItemsData[id]) {
+            const w = workItemsData[id];
+            openDrawer(
+                w.title,
+                `
+                <div class="drawer-section">
+                    <div class="drawer-section-title">Phase</div>
+                    <div class="drawer-section-content">
+                        <span class="badge badge-${w.phase.toLowerCase().replace('_', '')}">${w.phase.replace('_', ' ')}</span>
+                    </div>
+                </div>
+                <div class="drawer-section">
+                    <div class="drawer-section-title">Owner</div>
+                    <div class="drawer-section-content">${w.owner}</div>
+                </div>
+                <div class="drawer-section">
+                    <div class="drawer-section-title">Cost Estimate</div>
+                    <div class="drawer-section-content font-mono">${w.cost}</div>
+                </div>
+                <div class="drawer-section">
+                    <div class="drawer-section-title">Description</div>
+                    <div class="drawer-section-content">${w.description}</div>
+                </div>
+                `,
+                `<a href="{{ url_for('work_item_detail', wi_id='') }}${w.id}" class="btn btn-primary">View Full Details</a>`
+            );
+        }
+    });
+</script>
+{% endblock %}

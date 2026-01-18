@@ -1,0 +1,62 @@
+[
+  {
+    "id": "A-001",
+    "timestamp": "2026-01-05T20:04:03.633486",
+    "assumption": "TargetCo operates as a fully integrated business unit within ParentCo's IT infrastructure with no independent systems",
+    "basis": "All documents consistently state ParentCo ownership/management of cloud, network, identity, and security operations. No mention of TargetCo-owned infrastructure.",
+    "domain": "infrastructure",
+    "confidence": "high",
+    "impact": "high",
+    "validation_needed": "Detailed infrastructure inventory and dependency mapping to confirm no TargetCo-owned assets"
+  },
+  {
+    "id": "A-002",
+    "timestamp": "2026-01-05T20:04:45.762107",
+    "assumption": "TargetCo servers are likely virtualized and hosted in Azure given ParentCo's cloud-first approach",
+    "basis": "Document mentions \"ParentCo-managed cloud and data center environments\" and cybersecurity doc references \"cloud resources\" in log sources",
+    "domain": "infrastructure",
+    "confidence": "medium",
+    "impact": "medium",
+    "validation_needed": "Confirm hosting locations and virtualization platform through infrastructure inventory"
+  },
+  {
+    "id": "A-003",
+    "timestamp": "2026-01-05T20:05:37.087448",
+    "assumption": "SaaS applications (45 for TargetCo) will require re-authentication and potential license transfers",
+    "basis": "Applications currently authenticate via ParentCo Azure AD, will need reconfiguration for BuyerCo identity system",
+    "domain": "infrastructure",
+    "confidence": "high",
+    "impact": "medium",
+    "validation_needed": "SaaS application inventory with authentication methods and licensing models"
+  },
+  {
+    "id": "A-004",
+    "timestamp": "2026-01-05T20:06:00.825553",
+    "assumption": "TargetCo operates on ParentCo's shared network infrastructure with no independent network assets",
+    "basis": "Documents state ParentCo owns all network infrastructure, and TargetCo operates as a business unit within ParentCo with shared systems",
+    "domain": "network",
+    "confidence": "high",
+    "impact": "high",
+    "validation_needed": "Network topology diagrams, VLAN assignments, and IP address allocations specific to TargetCo assets"
+  },
+  {
+    "id": "A-005",
+    "timestamp": "2026-01-05T20:07:43.527923",
+    "assumption": "TargetCo inherits ParentCo's security posture and maturity level",
+    "basis": "All cybersecurity controls, tooling, and operations are centrally managed by ParentCo with no independent TargetCo security organization",
+    "domain": "cybersecurity",
+    "confidence": "high",
+    "impact": "medium",
+    "validation_needed": "Security assessment of ParentCo's overall security maturity and TargetCo's specific risk profile"
+  },
+  {
+    "id": "A-006",
+    "timestamp": "2026-01-05T20:07:47.857705",
+    "assumption": "TargetCo has good endpoint security coverage with CrowdStrike EDR",
+    "basis": "CrowdStrike is deployed enterprise-wide with ~620 endpoints covered, which is a leading EDR solution",
+    "domain": "cybersecurity",
+    "confidence": "high",
+    "impact": "low",
+    "validation_needed": "Verify CrowdStrike licensing terms and coverage gaps during carve-out"
+  }
+]

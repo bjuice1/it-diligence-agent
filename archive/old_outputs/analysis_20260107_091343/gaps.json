@@ -1,0 +1,132 @@
+[
+  {
+    "id": "G-001",
+    "timestamp": "2026-01-07T09:13:56.224111",
+    "gap": "Server inventory details - count, operating systems, virtualization platform, and hardware age",
+    "why_needed": "Critical for migration planning, licensing costs, and timeline estimation. Server count drives migration effort and cost estimates",
+    "domain": "infrastructure",
+    "priority": "critical",
+    "cost_impact": "high",
+    "suggested_source": "Technical assessment or infrastructure inventory document"
+  },
+  {
+    "id": "G-002",
+    "timestamp": "2026-01-07T09:14:01.904395",
+    "gap": "Storage infrastructure details - SAN/NAS platforms, capacity, utilization, and backup architecture",
+    "why_needed": "Storage migration is often the most complex and time-consuming part of infrastructure consolidation. Need to understand data volumes and dependencies",
+    "domain": "infrastructure",
+    "priority": "critical",
+    "cost_impact": "high",
+    "suggested_source": "Storage assessment or infrastructure architecture documents"
+  },
+  {
+    "id": "G-003",
+    "timestamp": "2026-01-07T09:14:48.930505",
+    "gap": "Operating system versions and end-of-life status for on-premises applications",
+    "why_needed": "Several applications show older versions (Duck Creek 10/12, Qlik Sense May 2024, Splunk 9.0) that may be running on EOL operating systems requiring immediate attention",
+    "domain": "infrastructure",
+    "priority": "high",
+    "cost_impact": "medium",
+    "suggested_source": "Technical assessment of server operating systems and patch levels"
+  },
+  {
+    "id": "G-004",
+    "timestamp": "2026-01-07T09:15:29.113923",
+    "gap": "Network architecture details including WAN connectivity, bandwidth, and inter-site connectivity",
+    "why_needed": "Critical for understanding integration complexity, especially with 12 office locations and 2 data centers. Network consolidation often drives timeline and costs",
+    "domain": "network",
+    "priority": "critical",
+    "cost_impact": "high",
+    "suggested_source": "Network architecture diagrams and WAN contract details"
+  },
+  {
+    "id": "G-005",
+    "timestamp": "2026-01-07T09:16:07.904243",
+    "gap": "Network architecture and WAN connectivity details",
+    "why_needed": "Critical for understanding current connectivity between 12 office locations and planning Day 1 integration connectivity",
+    "domain": "network",
+    "priority": "critical",
+    "cost_impact": "high",
+    "suggested_source": "Network architecture document request, interview with infrastructure team"
+  },
+  {
+    "id": "G-006",
+    "timestamp": "2026-01-07T09:16:12.368059",
+    "gap": "IP addressing scheme and DHCP/DNS architecture",
+    "why_needed": "Essential for identifying IP conflicts with buyer network and planning network integration",
+    "domain": "network",
+    "priority": "critical",
+    "cost_impact": "high",
+    "suggested_source": "Network documentation request, IP address management system export"
+  },
+  {
+    "id": "G-007",
+    "timestamp": "2026-01-07T09:16:16.084053",
+    "gap": "Firewall and security zone configuration",
+    "why_needed": "Required for security assessment and planning secure connectivity to buyer network",
+    "domain": "network",
+    "priority": "high",
+    "cost_impact": "medium",
+    "suggested_source": "Firewall configuration export, security architecture documentation"
+  },
+  {
+    "id": "G-008",
+    "timestamp": "2026-01-07T09:16:20.620005",
+    "gap": "Data center network infrastructure details",
+    "why_needed": "Understanding network equipment in Chicago data centers for migration planning and potential decommissioning",
+    "domain": "network",
+    "priority": "high",
+    "cost_impact": "medium",
+    "suggested_source": "Data center network diagrams, equipment inventory"
+  },
+  {
+    "id": "G-009",
+    "timestamp": "2026-01-07T09:18:11.302205",
+    "gap": "No penetration testing or vulnerability assessment results provided",
+    "why_needed": "Critical for understanding current security posture, existing vulnerabilities, and potential breach risks that could affect deal valuation and post-acquisition security investments",
+    "domain": "cybersecurity",
+    "priority": "critical",
+    "cost_impact": "high",
+    "suggested_source": "Request recent penetration test reports, vulnerability scan results, and security assessment findings"
+  },
+  {
+    "id": "G-010",
+    "timestamp": "2026-01-07T09:18:16.123070",
+    "gap": "Compliance certifications and audit results not documented",
+    "why_needed": "Insurance companies typically require SOC 2 Type II, and may need PCI DSS for payment processing. Missing compliance creates regulatory risk and integration complexity",
+    "domain": "cybersecurity",
+    "priority": "high",
+    "cost_impact": "high",
+    "suggested_source": "Request SOC 2 reports, PCI DSS attestations, and any other compliance certifications or audit findings"
+  },
+  {
+    "id": "G-011",
+    "timestamp": "2026-01-07T09:18:41.970174",
+    "gap": "Incident response plan and testing history not provided",
+    "why_needed": "Understanding IR maturity is critical for assessing breach response capability and potential liability. Insurance companies are high-value targets requiring robust IR capabilities",
+    "domain": "cybersecurity",
+    "priority": "high",
+    "cost_impact": "medium",
+    "suggested_source": "Request incident response plan, tabletop exercise results, and any actual incident history"
+  },
+  {
+    "id": "G-012",
+    "timestamp": "2026-01-07T09:18:47.727185",
+    "gap": "Data classification and encryption status unknown",
+    "why_needed": "Insurance companies handle sensitive PII and financial data. Understanding data classification, encryption at rest/transit, and DLP controls is critical for regulatory compliance and breach risk assessment",
+    "domain": "cybersecurity",
+    "priority": "high",
+    "cost_impact": "high",
+    "suggested_source": "Request data classification policy, encryption implementation details, and DLP tool configuration"
+  },
+  {
+    "id": "G-013",
+    "timestamp": "2026-01-07T09:19:35.472258",
+    "gap": "Security awareness training program and phishing simulation results not documented",
+    "why_needed": "Human factor is critical attack vector. Understanding security awareness maturity helps assess social engineering risk and training investment needs",
+    "domain": "cybersecurity",
+    "priority": "medium",
+    "cost_impact": "medium",
+    "suggested_source": "Request security awareness training records, phishing simulation results, and security culture assessment"
+  }
+]

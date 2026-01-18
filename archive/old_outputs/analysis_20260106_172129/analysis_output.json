@@ -1,0 +1,1087 @@
+{
+  "assumptions": [
+    {
+      "id": "A-001",
+      "timestamp": "2026-01-06T17:21:36.235543",
+      "assumption": "TargetCo operates in a shared ParentCo infrastructure environment requiring full separation",
+      "basis": "Document states TargetCo operates as business unit within ParentCo with ParentCo owning cloud tenant, network, identity, and security operations. This is a classic carve-out scenario.",
+      "domain": "infrastructure",
+      "confidence": "high",
+      "impact": "high",
+      "validation_needed": "Detailed infrastructure dependency mapping and TSA requirements assessment"
+    },
+    {
+      "id": "A-002",
+      "timestamp": "2026-01-06T17:23:09.953454",
+      "assumption": "TargetCo workloads are likely running on Azure given ParentCo uses Azure AD",
+      "basis": "ParentCo uses Azure AD for identity services, suggesting Azure cloud preference. This would align with BuyerCo's Azure environment and reduce migration complexity.",
+      "domain": "infrastructure",
+      "confidence": "medium",
+      "impact": "medium",
+      "validation_needed": "Cloud platform inventory to confirm Azure usage vs other platforms"
+    },
+    {
+      "id": "A-003",
+      "timestamp": "2026-01-06T17:23:14.701710",
+      "assumption": "Significant end-of-life systems present requiring immediate remediation",
+      "basis": "110-130 servers in enterprise environment likely includes Windows Server 2012 R2 (EOL Oct 2023), older Linux distributions, and aging hardware requiring refresh or migration",
+      "domain": "infrastructure",
+      "confidence": "high",
+      "impact": "high",
+      "validation_needed": "Complete server inventory with OS versions, patch levels, and hardware age"
+    },
+    {
+      "id": "A-004",
+      "timestamp": "2026-01-06T17:23:30.415600",
+      "assumption": "TargetCo operates on ParentCo's shared network infrastructure with no independent WAN or LAN architecture",
+      "basis": "Infrastructure disclosure states \"Network: ParentCo\" ownership and that TargetCo operates as a business unit within ParentCo with shared infrastructure",
+      "domain": "network",
+      "confidence": "high",
+      "impact": "high",
+      "validation_needed": "Detailed network topology and physical site locations to understand separation requirements"
+    },
+    {
+      "id": "A-005",
+      "timestamp": "2026-01-07T08:39:58.761153",
+      "assumption": "TargetCo uses standard enterprise network equipment that can be migrated to BuyerCo standards",
+      "basis": "ParentCo appears to be an enterprise organization with 650+ users and shared infrastructure, suggesting enterprise-grade network equipment",
+      "domain": "network",
+      "confidence": "medium",
+      "impact": "medium",
+      "validation_needed": "Network equipment inventory and compatibility assessment with BuyerCo standards"
+    },
+    {
+      "id": "A-006",
+      "timestamp": "2026-01-07T08:40:03.665797",
+      "assumption": "TargetCo has multiple physical sites requiring network connectivity",
+      "basis": "Organization size of 650 users and 620 devices suggests multi-site operations typical for business units of this scale",
+      "domain": "network",
+      "confidence": "medium",
+      "impact": "high",
+      "validation_needed": "Site survey to identify all TargetCo locations and their connectivity requirements"
+    },
+    {
+      "id": "A-007",
+      "timestamp": "2026-01-07T08:50:18.707135",
+      "assumption": "TargetCo inherits ParentCo's security posture and maturity level",
+      "basis": "All cybersecurity controls, tooling, and operations are centrally managed by ParentCo. TargetCo has no independent security organization or tooling.",
+      "domain": "cybersecurity",
+      "confidence": "high",
+      "impact": "high",
+      "validation_needed": "Security assessment of ParentCo's actual security maturity and control effectiveness"
+    },
+    {
+      "id": "A-008",
+      "timestamp": "2026-01-07T08:50:23.243485",
+      "assumption": "TargetCo's security controls are enterprise-grade based on tooling mentioned",
+      "basis": "CrowdStrike EDR, Microsoft Sentinel SIEM, Azure AD with MFA, and centralized SOC suggest mature security stack",
+      "domain": "cybersecurity",
+      "confidence": "medium",
+      "impact": "medium",
+      "validation_needed": "Verification of actual implementation quality, coverage, and effectiveness of these tools"
+    }
+  ],
+  "gaps": [
+    {
+      "id": "G-001",
+      "timestamp": "2026-01-06T17:21:40.940142",
+      "gap": "Specific cloud platform details for TargetCo workloads",
+      "why_needed": "Need to understand if TargetCo runs on Azure (matching buyer) or other platforms to estimate migration complexity and costs",
+      "domain": "infrastructure",
+      "priority": "critical",
+      "cost_impact": "high",
+      "suggested_source": "Technical assessment of current hosting platforms and cloud resource inventory"
+    },
+    {
+      "id": "G-002",
+      "timestamp": "2026-01-06T17:21:45.604703",
+      "gap": "Server operating systems, versions, and age distribution",
+      "why_needed": "Critical for identifying end-of-life systems requiring immediate attention and estimating migration/refresh costs",
+      "domain": "infrastructure",
+      "priority": "high",
+      "cost_impact": "high",
+      "suggested_source": "Server inventory report with OS versions, patch levels, and hardware age"
+    },
+    {
+      "id": "G-003",
+      "timestamp": "2026-01-06T17:21:49.296942",
+      "gap": "Data center locations and lease terms",
+      "why_needed": "Need to understand physical infrastructure commitments, lease expiration dates, and exit costs for separation planning",
+      "domain": "infrastructure",
+      "priority": "high",
+      "cost_impact": "medium",
+      "suggested_source": "Facilities contracts and data center lease agreements"
+    },
+    {
+      "id": "G-004",
+      "timestamp": "2026-01-06T17:21:53.292661",
+      "gap": "Storage capacity, platforms, and data volumes",
+      "why_needed": "Essential for estimating data migration costs, timeline, and storage platform consolidation requirements",
+      "domain": "infrastructure",
+      "priority": "high",
+      "cost_impact": "high",
+      "suggested_source": "Storage inventory with capacity utilization, growth rates, and platform details"
+    },
+    {
+      "id": "G-005",
+      "timestamp": "2026-01-06T17:23:35.241444",
+      "gap": "Complete network topology and architecture documentation",
+      "why_needed": "Cannot assess network separation complexity, IP addressing schemes, or integration approach without understanding current network design",
+      "domain": "network",
+      "priority": "critical",
+      "cost_impact": "high",
+      "suggested_source": "Request detailed network diagrams, IP addressing schemes, and site connectivity maps from ParentCo IT"
+    },
+    {
+      "id": "G-006",
+      "timestamp": "2026-01-06T17:23:39.892947",
+      "gap": "IP address scheme and DHCP/DNS configuration details",
+      "why_needed": "IP conflicts are the #1 network integration blocker - must understand current addressing to plan integration and identify conflicts with BuyerCo",
+      "domain": "network",
+      "priority": "critical",
+      "cost_impact": "high",
+      "suggested_source": "Technical assessment with ParentCo network team to document IP ranges, DHCP scopes, and DNS zones"
+    },
+    {
+      "id": "G-007",
+      "timestamp": "2026-01-06T17:23:45.289568",
+      "gap": "Physical site locations and WAN connectivity details",
+      "why_needed": "Need to understand which sites TargetCo operates from and how they connect to plan Day 1 connectivity and new circuit requirements",
+      "domain": "network",
+      "priority": "high",
+      "cost_impact": "high",
+      "suggested_source": "Site survey and facilities documentation from TargetCo operations team"
+    },
+    {
+      "id": "G-008",
+      "timestamp": "2026-01-06T17:23:49.725713",
+      "gap": "Firewall rules and security zone configuration",
+      "why_needed": "Document mentions ParentCo-managed network security controls but no details on firewall architecture, rules, or security zones that will need migration",
+      "domain": "network",
+      "priority": "high",
+      "cost_impact": "medium",
+      "suggested_source": "Firewall configuration export and security architecture documentation from ParentCo security team"
+    },
+    {
+      "id": "G-009",
+      "timestamp": "2026-01-07T08:50:28.154219",
+      "gap": "Security assessment results and penetration testing reports",
+      "why_needed": "Cannot assess actual security posture without understanding vulnerabilities, control effectiveness, and risk exposure",
+      "domain": "cybersecurity",
+      "priority": "critical",
+      "cost_impact": "high",
+      "suggested_source": "Request recent security assessments, penetration test reports, and vulnerability scan results from ParentCo"
+    },
+    {
+      "id": "G-010",
+      "timestamp": "2026-01-07T08:50:32.937647",
+      "gap": "Compliance certifications and audit reports",
+      "why_needed": "SOC 2 and ISO alignment mentioned but no certification details provided. Need to understand compliance scope and any findings",
+      "domain": "cybersecurity",
+      "priority": "high",
+      "cost_impact": "high",
+      "suggested_source": "Request SOC 2 Type II reports, ISO certifications, and any compliance audit findings"
+    },
+    {
+      "id": "G-011",
+      "timestamp": "2026-01-07T08:50:37.954139",
+      "gap": "Incident response plan and recent incident history",
+      "why_needed": "Need to understand IR capabilities and any recent security incidents that could indicate ongoing risks",
+      "domain": "cybersecurity",
+      "priority": "high",
+      "cost_impact": "medium",
+      "suggested_source": "Request incident response procedures and incident log for past 24 months"
+    },
+    {
+      "id": "G-012",
+      "timestamp": "2026-01-07T08:50:42.321776",
+      "gap": "Data classification and handling procedures",
+      "why_needed": "No mention of data classification scheme or DLP controls. Critical for understanding data protection posture and privacy compliance",
+      "domain": "cybersecurity",
+      "priority": "high",
+      "cost_impact": "medium",
+      "suggested_source": "Request data classification policy, DLP configuration, and data inventory"
+    },
+    {
+      "id": "G-013",
+      "timestamp": "2026-01-07T08:50:48.093463",
+      "gap": "Privileged access management (PAM) solution details",
+      "why_needed": "25-40 privileged accounts mentioned but no PAM solution described. Critical for understanding privileged access controls",
+      "domain": "cybersecurity",
+      "priority": "high",
+      "cost_impact": "medium",
+      "suggested_source": "Technical interview to understand privileged account management, vaulting, and session monitoring"
+    }
+  ],
+  "risks": [
+    {
+      "id": "R-001",
+      "timestamp": "2026-01-06T17:21:59.147739",
+      "risk": "Azure AD tenant separation complexity",
+      "trigger": "TargetCo users are in ParentCo Azure AD tenant, requiring separation to BuyerCo tenant",
+      "domain": "infrastructure",
+      "severity": "high",
+      "likelihood": "high",
+      "impact_description": "Complex user migration, potential service disruption, application re-authentication requirements, and extended timeline",
+      "cost_impact_estimate": "$200K-$500K",
+      "mitigation": "Early planning for phased user migration, TSA for identity services during transition, automated provisioning tools",
+      "risk_score": 9,
+      "priority_rank": 5
+    },
+    {
+      "id": "R-002",
+      "timestamp": "2026-01-06T17:22:04.644170",
+      "risk": "Shared ERP/CRM/HCM platform separation",
+      "trigger": "TargetCo operates within shared enterprise platforms requiring data/tenant separation",
+      "domain": "cross-domain",
+      "severity": "critical",
+      "likelihood": "high",
+      "impact_description": "Business disruption, data migration complexity, potential need for new platform implementations, extended timeline",
+      "cost_impact_estimate": "$1M-$5M",
+      "mitigation": "Detailed application dependency mapping, TSA agreements, phased migration approach, consider platform replacement vs separation",
+      "risk_score": 12,
+      "priority_rank": 1
+    },
+    {
+      "id": "R-003",
+      "timestamp": "2026-01-06T17:22:09.430023",
+      "risk": "Network infrastructure separation complexity",
+      "trigger": "TargetCo traffic traverses ParentCo-managed network infrastructure",
+      "domain": "network",
+      "severity": "high",
+      "likelihood": "high",
+      "impact_description": "Network segmentation challenges, potential connectivity disruption, firewall rule migration, VPN reconfiguration",
+      "cost_impact_estimate": "$300K-$800K",
+      "mitigation": "Network discovery and documentation, parallel network buildout, phased cutover approach",
+      "risk_score": 9,
+      "priority_rank": 6
+    },
+    {
+      "id": "R-004",
+      "timestamp": "2026-01-06T17:22:14.963481",
+      "risk": "Security tooling and monitoring gaps during transition",
+      "trigger": "Loss of ParentCo security operations center and centralized security tooling",
+      "domain": "cybersecurity",
+      "severity": "critical",
+      "likelihood": "high",
+      "impact_description": "Security monitoring blind spots, incident response capability gaps, compliance violations, potential security incidents",
+      "cost_impact_estimate": "$500K-$1.2M",
+      "mitigation": "Accelerated security tool deployment, TSA for security services, temporary managed security services",
+      "risk_score": 12,
+      "priority_rank": 2
+    },
+    {
+      "id": "R-005",
+      "timestamp": "2026-01-06T17:23:55.938126",
+      "risk": "Network separation from ParentCo may cause business disruption",
+      "trigger": "TargetCo currently relies entirely on ParentCo's shared network infrastructure with no independent network architecture",
+      "domain": "network",
+      "severity": "critical",
+      "likelihood": "high",
+      "impact_description": "Loss of network connectivity could disrupt all business operations including email, applications, internet access, and inter-site communication",
+      "cost_impact_estimate": "$500K-$2M in business disruption costs",
+      "mitigation": "Establish temporary network connectivity before separation, plan phased cutover approach, and ensure Day 1 connectivity requirements are met",
+      "risk_score": 12,
+      "priority_rank": 3
+    },
+    {
+      "id": "R-006",
+      "timestamp": "2026-01-06T17:24:01.579747",
+      "risk": "IP address conflicts between TargetCo and BuyerCo networks",
+      "trigger": "Both organizations likely use common RFC1918 address ranges (10.x.x.x, 192.168.x.x) which could overlap",
+      "domain": "network",
+      "severity": "high",
+      "likelihood": "high",
+      "impact_description": "IP conflicts prevent network integration and can block Day 1 connectivity, requiring extensive renumbering efforts",
+      "cost_impact_estimate": "$100K-$500K for IP renumbering project",
+      "mitigation": "Immediate IP address discovery and conflict analysis, plan IP renumbering if needed, consider NAT as temporary solution",
+      "risk_score": 9,
+      "priority_rank": 7
+    },
+    {
+      "id": "R-007",
+      "timestamp": "2026-01-06T17:24:07.951303",
+      "risk": "Long lead times for new WAN circuits may delay integration",
+      "trigger": "TargetCo sites will need new connectivity to BuyerCo network, and telecom circuits typically require 30-90 days for installation",
+      "domain": "network",
+      "severity": "medium",
+      "likelihood": "medium",
+      "impact_description": "Delayed circuit installation could push back integration timeline and force extended reliance on temporary connectivity solutions",
+      "cost_impact_estimate": "$50K-$200K in extended temporary connectivity costs",
+      "mitigation": "Order circuits immediately upon deal announcement, identify sites requiring new connectivity, consider SD-WAN for faster deployment",
+      "risk_score": 4,
+      "priority_rank": 13
+    },
+    {
+      "id": "R-008",
+      "timestamp": "2026-01-07T08:50:54.443112",
+      "risk": "Complete dependency on ParentCo security infrastructure and expertise",
+      "trigger": "Post-acquisition separation from ParentCo systems and loss of ParentCo security team support",
+      "domain": "cybersecurity",
+      "severity": "critical",
+      "likelihood": "high",
+      "impact_description": "Loss of security monitoring, incident response capability, and security tooling. Potential security gap during transition period.",
+      "cost_impact_estimate": "$500K-$1.5M",
+      "mitigation": "Develop comprehensive security separation plan with interim managed security services and accelerated security capability buildout",
+      "risk_score": 12,
+      "priority_rank": 4
+    },
+    {
+      "id": "R-009",
+      "timestamp": "2026-01-07T08:50:59.560550",
+      "risk": "Identity and access management separation complexity",
+      "trigger": "Migration from ParentCo Azure AD tenant to BuyerCo Azure AD tenant",
+      "domain": "cybersecurity",
+      "severity": "high",
+      "likelihood": "high",
+      "impact_description": "User access disruption, potential security gaps during migration, loss of SSO functionality, and need to reconfigure MFA for all users",
+      "cost_impact_estimate": "$200K-$500K",
+      "mitigation": "Detailed IAM migration planning with phased approach, temporary federation, and comprehensive user communication",
+      "risk_score": 9,
+      "priority_rank": 8
+    },
+    {
+      "id": "R-010",
+      "timestamp": "2026-01-07T08:51:04.781970",
+      "risk": "Security monitoring and SIEM data loss during transition",
+      "trigger": "Separation from ParentCo Microsoft Sentinel instance",
+      "domain": "cybersecurity",
+      "severity": "high",
+      "likelihood": "high",
+      "impact_description": "Loss of historical security logs, threat intelligence, and security monitoring capability. Potential blind spot for threat detection",
+      "cost_impact_estimate": "$150K-$400K",
+      "mitigation": "Implement new SIEM instance before separation, export critical historical data, and establish new log sources and detection rules",
+      "risk_score": 9,
+      "priority_rank": 9
+    },
+    {
+      "id": "R-011",
+      "timestamp": "2026-01-07T08:51:09.804387",
+      "risk": "Compliance certification gaps during transition",
+      "trigger": "Loss of ParentCo compliance scope coverage and need for independent certifications",
+      "domain": "cybersecurity",
+      "severity": "high",
+      "likelihood": "medium",
+      "impact_description": "Potential customer contract violations, regulatory non-compliance, and inability to pursue certain business opportunities",
+      "cost_impact_estimate": "$100K-$300K",
+      "mitigation": "Accelerate independent compliance certification process and maintain documentation continuity",
+      "risk_score": 6,
+      "priority_rank": 12
+    },
+    {
+      "id": "R-012",
+      "timestamp": "2026-01-07T08:52:45.443815",
+      "risk": "Critical path timeline risk due to sequential dependencies across all domains",
+      "trigger": "Azure AD separation delays cascade to network and security migrations, extending overall timeline beyond 18 months",
+      "domain": "cross-domain",
+      "severity": "critical",
+      "likelihood": "medium",
+      "impact_description": "Timeline extends to 24+ months, TSA costs increase by $500K+, business disruption risk increases significantly",
+      "cost_impact_estimate": "$500K-$1M in additional TSA and delay costs",
+      "mitigation": "Establish dedicated integration PMO, negotiate extended TSA terms upfront, begin identity separation planning immediately post-close",
+      "risk_score": 8,
+      "priority_rank": 11
+    },
+    {
+      "id": "R-013",
+      "timestamp": "2026-01-07T08:52:50.976175",
+      "risk": "Cumulative business disruption risk from simultaneous infrastructure changes",
+      "trigger": "Network, identity, and security changes happening concurrently create compounding user impact",
+      "domain": "cross-domain",
+      "severity": "high",
+      "likelihood": "high",
+      "impact_description": "Significant productivity loss, potential customer impact, employee satisfaction issues during 6-12 month transition period",
+      "cost_impact_estimate": "$200K-$500K in productivity loss and change management",
+      "mitigation": "Implement comprehensive change management program, stagger major changes, establish 24/7 support during transitions",
+      "risk_score": 9,
+      "priority_rank": 10
+    }
+  ],
+  "work_items": [
+    {
+      "id": "W-001",
+      "timestamp": "2026-01-06T17:22:21.082232",
+      "title": "Infrastructure Discovery and Dependency Mapping",
+      "description": "Comprehensive assessment of TargetCo infrastructure including server inventory, network topology, storage platforms, application dependencies, and integration points with ParentCo systems",
+      "domain": "infrastructure",
+      "category": "assessment",
+      "effort_estimate": "6-8 weeks",
+      "cost_estimate_range": "$150K-$250K",
+      "timeline_phase": "day_1",
+      "skills_required": [
+        "infrastructure_architect",
+        "network_engineer",
+        "systems_analyst"
+      ],
+      "dependencies": [
+        "Access to ParentCo infrastructure documentation",
+        "Technical interviews with ParentCo IT team"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-002",
+      "timestamp": "2026-01-06T17:22:26.792771",
+      "title": "Azure AD Tenant Separation and User Migration",
+      "description": "Migrate 650 TargetCo users from ParentCo Azure AD tenant to BuyerCo tenant, including user accounts, group memberships, application registrations, and authentication policies",
+      "domain": "infrastructure",
+      "category": "migration",
+      "effort_estimate": "8-12 weeks",
+      "cost_estimate_range": "$200K-$400K",
+      "timeline_phase": "0_90_days",
+      "skills_required": [
+        "identity_architect",
+        "azure_engineer",
+        "powershell_developer"
+      ],
+      "dependencies": [
+        "Infrastructure discovery completion",
+        "TSA agreement for identity services"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-003",
+      "timestamp": "2026-01-06T17:22:32.113892",
+      "title": "Server Infrastructure Migration",
+      "description": "Migrate 110-130 servers from ParentCo environment to BuyerCo infrastructure, including OS updates, application testing, and cutover coordination",
+      "domain": "infrastructure",
+      "category": "migration",
+      "effort_estimate": "16-24 weeks",
+      "cost_estimate_range": "$800K-$1.5M",
+      "timeline_phase": "90_180_days",
+      "skills_required": [
+        "systems_engineer",
+        "cloud_engineer",
+        "database_administrator",
+        "application_specialist"
+      ],
+      "dependencies": [
+        "Server inventory and assessment",
+        "Network connectivity established",
+        "Storage migration completed"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-004",
+      "timestamp": "2026-01-06T17:22:36.916344",
+      "title": "Network Infrastructure Separation",
+      "description": "Establish independent network infrastructure for TargetCo including firewall configuration, VPN setup, network segmentation, and connectivity to BuyerCo network",
+      "domain": "network",
+      "category": "migration",
+      "effort_estimate": "10-14 weeks",
+      "cost_estimate_range": "$300K-$600K",
+      "timeline_phase": "0_90_days",
+      "skills_required": [
+        "network_architect",
+        "security_engineer",
+        "firewall_specialist"
+      ],
+      "dependencies": [
+        "Network topology documentation",
+        "Security requirements definition"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-005",
+      "timestamp": "2026-01-06T17:22:42.024747",
+      "title": "Device Management Integration",
+      "description": "Migrate 620 devices from ParentCo Intune to BuyerCo device management, including policy migration, certificate updates, and application deployment",
+      "domain": "infrastructure",
+      "category": "migration",
+      "effort_estimate": "6-10 weeks",
+      "cost_estimate_range": "$150K-$300K",
+      "timeline_phase": "90_180_days",
+      "skills_required": [
+        "device_management_specialist",
+        "intune_administrator",
+        "powershell_developer"
+      ],
+      "dependencies": [
+        "Azure AD migration completion",
+        "Policy standardization"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-006",
+      "timestamp": "2026-01-06T17:22:48.484932",
+      "title": "TSA Infrastructure Services Setup",
+      "description": "Establish Transition Service Agreements for critical infrastructure services including identity, security monitoring, network connectivity, and application hosting during separation period",
+      "domain": "cross-domain",
+      "category": "integration",
+      "effort_estimate": "4-6 weeks",
+      "cost_estimate_range": "$100K-$200K",
+      "timeline_phase": "day_1",
+      "skills_required": [
+        "program_manager",
+        "legal_counsel",
+        "technical_architect"
+      ],
+      "dependencies": [
+        "Deal closure",
+        "Service level requirements definition"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-007",
+      "timestamp": "2026-01-06T17:24:14.913852",
+      "title": "Network Discovery and Documentation",
+      "description": "Conduct comprehensive discovery of TargetCo's current network infrastructure within ParentCo environment including topology mapping, IP addressing schemes, DHCP/DNS configuration, firewall rules, and site connectivity",
+      "domain": "network",
+      "category": "assessment",
+      "effort_estimate": "4-6 weeks",
+      "timeline_phase": "day_1",
+      "cost_estimate_range": "$50K-$100K",
+      "skills_required": [
+        "network_architect",
+        "network_engineer",
+        "security_engineer"
+      ],
+      "dependencies": [
+        "Access to ParentCo network documentation",
+        "Coordination with ParentCo IT team"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-008",
+      "timestamp": "2026-01-06T17:24:20.488662",
+      "title": "IP Address Conflict Analysis and Resolution Planning",
+      "description": "Analyze IP addressing schemes between TargetCo (via ParentCo) and BuyerCo networks to identify conflicts and develop renumbering plan if needed. Include DHCP scope analysis and DNS zone conflicts",
+      "domain": "network",
+      "category": "assessment",
+      "effort_estimate": "2-3 weeks",
+      "timeline_phase": "day_1",
+      "cost_estimate_range": "$25K-$50K",
+      "skills_required": [
+        "network_architect",
+        "network_engineer"
+      ],
+      "dependencies": [
+        "Network discovery completion",
+        "BuyerCo IP scheme documentation"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-009",
+      "timestamp": "2026-01-06T17:24:26.177641",
+      "title": "Day 1 Connectivity Solution Design and Implementation",
+      "description": "Design and implement temporary network connectivity solution to ensure TargetCo maintains business operations on Day 1 of separation from ParentCo. May include site-to-site VPNs, temporary circuits, or hybrid connectivity",
+      "domain": "network",
+      "category": "integration",
+      "effort_estimate": "6-8 weeks",
+      "timeline_phase": "day_1",
+      "cost_estimate_range": "$100K-$250K",
+      "skills_required": [
+        "network_architect",
+        "network_engineer",
+        "security_engineer",
+        "project_manager"
+      ],
+      "dependencies": [
+        "Network discovery",
+        "Site location identification",
+        "Firewall configuration"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-010",
+      "timestamp": "2026-01-06T17:24:31.995405",
+      "title": "Network Security Migration and Firewall Configuration",
+      "description": "Migrate network security controls from ParentCo-managed environment to BuyerCo network including firewall rule migration, security zone configuration, and VPN setup. Ensure security posture is maintained during transition",
+      "domain": "network",
+      "category": "migration",
+      "effort_estimate": "4-6 weeks",
+      "timeline_phase": "0_90_days",
+      "cost_estimate_range": "$75K-$150K",
+      "skills_required": [
+        "security_engineer",
+        "network_engineer",
+        "firewall_specialist"
+      ],
+      "dependencies": [
+        "Firewall rule documentation",
+        "Security zone mapping",
+        "Day 1 connectivity"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-011",
+      "timestamp": "2026-01-07T08:39:30.177688",
+      "title": "Permanent WAN Connectivity Implementation",
+      "description": "Design and implement permanent WAN connectivity solution for TargetCo sites to integrate with BuyerCo network. May include MPLS extension, SD-WAN deployment, or new dedicated circuits based on requirements",
+      "domain": "network",
+      "category": "integration",
+      "effort_estimate": "12-16 weeks",
+      "timeline_phase": "90_180_days",
+      "cost_estimate_range": "$200K-$500K",
+      "skills_required": [
+        "network_architect",
+        "network_engineer",
+        "project_manager",
+        "vendor_management"
+      ],
+      "dependencies": [
+        "Site survey completion",
+        "Circuit ordering",
+        "Carrier coordination"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-012",
+      "timestamp": "2026-01-07T08:51:16.148264",
+      "title": "Comprehensive Security Assessment",
+      "description": "Conduct thorough security assessment of TargetCo's current security posture including vulnerability assessment, penetration testing, and security control evaluation",
+      "domain": "cybersecurity",
+      "category": "assessment",
+      "effort_estimate": "6-8 weeks",
+      "cost_estimate_range": "$75K-$150K",
+      "timeline_phase": "day_1",
+      "skills_required": [
+        "security_assessor",
+        "penetration_tester",
+        "compliance_auditor"
+      ],
+      "dependencies": [
+        "Access to ParentCo security documentation",
+        "Technical environment access"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-013",
+      "timestamp": "2026-01-07T08:51:22.701778",
+      "title": "Identity and Access Management Migration",
+      "description": "Migrate 650 users from ParentCo Azure AD to BuyerCo Azure AD including user accounts, groups, MFA settings, and application integrations",
+      "domain": "cybersecurity",
+      "category": "migration",
+      "effort_estimate": "8-12 weeks",
+      "cost_estimate_range": "$150K-$300K",
+      "timeline_phase": "0_90_days",
+      "skills_required": [
+        "iam_specialist",
+        "azure_ad_expert",
+        "identity_architect"
+      ],
+      "dependencies": [
+        "User inventory completion",
+        "Application dependency mapping",
+        "MFA device inventory"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-014",
+      "timestamp": "2026-01-07T08:51:29.051343",
+      "title": "Security Operations Center (SOC) Establishment",
+      "description": "Establish independent security monitoring capability including SIEM deployment, log source configuration, detection rule creation, and SOC staffing or MSSP engagement",
+      "domain": "cybersecurity",
+      "category": "security",
+      "effort_estimate": "12-16 weeks",
+      "cost_estimate_range": "$200K-$500K",
+      "timeline_phase": "0_90_days",
+      "skills_required": [
+        "siem_engineer",
+        "security_analyst",
+        "soc_architect"
+      ],
+      "dependencies": [
+        "SIEM platform selection",
+        "Log source inventory",
+        "Detection use case definition"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-015",
+      "timestamp": "2026-01-07T08:51:34.684780",
+      "title": "Endpoint Security Migration",
+      "description": "Migrate 620 endpoints from ParentCo CrowdStrike instance to BuyerCo security management including agent reconfiguration and policy alignment",
+      "domain": "cybersecurity",
+      "category": "migration",
+      "effort_estimate": "4-6 weeks",
+      "cost_estimate_range": "$50K-$100K",
+      "timeline_phase": "0_90_days",
+      "skills_required": [
+        "endpoint_security_engineer",
+        "systems_administrator"
+      ],
+      "dependencies": [
+        "Endpoint inventory",
+        "CrowdStrike licensing negotiation",
+        "Policy standardization"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-016",
+      "timestamp": "2026-01-07T08:51:40.833174",
+      "title": "Privileged Access Management Implementation",
+      "description": "Implement PAM solution for 25-40 privileged accounts including account vaulting, session recording, and access workflow management",
+      "domain": "cybersecurity",
+      "category": "security",
+      "effort_estimate": "8-10 weeks",
+      "cost_estimate_range": "$100K-$200K",
+      "timeline_phase": "90_180_days",
+      "skills_required": [
+        "pam_specialist",
+        "security_engineer",
+        "iam_architect"
+      ],
+      "dependencies": [
+        "Privileged account inventory",
+        "PAM platform selection",
+        "Access workflow definition"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-017",
+      "timestamp": "2026-01-07T08:51:45.738163",
+      "title": "Compliance Certification Establishment",
+      "description": "Establish independent SOC 2 Type II and ISO 27001 certifications including control implementation, documentation, and audit preparation",
+      "domain": "cybersecurity",
+      "category": "compliance",
+      "effort_estimate": "16-20 weeks",
+      "cost_estimate_range": "$150K-$300K",
+      "timeline_phase": "90_180_days",
+      "skills_required": [
+        "compliance_specialist",
+        "auditor",
+        "security_architect"
+      ],
+      "dependencies": [
+        "Control framework selection",
+        "Policy documentation",
+        "Audit firm selection"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-018",
+      "timestamp": "2026-01-07T08:51:51.792887",
+      "title": "Incident Response Capability Development",
+      "description": "Develop independent incident response capability including IR plan creation, team training, forensic capability, and legal counsel engagement",
+      "domain": "cybersecurity",
+      "category": "security",
+      "effort_estimate": "6-8 weeks",
+      "cost_estimate_range": "$75K-$150K",
+      "timeline_phase": "0_90_days",
+      "skills_required": [
+        "incident_response_specialist",
+        "forensic_analyst",
+        "security_architect"
+      ],
+      "dependencies": [
+        "IR team identification",
+        "Legal counsel selection",
+        "Forensic tool procurement"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-019",
+      "timestamp": "2026-01-07T08:52:59.167422",
+      "title": "Integration Program Management Office (PMO) Establishment",
+      "description": "Establish dedicated PMO to manage complex cross-domain dependencies, timeline coordination, and stakeholder communication across 18-24 month integration",
+      "domain": "cross-domain",
+      "category": "integration",
+      "effort_estimate": "18-24 months continuous",
+      "cost_estimate_range": "$400K-$600K",
+      "timeline_phase": "day_1",
+      "skills_required": [
+        "program_manager",
+        "integration_specialist",
+        "change_management"
+      ],
+      "dependencies": [
+        "Executive sponsorship",
+        "Budget approval"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-020",
+      "timestamp": "2026-01-07T08:53:05.003204",
+      "title": "Comprehensive TSA Negotiation and Management",
+      "description": "Negotiate and manage extended TSA covering all shared services (Azure AD, network, security, ERP/CRM/HCM) with clear SLAs and exit criteria",
+      "domain": "cross-domain",
+      "category": "integration",
+      "effort_estimate": "Pre-close through 24 months",
+      "cost_estimate_range": "$1.5M-$3M in TSA fees",
+      "timeline_phase": "day_1",
+      "skills_required": [
+        "legal",
+        "commercial_negotiator",
+        "technical_architect"
+      ],
+      "dependencies": [
+        "Deal structure finalization"
+      ],
+      "priority_score": 1
+    }
+  ],
+  "recommendations": [
+    {
+      "id": "REC-001",
+      "timestamp": "2026-01-06T17:22:53.804123",
+      "recommendation": "Negotiate comprehensive TSA covering all infrastructure domains for 12-18 months",
+      "rationale": "TargetCo is fully integrated into ParentCo infrastructure with no independent capabilities. Separation will require 12-18 months minimum, and business continuity depends on ParentCo services during transition.",
+      "domain": "deal",
+      "priority": "critical",
+      "timing": "pre_close",
+      "investment_required": "TSA fees estimated at $200K-$400K monthly"
+    },
+    {
+      "id": "REC-002",
+      "timestamp": "2026-01-06T17:22:59.280364",
+      "recommendation": "Prioritize Azure AD tenant separation as critical path item",
+      "rationale": "Identity is foundational to all other systems. Delays in Azure AD migration will cascade to application access, device management, and security tool deployment. Both companies use Azure AD, creating opportunity for streamlined integration.",
+      "domain": "infrastructure",
+      "priority": "critical",
+      "timing": "day_1",
+      "investment_required": "$200K-$400K plus dedicated identity architect resource"
+    },
+    {
+      "id": "REC-003",
+      "timestamp": "2026-01-06T17:23:04.939338",
+      "recommendation": "Conduct immediate infrastructure discovery to validate server counts and identify end-of-life systems",
+      "rationale": "Server count range of 110-130 indicates uncertainty. Need precise inventory to identify Windows Server 2012 R2, legacy Linux, and other end-of-life systems requiring immediate attention and budget allocation.",
+      "domain": "infrastructure",
+      "priority": "high",
+      "timing": "day_1",
+      "investment_required": "$150K-$250K for comprehensive discovery"
+    },
+    {
+      "id": "REC-004",
+      "timestamp": "2026-01-07T08:39:36.535974",
+      "recommendation": "Immediately initiate network discovery and site survey to understand TargetCo's network dependencies within ParentCo",
+      "rationale": "TargetCo operates entirely on ParentCo's shared network infrastructure with no independent network architecture. Without understanding the current topology, IP schemes, and site connectivity, it's impossible to plan separation or integration approach",
+      "domain": "network",
+      "priority": "critical",
+      "timing": "pre_close",
+      "investment_required": "$50K-$100K for comprehensive network assessment"
+    },
+    {
+      "id": "REC-005",
+      "timestamp": "2026-01-07T08:39:42.432659",
+      "recommendation": "Begin WAN circuit planning and ordering process immediately upon deal announcement",
+      "rationale": "Telecom circuits have 30-90 day lead times and TargetCo will need new connectivity independent from ParentCo. Delaying circuit orders will extend integration timeline and increase temporary connectivity costs",
+      "domain": "network",
+      "priority": "high",
+      "timing": "pre_close",
+      "investment_required": "Circuit costs vary by site but expect $100K-$300K in setup and monthly recurring costs"
+    },
+    {
+      "id": "REC-006",
+      "timestamp": "2026-01-07T08:39:47.816290",
+      "recommendation": "Plan for IP address renumbering as likely requirement for network integration",
+      "rationale": "Both organizations likely use common RFC1918 address ranges which typically conflict. IP conflicts prevent network integration and must be resolved before full connectivity can be established",
+      "domain": "network",
+      "priority": "high",
+      "timing": "first_90_days",
+      "investment_required": "$100K-$500K depending on scope of renumbering required"
+    },
+    {
+      "id": "REC-007",
+      "timestamp": "2026-01-07T08:51:57.366593",
+      "recommendation": "Conduct immediate security assessment before deal close",
+      "rationale": "TargetCo's security posture is completely dependent on ParentCo with no independent assessment available. Unknown vulnerabilities or security gaps could represent significant liability",
+      "domain": "cybersecurity",
+      "priority": "critical",
+      "timing": "pre_close",
+      "investment_required": "$75K-$150K for comprehensive assessment"
+    },
+    {
+      "id": "REC-008",
+      "timestamp": "2026-01-07T08:52:02.640993",
+      "recommendation": "Negotiate extended ParentCo security services transition period",
+      "rationale": "Complete security dependency on ParentCo creates critical risk if services are terminated abruptly. Need 6-12 month transition period to build independent capabilities",
+      "domain": "cybersecurity",
+      "priority": "critical",
+      "timing": "pre_close",
+      "investment_required": "Transition services agreement costs plus accelerated capability buildout"
+    },
+    {
+      "id": "REC-009",
+      "timestamp": "2026-01-07T08:52:07.453630",
+      "recommendation": "Establish interim managed security services",
+      "rationale": "Loss of ParentCo SOC and security expertise creates immediate security monitoring gap. MSSP can provide bridge capability during transition",
+      "domain": "cybersecurity",
+      "priority": "high",
+      "timing": "day_1",
+      "investment_required": "$200K-$400K annually for comprehensive MSSP services"
+    },
+    {
+      "id": "REC-010",
+      "timestamp": "2026-01-07T08:52:13.309492",
+      "recommendation": "Prioritize identity migration planning",
+      "rationale": "IAM migration affects all 650 users and 45+ applications. Poor execution could disrupt business operations and create security gaps",
+      "domain": "cybersecurity",
+      "priority": "high",
+      "timing": "first_90_days",
+      "investment_required": "$150K-$300K for comprehensive IAM migration"
+    },
+    {
+      "id": "REC-011",
+      "timestamp": "2026-01-07T08:52:19.023717",
+      "recommendation": "Accelerate compliance certification timeline",
+      "rationale": "Loss of ParentCo compliance scope could impact customer contracts and business opportunities. Independent certifications needed quickly",
+      "domain": "cybersecurity",
+      "priority": "high",
+      "timing": "first_90_days",
+      "investment_required": "$150K-$300K for SOC 2 and ISO 27001 certifications"
+    },
+    {
+      "id": "REC-012",
+      "timestamp": "2026-01-07T08:53:10.331326",
+      "recommendation": "Negotiate minimum 24-month TSA with ParentCo covering all IT services",
+      "rationale": "Given the complete integration of TargetCo into ParentCo systems and sequential dependencies across domains, 18-24 months will be required for safe separation. Standard 12-month TSAs are insufficient for this complexity level.",
+      "domain": "deal",
+      "priority": "critical",
+      "timing": "pre_close",
+      "investment_required": "$1.5M-$3M in TSA fees"
+    },
+    {
+      "id": "REC-013",
+      "timestamp": "2026-01-07T08:53:14.933885",
+      "recommendation": "Establish dedicated integration PMO with experienced carve-out specialists",
+      "rationale": "The complexity of separating from shared Azure AD, network infrastructure, and security systems requires specialized expertise and dedicated program management to coordinate sequential dependencies and minimize business disruption.",
+      "domain": "cross-domain",
+      "priority": "critical",
+      "timing": "day_1",
+      "investment_required": "$400K-$600K for PMO team"
+    },
+    {
+      "id": "REC-014",
+      "timestamp": "2026-01-07T08:53:19.645402",
+      "recommendation": "Begin Azure AD separation planning immediately post-close as critical path item",
+      "rationale": "Azure AD tenant separation is the foundational dependency for all other integration work. Delays here cascade to network and security migrations, potentially extending timeline to 30+ months.",
+      "domain": "infrastructure",
+      "priority": "critical",
+      "timing": "day_1",
+      "investment_required": "$300K-$600K for identity migration specialists"
+    },
+    {
+      "id": "REC-015",
+      "timestamp": "2026-01-07T08:53:24.152721",
+      "recommendation": "Conduct immediate comprehensive technical discovery across all domains",
+      "rationale": "Critical gaps exist in network topology, security configurations, and infrastructure dependencies. Without this information, cost estimates could be 50-100% higher and timeline could extend significantly.",
+      "domain": "cross-domain",
+      "priority": "high",
+      "timing": "pre_close",
+      "investment_required": "$200K-$300K for technical assessments"
+    },
+    {
+      "id": "REC-016",
+      "timestamp": "2026-01-07T08:53:28.659729",
+      "recommendation": "Implement comprehensive change management and communication program",
+      "rationale": "650 users will experience significant changes to identity, network access, security tools, and core applications over 18-24 months. Without proper change management, productivity loss and employee satisfaction issues are likely.",
+      "domain": "cross-domain",
+      "priority": "high",
+      "timing": "first_90_days",
+      "investment_required": "$150K-$250K for change management resources"
+    }
+  ],
+  "domain_summaries": {
+    "infrastructure": {
+      "timestamp": "2026-01-06T17:23:23.806598",
+      "domain": "infrastructure",
+      "summary": "TargetCo operates as a fully integrated business unit within ParentCo's infrastructure, requiring complete separation across all domains. The environment includes 650 users, 620 devices, and 110-130 servers all managed through ParentCo systems. This is a classic carve-out scenario with high complexity due to shared Azure AD tenant, network infrastructure, and enterprise applications. Integration with BuyerCo's Azure environment offers some alignment opportunities but separation timeline will be 12-18 months minimum.",
+      "complexity_assessment": "very_high",
+      "estimated_cost_range": "$2.5M-$5M",
+      "estimated_timeline": "12-18 months",
+      "top_risks": [
+        "Azure AD tenant separation complexity",
+        "Shared ERP/CRM/HCM platform separation",
+        "Security tooling and monitoring gaps during transition"
+      ],
+      "critical_gaps": [
+        "Specific cloud platform details for TargetCo workloads",
+        "Server operating systems, versions, and age distribution",
+        "Storage capacity, platforms, and data volumes"
+      ]
+    },
+    "network": {
+      "timestamp": "2026-01-07T08:40:11.371229",
+      "domain": "network",
+      "summary": "TargetCo operates entirely on ParentCo's shared network infrastructure with no independent network architecture. This creates significant separation complexity requiring comprehensive discovery, Day 1 connectivity planning, and likely IP renumbering. The lack of network documentation represents a critical gap that must be addressed immediately.",
+      "complexity_assessment": "very_high",
+      "estimated_cost_range": "$500K-$1.5M",
+      "estimated_timeline": "12-18 months for full integration",
+      "top_risks": [
+        "Network separation from ParentCo may cause business disruption",
+        "IP address conflicts between TargetCo and BuyerCo networks",
+        "Long lead times for new WAN circuits may delay integration"
+      ],
+      "critical_gaps": [
+        "Complete network topology and architecture documentation",
+        "IP address scheme and DHCP/DNS configuration details",
+        "Physical site locations and WAN connectivity details"
+      ]
+    },
+    "cybersecurity": {
+      "timestamp": "2026-01-07T08:52:26.500416",
+      "domain": "cybersecurity",
+      "summary": "TargetCo operates with complete dependency on ParentCo's security infrastructure including Azure AD, CrowdStrike EDR, Microsoft Sentinel SIEM, and centralized SOC. While the underlying security stack appears enterprise-grade, the complete dependency creates significant separation risk and requires comprehensive security capability buildout post-acquisition.",
+      "complexity_assessment": "very_high",
+      "top_risks": [
+        "Complete dependency on ParentCo security infrastructure",
+        "Identity and access management separation complexity",
+        "Loss of security monitoring and incident response capability"
+      ],
+      "critical_gaps": [
+        "Security assessment results and vulnerability status",
+        "Compliance certification details and audit findings",
+        "Incident response capabilities and recent incident history"
+      ],
+      "estimated_cost_range": "$800K-$1.8M",
+      "estimated_timeline": "12-18 months"
+    },
+    "cross-domain": {
+      "timestamp": "2026-01-07T08:54:04.709839",
+      "domain": "cross-domain",
+      "summary": "Project Atlas represents a very high complexity carve-out requiring separation of TargetCo from completely shared ParentCo infrastructure. Critical path dependencies across Azure AD, network, and security domains create 18-24 month minimum timeline with $4.5M-$8.5M estimated cost. Significant technical discovery gaps and sequential dependencies present material risks to timeline and budget.",
+      "complexity_assessment": "very_high",
+      "estimated_cost_range": "$4.5M-$8.5M",
+      "estimated_timeline": "18-24 months",
+      "top_risks": [
+        "Critical path timeline risk due to sequential dependencies",
+        "Complete dependency on ParentCo security infrastructure",
+        "Business disruption from simultaneous infrastructure changes"
+      ],
+      "critical_gaps": [
+        "Complete network topology documentation",
+        "Detailed security configurations",
+        "Shared application separation complexity"
+      ]
+    }
+  },
+  "statistics": {
+    "total_assumptions": 8,
+    "total_gaps": 13,
+    "total_risks": 13,
+    "total_work_items": 20,
+    "total_recommendations": 16,
+    "domains_analyzed": [
+      "infrastructure",
+      "network",
+      "cybersecurity",
+      "cross-domain"
+    ]
+  },
+  "validation": {
+    "valid": true,
+    "issues": [],
+    "warnings": [],
+    "quality_score": 100
+  }
+}

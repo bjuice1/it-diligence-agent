@@ -1,0 +1,26 @@
+{
+  "assumptions": [],
+  "gaps": [],
+  "risks": [],
+  "work_items": [],
+  "recommendations": [],
+  "domain_summaries": {},
+  "statistics": {
+    "total_assumptions": 0,
+    "total_gaps": 0,
+    "total_risks": 0,
+    "total_work_items": 0,
+    "total_recommendations": 0,
+    "domains_analyzed": []
+  },
+  "validation": {
+    "valid": false,
+    "issues": [
+      "Missing summary for infrastructure",
+      "Missing summary for network",
+      "Missing summary for cybersecurity"
+    ],
+    "warnings": [],
+    "quality_score": 70.0
+  }
+}

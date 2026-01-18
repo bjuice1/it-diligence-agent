@@ -1,0 +1,2601 @@
+{
+  "current_state": [
+    {
+      "id": "CS-001",
+      "timestamp": "2026-01-07T11:49:28.420161",
+      "domain": "infrastructure",
+      "category": "hosting_model",
+      "summary": "National Mutual operates a hybrid hosting model with 2 colocation data centers in Chicago (Tier 3, 28 total racks) and AWS cloud presence. Primary DC has 22 racks ($635,935 annual), secondary DC has 6 racks ($112,822 annual). AWS spend is $3.38M annually across 41 accounts in us-east-1 region.",
+      "maturity": "medium",
+      "key_characteristics": [
+        "Dual colocation facilities",
+        "Single AWS region deployment",
+        "41 AWS accounts suggesting decentralized governance",
+        "Total infrastructure spend $4.1M annually"
+      ],
+      "standalone_viability": "viable",
+      "evidence": "Document shows \"Data Centers: 2\", \"Primary DC - Chicago: Tier 3, 22 racks, $635,935\", \"Secondary DC - Chicago: Tier 3, 6 racks, $112,822\", \"AWS us-east-1, 41 accounts, $281,399 monthly\""
+    },
+    {
+      "id": "CS-002",
+      "timestamp": "2026-01-07T11:49:35.871902",
+      "domain": "infrastructure",
+      "category": "cloud_presence",
+      "summary": "Single cloud provider (AWS) deployment concentrated in us-east-1 region with $3.38M annual spend. Application hosting shows mixed model: 14 applications on-premises, 11 SaaS, 8 cloud-hosted, 3 hybrid. No evidence of Infrastructure as Code, cloud governance, or FinOps practices.",
+      "maturity": "low",
+      "key_characteristics": [
+        "Single region deployment (us-east-1)",
+        "41 AWS accounts indicating potential sprawl",
+        "No reserved instance strategy mentioned",
+        "Mixed hosting without clear cloud-first strategy"
+      ],
+      "standalone_viability": "constrained",
+      "evidence": "Application inventory shows hosting distribution, AWS spend data, and lack of cloud governance indicators in the infrastructure summary"
+    },
+    {
+      "id": "CS-003",
+      "timestamp": "2026-01-07T11:49:43.164256",
+      "domain": "infrastructure",
+      "category": "disaster_recovery",
+      "summary": "Hot DR strategy with Tier 2 classification, 1-hour RPO and 1-hour RTO targets. Both data centers located in Chicago creating geographic concentration risk. Uses Zerto (v9.5) and Veeam (v12.0) for backup and DR capabilities.",
+      "maturity": "medium",
+      "key_characteristics": [
+        "Hot DR with aggressive 1-hour targets",
+        "Geographic concentration in single metro",
+        "Dual backup solutions (Zerto + Veeam)",
+        "Tier 2 DR classification"
+      ],
+      "standalone_viability": "constrained",
+      "evidence": "Document states \"DR Strategy: Hot, DR Tier: Tier 2, RPO: 1 hours, RTO: 1 hours\" and both DCs listed as Chicago, IL"
+    },
+    {
+      "id": "CS-004",
+      "timestamp": "2026-01-07T11:49:50.398265",
+      "domain": "infrastructure",
+      "category": "it_organization",
+      "summary": "Centralized IT organization with 121 total headcount, $17.3M personnel cost, and minimal outsourcing (4% overall). Infrastructure team has 21 people including 1 cloud engineer, 3 senior systems administrators, and 15 systems administrators. CIO reports to COO with C-level positions for CIO, CISO, and CTO.",
+      "maturity": "medium",
+      "key_characteristics": [
+        "Centralized model with 7 teams",
+        "Low outsourcing dependency",
+        "Single cloud engineer for $3.38M AWS spend",
+        "Strong leadership structure with dedicated C-level roles"
+      ],
+      "standalone_viability": "viable",
+      "evidence": "Document shows \"Total IT Headcount: 121\", \"Outsourced %: 4%\", \"Infrastructure team: 21 headcount\", \"Cloud Engineer: 1\""
+    },
+    {
+      "id": "CS-005",
+      "timestamp": "2026-01-07T11:52:18.741206",
+      "domain": "network",
+      "category": "infrastructure_overview",
+      "summary": "National Mutual operates from 12 office locations with 2 data centers (both in Chicago - primary colocation Tier 3 with 22 racks, secondary colocation Tier 3 with 6 racks). Uses AWS as single cloud provider (us-east-1 region, 41 accounts, $3.4M annual spend). Has 1,812 employees across distributed locations requiring network connectivity.",
+      "maturity": "medium",
+      "key_characteristics": [
+        "12 distributed office locations",
+        "Dual Chicago data centers",
+        "Single cloud provider (AWS)",
+        "41 AWS accounts",
+        "Tier 3 colocation facilities"
+      ],
+      "standalone_viability": "viable",
+      "evidence": "Document shows 12 office locations, 2 data centers both in Chicago (Primary DC - 22 racks $635,935 annual, Secondary DC - 6 racks $112,822 annual), AWS us-east-1 region with 41 accounts and $281,399 monthly spend"
+    },
+    {
+      "id": "CS-006",
+      "timestamp": "2026-01-07T11:52:25.981236",
+      "domain": "network",
+      "category": "security_infrastructure",
+      "summary": "Network security implemented with Check Point firewalls, IBM QRadar SIEM, and RSA SecurID for MFA. Email security provided by Mimecast. Endpoint protection via CrowdStrike. Security team of 14 people managing these tools.",
+      "maturity": "medium",
+      "key_characteristics": [
+        "Check Point firewall platform",
+        "IBM QRadar SIEM",
+        "RSA SecurID MFA",
+        "Mimecast email security",
+        "14-person security team"
+      ],
+      "standalone_viability": "viable",
+      "evidence": "Security tools section lists Check Point (Firewall), IBM QRadar (SIEM), RSA SecurID (MFA), Mimecast (Email Security). Security & Compliance team shows 14 headcount with $2,315,625 personnel cost"
+    },
+    {
+      "id": "CS-007",
+      "timestamp": "2026-01-07T11:55:02.312537",
+      "domain": "cybersecurity",
+      "category": "identity_access_management",
+      "summary": "National Mutual has a hybrid IAM environment with Microsoft Entra ID (Azure AD) as primary identity provider serving 1,077 users, complemented by CyberArk Privileged Access Management (version 13.2) on-premises for 1,166 users. RSA SecurID provides MFA capabilities. Total annual IAM cost is $205,603.",
+      "maturity": "medium",
+      "key_characteristics": [
+        "Cloud-based primary identity provider",
+        "PAM solution deployed",
+        "MFA available via RSA SecurID",
+        "Hybrid architecture with on-prem PAM"
+      ],
+      "standalone_viability": "viable",
+      "evidence": "Application inventory shows Microsoft Entra ID (Azure AD) with 1,077 users at $108,379 annual cost, and CyberArk Privileged Access version 13.2 on-premises with 1,166 users at $97,225 annual cost. Security tools section lists RSA SecurID for MFA."
+    },
+    {
+      "id": "CS-008",
+      "timestamp": "2026-01-07T11:55:09.890281",
+      "domain": "cybersecurity",
+      "category": "endpoint_security",
+      "summary": "National Mutual deploys CrowdStrike Falcon EDR across 700 endpoints with evergreen licensing model, costing $165,287 annually. This represents modern endpoint detection and response capability with cloud-based management.",
+      "maturity": "high",
+      "key_characteristics": [
+        "Modern EDR platform",
+        "Cloud-managed",
+        "Evergreen licensing",
+        "700 endpoints covered"
+      ],
+      "standalone_viability": "viable",
+      "evidence": "Application inventory shows CrowdStrike Falcon as Security category application with evergreen version, SaaS hosting, 700 users, $165,287 annual cost, and HIGH criticality rating."
+    },
+    {
+      "id": "CS-009",
+      "timestamp": "2026-01-07T11:55:18.085315",
+      "domain": "cybersecurity",
+      "category": "security_operations",
+      "summary": "Security operations center around Splunk Enterprise Security version 9.0 on-premises serving 1,126 users at $86,700 annually. The environment includes 14 security and compliance staff with dedicated Security Manager and 2 Senior Security Engineers, plus 9 Security Engineers and 2 Security Analysts.",
+      "maturity": "medium",
+      "key_characteristics": [
+        "On-premises SIEM platform",
+        "Dedicated security team of 14 FTEs",
+        "Splunk Enterprise Security v9.0",
+        "Security team cost $2.3M annually"
+      ],
+      "standalone_viability": "viable",
+      "evidence": "Application inventory shows Splunk Enterprise Security version 9.0, on-premises, 1,126 users, $86,700 annual cost, HIGH criticality. Team summary shows Security & Compliance team with 14 headcount and $2,315,625 personnel cost."
+    },
+    {
+      "id": "CS-010",
+      "timestamp": "2026-01-07T11:55:24.739335",
+      "domain": "cybersecurity",
+      "category": "email_security",
+      "summary": "Email security implemented through dual-vendor approach: Proofpoint Email Protection (855 users, $55,893 annually) and Mimecast Email Security (1,096 users, $37,392 annually). Both are SaaS-based with evergreen licensing, totaling $93,285 in annual email security costs.",
+      "maturity": "medium",
+      "key_characteristics": [
+        "Dual email security vendors",
+        "SaaS-based solutions",
+        "Overlapping user coverage",
+        "Combined 1,951 protected users"
+      ],
+      "standalone_viability": "viable",
+      "evidence": "Application inventory shows Proofpoint Email Protection (evergreen, SaaS, 855 users, $55,893, MEDIUM criticality) and Mimecast Email Security (evergreen, SaaS, 1,096 users, $37,392, LOW criticality) under Email & Communication category."
+    },
+    {
+      "id": "CS-011",
+      "timestamp": "2026-01-07T11:55:32.042631",
+      "domain": "cybersecurity",
+      "category": "network_security",
+      "summary": "Network security anchored by Check Point firewall solution. Infrastructure spans 2 colocation data centers in Chicago (Tier 3) with 28 total racks, plus AWS cloud presence in us-east-1 region with 41 accounts and $3.4M annual spend.",
+      "maturity": "medium",
+      "key_characteristics": [
+        "Check Point firewall platform",
+        "Dual data center setup",
+        "Significant AWS cloud footprint",
+        "41 AWS accounts"
+      ],
+      "standalone_viability": "viable",
+      "evidence": "Security tools section lists Check Point for Firewall. Infrastructure summary shows 2 data centers in Chicago (Primary: 22 racks, $635,935; Secondary: 6 racks, $112,822) and AWS cloud with 41 accounts, $281,399 monthly spend."
+    },
+    {
+      "id": "CS-012",
+      "timestamp": "2026-01-07T11:55:39.896127",
+      "domain": "cybersecurity",
+      "category": "backup_disaster_recovery",
+      "summary": "Backup and DR strategy uses Veeam Backup & Replication v12.0 (1,343 users, $37,963) and Zerto v9.5 (747 users, $25,000), both on-premises. Hot DR strategy with Tier 2 classification, 1-hour RPO and RTO targets. Total annual B&DR cost is $62,963.",
+      "maturity": "medium",
+      "key_characteristics": [
+        "Dual backup solutions",
+        "Hot DR strategy",
+        "1-hour RPO/RTO",
+        "On-premises backup infrastructure"
+      ],
+      "standalone_viability": "viable",
+      "evidence": "Application inventory shows Veeam Backup & Replication 12.0 (on-prem, 1,343 users, $37,963, MEDIUM criticality) and Zerto 9.5 (on-prem, 747 users, $25,000, MEDIUM criticality). DR Strategy shows Hot/Tier 2/1 hour RPO/1 hour RTO."
+    }
+  ],
+  "risks": [
+    {
+      "id": "R-001",
+      "timestamp": "2026-01-07T11:49:59.463008",
+      "risk": "Geographic concentration with both data centers in Chicago creates single point of failure for regional disasters",
+      "trigger": "Regional disaster (earthquake, severe weather, power grid failure) affecting Chicago metropolitan area",
+      "domain": "infrastructure",
+      "severity": "high",
+      "likelihood": "low",
+      "risk_type": "scalability",
+      "integration_dependent": false,
+      "standalone_exposure": "Complete business disruption if regional disaster affects both Chicago facilities, violating basic DR principles of geographic separation",
+      "deal_impact": [
+        "value_leakage",
+        "execution_risk"
+      ],
+      "impact_description": "Business continuity failure, potential data loss, inability to meet 1-hour RTO commitments, regulatory compliance violations",
+      "cost_impact_estimate": "$5M-$20M in business disruption costs",
+      "mitigation": "Establish geographically separated DR site or migrate critical workloads to multi-region cloud deployment",
+      "risk_score": 3,
+      "priority_rank": 18
+    },
+    {
+      "id": "R-002",
+      "timestamp": "2026-01-07T11:50:06.529922",
+      "risk": "Single cloud region deployment (AWS us-east-1) creates availability and compliance risk",
+      "trigger": "AWS us-east-1 regional outage or service degradation",
+      "domain": "infrastructure",
+      "severity": "medium",
+      "likelihood": "medium",
+      "risk_type": "scalability",
+      "integration_dependent": false,
+      "standalone_exposure": "Cloud-hosted applications unavailable during regional outages, potential SLA violations, customer service disruption",
+      "deal_impact": [
+        "execution_risk",
+        "value_leakage"
+      ],
+      "impact_description": "Service disruption for cloud-hosted applications, potential regulatory issues for insurance operations",
+      "cost_impact_estimate": "$1M-$5M per major outage",
+      "mitigation": "Implement multi-region deployment strategy for critical applications",
+      "risk_score": 4,
+      "priority_rank": 14
+    },
+    {
+      "id": "R-003",
+      "timestamp": "2026-01-07T11:50:14.981359",
+      "risk": "Inadequate cloud engineering capacity with only 1 cloud engineer supporting $3.38M AWS environment",
+      "trigger": "Cloud engineer departure, increased cloud complexity, or scaling requirements",
+      "domain": "infrastructure",
+      "severity": "medium",
+      "likelihood": "high",
+      "risk_type": "organization",
+      "integration_dependent": false,
+      "standalone_exposure": "Key person dependency for cloud operations, inability to scale cloud adoption, potential security and cost optimization gaps",
+      "deal_impact": [
+        "execution_risk",
+        "cost_exposure"
+      ],
+      "impact_description": "Cloud operations disruption, inability to optimize costs, delayed cloud initiatives",
+      "cost_impact_estimate": "$500K-$1M in operational inefficiencies and hiring costs",
+      "mitigation": "Hire additional cloud engineers and implement knowledge transfer processes",
+      "risk_score": 6,
+      "priority_rank": 10
+    },
+    {
+      "id": "R-004",
+      "timestamp": "2026-01-07T11:50:22.561920",
+      "risk": "Cloud platform mismatch between target (AWS) and buyer (Azure primary) creates integration complexity",
+      "trigger": "Integration planning and execution phase",
+      "domain": "infrastructure",
+      "severity": "high",
+      "likelihood": "high",
+      "risk_type": "integration",
+      "integration_dependent": true,
+      "deal_impact": [
+        "execution_risk",
+        "cost_exposure",
+        "timeline_risk"
+      ],
+      "impact_description": "Significant migration effort required, extended timeline, dual cloud management complexity, increased costs",
+      "cost_impact_estimate": "$2M-$5M for cloud platform migration",
+      "mitigation": "Develop phased migration strategy, consider multi-cloud approach for transition period, assess application portability",
+      "risk_score": 9,
+      "priority_rank": 1
+    },
+    {
+      "id": "R-005",
+      "timestamp": "2026-01-07T11:50:29.064490",
+      "risk": "Potential AWS account sprawl with 41 accounts indicating weak cloud governance",
+      "trigger": "Continued uncontrolled account creation, lack of centralized billing and governance",
+      "domain": "infrastructure",
+      "severity": "medium",
+      "likelihood": "medium",
+      "risk_type": "vendor",
+      "integration_dependent": false,
+      "standalone_exposure": "Cost optimization challenges, security gaps, compliance difficulties, billing complexity",
+      "deal_impact": [
+        "cost_exposure",
+        "execution_risk"
+      ],
+      "impact_description": "Difficulty in cost optimization, security posture gaps, complex migration planning",
+      "cost_impact_estimate": "$200K-$500K annually in cost optimization opportunities",
+      "mitigation": "Implement AWS Organizations, establish cloud governance framework, consolidate unnecessary accounts",
+      "risk_score": 4,
+      "priority_rank": 15
+    },
+    {
+      "id": "R-006",
+      "timestamp": "2026-01-07T11:52:58.076786",
+      "risk": "Geographic concentration of data centers in single metro area (Chicago)",
+      "trigger": "Regional disaster, power grid failure, or major weather event affecting Chicago metropolitan area",
+      "domain": "network",
+      "severity": "high",
+      "likelihood": "low",
+      "risk_type": "scalability",
+      "integration_dependent": false,
+      "standalone_exposure": "Both primary and secondary data centers could be impacted simultaneously, creating complete infrastructure outage affecting all 12 office locations and 1,812 employees",
+      "deal_impact": [
+        "execution_risk",
+        "value_leakage"
+      ],
+      "impact_description": "Complete business disruption, inability to process claims or policies, potential regulatory violations, customer service failures",
+      "cost_impact_estimate": "$2M-$10M in business disruption costs",
+      "mitigation": "Establish geographically diverse DR site outside Chicago metro area, implement cloud-based DR capabilities",
+      "risk_score": 3,
+      "priority_rank": 19
+    },
+    {
+      "id": "R-007",
+      "timestamp": "2026-01-07T11:53:06.386485",
+      "risk": "Single cloud provider dependency (AWS only)",
+      "trigger": "AWS service outages, pricing changes, or contract disputes",
+      "domain": "network",
+      "severity": "medium",
+      "likelihood": "medium",
+      "risk_type": "vendor",
+      "integration_dependent": false,
+      "standalone_exposure": "$3.4M annual cloud spend concentrated with single provider creates vendor lock-in and negotiating weakness. Service outages affect cloud-hosted applications",
+      "deal_impact": [
+        "cost_exposure",
+        "execution_risk"
+      ],
+      "impact_description": "Potential service disruptions, limited negotiating power on pricing, dependency on single vendor roadmap",
+      "cost_impact_estimate": "$500K-$2M in potential cost increases or migration costs",
+      "mitigation": "Develop multi-cloud strategy, negotiate better contract terms, implement cloud-agnostic architecture patterns",
+      "risk_score": 4,
+      "priority_rank": 16
+    },
+    {
+      "id": "R-008",
+      "timestamp": "2026-01-07T11:55:48.963718",
+      "risk": "RSA SecurID MFA platform approaching end-of-life with potential support discontinuation",
+      "trigger": "RSA SecurID hardware tokens and infrastructure reaching vendor support cutoff dates",
+      "domain": "cybersecurity",
+      "severity": "high",
+      "likelihood": "high",
+      "risk_type": "technical_debt",
+      "integration_dependent": false,
+      "standalone_exposure": "Loss of MFA capability would force fallback to password-only authentication, significantly increasing account compromise risk and potentially violating compliance requirements",
+      "deal_impact": [
+        "execution_risk",
+        "cost_exposure"
+      ],
+      "impact_description": "MFA replacement project required within 12-18 months, estimated $150K-$300K cost, potential compliance violations during transition",
+      "cost_impact_estimate": "$150K-$300K",
+      "mitigation": "Accelerate migration to modern MFA solution (Microsoft Authenticator, Duo, or Okta) with phased rollout plan",
+      "risk_score": 9,
+      "priority_rank": 2
+    },
+    {
+      "id": "R-009",
+      "timestamp": "2026-01-07T11:55:57.919074",
+      "risk": "Splunk Enterprise Security version 9.0 on-premises creates licensing cost escalation and maintenance complexity",
+      "trigger": "Splunk's shift to cloud-first licensing model and increasing on-premises support costs",
+      "domain": "cybersecurity",
+      "severity": "medium",
+      "likelihood": "high",
+      "risk_type": "vendor",
+      "integration_dependent": false,
+      "standalone_exposure": "Significant SIEM licensing cost increases (potentially 200-400% over 3 years) and reduced vendor support for on-premises deployments",
+      "deal_impact": [
+        "cost_exposure",
+        "execution_risk"
+      ],
+      "impact_description": "SIEM costs could escalate from $87K to $200K+ annually, plus migration costs to cloud or alternative platform",
+      "cost_impact_estimate": "$300K-$500K",
+      "mitigation": "Evaluate migration to Splunk Cloud, Microsoft Sentinel, or alternative SIEM platform with cost-benefit analysis",
+      "risk_score": 6,
+      "priority_rank": 11
+    },
+    {
+      "id": "R-010",
+      "timestamp": "2026-01-07T11:56:04.986255",
+      "risk": "Dual email security vendor approach creates management complexity and potential security gaps",
+      "trigger": "Configuration drift between Proofpoint and Mimecast policies, overlapping coverage creating blind spots",
+      "domain": "cybersecurity",
+      "severity": "medium",
+      "likelihood": "medium",
+      "risk_type": "security",
+      "integration_dependent": false,
+      "standalone_exposure": "Inconsistent email security policies, potential for threats to bypass one solution while being caught by another, administrative overhead",
+      "deal_impact": [
+        "execution_risk",
+        "value_leakage"
+      ],
+      "impact_description": "Security incidents due to policy gaps, increased administrative costs, complexity in incident response",
+      "cost_impact_estimate": "$50K-$150K",
+      "mitigation": "Consolidate to single email security platform, standardize policies, implement unified monitoring",
+      "risk_score": 4,
+      "priority_rank": 17
+    },
+    {
+      "id": "R-011",
+      "timestamp": "2026-01-07T11:56:12.054257",
+      "risk": "CyberArk PAM version 13.2 on-premises may have unpatched vulnerabilities and limited cloud integration",
+      "trigger": "Delayed patching cycles for on-premises PAM infrastructure, lack of cloud-native integrations",
+      "domain": "cybersecurity",
+      "severity": "high",
+      "likelihood": "medium",
+      "risk_type": "security",
+      "integration_dependent": false,
+      "standalone_exposure": "Privileged account compromise risk, limited visibility into cloud privileged access, potential compliance violations",
+      "deal_impact": [
+        "execution_risk",
+        "cost_exposure"
+      ],
+      "impact_description": "Privileged account breach could result in complete environment compromise, regulatory fines, business disruption",
+      "cost_impact_estimate": "$500K-$2M",
+      "mitigation": "Upgrade to latest CyberArk version, implement cloud PAM capabilities, establish regular patching schedule",
+      "risk_score": 6,
+      "priority_rank": 12
+    },
+    {
+      "id": "R-012",
+      "timestamp": "2026-01-07T11:56:18.592071",
+      "risk": "41 AWS accounts create significant cloud security governance and compliance challenges",
+      "trigger": "Lack of centralized cloud security controls, inconsistent security configurations across accounts",
+      "domain": "cybersecurity",
+      "severity": "high",
+      "likelihood": "high",
+      "risk_type": "security",
+      "integration_dependent": false,
+      "standalone_exposure": "Cloud misconfigurations, data breaches, compliance violations, shadow IT proliferation, excessive cloud costs",
+      "deal_impact": [
+        "execution_risk",
+        "cost_exposure",
+        "value_leakage"
+      ],
+      "impact_description": "Cloud security incidents, regulatory fines, uncontrolled cloud spending, audit failures",
+      "cost_impact_estimate": "$200K-$1M",
+      "mitigation": "Implement AWS Organizations, centralized security controls, cloud security posture management (CSPM), account consolidation strategy",
+      "risk_score": 9,
+      "priority_rank": 3
+    },
+    {
+      "id": "R-013",
+      "timestamp": "2026-01-07T11:56:26.487137",
+      "risk": "Cloud-first buyer environment conflicts with target's on-premises security infrastructure",
+      "trigger": "Integration requirements to align with buyer's Azure-centric, cloud-first security architecture",
+      "domain": "cybersecurity",
+      "severity": "medium",
+      "likelihood": "high",
+      "risk_type": "integration",
+      "integration_dependent": true,
+      "deal_impact": [
+        "execution_risk",
+        "cost_exposure",
+        "timeline_risk"
+      ],
+      "impact_description": "Extensive security tool migration required, potential security gaps during transition, extended integration timeline",
+      "cost_impact_estimate": "$500K-$1.5M",
+      "mitigation": "Phased migration approach, maintain parallel security operations during transition, leverage TSA for security services",
+      "risk_score": 6,
+      "priority_rank": 13
+    },
+    {
+      "id": "R-014",
+      "timestamp": "2026-01-07T11:58:00.458199",
+      "risk": "Cross-domain dependency: Network connectivity establishment must precede AWS to Azure cloud migration",
+      "trigger": "Without secure network connectivity, cloud workload migration cannot begin, delaying entire integration timeline by 3-4 weeks",
+      "domain": "cross-domain",
+      "severity": "high",
+      "likelihood": "high",
+      "risk_type": "integration",
+      "integration_dependent": true,
+      "mitigation": "Network connectivity (WI-010) must complete before cloud migration execution (WI-006) can begin",
+      "dependency": "Network connectivity establishment must precede AWS to Azure cloud migration",
+      "source_domain": "network",
+      "target_domain": "infrastructure",
+      "impact": "Without secure network connectivity, cloud workload migration cannot begin, delaying entire integration timeline by 3-4 weeks",
+      "sequencing_requirement": "Network connectivity (WI-010) must complete before cloud migration execution (WI-006) can begin",
+      "risk_score": 9,
+      "priority_rank": 4
+    },
+    {
+      "id": "R-015",
+      "timestamp": "2026-01-07T11:58:13.439786",
+      "risk": "Cross-domain dependency: Identity integration (Azure AD) must complete before security tool migrations can begin",
+      "trigger": "Security access provisioning blocks infrastructure team access to buyer systems, preventing migration work from starting",
+      "domain": "cross-domain",
+      "severity": "high",
+      "likelihood": "high",
+      "risk_type": "integration",
+      "integration_dependent": true,
+      "mitigation": "Security access provisioning (WI-015) must complete before infrastructure discovery (WI-001) and cloud migration planning can begin",
+      "dependency": "Identity integration (Azure AD) must complete before security tool migrations can begin",
+      "source_domain": "cybersecurity",
+      "target_domain": "infrastructure",
+      "impact": "Security access provisioning blocks infrastructure team access to buyer systems, preventing migration work from starting",
+      "sequencing_requirement": "Security access provisioning (WI-015) must complete before infrastructure discovery (WI-001) and cloud migration planning can begin",
+      "risk_score": 9,
+      "priority_rank": 5
+    },
+    {
+      "id": "R-016",
+      "timestamp": "2026-01-07T11:58:18.415786",
+      "risk": "Cross-domain dependency: MFA migration affects all system access and must coordinate with infrastructure migrations",
+      "trigger": "If MFA migration occurs during infrastructure migrations, could cause access disruptions to critical systems during migration windows",
+      "domain": "cross-domain",
+      "severity": "high",
+      "likelihood": "high",
+      "risk_type": "integration",
+      "integration_dependent": true,
+      "mitigation": "MFA migration (WI-017) should complete before major infrastructure migrations begin, or be carefully coordinated to avoid access disruptions",
+      "dependency": "MFA migration affects all system access and must coordinate with infrastructure migrations",
+      "source_domain": "cybersecurity",
+      "target_domain": "infrastructure",
+      "impact": "If MFA migration occurs during infrastructure migrations, could cause access disruptions to critical systems during migration windows",
+      "sequencing_requirement": "MFA migration (WI-017) should complete before major infrastructure migrations begin, or be carefully coordinated to avoid access disruptions",
+      "risk_score": 9,
+      "priority_rank": 6
+    },
+    {
+      "id": "R-017",
+      "timestamp": "2026-01-07T11:58:24.145811",
+      "risk": "Cross-domain dependency: SIEM migration requires network connectivity and affects security monitoring during infrastructure changes",
+      "trigger": "Security monitoring gaps during infrastructure migrations if SIEM migration not properly sequenced",
+      "domain": "cross-domain",
+      "severity": "high",
+      "likelihood": "high",
+      "risk_type": "integration",
+      "integration_dependent": true,
+      "mitigation": "SIEM migration (WI-018) must maintain security monitoring capability throughout infrastructure migration period",
+      "dependency": "SIEM migration requires network connectivity and affects security monitoring during infrastructure changes",
+      "source_domain": "cybersecurity",
+      "target_domain": "network",
+      "impact": "Security monitoring gaps during infrastructure migrations if SIEM migration not properly sequenced",
+      "sequencing_requirement": "SIEM migration (WI-018) must maintain security monitoring capability throughout infrastructure migration period",
+      "risk_score": 9,
+      "priority_rank": 7
+    },
+    {
+      "id": "R-018",
+      "timestamp": "2026-01-07T11:58:34.286338",
+      "risk": "Cumulative timeline risk from sequential dependencies creates 6-month critical path",
+      "trigger": "Multiple long-lead items (identity integration, network connectivity, cloud migration) must occur sequentially",
+      "domain": "cross-domain",
+      "severity": "high",
+      "likelihood": "high",
+      "risk_type": "integration",
+      "integration_dependent": true,
+      "impact_description": "Integration timeline extends to 24+ months instead of planned 18 months, delaying synergy realization and increasing TSA costs",
+      "cost_impact_estimate": "$500K-$1M in extended TSA and program costs",
+      "deal_impact": [
+        "timeline_risk",
+        "cost_exposure",
+        "value_leakage"
+      ],
+      "mitigation": "Parallel work streams where possible, dedicated integration PMO, pre-close planning acceleration",
+      "risk_score": 9,
+      "priority_rank": 8
+    },
+    {
+      "id": "R-019",
+      "timestamp": "2026-01-07T11:58:41.146917",
+      "risk": "Platform mismatch across all domains creates compounding integration complexity",
+      "trigger": "AWS vs Azure, RSA vs Microsoft MFA, Splunk vs Sentinel, QRadar vs Sentinel all require migration",
+      "domain": "cross-domain",
+      "severity": "high",
+      "likelihood": "high",
+      "risk_type": "integration",
+      "integration_dependent": true,
+      "impact_description": "Every major platform requires migration, creating skills gaps, vendor management complexity, and potential data/configuration loss",
+      "cost_impact_estimate": "$1M-$2M in additional migration and consulting costs",
+      "deal_impact": [
+        "execution_risk",
+        "cost_exposure",
+        "timeline_risk"
+      ],
+      "mitigation": "Phased migration approach, retain key target personnel, engage specialized migration partners",
+      "risk_score": 9,
+      "priority_rank": 9
+    }
+  ],
+  "risks_by_type": {
+    "scalability": [
+      {
+        "id": "R-001",
+        "timestamp": "2026-01-07T11:49:59.463008",
+        "risk": "Geographic concentration with both data centers in Chicago creates single point of failure for regional disasters",
+        "trigger": "Regional disaster (earthquake, severe weather, power grid failure) affecting Chicago metropolitan area",
+        "domain": "infrastructure",
+        "severity": "high",
+        "likelihood": "low",
+        "risk_type": "scalability",
+        "integration_dependent": false,
+        "standalone_exposure": "Complete business disruption if regional disaster affects both Chicago facilities, violating basic DR principles of geographic separation",
+        "deal_impact": [
+          "value_leakage",
+          "execution_risk"
+        ],
+        "impact_description": "Business continuity failure, potential data loss, inability to meet 1-hour RTO commitments, regulatory compliance violations",
+        "cost_impact_estimate": "$5M-$20M in business disruption costs",
+        "mitigation": "Establish geographically separated DR site or migrate critical workloads to multi-region cloud deployment",
+        "risk_score": 3,
+        "priority_rank": 18
+      },
+      {
+        "id": "R-002",
+        "timestamp": "2026-01-07T11:50:06.529922",
+        "risk": "Single cloud region deployment (AWS us-east-1) creates availability and compliance risk",
+        "trigger": "AWS us-east-1 regional outage or service degradation",
+        "domain": "infrastructure",
+        "severity": "medium",
+        "likelihood": "medium",
+        "risk_type": "scalability",
+        "integration_dependent": false,
+        "standalone_exposure": "Cloud-hosted applications unavailable during regional outages, potential SLA violations, customer service disruption",
+        "deal_impact": [
+          "execution_risk",
+          "value_leakage"
+        ],
+        "impact_description": "Service disruption for cloud-hosted applications, potential regulatory issues for insurance operations",
+        "cost_impact_estimate": "$1M-$5M per major outage",
+        "mitigation": "Implement multi-region deployment strategy for critical applications",
+        "risk_score": 4,
+        "priority_rank": 14
+      },
+      {
+        "id": "R-006",
+        "timestamp": "2026-01-07T11:52:58.076786",
+        "risk": "Geographic concentration of data centers in single metro area (Chicago)",
+        "trigger": "Regional disaster, power grid failure, or major weather event affecting Chicago metropolitan area",
+        "domain": "network",
+        "severity": "high",
+        "likelihood": "low",
+        "risk_type": "scalability",
+        "integration_dependent": false,
+        "standalone_exposure": "Both primary and secondary data centers could be impacted simultaneously, creating complete infrastructure outage affecting all 12 office locations and 1,812 employees",
+        "deal_impact": [
+          "execution_risk",
+          "value_leakage"
+        ],
+        "impact_description": "Complete business disruption, inability to process claims or policies, potential regulatory violations, customer service failures",
+        "cost_impact_estimate": "$2M-$10M in business disruption costs",
+        "mitigation": "Establish geographically diverse DR site outside Chicago metro area, implement cloud-based DR capabilities",
+        "risk_score": 3,
+        "priority_rank": 19
+      }
+    ],
+    "organization": [
+      {
+        "id": "R-003",
+        "timestamp": "2026-01-07T11:50:14.981359",
+        "risk": "Inadequate cloud engineering capacity with only 1 cloud engineer supporting $3.38M AWS environment",
+        "trigger": "Cloud engineer departure, increased cloud complexity, or scaling requirements",
+        "domain": "infrastructure",
+        "severity": "medium",
+        "likelihood": "high",
+        "risk_type": "organization",
+        "integration_dependent": false,
+        "standalone_exposure": "Key person dependency for cloud operations, inability to scale cloud adoption, potential security and cost optimization gaps",
+        "deal_impact": [
+          "execution_risk",
+          "cost_exposure"
+        ],
+        "impact_description": "Cloud operations disruption, inability to optimize costs, delayed cloud initiatives",
+        "cost_impact_estimate": "$500K-$1M in operational inefficiencies and hiring costs",
+        "mitigation": "Hire additional cloud engineers and implement knowledge transfer processes",
+        "risk_score": 6,
+        "priority_rank": 10
+      }
+    ],
+    "integration": [
+      {
+        "id": "R-004",
+        "timestamp": "2026-01-07T11:50:22.561920",
+        "risk": "Cloud platform mismatch between target (AWS) and buyer (Azure primary) creates integration complexity",
+        "trigger": "Integration planning and execution phase",
+        "domain": "infrastructure",
+        "severity": "high",
+        "likelihood": "high",
+        "risk_type": "integration",
+        "integration_dependent": true,
+        "deal_impact": [
+          "execution_risk",
+          "cost_exposure",
+          "timeline_risk"
+        ],
+        "impact_description": "Significant migration effort required, extended timeline, dual cloud management complexity, increased costs",
+        "cost_impact_estimate": "$2M-$5M for cloud platform migration",
+        "mitigation": "Develop phased migration strategy, consider multi-cloud approach for transition period, assess application portability",
+        "risk_score": 9,
+        "priority_rank": 1
+      },
+      {
+        "id": "R-013",
+        "timestamp": "2026-01-07T11:56:26.487137",
+        "risk": "Cloud-first buyer environment conflicts with target's on-premises security infrastructure",
+        "trigger": "Integration requirements to align with buyer's Azure-centric, cloud-first security architecture",
+        "domain": "cybersecurity",
+        "severity": "medium",
+        "likelihood": "high",
+        "risk_type": "integration",
+        "integration_dependent": true,
+        "deal_impact": [
+          "execution_risk",
+          "cost_exposure",
+          "timeline_risk"
+        ],
+        "impact_description": "Extensive security tool migration required, potential security gaps during transition, extended integration timeline",
+        "cost_impact_estimate": "$500K-$1.5M",
+        "mitigation": "Phased migration approach, maintain parallel security operations during transition, leverage TSA for security services",
+        "risk_score": 6,
+        "priority_rank": 13
+      },
+      {
+        "id": "R-014",
+        "timestamp": "2026-01-07T11:58:00.458199",
+        "risk": "Cross-domain dependency: Network connectivity establishment must precede AWS to Azure cloud migration",
+        "trigger": "Without secure network connectivity, cloud workload migration cannot begin, delaying entire integration timeline by 3-4 weeks",
+        "domain": "cross-domain",
+        "severity": "high",
+        "likelihood": "high",
+        "risk_type": "integration",
+        "integration_dependent": true,
+        "mitigation": "Network connectivity (WI-010) must complete before cloud migration execution (WI-006) can begin",
+        "dependency": "Network connectivity establishment must precede AWS to Azure cloud migration",
+        "source_domain": "network",
+        "target_domain": "infrastructure",
+        "impact": "Without secure network connectivity, cloud workload migration cannot begin, delaying entire integration timeline by 3-4 weeks",
+        "sequencing_requirement": "Network connectivity (WI-010) must complete before cloud migration execution (WI-006) can begin",
+        "risk_score": 9,
+        "priority_rank": 4
+      },
+      {
+        "id": "R-015",
+        "timestamp": "2026-01-07T11:58:13.439786",
+        "risk": "Cross-domain dependency: Identity integration (Azure AD) must complete before security tool migrations can begin",
+        "trigger": "Security access provisioning blocks infrastructure team access to buyer systems, preventing migration work from starting",
+        "domain": "cross-domain",
+        "severity": "high",
+        "likelihood": "high",
+        "risk_type": "integration",
+        "integration_dependent": true,
+        "mitigation": "Security access provisioning (WI-015) must complete before infrastructure discovery (WI-001) and cloud migration planning can begin",
+        "dependency": "Identity integration (Azure AD) must complete before security tool migrations can begin",
+        "source_domain": "cybersecurity",
+        "target_domain": "infrastructure",
+        "impact": "Security access provisioning blocks infrastructure team access to buyer systems, preventing migration work from starting",
+        "sequencing_requirement": "Security access provisioning (WI-015) must complete before infrastructure discovery (WI-001) and cloud migration planning can begin",
+        "risk_score": 9,
+        "priority_rank": 5
+      },
+      {
+        "id": "R-016",
+        "timestamp": "2026-01-07T11:58:18.415786",
+        "risk": "Cross-domain dependency: MFA migration affects all system access and must coordinate with infrastructure migrations",
+        "trigger": "If MFA migration occurs during infrastructure migrations, could cause access disruptions to critical systems during migration windows",
+        "domain": "cross-domain",
+        "severity": "high",
+        "likelihood": "high",
+        "risk_type": "integration",
+        "integration_dependent": true,
+        "mitigation": "MFA migration (WI-017) should complete before major infrastructure migrations begin, or be carefully coordinated to avoid access disruptions",
+        "dependency": "MFA migration affects all system access and must coordinate with infrastructure migrations",
+        "source_domain": "cybersecurity",
+        "target_domain": "infrastructure",
+        "impact": "If MFA migration occurs during infrastructure migrations, could cause access disruptions to critical systems during migration windows",
+        "sequencing_requirement": "MFA migration (WI-017) should complete before major infrastructure migrations begin, or be carefully coordinated to avoid access disruptions",
+        "risk_score": 9,
+        "priority_rank": 6
+      },
+      {
+        "id": "R-017",
+        "timestamp": "2026-01-07T11:58:24.145811",
+        "risk": "Cross-domain dependency: SIEM migration requires network connectivity and affects security monitoring during infrastructure changes",
+        "trigger": "Security monitoring gaps during infrastructure migrations if SIEM migration not properly sequenced",
+        "domain": "cross-domain",
+        "severity": "high",
+        "likelihood": "high",
+        "risk_type": "integration",
+        "integration_dependent": true,
+        "mitigation": "SIEM migration (WI-018) must maintain security monitoring capability throughout infrastructure migration period",
+        "dependency": "SIEM migration requires network connectivity and affects security monitoring during infrastructure changes",
+        "source_domain": "cybersecurity",
+        "target_domain": "network",
+        "impact": "Security monitoring gaps during infrastructure migrations if SIEM migration not properly sequenced",
+        "sequencing_requirement": "SIEM migration (WI-018) must maintain security monitoring capability throughout infrastructure migration period",
+        "risk_score": 9,
+        "priority_rank": 7
+      },
+      {
+        "id": "R-018",
+        "timestamp": "2026-01-07T11:58:34.286338",
+        "risk": "Cumulative timeline risk from sequential dependencies creates 6-month critical path",
+        "trigger": "Multiple long-lead items (identity integration, network connectivity, cloud migration) must occur sequentially",
+        "domain": "cross-domain",
+        "severity": "high",
+        "likelihood": "high",
+        "risk_type": "integration",
+        "integration_dependent": true,
+        "impact_description": "Integration timeline extends to 24+ months instead of planned 18 months, delaying synergy realization and increasing TSA costs",
+        "cost_impact_estimate": "$500K-$1M in extended TSA and program costs",
+        "deal_impact": [
+          "timeline_risk",
+          "cost_exposure",
+          "value_leakage"
+        ],
+        "mitigation": "Parallel work streams where possible, dedicated integration PMO, pre-close planning acceleration",
+        "risk_score": 9,
+        "priority_rank": 8
+      },
+      {
+        "id": "R-019",
+        "timestamp": "2026-01-07T11:58:41.146917",
+        "risk": "Platform mismatch across all domains creates compounding integration complexity",
+        "trigger": "AWS vs Azure, RSA vs Microsoft MFA, Splunk vs Sentinel, QRadar vs Sentinel all require migration",
+        "domain": "cross-domain",
+        "severity": "high",
+        "likelihood": "high",
+        "risk_type": "integration",
+        "integration_dependent": true,
+        "impact_description": "Every major platform requires migration, creating skills gaps, vendor management complexity, and potential data/configuration loss",
+        "cost_impact_estimate": "$1M-$2M in additional migration and consulting costs",
+        "deal_impact": [
+          "execution_risk",
+          "cost_exposure",
+          "timeline_risk"
+        ],
+        "mitigation": "Phased migration approach, retain key target personnel, engage specialized migration partners",
+        "risk_score": 9,
+        "priority_rank": 9
+      }
+    ],
+    "vendor": [
+      {
+        "id": "R-005",
+        "timestamp": "2026-01-07T11:50:29.064490",
+        "risk": "Potential AWS account sprawl with 41 accounts indicating weak cloud governance",
+        "trigger": "Continued uncontrolled account creation, lack of centralized billing and governance",
+        "domain": "infrastructure",
+        "severity": "medium",
+        "likelihood": "medium",
+        "risk_type": "vendor",
+        "integration_dependent": false,
+        "standalone_exposure": "Cost optimization challenges, security gaps, compliance difficulties, billing complexity",
+        "deal_impact": [
+          "cost_exposure",
+          "execution_risk"
+        ],
+        "impact_description": "Difficulty in cost optimization, security posture gaps, complex migration planning",
+        "cost_impact_estimate": "$200K-$500K annually in cost optimization opportunities",
+        "mitigation": "Implement AWS Organizations, establish cloud governance framework, consolidate unnecessary accounts",
+        "risk_score": 4,
+        "priority_rank": 15
+      },
+      {
+        "id": "R-007",
+        "timestamp": "2026-01-07T11:53:06.386485",
+        "risk": "Single cloud provider dependency (AWS only)",
+        "trigger": "AWS service outages, pricing changes, or contract disputes",
+        "domain": "network",
+        "severity": "medium",
+        "likelihood": "medium",
+        "risk_type": "vendor",
+        "integration_dependent": false,
+        "standalone_exposure": "$3.4M annual cloud spend concentrated with single provider creates vendor lock-in and negotiating weakness. Service outages affect cloud-hosted applications",
+        "deal_impact": [
+          "cost_exposure",
+          "execution_risk"
+        ],
+        "impact_description": "Potential service disruptions, limited negotiating power on pricing, dependency on single vendor roadmap",
+        "cost_impact_estimate": "$500K-$2M in potential cost increases or migration costs",
+        "mitigation": "Develop multi-cloud strategy, negotiate better contract terms, implement cloud-agnostic architecture patterns",
+        "risk_score": 4,
+        "priority_rank": 16
+      },
+      {
+        "id": "R-009",
+        "timestamp": "2026-01-07T11:55:57.919074",
+        "risk": "Splunk Enterprise Security version 9.0 on-premises creates licensing cost escalation and maintenance complexity",
+        "trigger": "Splunk's shift to cloud-first licensing model and increasing on-premises support costs",
+        "domain": "cybersecurity",
+        "severity": "medium",
+        "likelihood": "high",
+        "risk_type": "vendor",
+        "integration_dependent": false,
+        "standalone_exposure": "Significant SIEM licensing cost increases (potentially 200-400% over 3 years) and reduced vendor support for on-premises deployments",
+        "deal_impact": [
+          "cost_exposure",
+          "execution_risk"
+        ],
+        "impact_description": "SIEM costs could escalate from $87K to $200K+ annually, plus migration costs to cloud or alternative platform",
+        "cost_impact_estimate": "$300K-$500K",
+        "mitigation": "Evaluate migration to Splunk Cloud, Microsoft Sentinel, or alternative SIEM platform with cost-benefit analysis",
+        "risk_score": 6,
+        "priority_rank": 11
+      }
+    ],
+    "technical_debt": [
+      {
+        "id": "R-008",
+        "timestamp": "2026-01-07T11:55:48.963718",
+        "risk": "RSA SecurID MFA platform approaching end-of-life with potential support discontinuation",
+        "trigger": "RSA SecurID hardware tokens and infrastructure reaching vendor support cutoff dates",
+        "domain": "cybersecurity",
+        "severity": "high",
+        "likelihood": "high",
+        "risk_type": "technical_debt",
+        "integration_dependent": false,
+        "standalone_exposure": "Loss of MFA capability would force fallback to password-only authentication, significantly increasing account compromise risk and potentially violating compliance requirements",
+        "deal_impact": [
+          "execution_risk",
+          "cost_exposure"
+        ],
+        "impact_description": "MFA replacement project required within 12-18 months, estimated $150K-$300K cost, potential compliance violations during transition",
+        "cost_impact_estimate": "$150K-$300K",
+        "mitigation": "Accelerate migration to modern MFA solution (Microsoft Authenticator, Duo, or Okta) with phased rollout plan",
+        "risk_score": 9,
+        "priority_rank": 2
+      }
+    ],
+    "security": [
+      {
+        "id": "R-010",
+        "timestamp": "2026-01-07T11:56:04.986255",
+        "risk": "Dual email security vendor approach creates management complexity and potential security gaps",
+        "trigger": "Configuration drift between Proofpoint and Mimecast policies, overlapping coverage creating blind spots",
+        "domain": "cybersecurity",
+        "severity": "medium",
+        "likelihood": "medium",
+        "risk_type": "security",
+        "integration_dependent": false,
+        "standalone_exposure": "Inconsistent email security policies, potential for threats to bypass one solution while being caught by another, administrative overhead",
+        "deal_impact": [
+          "execution_risk",
+          "value_leakage"
+        ],
+        "impact_description": "Security incidents due to policy gaps, increased administrative costs, complexity in incident response",
+        "cost_impact_estimate": "$50K-$150K",
+        "mitigation": "Consolidate to single email security platform, standardize policies, implement unified monitoring",
+        "risk_score": 4,
+        "priority_rank": 17
+      },
+      {
+        "id": "R-011",
+        "timestamp": "2026-01-07T11:56:12.054257",
+        "risk": "CyberArk PAM version 13.2 on-premises may have unpatched vulnerabilities and limited cloud integration",
+        "trigger": "Delayed patching cycles for on-premises PAM infrastructure, lack of cloud-native integrations",
+        "domain": "cybersecurity",
+        "severity": "high",
+        "likelihood": "medium",
+        "risk_type": "security",
+        "integration_dependent": false,
+        "standalone_exposure": "Privileged account compromise risk, limited visibility into cloud privileged access, potential compliance violations",
+        "deal_impact": [
+          "execution_risk",
+          "cost_exposure"
+        ],
+        "impact_description": "Privileged account breach could result in complete environment compromise, regulatory fines, business disruption",
+        "cost_impact_estimate": "$500K-$2M",
+        "mitigation": "Upgrade to latest CyberArk version, implement cloud PAM capabilities, establish regular patching schedule",
+        "risk_score": 6,
+        "priority_rank": 12
+      },
+      {
+        "id": "R-012",
+        "timestamp": "2026-01-07T11:56:18.592071",
+        "risk": "41 AWS accounts create significant cloud security governance and compliance challenges",
+        "trigger": "Lack of centralized cloud security controls, inconsistent security configurations across accounts",
+        "domain": "cybersecurity",
+        "severity": "high",
+        "likelihood": "high",
+        "risk_type": "security",
+        "integration_dependent": false,
+        "standalone_exposure": "Cloud misconfigurations, data breaches, compliance violations, shadow IT proliferation, excessive cloud costs",
+        "deal_impact": [
+          "execution_risk",
+          "cost_exposure",
+          "value_leakage"
+        ],
+        "impact_description": "Cloud security incidents, regulatory fines, uncontrolled cloud spending, audit failures",
+        "cost_impact_estimate": "$200K-$1M",
+        "mitigation": "Implement AWS Organizations, centralized security controls, cloud security posture management (CSPM), account consolidation strategy",
+        "risk_score": 9,
+        "priority_rank": 3
+      }
+    ]
+  },
+  "standalone_risks": [
+    {
+      "id": "R-001",
+      "timestamp": "2026-01-07T11:49:59.463008",
+      "risk": "Geographic concentration with both data centers in Chicago creates single point of failure for regional disasters",
+      "trigger": "Regional disaster (earthquake, severe weather, power grid failure) affecting Chicago metropolitan area",
+      "domain": "infrastructure",
+      "severity": "high",
+      "likelihood": "low",
+      "risk_type": "scalability",
+      "integration_dependent": false,
+      "standalone_exposure": "Complete business disruption if regional disaster affects both Chicago facilities, violating basic DR principles of geographic separation",
+      "deal_impact": [
+        "value_leakage",
+        "execution_risk"
+      ],
+      "impact_description": "Business continuity failure, potential data loss, inability to meet 1-hour RTO commitments, regulatory compliance violations",
+      "cost_impact_estimate": "$5M-$20M in business disruption costs",
+      "mitigation": "Establish geographically separated DR site or migrate critical workloads to multi-region cloud deployment",
+      "risk_score": 3,
+      "priority_rank": 18
+    },
+    {
+      "id": "R-002",
+      "timestamp": "2026-01-07T11:50:06.529922",
+      "risk": "Single cloud region deployment (AWS us-east-1) creates availability and compliance risk",
+      "trigger": "AWS us-east-1 regional outage or service degradation",
+      "domain": "infrastructure",
+      "severity": "medium",
+      "likelihood": "medium",
+      "risk_type": "scalability",
+      "integration_dependent": false,
+      "standalone_exposure": "Cloud-hosted applications unavailable during regional outages, potential SLA violations, customer service disruption",
+      "deal_impact": [
+        "execution_risk",
+        "value_leakage"
+      ],
+      "impact_description": "Service disruption for cloud-hosted applications, potential regulatory issues for insurance operations",
+      "cost_impact_estimate": "$1M-$5M per major outage",
+      "mitigation": "Implement multi-region deployment strategy for critical applications",
+      "risk_score": 4,
+      "priority_rank": 14
+    },
+    {
+      "id": "R-003",
+      "timestamp": "2026-01-07T11:50:14.981359",
+      "risk": "Inadequate cloud engineering capacity with only 1 cloud engineer supporting $3.38M AWS environment",
+      "trigger": "Cloud engineer departure, increased cloud complexity, or scaling requirements",
+      "domain": "infrastructure",
+      "severity": "medium",
+      "likelihood": "high",
+      "risk_type": "organization",
+      "integration_dependent": false,
+      "standalone_exposure": "Key person dependency for cloud operations, inability to scale cloud adoption, potential security and cost optimization gaps",
+      "deal_impact": [
+        "execution_risk",
+        "cost_exposure"
+      ],
+      "impact_description": "Cloud operations disruption, inability to optimize costs, delayed cloud initiatives",
+      "cost_impact_estimate": "$500K-$1M in operational inefficiencies and hiring costs",
+      "mitigation": "Hire additional cloud engineers and implement knowledge transfer processes",
+      "risk_score": 6,
+      "priority_rank": 10
+    },
+    {
+      "id": "R-005",
+      "timestamp": "2026-01-07T11:50:29.064490",
+      "risk": "Potential AWS account sprawl with 41 accounts indicating weak cloud governance",
+      "trigger": "Continued uncontrolled account creation, lack of centralized billing and governance",
+      "domain": "infrastructure",
+      "severity": "medium",
+      "likelihood": "medium",
+      "risk_type": "vendor",
+      "integration_dependent": false,
+      "standalone_exposure": "Cost optimization challenges, security gaps, compliance difficulties, billing complexity",
+      "deal_impact": [
+        "cost_exposure",
+        "execution_risk"
+      ],
+      "impact_description": "Difficulty in cost optimization, security posture gaps, complex migration planning",
+      "cost_impact_estimate": "$200K-$500K annually in cost optimization opportunities",
+      "mitigation": "Implement AWS Organizations, establish cloud governance framework, consolidate unnecessary accounts",
+      "risk_score": 4,
+      "priority_rank": 15
+    },
+    {
+      "id": "R-006",
+      "timestamp": "2026-01-07T11:52:58.076786",
+      "risk": "Geographic concentration of data centers in single metro area (Chicago)",
+      "trigger": "Regional disaster, power grid failure, or major weather event affecting Chicago metropolitan area",
+      "domain": "network",
+      "severity": "high",
+      "likelihood": "low",
+      "risk_type": "scalability",
+      "integration_dependent": false,
+      "standalone_exposure": "Both primary and secondary data centers could be impacted simultaneously, creating complete infrastructure outage affecting all 12 office locations and 1,812 employees",
+      "deal_impact": [
+        "execution_risk",
+        "value_leakage"
+      ],
+      "impact_description": "Complete business disruption, inability to process claims or policies, potential regulatory violations, customer service failures",
+      "cost_impact_estimate": "$2M-$10M in business disruption costs",
+      "mitigation": "Establish geographically diverse DR site outside Chicago metro area, implement cloud-based DR capabilities",
+      "risk_score": 3,
+      "priority_rank": 19
+    },
+    {
+      "id": "R-007",
+      "timestamp": "2026-01-07T11:53:06.386485",
+      "risk": "Single cloud provider dependency (AWS only)",
+      "trigger": "AWS service outages, pricing changes, or contract disputes",
+      "domain": "network",
+      "severity": "medium",
+      "likelihood": "medium",
+      "risk_type": "vendor",
+      "integration_dependent": false,
+      "standalone_exposure": "$3.4M annual cloud spend concentrated with single provider creates vendor lock-in and negotiating weakness. Service outages affect cloud-hosted applications",
+      "deal_impact": [
+        "cost_exposure",
+        "execution_risk"
+      ],
+      "impact_description": "Potential service disruptions, limited negotiating power on pricing, dependency on single vendor roadmap",
+      "cost_impact_estimate": "$500K-$2M in potential cost increases or migration costs",
+      "mitigation": "Develop multi-cloud strategy, negotiate better contract terms, implement cloud-agnostic architecture patterns",
+      "risk_score": 4,
+      "priority_rank": 16
+    },
+    {
+      "id": "R-008",
+      "timestamp": "2026-01-07T11:55:48.963718",
+      "risk": "RSA SecurID MFA platform approaching end-of-life with potential support discontinuation",
+      "trigger": "RSA SecurID hardware tokens and infrastructure reaching vendor support cutoff dates",
+      "domain": "cybersecurity",
+      "severity": "high",
+      "likelihood": "high",
+      "risk_type": "technical_debt",
+      "integration_dependent": false,
+      "standalone_exposure": "Loss of MFA capability would force fallback to password-only authentication, significantly increasing account compromise risk and potentially violating compliance requirements",
+      "deal_impact": [
+        "execution_risk",
+        "cost_exposure"
+      ],
+      "impact_description": "MFA replacement project required within 12-18 months, estimated $150K-$300K cost, potential compliance violations during transition",
+      "cost_impact_estimate": "$150K-$300K",
+      "mitigation": "Accelerate migration to modern MFA solution (Microsoft Authenticator, Duo, or Okta) with phased rollout plan",
+      "risk_score": 9,
+      "priority_rank": 2
+    },
+    {
+      "id": "R-009",
+      "timestamp": "2026-01-07T11:55:57.919074",
+      "risk": "Splunk Enterprise Security version 9.0 on-premises creates licensing cost escalation and maintenance complexity",
+      "trigger": "Splunk's shift to cloud-first licensing model and increasing on-premises support costs",
+      "domain": "cybersecurity",
+      "severity": "medium",
+      "likelihood": "high",
+      "risk_type": "vendor",
+      "integration_dependent": false,
+      "standalone_exposure": "Significant SIEM licensing cost increases (potentially 200-400% over 3 years) and reduced vendor support for on-premises deployments",
+      "deal_impact": [
+        "cost_exposure",
+        "execution_risk"
+      ],
+      "impact_description": "SIEM costs could escalate from $87K to $200K+ annually, plus migration costs to cloud or alternative platform",
+      "cost_impact_estimate": "$300K-$500K",
+      "mitigation": "Evaluate migration to Splunk Cloud, Microsoft Sentinel, or alternative SIEM platform with cost-benefit analysis",
+      "risk_score": 6,
+      "priority_rank": 11
+    },
+    {
+      "id": "R-010",
+      "timestamp": "2026-01-07T11:56:04.986255",
+      "risk": "Dual email security vendor approach creates management complexity and potential security gaps",
+      "trigger": "Configuration drift between Proofpoint and Mimecast policies, overlapping coverage creating blind spots",
+      "domain": "cybersecurity",
+      "severity": "medium",
+      "likelihood": "medium",
+      "risk_type": "security",
+      "integration_dependent": false,
+      "standalone_exposure": "Inconsistent email security policies, potential for threats to bypass one solution while being caught by another, administrative overhead",
+      "deal_impact": [
+        "execution_risk",
+        "value_leakage"
+      ],
+      "impact_description": "Security incidents due to policy gaps, increased administrative costs, complexity in incident response",
+      "cost_impact_estimate": "$50K-$150K",
+      "mitigation": "Consolidate to single email security platform, standardize policies, implement unified monitoring",
+      "risk_score": 4,
+      "priority_rank": 17
+    },
+    {
+      "id": "R-011",
+      "timestamp": "2026-01-07T11:56:12.054257",
+      "risk": "CyberArk PAM version 13.2 on-premises may have unpatched vulnerabilities and limited cloud integration",
+      "trigger": "Delayed patching cycles for on-premises PAM infrastructure, lack of cloud-native integrations",
+      "domain": "cybersecurity",
+      "severity": "high",
+      "likelihood": "medium",
+      "risk_type": "security",
+      "integration_dependent": false,
+      "standalone_exposure": "Privileged account compromise risk, limited visibility into cloud privileged access, potential compliance violations",
+      "deal_impact": [
+        "execution_risk",
+        "cost_exposure"
+      ],
+      "impact_description": "Privileged account breach could result in complete environment compromise, regulatory fines, business disruption",
+      "cost_impact_estimate": "$500K-$2M",
+      "mitigation": "Upgrade to latest CyberArk version, implement cloud PAM capabilities, establish regular patching schedule",
+      "risk_score": 6,
+      "priority_rank": 12
+    },
+    {
+      "id": "R-012",
+      "timestamp": "2026-01-07T11:56:18.592071",
+      "risk": "41 AWS accounts create significant cloud security governance and compliance challenges",
+      "trigger": "Lack of centralized cloud security controls, inconsistent security configurations across accounts",
+      "domain": "cybersecurity",
+      "severity": "high",
+      "likelihood": "high",
+      "risk_type": "security",
+      "integration_dependent": false,
+      "standalone_exposure": "Cloud misconfigurations, data breaches, compliance violations, shadow IT proliferation, excessive cloud costs",
+      "deal_impact": [
+        "execution_risk",
+        "cost_exposure",
+        "value_leakage"
+      ],
+      "impact_description": "Cloud security incidents, regulatory fines, uncontrolled cloud spending, audit failures",
+      "cost_impact_estimate": "$200K-$1M",
+      "mitigation": "Implement AWS Organizations, centralized security controls, cloud security posture management (CSPM), account consolidation strategy",
+      "risk_score": 9,
+      "priority_rank": 3
+    }
+  ],
+  "strategic_considerations": [
+    {
+      "id": "SC-001",
+      "timestamp": "2026-01-07T11:50:34.954424",
+      "theme": "Cloud Platform Mismatch",
+      "observation": "Target company uses AWS as primary cloud provider with $3.38M annual spend, while buyer uses Azure as primary cloud platform",
+      "implication": "Significant integration complexity requiring either dual cloud management or costly migration of cloud-hosted applications and infrastructure",
+      "deal_relevance": [
+        "integration_risk",
+        "cost_exposure",
+        "timeline_risk"
+      ],
+      "buyer_alignment": "misaligned",
+      "confidence": "high",
+      "domain": "infrastructure"
+    },
+    {
+      "id": "SC-002",
+      "timestamp": "2026-01-07T11:50:46.398801",
+      "theme": "Data Center Consolidation Opportunity",
+      "observation": "Target has 2 colocation facilities in Chicago ($748K annual cost) while buyer has 4 data centers including Chicago primary facility",
+      "implication": "Potential for data center consolidation and cost synergies, but requires careful migration planning to avoid geographic concentration risks",
+      "deal_relevance": [
+        "synergy_barrier",
+        "execution_risk"
+      ],
+      "buyer_alignment": "partial",
+      "confidence": "medium",
+      "domain": "infrastructure"
+    },
+    {
+      "id": "SC-003",
+      "timestamp": "2026-01-07T11:50:52.752727",
+      "theme": "Infrastructure Team Scale Mismatch",
+      "observation": "Target has 21 infrastructure staff supporting $4.1M infrastructure spend, while buyer has 101 infrastructure staff supporting larger environment",
+      "implication": "Target team may lack scale and specialization needed for complex integration, particularly in cloud engineering (only 1 cloud engineer)",
+      "deal_relevance": [
+        "execution_risk",
+        "integration_risk"
+      ],
+      "buyer_alignment": "partial",
+      "confidence": "high",
+      "domain": "infrastructure"
+    },
+    {
+      "id": "SC-004",
+      "timestamp": "2026-01-07T11:50:58.577620",
+      "theme": "DR Architecture Incompatibility",
+      "observation": "Target has hot DR with both sites in Chicago, while buyer has warm DR across multiple geographic regions",
+      "implication": "Target's DR approach violates geographic separation principles and may not meet buyer's resilience standards, requiring DR architecture redesign",
+      "deal_relevance": [
+        "integration_risk",
+        "value_leakage"
+      ],
+      "buyer_alignment": "misaligned",
+      "confidence": "high",
+      "domain": "infrastructure"
+    },
+    {
+      "id": "SC-005",
+      "timestamp": "2026-01-07T11:53:22.016188",
+      "theme": "Cloud Platform Mismatch",
+      "observation": "National Mutual uses AWS (us-east-1, $3.4M annual) while Atlantic International uses AWS (us-east-2, $3.9M annual) - same provider but different regions",
+      "implication": "Regional difference creates network latency and data transfer costs between environments, but same cloud provider simplifies integration compared to multi-cloud scenario",
+      "deal_relevance": [
+        "integration_risk",
+        "execution_risk"
+      ],
+      "buyer_alignment": "partial",
+      "confidence": "high",
+      "domain": "network"
+    },
+    {
+      "id": "SC-006",
+      "timestamp": "2026-01-07T11:53:27.798814",
+      "theme": "Security Platform Alignment",
+      "observation": "Both companies use Check Point firewalls and Mimecast email security, but differ on SIEM (National Mutual: IBM QRadar vs Atlantic International: Microsoft Sentinel) and MFA (RSA SecurID vs Microsoft Authenticator)",
+      "implication": "Partial security stack alignment reduces integration complexity for firewalls and email security, but SIEM and MFA consolidation will require migration work",
+      "deal_relevance": [
+        "integration_risk",
+        "synergy_barrier"
+      ],
+      "buyer_alignment": "partial",
+      "confidence": "high",
+      "domain": "network"
+    },
+    {
+      "id": "SC-007",
+      "timestamp": "2026-01-07T11:53:33.020783",
+      "theme": "Geographic Data Center Concentration",
+      "observation": "National Mutual has both data centers in Chicago while Atlantic International has geographically diverse facilities (Chicago, Phoenix, Atlanta, New York)",
+      "implication": "Target's geographic concentration creates integration opportunity to leverage buyer's distributed infrastructure for improved resilience, but may require significant network architecture changes",
+      "deal_relevance": [
+        "integration_risk",
+        "value_leakage"
+      ],
+      "buyer_alignment": "misaligned",
+      "confidence": "high",
+      "domain": "network"
+    },
+    {
+      "id": "SC-008",
+      "timestamp": "2026-01-07T11:56:32.404999",
+      "theme": "Identity Platform Alignment",
+      "observation": "Target uses Microsoft Entra ID (Azure AD) as primary identity provider, matching buyer's Azure AD environment",
+      "implication": "Strong identity platform alignment reduces integration complexity and enables faster user onboarding, but RSA SecurID MFA replacement still required",
+      "deal_relevance": [
+        "execution_risk",
+        "synergy_barrier"
+      ],
+      "buyer_alignment": "aligned",
+      "confidence": "high",
+      "domain": "cybersecurity"
+    },
+    {
+      "id": "SC-009",
+      "timestamp": "2026-01-07T11:56:38.201257",
+      "theme": "Cloud Security Architecture Mismatch",
+      "observation": "Target operates primarily on AWS (41 accounts, $3.4M annual spend) while buyer is Azure-centric with Microsoft security stack",
+      "implication": "Significant cloud platform migration or multi-cloud security management required, impacting synergy realization timeline and costs",
+      "deal_relevance": [
+        "integration_risk",
+        "synergy_barrier",
+        "execution_risk"
+      ],
+      "buyer_alignment": "misaligned",
+      "confidence": "high",
+      "domain": "cybersecurity"
+    },
+    {
+      "id": "SC-010",
+      "timestamp": "2026-01-07T11:56:45.022349",
+      "theme": "Security Operations Consolidation Opportunity",
+      "observation": "Target has mature security team (14 FTEs, $2.3M cost) with Splunk SIEM, while buyer uses Microsoft Sentinel",
+      "implication": "Opportunity for security operations consolidation and cost synergies, but requires SIEM migration and potential team restructuring",
+      "deal_relevance": [
+        "synergy_barrier",
+        "execution_risk",
+        "value_leakage"
+      ],
+      "buyer_alignment": "partial",
+      "confidence": "medium",
+      "domain": "cybersecurity"
+    },
+    {
+      "id": "SC-011",
+      "timestamp": "2026-01-07T11:56:49.936785",
+      "theme": "Endpoint Security Platform Alignment",
+      "observation": "Both target (CrowdStrike Falcon) and buyer (CrowdStrike Falcon) use the same EDR platform",
+      "implication": "Excellent alignment enables rapid endpoint security integration and immediate visibility across combined environment",
+      "deal_relevance": [
+        "execution_risk"
+      ],
+      "buyer_alignment": "aligned",
+      "confidence": "high",
+      "domain": "cybersecurity"
+    }
+  ],
+  "work_items": [
+    {
+      "id": "WI-001",
+      "timestamp": "2026-01-07T11:51:05.831754",
+      "title": "Infrastructure Discovery and Assessment",
+      "description": "Conduct comprehensive discovery of target infrastructure including detailed inventory of AWS resources, on-premises systems, network topology, and dependencies. Document current architecture and identify integration touchpoints.",
+      "domain": "infrastructure",
+      "category": "assessment",
+      "phase": "Day_1",
+      "phase_rationale": "Critical to understand what is being acquired and establish baseline for all subsequent integration work",
+      "effort_estimate": "6-8 weeks",
+      "cost_estimate_range": "$150K-$250K",
+      "skills_required": [
+        "infrastructure_architect",
+        "cloud_engineer",
+        "systems_administrator"
+      ],
+      "depends_on": [],
+      "priority_score": 1
+    },
+    {
+      "id": "WI-002",
+      "timestamp": "2026-01-07T11:51:12.077613",
+      "title": "Establish Network Connectivity",
+      "description": "Establish secure network connectivity between target and buyer environments to enable integration activities. Include VPN setup, firewall rules, and basic monitoring.",
+      "domain": "infrastructure",
+      "category": "integration",
+      "phase": "Day_1",
+      "phase_rationale": "Required for business continuity and to enable all other integration activities",
+      "effort_estimate": "2-3 weeks",
+      "cost_estimate_range": "$50K-$100K",
+      "skills_required": [
+        "network_engineer",
+        "security_engineer"
+      ],
+      "depends_on": [],
+      "priority_score": 1
+    },
+    {
+      "id": "WI-003",
+      "timestamp": "2026-01-07T11:51:17.544190",
+      "title": "AWS to Azure Migration Strategy Development",
+      "description": "Develop comprehensive migration strategy for moving target's AWS workloads to buyer's Azure environment. Include application assessment, migration patterns, timeline, and risk mitigation.",
+      "domain": "infrastructure",
+      "category": "migration",
+      "phase": "Day_100",
+      "phase_rationale": "Requires completion of discovery phase and is not critical for immediate business continuity",
+      "effort_estimate": "8-12 weeks",
+      "cost_estimate_range": "$200K-$400K",
+      "depends_on": [
+        "WI-001"
+      ],
+      "skills_required": [
+        "cloud_architect",
+        "migration_specialist",
+        "aws_engineer",
+        "azure_engineer"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "WI-004",
+      "timestamp": "2026-01-07T11:51:23.161637",
+      "title": "Data Center Consolidation Planning",
+      "description": "Plan consolidation of target's Chicago colocation facilities into buyer's data center footprint. Address geographic separation requirements and develop migration timeline.",
+      "domain": "infrastructure",
+      "category": "migration",
+      "phase": "Day_100",
+      "phase_rationale": "Not critical for Day 1 operations but important for cost synergies and risk reduction",
+      "effort_estimate": "6-10 weeks",
+      "cost_estimate_range": "$100K-$200K",
+      "depends_on": [
+        "WI-001"
+      ],
+      "skills_required": [
+        "data_center_specialist",
+        "migration_planner",
+        "infrastructure_architect"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "WI-005",
+      "timestamp": "2026-01-07T11:51:28.839511",
+      "title": "DR Architecture Redesign",
+      "description": "Redesign disaster recovery architecture to address geographic concentration risk and align with buyer's DR standards. Implement geographically separated DR capabilities.",
+      "domain": "infrastructure",
+      "category": "remediation",
+      "phase": "Day_100",
+      "phase_rationale": "Critical for risk mitigation but can be addressed after immediate connectivity needs",
+      "effort_estimate": "12-16 weeks",
+      "cost_estimate_range": "$300K-$600K",
+      "depends_on": [
+        "WI-001",
+        "WI-004"
+      ],
+      "skills_required": [
+        "dr_specialist",
+        "infrastructure_architect",
+        "storage_engineer"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "WI-006",
+      "timestamp": "2026-01-07T11:51:34.709243",
+      "title": "Cloud Workload Migration Execution",
+      "description": "Execute migration of target's AWS workloads to buyer's Azure environment based on developed strategy. Include testing, cutover, and optimization activities.",
+      "domain": "infrastructure",
+      "category": "migration",
+      "phase": "Post_100",
+      "phase_rationale": "Major transformation work that requires completed strategy and can occur after stabilization",
+      "effort_estimate": "20-30 weeks",
+      "cost_estimate_range": "$1.5M-$3M",
+      "depends_on": [
+        "WI-003"
+      ],
+      "skills_required": [
+        "migration_engineer",
+        "cloud_engineer",
+        "application_engineer",
+        "dba"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "WI-007",
+      "timestamp": "2026-01-07T11:51:40.407679",
+      "title": "Infrastructure Team Integration",
+      "description": "Integrate target infrastructure team into buyer organization, including skills assessment, training, role alignment, and knowledge transfer processes.",
+      "domain": "infrastructure",
+      "category": "integration",
+      "phase": "Day_100",
+      "phase_rationale": "Important for maintaining operational capability during integration but not Day 1 critical",
+      "effort_estimate": "8-12 weeks",
+      "cost_estimate_range": "$100K-$200K",
+      "skills_required": [
+        "hr_specialist",
+        "training_coordinator",
+        "infrastructure_manager"
+      ],
+      "depends_on": [],
+      "priority_score": 1
+    },
+    {
+      "id": "WI-008",
+      "timestamp": "2026-01-07T11:53:40.028681",
+      "title": "Network Discovery and Documentation",
+      "description": "Comprehensive discovery of National Mutual's network infrastructure including WAN topology, LAN switching, IP addressing schemes, DNS/DHCP architecture, and security configurations. Document current state to enable integration planning.",
+      "domain": "network",
+      "category": "assessment",
+      "phase": "Day_1",
+      "phase_rationale": "Must understand network architecture before any integration activities can proceed safely",
+      "effort_estimate": "4-6 weeks",
+      "cost_estimate_range": "$50K-$75K",
+      "skills_required": [
+        "network_engineer",
+        "security_engineer",
+        "documentation_specialist"
+      ],
+      "depends_on": [],
+      "priority_score": 1
+    },
+    {
+      "id": "WI-009",
+      "timestamp": "2026-01-07T11:53:47.049118",
+      "title": "IP Address Conflict Analysis and Remediation Planning",
+      "description": "Analyze National Mutual's IP addressing scheme against Atlantic International's networks to identify conflicts. Develop remediation plan for IP renumbering if required, including impact assessment on applications and network devices.",
+      "domain": "network",
+      "category": "assessment",
+      "phase": "Day_1",
+      "phase_rationale": "IP conflicts must be identified immediately to prevent connectivity issues during integration",
+      "effort_estimate": "2-3 weeks",
+      "cost_estimate_range": "$25K-$40K",
+      "depends_on": [
+        "WI-008"
+      ],
+      "skills_required": [
+        "network_engineer",
+        "systems_administrator"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "WI-010",
+      "timestamp": "2026-01-07T11:53:53.386401",
+      "title": "Establish Secure Network Connectivity to Buyer",
+      "description": "Implement secure network connectivity between National Mutual and Atlantic International networks to enable Day 1 operations. This may include VPN tunnels, dedicated circuits, or cloud-based connectivity depending on discovered architecture.",
+      "domain": "network",
+      "category": "integration",
+      "phase": "Day_1",
+      "phase_rationale": "Basic connectivity required for email, authentication, and critical business applications from Day 1",
+      "effort_estimate": "3-4 weeks",
+      "cost_estimate_range": "$40K-$80K",
+      "depends_on": [
+        "WI-008",
+        "WI-009"
+      ],
+      "skills_required": [
+        "network_engineer",
+        "security_engineer",
+        "cloud_engineer"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "WI-011",
+      "timestamp": "2026-01-07T11:54:00.471732",
+      "title": "SIEM Migration from QRadar to Microsoft Sentinel",
+      "description": "Migrate security monitoring from IBM QRadar to Microsoft Sentinel to align with buyer's security platform. Includes data migration, rule conversion, dashboard recreation, and team training.",
+      "domain": "network",
+      "category": "migration",
+      "phase": "Day_100",
+      "phase_rationale": "Security monitoring can continue on existing platform initially, migration provides standardization and cost synergies",
+      "effort_estimate": "8-12 weeks",
+      "cost_estimate_range": "$150K-$250K",
+      "skills_required": [
+        "security_engineer",
+        "siem_specialist",
+        "cloud_engineer"
+      ],
+      "depends_on": [],
+      "priority_score": 1
+    },
+    {
+      "id": "WI-012",
+      "timestamp": "2026-01-07T11:54:06.922076",
+      "title": "MFA Migration from RSA SecurID to Microsoft Authenticator",
+      "description": "Migrate multi-factor authentication from RSA SecurID to Microsoft Authenticator to align with buyer's identity platform. Includes user enrollment, application integration updates, and policy migration.",
+      "domain": "network",
+      "category": "migration",
+      "phase": "Day_100",
+      "phase_rationale": "Existing MFA can continue short-term, migration enables identity consolidation and cost savings",
+      "effort_estimate": "6-8 weeks",
+      "cost_estimate_range": "$75K-$125K",
+      "skills_required": [
+        "identity_engineer",
+        "security_engineer",
+        "application_administrator"
+      ],
+      "depends_on": [],
+      "priority_score": 1
+    },
+    {
+      "id": "WI-013",
+      "timestamp": "2026-01-07T11:54:13.637136",
+      "title": "AWS Region Consolidation Planning",
+      "description": "Evaluate consolidating National Mutual's AWS us-east-1 workloads to Atlantic International's us-east-2 region or establish cross-region connectivity. Assess data transfer costs, latency impacts, and compliance requirements.",
+      "domain": "network",
+      "category": "assessment",
+      "phase": "Post_100",
+      "phase_rationale": "Regional consolidation provides cost optimization but not critical for initial operations",
+      "effort_estimate": "4-6 weeks",
+      "cost_estimate_range": "$40K-$60K",
+      "skills_required": [
+        "cloud_engineer",
+        "network_engineer",
+        "cost_analyst"
+      ],
+      "depends_on": [],
+      "priority_score": 1
+    },
+    {
+      "id": "WI-014",
+      "timestamp": "2026-01-07T11:54:19.678653",
+      "title": "Data Center Consolidation and Geographic Diversification",
+      "description": "Consolidate National Mutual's Chicago-based data centers into Atlantic International's geographically diverse infrastructure. Migrate workloads to Phoenix, Atlanta, or New York facilities to improve resilience.",
+      "domain": "network",
+      "category": "migration",
+      "phase": "Post_100",
+      "phase_rationale": "Major infrastructure consolidation that improves resilience but requires extensive planning and testing",
+      "effort_estimate": "12-18 months",
+      "cost_estimate_range": "$500K-$1M",
+      "depends_on": [
+        "WI-008",
+        "WI-010"
+      ],
+      "skills_required": [
+        "infrastructure_architect",
+        "network_engineer",
+        "project_manager",
+        "migration_specialist"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "WI-015",
+      "timestamp": "2026-01-07T11:57:17.177147",
+      "title": "Security Access Provisioning and Identity Integration",
+      "description": "Establish secure connectivity between buyer and target environments, provision buyer security team access to target systems, integrate Azure AD directories for unified identity management",
+      "domain": "cybersecurity",
+      "category": "integration",
+      "phase": "Day_1",
+      "phase_rationale": "Required for business continuity and buyer security oversight from day one",
+      "effort_estimate": "3-4 weeks",
+      "cost_estimate_range": "$75K-$125K",
+      "skills_required": [
+        "security_architect",
+        "identity_engineer",
+        "network_engineer"
+      ],
+      "depends_on": [],
+      "priority_score": 1
+    },
+    {
+      "id": "WI-016",
+      "timestamp": "2026-01-07T11:57:23.830991",
+      "title": "CrowdStrike Falcon Tenant Integration",
+      "description": "Integrate target's CrowdStrike Falcon deployment with buyer's tenant for unified endpoint visibility and management across combined organization",
+      "domain": "cybersecurity",
+      "category": "integration",
+      "phase": "Day_1",
+      "phase_rationale": "Critical for immediate endpoint security visibility and threat detection across combined environment",
+      "effort_estimate": "1-2 weeks",
+      "cost_estimate_range": "$25K-$50K",
+      "skills_required": [
+        "security_engineer",
+        "endpoint_security_specialist"
+      ],
+      "depends_on": [],
+      "priority_score": 1
+    },
+    {
+      "id": "WI-017",
+      "timestamp": "2026-01-07T11:57:30.541272",
+      "title": "RSA SecurID to Microsoft Authenticator Migration",
+      "description": "Replace RSA SecurID MFA platform with Microsoft Authenticator to align with buyer standards and eliminate EOL risk. Include user training and phased rollout.",
+      "domain": "cybersecurity",
+      "category": "migration",
+      "phase": "Day_100",
+      "phase_rationale": "Addresses technical debt and aligns with buyer MFA standard, but not critical for day-one operations",
+      "effort_estimate": "8-12 weeks",
+      "cost_estimate_range": "$150K-$250K",
+      "skills_required": [
+        "identity_engineer",
+        "security_engineer",
+        "change_management"
+      ],
+      "depends_on": [],
+      "priority_score": 1
+    },
+    {
+      "id": "WI-018",
+      "timestamp": "2026-01-07T11:57:37.040052",
+      "title": "SIEM Migration from Splunk to Microsoft Sentinel",
+      "description": "Migrate security operations from Splunk Enterprise Security to Microsoft Sentinel, including data source configuration, custom rule migration, and SOC team training",
+      "domain": "cybersecurity",
+      "category": "migration",
+      "phase": "Day_100",
+      "phase_rationale": "Enables security operations consolidation and cost synergies, but requires parallel operation during transition",
+      "effort_estimate": "12-16 weeks",
+      "cost_estimate_range": "$300K-$500K",
+      "skills_required": [
+        "siem_engineer",
+        "security_analyst",
+        "azure_security_specialist"
+      ],
+      "depends_on": [
+        "WI-015"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "WI-019",
+      "timestamp": "2026-01-07T11:57:43.596220",
+      "title": "AWS Cloud Security Assessment and Remediation",
+      "description": "Comprehensive security assessment of 41 AWS accounts, implement centralized security controls, remediate misconfigurations, and establish cloud security governance",
+      "domain": "cybersecurity",
+      "category": "assessment",
+      "phase": "Day_100",
+      "phase_rationale": "Critical for understanding cloud security posture and reducing risk, but can operate in parallel with other integration work",
+      "effort_estimate": "6-10 weeks",
+      "cost_estimate_range": "$200K-$400K",
+      "skills_required": [
+        "cloud_security_engineer",
+        "aws_specialist",
+        "compliance_specialist"
+      ],
+      "depends_on": [],
+      "priority_score": 1
+    },
+    {
+      "id": "WI-020",
+      "timestamp": "2026-01-07T11:57:51.890837",
+      "title": "Email Security Platform Consolidation",
+      "description": "Consolidate dual email security vendors (Proofpoint and Mimecast) to single platform aligned with buyer standards, migrate policies and configurations",
+      "domain": "cybersecurity",
+      "category": "migration",
+      "phase": "Post_100",
+      "phase_rationale": "Optimization opportunity that can be addressed after core integration is stable",
+      "effort_estimate": "4-6 weeks",
+      "cost_estimate_range": "$75K-$150K",
+      "skills_required": [
+        "email_security_engineer",
+        "messaging_specialist"
+      ],
+      "depends_on": [],
+      "priority_score": 1
+    },
+    {
+      "id": "WI-021",
+      "timestamp": "2026-01-07T11:58:48.203050",
+      "title": "Integration Program Management Office Establishment",
+      "description": "Establish dedicated PMO to coordinate cross-domain dependencies, manage critical path, and ensure proper sequencing of identity, network, infrastructure, and security migrations",
+      "domain": "cross-domain",
+      "category": "integration",
+      "phase": "Day_1",
+      "phase_rationale": "Critical path management and dependency coordination must begin immediately to avoid timeline delays",
+      "effort_estimate": "12-18 months ongoing",
+      "cost_estimate_range": "$800K-$1.2M",
+      "skills_required": [
+        "program_manager",
+        "integration_architect",
+        "change_manager"
+      ],
+      "depends_on": [],
+      "priority_score": 1
+    },
+    {
+      "id": "WI-022",
+      "timestamp": "2026-01-07T11:58:54.358557",
+      "title": "Platform Migration Strategy and Sequencing",
+      "description": "Develop comprehensive migration strategy addressing AWS->Azure, RSA->Microsoft MFA, Splunk->Sentinel, and QRadar->Sentinel with proper sequencing to maintain security and operational continuity",
+      "domain": "cross-domain",
+      "category": "migration",
+      "phase": "Day_1",
+      "phase_rationale": "Strategy must be defined before any major migrations begin to ensure proper sequencing and risk mitigation",
+      "effort_estimate": "8-12 weeks",
+      "cost_estimate_range": "$200K-$350K",
+      "skills_required": [
+        "solution_architect",
+        "migration_specialist",
+        "security_architect"
+      ],
+      "depends_on": [],
+      "priority_score": 1
+    }
+  ],
+  "work_items_by_phase": {
+    "Day_1": [
+      {
+        "id": "WI-001",
+        "timestamp": "2026-01-07T11:51:05.831754",
+        "title": "Infrastructure Discovery and Assessment",
+        "description": "Conduct comprehensive discovery of target infrastructure including detailed inventory of AWS resources, on-premises systems, network topology, and dependencies. Document current architecture and identify integration touchpoints.",
+        "domain": "infrastructure",
+        "category": "assessment",
+        "phase": "Day_1",
+        "phase_rationale": "Critical to understand what is being acquired and establish baseline for all subsequent integration work",
+        "effort_estimate": "6-8 weeks",
+        "cost_estimate_range": "$150K-$250K",
+        "skills_required": [
+          "infrastructure_architect",
+          "cloud_engineer",
+          "systems_administrator"
+        ],
+        "depends_on": [],
+        "priority_score": 1
+      },
+      {
+        "id": "WI-002",
+        "timestamp": "2026-01-07T11:51:12.077613",
+        "title": "Establish Network Connectivity",
+        "description": "Establish secure network connectivity between target and buyer environments to enable integration activities. Include VPN setup, firewall rules, and basic monitoring.",
+        "domain": "infrastructure",
+        "category": "integration",
+        "phase": "Day_1",
+        "phase_rationale": "Required for business continuity and to enable all other integration activities",
+        "effort_estimate": "2-3 weeks",
+        "cost_estimate_range": "$50K-$100K",
+        "skills_required": [
+          "network_engineer",
+          "security_engineer"
+        ],
+        "depends_on": [],
+        "priority_score": 1
+      },
+      {
+        "id": "WI-008",
+        "timestamp": "2026-01-07T11:53:40.028681",
+        "title": "Network Discovery and Documentation",
+        "description": "Comprehensive discovery of National Mutual's network infrastructure including WAN topology, LAN switching, IP addressing schemes, DNS/DHCP architecture, and security configurations. Document current state to enable integration planning.",
+        "domain": "network",
+        "category": "assessment",
+        "phase": "Day_1",
+        "phase_rationale": "Must understand network architecture before any integration activities can proceed safely",
+        "effort_estimate": "4-6 weeks",
+        "cost_estimate_range": "$50K-$75K",
+        "skills_required": [
+          "network_engineer",
+          "security_engineer",
+          "documentation_specialist"
+        ],
+        "depends_on": [],
+        "priority_score": 1
+      },
+      {
+        "id": "WI-009",
+        "timestamp": "2026-01-07T11:53:47.049118",
+        "title": "IP Address Conflict Analysis and Remediation Planning",
+        "description": "Analyze National Mutual's IP addressing scheme against Atlantic International's networks to identify conflicts. Develop remediation plan for IP renumbering if required, including impact assessment on applications and network devices.",
+        "domain": "network",
+        "category": "assessment",
+        "phase": "Day_1",
+        "phase_rationale": "IP conflicts must be identified immediately to prevent connectivity issues during integration",
+        "effort_estimate": "2-3 weeks",
+        "cost_estimate_range": "$25K-$40K",
+        "depends_on": [
+          "WI-008"
+        ],
+        "skills_required": [
+          "network_engineer",
+          "systems_administrator"
+        ],
+        "priority_score": 1
+      },
+      {
+        "id": "WI-010",
+        "timestamp": "2026-01-07T11:53:53.386401",
+        "title": "Establish Secure Network Connectivity to Buyer",
+        "description": "Implement secure network connectivity between National Mutual and Atlantic International networks to enable Day 1 operations. This may include VPN tunnels, dedicated circuits, or cloud-based connectivity depending on discovered architecture.",
+        "domain": "network",
+        "category": "integration",
+        "phase": "Day_1",
+        "phase_rationale": "Basic connectivity required for email, authentication, and critical business applications from Day 1",
+        "effort_estimate": "3-4 weeks",
+        "cost_estimate_range": "$40K-$80K",
+        "depends_on": [
+          "WI-008",
+          "WI-009"
+        ],
+        "skills_required": [
+          "network_engineer",
+          "security_engineer",
+          "cloud_engineer"
+        ],
+        "priority_score": 1
+      },
+      {
+        "id": "WI-015",
+        "timestamp": "2026-01-07T11:57:17.177147",
+        "title": "Security Access Provisioning and Identity Integration",
+        "description": "Establish secure connectivity between buyer and target environments, provision buyer security team access to target systems, integrate Azure AD directories for unified identity management",
+        "domain": "cybersecurity",
+        "category": "integration",
+        "phase": "Day_1",
+        "phase_rationale": "Required for business continuity and buyer security oversight from day one",
+        "effort_estimate": "3-4 weeks",
+        "cost_estimate_range": "$75K-$125K",
+        "skills_required": [
+          "security_architect",
+          "identity_engineer",
+          "network_engineer"
+        ],
+        "depends_on": [],
+        "priority_score": 1
+      },
+      {
+        "id": "WI-016",
+        "timestamp": "2026-01-07T11:57:23.830991",
+        "title": "CrowdStrike Falcon Tenant Integration",
+        "description": "Integrate target's CrowdStrike Falcon deployment with buyer's tenant for unified endpoint visibility and management across combined organization",
+        "domain": "cybersecurity",
+        "category": "integration",
+        "phase": "Day_1",
+        "phase_rationale": "Critical for immediate endpoint security visibility and threat detection across combined environment",
+        "effort_estimate": "1-2 weeks",
+        "cost_estimate_range": "$25K-$50K",
+        "skills_required": [
+          "security_engineer",
+          "endpoint_security_specialist"
+        ],
+        "depends_on": [],
+        "priority_score": 1
+      },
+      {
+        "id": "WI-021",
+        "timestamp": "2026-01-07T11:58:48.203050",
+        "title": "Integration Program Management Office Establishment",
+        "description": "Establish dedicated PMO to coordinate cross-domain dependencies, manage critical path, and ensure proper sequencing of identity, network, infrastructure, and security migrations",
+        "domain": "cross-domain",
+        "category": "integration",
+        "phase": "Day_1",
+        "phase_rationale": "Critical path management and dependency coordination must begin immediately to avoid timeline delays",
+        "effort_estimate": "12-18 months ongoing",
+        "cost_estimate_range": "$800K-$1.2M",
+        "skills_required": [
+          "program_manager",
+          "integration_architect",
+          "change_manager"
+        ],
+        "depends_on": [],
+        "priority_score": 1
+      },
+      {
+        "id": "WI-022",
+        "timestamp": "2026-01-07T11:58:54.358557",
+        "title": "Platform Migration Strategy and Sequencing",
+        "description": "Develop comprehensive migration strategy addressing AWS->Azure, RSA->Microsoft MFA, Splunk->Sentinel, and QRadar->Sentinel with proper sequencing to maintain security and operational continuity",
+        "domain": "cross-domain",
+        "category": "migration",
+        "phase": "Day_1",
+        "phase_rationale": "Strategy must be defined before any major migrations begin to ensure proper sequencing and risk mitigation",
+        "effort_estimate": "8-12 weeks",
+        "cost_estimate_range": "$200K-$350K",
+        "skills_required": [
+          "solution_architect",
+          "migration_specialist",
+          "security_architect"
+        ],
+        "depends_on": [],
+        "priority_score": 1
+      }
+    ],
+    "Day_100": [
+      {
+        "id": "WI-003",
+        "timestamp": "2026-01-07T11:51:17.544190",
+        "title": "AWS to Azure Migration Strategy Development",
+        "description": "Develop comprehensive migration strategy for moving target's AWS workloads to buyer's Azure environment. Include application assessment, migration patterns, timeline, and risk mitigation.",
+        "domain": "infrastructure",
+        "category": "migration",
+        "phase": "Day_100",
+        "phase_rationale": "Requires completion of discovery phase and is not critical for immediate business continuity",
+        "effort_estimate": "8-12 weeks",
+        "cost_estimate_range": "$200K-$400K",
+        "depends_on": [
+          "WI-001"
+        ],
+        "skills_required": [
+          "cloud_architect",
+          "migration_specialist",
+          "aws_engineer",
+          "azure_engineer"
+        ],
+        "priority_score": 1
+      },
+      {
+        "id": "WI-004",
+        "timestamp": "2026-01-07T11:51:23.161637",
+        "title": "Data Center Consolidation Planning",
+        "description": "Plan consolidation of target's Chicago colocation facilities into buyer's data center footprint. Address geographic separation requirements and develop migration timeline.",
+        "domain": "infrastructure",
+        "category": "migration",
+        "phase": "Day_100",
+        "phase_rationale": "Not critical for Day 1 operations but important for cost synergies and risk reduction",
+        "effort_estimate": "6-10 weeks",
+        "cost_estimate_range": "$100K-$200K",
+        "depends_on": [
+          "WI-001"
+        ],
+        "skills_required": [
+          "data_center_specialist",
+          "migration_planner",
+          "infrastructure_architect"
+        ],
+        "priority_score": 1
+      },
+      {
+        "id": "WI-005",
+        "timestamp": "2026-01-07T11:51:28.839511",
+        "title": "DR Architecture Redesign",
+        "description": "Redesign disaster recovery architecture to address geographic concentration risk and align with buyer's DR standards. Implement geographically separated DR capabilities.",
+        "domain": "infrastructure",
+        "category": "remediation",
+        "phase": "Day_100",
+        "phase_rationale": "Critical for risk mitigation but can be addressed after immediate connectivity needs",
+        "effort_estimate": "12-16 weeks",
+        "cost_estimate_range": "$300K-$600K",
+        "depends_on": [
+          "WI-001",
+          "WI-004"
+        ],
+        "skills_required": [
+          "dr_specialist",
+          "infrastructure_architect",
+          "storage_engineer"
+        ],
+        "priority_score": 1
+      },
+      {
+        "id": "WI-007",
+        "timestamp": "2026-01-07T11:51:40.407679",
+        "title": "Infrastructure Team Integration",
+        "description": "Integrate target infrastructure team into buyer organization, including skills assessment, training, role alignment, and knowledge transfer processes.",
+        "domain": "infrastructure",
+        "category": "integration",
+        "phase": "Day_100",
+        "phase_rationale": "Important for maintaining operational capability during integration but not Day 1 critical",
+        "effort_estimate": "8-12 weeks",
+        "cost_estimate_range": "$100K-$200K",
+        "skills_required": [
+          "hr_specialist",
+          "training_coordinator",
+          "infrastructure_manager"
+        ],
+        "depends_on": [],
+        "priority_score": 1
+      },
+      {
+        "id": "WI-011",
+        "timestamp": "2026-01-07T11:54:00.471732",
+        "title": "SIEM Migration from QRadar to Microsoft Sentinel",
+        "description": "Migrate security monitoring from IBM QRadar to Microsoft Sentinel to align with buyer's security platform. Includes data migration, rule conversion, dashboard recreation, and team training.",
+        "domain": "network",
+        "category": "migration",
+        "phase": "Day_100",
+        "phase_rationale": "Security monitoring can continue on existing platform initially, migration provides standardization and cost synergies",
+        "effort_estimate": "8-12 weeks",
+        "cost_estimate_range": "$150K-$250K",
+        "skills_required": [
+          "security_engineer",
+          "siem_specialist",
+          "cloud_engineer"
+        ],
+        "depends_on": [],
+        "priority_score": 1
+      },
+      {
+        "id": "WI-012",
+        "timestamp": "2026-01-07T11:54:06.922076",
+        "title": "MFA Migration from RSA SecurID to Microsoft Authenticator",
+        "description": "Migrate multi-factor authentication from RSA SecurID to Microsoft Authenticator to align with buyer's identity platform. Includes user enrollment, application integration updates, and policy migration.",
+        "domain": "network",
+        "category": "migration",
+        "phase": "Day_100",
+        "phase_rationale": "Existing MFA can continue short-term, migration enables identity consolidation and cost savings",
+        "effort_estimate": "6-8 weeks",
+        "cost_estimate_range": "$75K-$125K",
+        "skills_required": [
+          "identity_engineer",
+          "security_engineer",
+          "application_administrator"
+        ],
+        "depends_on": [],
+        "priority_score": 1
+      },
+      {
+        "id": "WI-017",
+        "timestamp": "2026-01-07T11:57:30.541272",
+        "title": "RSA SecurID to Microsoft Authenticator Migration",
+        "description": "Replace RSA SecurID MFA platform with Microsoft Authenticator to align with buyer standards and eliminate EOL risk. Include user training and phased rollout.",
+        "domain": "cybersecurity",
+        "category": "migration",
+        "phase": "Day_100",
+        "phase_rationale": "Addresses technical debt and aligns with buyer MFA standard, but not critical for day-one operations",
+        "effort_estimate": "8-12 weeks",
+        "cost_estimate_range": "$150K-$250K",
+        "skills_required": [
+          "identity_engineer",
+          "security_engineer",
+          "change_management"
+        ],
+        "depends_on": [],
+        "priority_score": 1
+      },
+      {
+        "id": "WI-018",
+        "timestamp": "2026-01-07T11:57:37.040052",
+        "title": "SIEM Migration from Splunk to Microsoft Sentinel",
+        "description": "Migrate security operations from Splunk Enterprise Security to Microsoft Sentinel, including data source configuration, custom rule migration, and SOC team training",
+        "domain": "cybersecurity",
+        "category": "migration",
+        "phase": "Day_100",
+        "phase_rationale": "Enables security operations consolidation and cost synergies, but requires parallel operation during transition",
+        "effort_estimate": "12-16 weeks",
+        "cost_estimate_range": "$300K-$500K",
+        "skills_required": [
+          "siem_engineer",
+          "security_analyst",
+          "azure_security_specialist"
+        ],
+        "depends_on": [
+          "WI-015"
+        ],
+        "priority_score": 1
+      },
+      {
+        "id": "WI-019",
+        "timestamp": "2026-01-07T11:57:43.596220",
+        "title": "AWS Cloud Security Assessment and Remediation",
+        "description": "Comprehensive security assessment of 41 AWS accounts, implement centralized security controls, remediate misconfigurations, and establish cloud security governance",
+        "domain": "cybersecurity",
+        "category": "assessment",
+        "phase": "Day_100",
+        "phase_rationale": "Critical for understanding cloud security posture and reducing risk, but can operate in parallel with other integration work",
+        "effort_estimate": "6-10 weeks",
+        "cost_estimate_range": "$200K-$400K",
+        "skills_required": [
+          "cloud_security_engineer",
+          "aws_specialist",
+          "compliance_specialist"
+        ],
+        "depends_on": [],
+        "priority_score": 1
+      }
+    ],
+    "Post_100": [
+      {
+        "id": "WI-006",
+        "timestamp": "2026-01-07T11:51:34.709243",
+        "title": "Cloud Workload Migration Execution",
+        "description": "Execute migration of target's AWS workloads to buyer's Azure environment based on developed strategy. Include testing, cutover, and optimization activities.",
+        "domain": "infrastructure",
+        "category": "migration",
+        "phase": "Post_100",
+        "phase_rationale": "Major transformation work that requires completed strategy and can occur after stabilization",
+        "effort_estimate": "20-30 weeks",
+        "cost_estimate_range": "$1.5M-$3M",
+        "depends_on": [
+          "WI-003"
+        ],
+        "skills_required": [
+          "migration_engineer",
+          "cloud_engineer",
+          "application_engineer",
+          "dba"
+        ],
+        "priority_score": 1
+      },
+      {
+        "id": "WI-013",
+        "timestamp": "2026-01-07T11:54:13.637136",
+        "title": "AWS Region Consolidation Planning",
+        "description": "Evaluate consolidating National Mutual's AWS us-east-1 workloads to Atlantic International's us-east-2 region or establish cross-region connectivity. Assess data transfer costs, latency impacts, and compliance requirements.",
+        "domain": "network",
+        "category": "assessment",
+        "phase": "Post_100",
+        "phase_rationale": "Regional consolidation provides cost optimization but not critical for initial operations",
+        "effort_estimate": "4-6 weeks",
+        "cost_estimate_range": "$40K-$60K",
+        "skills_required": [
+          "cloud_engineer",
+          "network_engineer",
+          "cost_analyst"
+        ],
+        "depends_on": [],
+        "priority_score": 1
+      },
+      {
+        "id": "WI-014",
+        "timestamp": "2026-01-07T11:54:19.678653",
+        "title": "Data Center Consolidation and Geographic Diversification",
+        "description": "Consolidate National Mutual's Chicago-based data centers into Atlantic International's geographically diverse infrastructure. Migrate workloads to Phoenix, Atlanta, or New York facilities to improve resilience.",
+        "domain": "network",
+        "category": "migration",
+        "phase": "Post_100",
+        "phase_rationale": "Major infrastructure consolidation that improves resilience but requires extensive planning and testing",
+        "effort_estimate": "12-18 months",
+        "cost_estimate_range": "$500K-$1M",
+        "depends_on": [
+          "WI-008",
+          "WI-010"
+        ],
+        "skills_required": [
+          "infrastructure_architect",
+          "network_engineer",
+          "project_manager",
+          "migration_specialist"
+        ],
+        "priority_score": 1
+      },
+      {
+        "id": "WI-020",
+        "timestamp": "2026-01-07T11:57:51.890837",
+        "title": "Email Security Platform Consolidation",
+        "description": "Consolidate dual email security vendors (Proofpoint and Mimecast) to single platform aligned with buyer standards, migrate policies and configurations",
+        "domain": "cybersecurity",
+        "category": "migration",
+        "phase": "Post_100",
+        "phase_rationale": "Optimization opportunity that can be addressed after core integration is stable",
+        "effort_estimate": "4-6 weeks",
+        "cost_estimate_range": "$75K-$150K",
+        "skills_required": [
+          "email_security_engineer",
+          "messaging_specialist"
+        ],
+        "depends_on": [],
+        "priority_score": 1
+      }
+    ],
+    "Optional": []
+  },
+  "recommendations": [
+    {
+      "id": "REC-001",
+      "timestamp": "2026-01-07T11:51:46.013601",
+      "recommendation": "Negotiate extended TSA for infrastructure services to provide buffer during complex cloud migration",
+      "rationale": "AWS to Azure migration is complex and high-risk. Extended TSA provides safety net and allows for proper planning and testing without business disruption",
+      "domain": "infrastructure",
+      "priority": "high",
+      "timing": "pre_close",
+      "investment_required": "TSA fees estimated at $200K-$400K for extended period"
+    },
+    {
+      "id": "REC-002",
+      "timestamp": "2026-01-07T11:51:50.762716",
+      "recommendation": "Conduct immediate geographic DR risk assessment and implement interim mitigation",
+      "rationale": "Both data centers in Chicago creates unacceptable business continuity risk that exists today and will persist through integration",
+      "domain": "infrastructure",
+      "priority": "critical",
+      "timing": "day_1",
+      "investment_required": "$100K-$200K for interim DR capabilities"
+    },
+    {
+      "id": "REC-003",
+      "timestamp": "2026-01-07T11:51:56.733004",
+      "recommendation": "Augment target's cloud engineering capacity immediately post-close",
+      "rationale": "Single cloud engineer is insufficient for $3.38M AWS environment and upcoming migration complexity. Key person risk threatens integration execution",
+      "domain": "infrastructure",
+      "priority": "high",
+      "timing": "day_1",
+      "investment_required": "$300K-$500K annually for additional cloud engineering resources"
+    },
+    {
+      "id": "REC-004",
+      "timestamp": "2026-01-07T11:54:25.322114",
+      "recommendation": "Prioritize network discovery and documentation as first critical activity post-close",
+      "rationale": "Multiple critical knowledge gaps exist around WAN architecture, IP addressing, and LAN infrastructure. Without this baseline, integration planning cannot proceed safely and Day 1 connectivity risks are elevated.",
+      "domain": "network",
+      "priority": "critical",
+      "timing": "day_1",
+      "investment_required": "$50K-$75K for comprehensive network assessment"
+    },
+    {
+      "id": "REC-005",
+      "timestamp": "2026-01-07T11:54:34.044739",
+      "recommendation": "Negotiate extended support contracts for RSA SecurID and IBM QRadar during transition period",
+      "rationale": "Both platforms will be migrated to buyer standards (Microsoft Authenticator and Sentinel) but need to remain operational during transition. Extended support ensures security continuity.",
+      "domain": "network",
+      "priority": "high",
+      "timing": "pre_close",
+      "investment_required": "$100K-$200K for extended vendor support contracts"
+    },
+    {
+      "id": "REC-006",
+      "timestamp": "2026-01-07T11:54:43.065242",
+      "recommendation": "Establish geographic DR capability outside Chicago metro area as risk mitigation priority",
+      "rationale": "Both data centers in Chicago create unacceptable geographic concentration risk. Buyer's distributed infrastructure provides opportunity to improve resilience while achieving integration synergies.",
+      "domain": "network",
+      "priority": "high",
+      "timing": "first_90_days",
+      "investment_required": "$200K-$500K for DR site establishment and connectivity"
+    },
+    {
+      "id": "REC-007",
+      "timestamp": "2026-01-07T11:59:01.338961",
+      "recommendation": "Negotiate extended TSA for shared services with minimum 18-month term and 6-month extension option",
+      "rationale": "Cross-domain dependencies create 18-24 month integration timeline. Geographic concentration in Chicago and platform mismatches require careful sequencing that cannot be rushed",
+      "domain": "deal",
+      "priority": "critical",
+      "timing": "pre_close",
+      "investment_required": "TSA cost escalation clauses and potential extension fees"
+    },
+    {
+      "id": "REC-008",
+      "timestamp": "2026-01-07T11:59:06.805977",
+      "recommendation": "Establish dedicated integration budget of $4M-$6M with 25% contingency for platform migrations",
+      "rationale": "Complete platform mismatch across infrastructure (AWS->Azure), security (RSA->Microsoft, Splunk->Sentinel), and network requires significant investment. Geographic concentration adds DR complexity",
+      "domain": "deal",
+      "priority": "critical",
+      "timing": "pre_close",
+      "investment_required": "$4M-$6M integration budget plus contingency"
+    },
+    {
+      "id": "REC-009",
+      "timestamp": "2026-01-07T11:59:13.103426",
+      "recommendation": "Retain key target IT personnel through 24-month retention packages, especially cloud engineer and security team",
+      "rationale": "Only 1 cloud engineer supporting $3.38M AWS environment and complex security platform migrations create key person dependency. Knowledge loss would significantly increase integration risk and cost",
+      "domain": "cross-domain",
+      "priority": "high",
+      "timing": "pre_close",
+      "investment_required": "$500K-$800K in retention bonuses and extended employment agreements"
+    },
+    {
+      "id": "REC-010",
+      "timestamp": "2026-01-07T11:59:18.720783",
+      "recommendation": "Accelerate geographic diversification by establishing East Coast presence before Chicago data center consolidation",
+      "rationale": "Both data centers in Chicago create unacceptable single point of failure for $500M revenue company. Must establish geographic diversity before consolidating to buyer's infrastructure",
+      "domain": "infrastructure",
+      "priority": "high",
+      "timing": "first_90_days",
+      "investment_required": "$800K-$1.2M for temporary DR site establishment"
+    },
+    {
+      "id": "REC-011",
+      "timestamp": "2026-01-07T11:59:26.305706",
+      "recommendation": "Engage Microsoft as strategic partner for comprehensive platform migration support",
+      "rationale": "Buyer's Azure/Microsoft 365 environment aligns with target's partial Microsoft adoption. Microsoft can provide migration credits, technical resources, and accelerated timelines for Azure, Sentinel, and MFA migrations",
+      "domain": "cross-domain",
+      "priority": "high",
+      "timing": "pre_close",
+      "investment_required": "Microsoft partnership agreement and potential migration credits"
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A-001",
+      "timestamp": "2026-01-07T11:53:14.488684",
+      "assumption": "Network infrastructure connecting 12 office locations exists but architecture is unknown",
+      "basis": "Document shows 12 office locations and 1,812 employees requiring connectivity, but no WAN details provided",
+      "domain": "network",
+      "confidence": "high",
+      "impact": "medium",
+      "validation_needed": "Network architecture documentation or infrastructure team interview to confirm WAN topology, carriers, and bandwidth"
+    }
+  ],
+  "gaps": [
+    {
+      "id": "G-001",
+      "timestamp": "2026-01-07T11:52:02.926251",
+      "gap": "Detailed AWS resource inventory and architecture diagrams",
+      "why_needed": "Required to accurately estimate migration complexity and costs for AWS to Azure transition",
+      "domain": "infrastructure",
+      "priority": "high",
+      "cost_impact": "high",
+      "suggested_source": "Technical assessment with AWS cost and usage reports, architecture review"
+    },
+    {
+      "id": "G-002",
+      "timestamp": "2026-01-07T11:52:07.179003",
+      "gap": "Network topology and bandwidth utilization details",
+      "why_needed": "Critical for planning network integration and estimating connectivity costs between environments",
+      "domain": "infrastructure",
+      "priority": "high",
+      "cost_impact": "medium",
+      "suggested_source": "Network documentation review and technical interview with infrastructure team"
+    },
+    {
+      "id": "G-003",
+      "timestamp": "2026-01-07T11:52:32.285904",
+      "gap": "WAN connectivity architecture and providers",
+      "why_needed": "Critical for Day 1 connectivity planning and understanding single points of failure. Need to know if MPLS, SD-WAN, or internet VPN, carrier contracts, and bandwidth per site.",
+      "domain": "network",
+      "priority": "critical",
+      "cost_impact": "high",
+      "suggested_source": "Network architecture documentation, carrier contracts, or technical interview with infrastructure team"
+    },
+    {
+      "id": "G-004",
+      "timestamp": "2026-01-07T11:52:42.402081",
+      "gap": "LAN/switching infrastructure details",
+      "why_needed": "Need to understand network equipment age, vendor, EOL status for security and operational risk assessment. Critical for determining refresh requirements.",
+      "domain": "network",
+      "priority": "high",
+      "cost_impact": "medium",
+      "suggested_source": "Network inventory documentation or infrastructure team interview"
+    },
+    {
+      "id": "G-005",
+      "timestamp": "2026-01-07T11:52:47.358377",
+      "gap": "IP addressing scheme and DHCP/DNS architecture",
+      "why_needed": "Essential for integration planning to identify IP conflicts with buyer (Atlantic International). DNS architecture affects email, authentication, and application integration.",
+      "domain": "network",
+      "priority": "critical",
+      "cost_impact": "high",
+      "suggested_source": "Network documentation or technical assessment"
+    },
+    {
+      "id": "G-006",
+      "timestamp": "2026-01-07T11:56:55.711998",
+      "gap": "MFA coverage percentage and privileged account MFA status",
+      "why_needed": "Critical for assessing account compromise risk and determining MFA rollout scope and urgency",
+      "domain": "cybersecurity",
+      "priority": "high",
+      "cost_impact": "medium",
+      "suggested_source": "Technical assessment of RSA SecurID deployment and Azure AD MFA configuration"
+    },
+    {
+      "id": "G-007",
+      "timestamp": "2026-01-07T11:57:03.352270",
+      "gap": "Compliance certifications held and regulatory requirements",
+      "why_needed": "Insurance industry has specific regulatory requirements (state insurance regulations, NAIC, potentially SOX) that affect security controls and integration approach",
+      "domain": "cybersecurity",
+      "priority": "high",
+      "cost_impact": "high",
+      "suggested_source": "Document request for compliance certifications, audit reports, and regulatory correspondence"
+    },
+    {
+      "id": "G-008",
+      "timestamp": "2026-01-07T11:57:09.517641",
+      "gap": "Incident response plan testing history and recent security incidents",
+      "why_needed": "Assesses security operations maturity and potential hidden liabilities from recent breaches or incidents",
+      "domain": "cybersecurity",
+      "priority": "medium",
+      "cost_impact": "medium",
+      "suggested_source": "Interview with CISO/Security Manager, review of incident logs and tabletop exercise documentation"
+    }
+  ],
+  "domain_summaries": {
+    "network": {
+      "timestamp": "2026-01-07T11:54:52.435595",
+      "domain": "network",
+      "summary": "National Mutual operates a distributed network across 12 locations with concentrated Chicago data centers and AWS cloud infrastructure. Significant knowledge gaps exist around WAN architecture and IP addressing. Security platforms show partial alignment with buyer. Geographic concentration creates standalone risk requiring mitigation.",
+      "complexity_assessment": "medium",
+      "top_risks": [
+        "Geographic concentration of both data centers in Chicago",
+        "Single cloud provider dependency (AWS)",
+        "Unknown WAN architecture creating Day 1 connectivity risk"
+      ],
+      "critical_gaps": [
+        "WAN connectivity architecture and providers",
+        "IP addressing scheme and DNS architecture",
+        "LAN/switching infrastructure details"
+      ],
+      "estimated_cost_range": "$900K-$1.6M",
+      "estimated_timeline": "12-18 months for full integration"
+    },
+    "cross-domain": {
+      "timestamp": "2026-01-07T11:59:59.891427",
+      "domain": "cross-domain",
+      "summary": "National Mutual presents a high-complexity integration requiring comprehensive platform migrations across all domains. While the target has strong SaaS adoption and reasonable IT investment, complete platform mismatch with buyer environment creates 18-24 month integration timeline. Geographic concentration in Chicago adds immediate business continuity risk requiring urgent attention.",
+      "complexity_assessment": "high",
+      "estimated_cost_range": "$4M-$6M",
+      "estimated_timeline": "18-24 months",
+      "top_risks": [
+        "Geographic concentration creates business continuity risk",
+        "Platform migration complexity extends integration timeline",
+        "Key person dependency on single cloud engineer creates execution risk"
+      ],
+      "critical_gaps": [
+        "Detailed AWS architecture and resource inventory",
+        "Network topology and IP addressing schemes",
+        "Compliance requirements and regulatory obligations"
+      ]
+    }
+  },
+  "executive_summary": {
+    "timestamp": "2026-01-07T11:59:48.632799",
+    "overall_complexity": "high",
+    "total_estimated_cost_range": "$4M-$6M",
+    "estimated_timeline": "18-24 months",
+    "deal_recommendation": "proceed_with_caution",
+    "confidence_level": "medium",
+    "key_findings": [
+      "Complete platform mismatch requiring migration of AWS to Azure, RSA MFA to Microsoft, and Splunk/QRadar to Sentinel",
+      "Geographic concentration risk with both data centers in Chicago creating single point of failure for $500M revenue company",
+      "Critical skills gap with only 1 cloud engineer supporting $3.38M AWS environment across 41 accounts",
+      "Complex cross-domain dependencies creating 18-24 month integration timeline with 6-month critical path",
+      "Strong application portfolio with modern SaaS adoption (67% cloud/SaaS) reducing application integration complexity",
+      "Reasonable IT spend at 4.5% of revenue with $22.6M budget providing adequate investment capacity",
+      "Partial Microsoft platform adoption provides foundation for buyer alignment in collaboration and identity"
+    ],
+    "critical_risks": [
+      "Geographic concentration creates business continuity risk requiring immediate DR diversification ($800K-$1.2M)",
+      "Platform migration complexity could extend timeline to 24+ months, increasing TSA costs by $500K-$1M",
+      "Key person dependency on single cloud engineer creates execution risk if retention fails",
+      "41 AWS accounts with weak governance create security and compliance exposure during migration",
+      "Sequential migration dependencies prevent parallel execution, creating critical path bottlenecks"
+    ],
+    "day_1_requirements": [
+      "Establish secure network connectivity between target and buyer environments",
+      "Provision buyer identity access for target IT team to begin integration work",
+      "Set up integration PMO with dedicated program management and architecture resources",
+      "Execute retention agreements for critical IT personnel, especially cloud and security teams",
+      "Begin geographic diversification planning to address Chicago concentration risk"
+    ],
+    "immediate_actions": [
+      "Negotiate 18-24 month TSA with extension options to accommodate integration timeline",
+      "Secure $4M-$6M integration budget with 25% contingency for platform migrations",
+      "Engage Microsoft as strategic migration partner for Azure, Sentinel, and MFA transitions",
+      "Initiate retention discussions with key IT personnel before announcement",
+      "Commission detailed network and AWS architecture discovery to validate cost estimates"
+    ],
+    "synergy_opportunities": [
+      "Consolidate from 41 AWS accounts to buyer's governed Azure environment saving $200K-$400K annually",
+      "Eliminate duplicate security tools (RSA MFA, Splunk, QRadar) saving $300K-$500K annually",
+      "Leverage buyer's Microsoft EA for target's Office 365 and Azure needs reducing licensing costs by $150K-$250K annually",
+      "Consolidate Chicago data centers to buyer's geographically diverse infrastructure saving $400K-$600K annually in facilities costs"
+    ],
+    "key_unknowns": [
+      "Detailed AWS resource inventory and actual migration complexity could increase costs by 25-50%",
+      "Network architecture details may reveal additional connectivity requirements and costs",
+      "Compliance requirements and certifications may mandate specific security controls during migration",
+      "Application dependencies on current infrastructure may require extended parallel operations"
+    ]
+  },
+  "statistics": {
+    "total_current_state": 12,
+    "total_assumptions": 1,
+    "total_gaps": 8,
+    "total_risks": 19,
+    "standalone_risks": 11,
+    "integration_risks": 8,
+    "total_strategic_considerations": 11,
+    "total_work_items": 22,
+    "total_recommendations": 11,
+    "domains_analyzed": [
+      "network",
+      "cross-domain"
+    ]
+  },
+  "validation": {
+    "valid": false,
+    "issues": [
+      "Missing summary for infrastructure",
+      "Missing summary for cybersecurity"
+    ],
+    "warnings": [],
+    "quality_score": 95.0,
+    "dd_completeness": {
+      "dd_completeness_check": "fail",
+      "missing_lenses": [],
+      "missing_domains": [
+        "infrastructure",
+        "cybersecurity"
+      ],
+      "non_integration_risks_evaluated": true,
+      "standalone_risk_count": 11
+    }
+  }
+}

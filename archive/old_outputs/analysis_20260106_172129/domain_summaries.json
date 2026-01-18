@@ -1,0 +1,74 @@
+{
+  "infrastructure": {
+    "timestamp": "2026-01-06T17:23:23.806598",
+    "domain": "infrastructure",
+    "summary": "TargetCo operates as a fully integrated business unit within ParentCo's infrastructure, requiring complete separation across all domains. The environment includes 650 users, 620 devices, and 110-130 servers all managed through ParentCo systems. This is a classic carve-out scenario with high complexity due to shared Azure AD tenant, network infrastructure, and enterprise applications. Integration with BuyerCo's Azure environment offers some alignment opportunities but separation timeline will be 12-18 months minimum.",
+    "complexity_assessment": "very_high",
+    "estimated_cost_range": "$2.5M-$5M",
+    "estimated_timeline": "12-18 months",
+    "top_risks": [
+      "Azure AD tenant separation complexity",
+      "Shared ERP/CRM/HCM platform separation",
+      "Security tooling and monitoring gaps during transition"
+    ],
+    "critical_gaps": [
+      "Specific cloud platform details for TargetCo workloads",
+      "Server operating systems, versions, and age distribution",
+      "Storage capacity, platforms, and data volumes"
+    ]
+  },
+  "network": {
+    "timestamp": "2026-01-07T08:40:11.371229",
+    "domain": "network",
+    "summary": "TargetCo operates entirely on ParentCo's shared network infrastructure with no independent network architecture. This creates significant separation complexity requiring comprehensive discovery, Day 1 connectivity planning, and likely IP renumbering. The lack of network documentation represents a critical gap that must be addressed immediately.",
+    "complexity_assessment": "very_high",
+    "estimated_cost_range": "$500K-$1.5M",
+    "estimated_timeline": "12-18 months for full integration",
+    "top_risks": [
+      "Network separation from ParentCo may cause business disruption",
+      "IP address conflicts between TargetCo and BuyerCo networks",
+      "Long lead times for new WAN circuits may delay integration"
+    ],
+    "critical_gaps": [
+      "Complete network topology and architecture documentation",
+      "IP address scheme and DHCP/DNS configuration details",
+      "Physical site locations and WAN connectivity details"
+    ]
+  },
+  "cybersecurity": {
+    "timestamp": "2026-01-07T08:52:26.500416",
+    "domain": "cybersecurity",
+    "summary": "TargetCo operates with complete dependency on ParentCo's security infrastructure including Azure AD, CrowdStrike EDR, Microsoft Sentinel SIEM, and centralized SOC. While the underlying security stack appears enterprise-grade, the complete dependency creates significant separation risk and requires comprehensive security capability buildout post-acquisition.",
+    "complexity_assessment": "very_high",
+    "top_risks": [
+      "Complete dependency on ParentCo security infrastructure",
+      "Identity and access management separation complexity",
+      "Loss of security monitoring and incident response capability"
+    ],
+    "critical_gaps": [
+      "Security assessment results and vulnerability status",
+      "Compliance certification details and audit findings",
+      "Incident response capabilities and recent incident history"
+    ],
+    "estimated_cost_range": "$800K-$1.8M",
+    "estimated_timeline": "12-18 months"
+  },
+  "cross-domain": {
+    "timestamp": "2026-01-07T08:54:04.709839",
+    "domain": "cross-domain",
+    "summary": "Project Atlas represents a very high complexity carve-out requiring separation of TargetCo from completely shared ParentCo infrastructure. Critical path dependencies across Azure AD, network, and security domains create 18-24 month minimum timeline with $4.5M-$8.5M estimated cost. Significant technical discovery gaps and sequential dependencies present material risks to timeline and budget.",
+    "complexity_assessment": "very_high",
+    "estimated_cost_range": "$4.5M-$8.5M",
+    "estimated_timeline": "18-24 months",
+    "top_risks": [
+      "Critical path timeline risk due to sequential dependencies",
+      "Complete dependency on ParentCo security infrastructure",
+      "Business disruption from simultaneous infrastructure changes"
+    ],
+    "critical_gaps": [
+      "Complete network topology documentation",
+      "Detailed security configurations",
+      "Shared application separation complexity"
+    ]
+  }
+}

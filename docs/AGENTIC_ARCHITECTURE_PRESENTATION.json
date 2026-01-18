@@ -1,0 +1,275 @@
+{
+  "presentation": {
+    "title": "What's Actually Agentic?",
+    "subtitle": "An Honest Look at Our IT Due Diligence System",
+    "theme": {
+      "background": "#0a0a0a",
+      "primary_accent": "#00d4ff",
+      "secondary_accent": "#ff6b6b",
+      "tertiary_accent": "#4ecdc4",
+      "success": "#2ecc71",
+      "warning": "#f39c12",
+      "text_primary": "#ffffff",
+      "text_secondary": "#a0a0a0",
+      "font_heading": "Space Grotesk, sans-serif",
+      "font_body": "Inter, sans-serif",
+      "style_notes": "Minimal, dark mode, generous whitespace, accent colors for emphasis only"
+    },
+    "slides": [
+      {
+        "id": 1,
+        "type": "title",
+        "title": "What's Actually Agentic?",
+        "subtitle": "An Honest Assessment of Our Architecture",
+        "visual": "abstract geometric pattern with nodes and connections",
+        "notes": "Clean title slide, subtle animated background"
+      },
+      {
+        "id": 2,
+        "type": "question",
+        "title": "The Question Everyone Asks",
+        "content": {
+          "main_quote": "Is this LangGraph? LangFlow? LangChain?",
+          "answer": "No.",
+          "subtext": "It's a custom Python application calling the Claude API directly."
+        },
+        "visual": "Strike-through effect on framework names",
+        "accent_color": "primary_accent"
+      },
+      {
+        "id": 3,
+        "type": "tech_stack",
+        "title": "The Entire Tech Stack",
+        "items": [
+          {"name": "anthropic", "purpose": "Direct Claude API"},
+          {"name": "pymupdf", "purpose": "PDF extraction"},
+          {"name": "sqlite3", "purpose": "Persistence"},
+          {"name": "python-dotenv", "purpose": "Config"}
+        ],
+        "footer": "That's it. No frameworks. No vector databases. No RAG pipelines.",
+        "visual": "Four minimal boxes/cards",
+        "accent_color": "tertiary_accent"
+      },
+      {
+        "id": 4,
+        "type": "section_break",
+        "title": "So What IS Agentic?",
+        "visual": "Animated pulse or glow effect"
+      },
+      {
+        "id": 5,
+        "type": "diagram",
+        "title": "The Only Truly Agentic Part",
+        "content": {
+          "description": "Inside the Claude API call, the model autonomously decides:",
+          "flow": [
+            "Claude receives: prompt + document + tools",
+            "Claude decides: 'I should call identify_risk'",
+            "Claude decides: 'Now create_work_item'",
+            "Claude decides: 'I'm done'"
+          ]
+        },
+        "highlight": "That decision-making loop is genuinely agentic. The model chooses, not a script.",
+        "visual": "Animated decision tree or flowchart",
+        "accent_color": "success"
+      },
+      {
+        "id": 6,
+        "type": "section_break",
+        "title": "What's NOT Agentic",
+        "subtitle": "(Just Scaled Prompts)",
+        "visual": "Color shift to warning/secondary accent"
+      },
+      {
+        "id": 7,
+        "type": "code_reveal",
+        "title": "1. Orchestration is Hardcoded",
+        "code": "# main.py - this is just a script\ndomain_agents = [\n    (InfrastructureAgent, \"Infrastructure\"),\n    (NetworkAgent, \"Network\"),\n    (CybersecurityAgent, \"Cybersecurity\"),\n    # ... always these 6, in this order\n]",
+        "callout": "No decision about WHICH agents to run. Always the same 6.",
+        "comparison": {
+          "true_agent": "Looks at document, decides 'this needs security focus'",
+          "our_system": "Runs all 6 agents regardless of content"
+        },
+        "accent_color": "secondary_accent"
+      },
+      {
+        "id": 8,
+        "type": "visual_diagram",
+        "title": "2. No Inter-Agent Communication",
+        "diagram": {
+          "agents": ["Infrastructure", "Network", "Security", "Apps", "Identity", "Org"],
+          "pattern": "parallel_isolated",
+          "description": "Each writes to store independently. They never talk."
+        },
+        "callout": "The 'coordinator' just reads output after. It's not orchestrating—it's summarizing.",
+        "accent_color": "secondary_accent"
+      },
+      {
+        "id": 9,
+        "type": "comparison_list",
+        "title": "3-5. More Things That Aren't Agentic",
+        "items": [
+          {
+            "number": "3",
+            "title": "No Planning",
+            "description": "Agents don't create plans. The 'plan' is baked into the prompt."
+          },
+          {
+            "number": "4",
+            "title": "No Memory",
+            "description": "Every run starts fresh. Doesn't learn from past analyses."
+          },
+          {
+            "number": "5",
+            "title": "No Self-Correction",
+            "description": "If an agent makes a mistake, nothing catches it."
+          }
+        ],
+        "accent_color": "secondary_accent"
+      },
+      {
+        "id": 10,
+        "type": "table",
+        "title": "Honest Capability Assessment",
+        "headers": ["Capability", "True Agents", "Our System"],
+        "rows": [
+          ["Decides what tools to call", "Yes", "YES ✓"],
+          ["Decides when to stop", "Yes", "YES ✓"],
+          ["Decides which agents to run", "Yes", "NO ✗"],
+          ["Agents communicate", "Yes", "NO ✗"],
+          ["Creates and adapts plans", "Yes", "NO ✗"],
+          ["Learns from past runs", "Yes", "NO ✗"],
+          ["Self-corrects errors", "Yes", "NO ✗"],
+          ["Dynamically spawns sub-agents", "Yes", "NO ✗"]
+        ],
+        "visual": "Checkmarks in green, X marks in red/coral",
+        "accent_colors": {"yes": "success", "no": "secondary_accent"}
+      },
+      {
+        "id": 11,
+        "type": "definition",
+        "title": "What This System Actually Is",
+        "definitions": [
+          {
+            "label": "Accurate Description",
+            "text": "Parallel tool-augmented LLM calls with structured output and post-hoc synthesis"
+          },
+          {
+            "label": "Simple Version",
+            "text": "Six specialized prompts running in parallel, each with tools for structured output, followed by a summarization prompt"
+          }
+        ],
+        "callout": "The 'agentic' part is Claude deciding how to use tools. Everything else is orchestration code.",
+        "accent_color": "primary_accent"
+      },
+      {
+        "id": 12,
+        "type": "section_break",
+        "title": "Why This Still Works",
+        "visual": "Shift to positive/success color"
+      },
+      {
+        "id": 13,
+        "type": "insight",
+        "title": "You Don't Always Need 'True' Agents",
+        "content": {
+          "main_point": "IT due diligence is a well-defined task",
+          "reasons": [
+            "Fixed domains (infra, network, security...)",
+            "Fixed output structure (risks, gaps, work items)",
+            "Fixed analysis framework (four lenses)"
+          ],
+          "conclusion": "You don't need dynamic planning when the plan is always the same."
+        },
+        "accent_color": "success"
+      },
+      {
+        "id": 14,
+        "type": "value_props",
+        "title": "Where the Real Value Comes From",
+        "items": [
+          {"icon": "brain", "title": "Domain-Specific Prompts", "subtitle": "The expertise"},
+          {"icon": "structure", "title": "Structured Output", "subtitle": "The tools"},
+          {"icon": "speed", "title": "Parallelization", "subtitle": "The speed"},
+          {"icon": "merge", "title": "Synthesis", "subtitle": "The coordinator"}
+        ],
+        "footer": "Not from agents autonomously deciding what to do.",
+        "accent_color": "tertiary_accent"
+      },
+      {
+        "id": 15,
+        "type": "section_break",
+        "title": "What Would Make It More Agentic?",
+        "subtitle": "(If We Wanted To)",
+        "visual": "Future/forward-looking visual"
+      },
+      {
+        "id": 16,
+        "type": "architecture_diagram",
+        "title": "A Truly Agentic Architecture",
+        "layers": [
+          {
+            "name": "PLANNER AGENT",
+            "responsibilities": [
+              "Reads document, assesses content",
+              "'This is heavy on security, light on network'",
+              "'Should I spawn an ERP specialist?'",
+              "Decides which agents and how deep"
+            ]
+          },
+          {
+            "name": "DYNAMIC EXECUTION",
+            "responsibilities": [
+              "Agents spawned based on planner's decision",
+              "Agents can request help from each other",
+              "Agents can spawn sub-agents for deep dives"
+            ]
+          },
+          {
+            "name": "CRITIC AGENT",
+            "responsibilities": [
+              "Reviews all findings",
+              "'This risk seems overstated'",
+              "'You missed something on page 12'",
+              "Sends agents back for another pass"
+            ]
+          }
+        ],
+        "footer": "But this adds complexity, cost, and latency—may not improve output for a well-defined task.",
+        "accent_color": "primary_accent"
+      },
+      {
+        "id": 17,
+        "type": "summary",
+        "title": "The Bottom Line",
+        "items": [
+          {
+            "label": "What we have",
+            "value": "Smart prompts with tool use, run in parallel, with structured output"
+          },
+          {
+            "label": "What we call it",
+            "value": "'Agents' (industry term for tool-using LLMs)"
+          },
+          {
+            "label": "What it actually is",
+            "value": "Scaled prompt engineering with good orchestration"
+          },
+          {
+            "label": "Is that bad?",
+            "value": "No. It works. The output is good.",
+            "highlight": true
+          }
+        ],
+        "accent_color": "success"
+      },
+      {
+        "id": 18,
+        "type": "closing",
+        "title": "The Term 'Agent' Is Overloaded",
+        "quote": "The industry calls any tool-using LLM an 'agent.' That's fine. Just know what you're actually building.",
+        "visual": "Fade to minimal end card"
+      }
+    ]
+  }
+}

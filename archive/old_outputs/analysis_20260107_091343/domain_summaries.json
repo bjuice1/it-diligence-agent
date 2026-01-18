@@ -1,0 +1,75 @@
+{
+  "infrastructure": {
+    "timestamp": "2026-01-07T09:16:01.092078",
+    "domain": "infrastructure",
+    "summary": "National Mutual presents a complex infrastructure integration challenge with significant cloud platform mismatch (AWS vs Azure), critical insurance applications requiring specialized migration expertise, and geographic concentration risk in Chicago data centers. The $3.4M AWS spend and mix of on-premises insurance platforms will drive substantial migration costs and extended timelines.",
+    "complexity_assessment": "high",
+    "estimated_cost_range": "$1.5M-$4M",
+    "estimated_timeline": "12-18 months",
+    "top_risks": [
+      "AWS to Azure cloud migration complexity",
+      "Critical insurance application migration risk",
+      "Geographic concentration in Chicago data centers"
+    ],
+    "critical_gaps": [
+      "Server inventory and OS versions",
+      "Storage infrastructure details",
+      "Network architecture and WAN connectivity"
+    ]
+  },
+  "network": {
+    "timestamp": "2026-01-07T09:17:58.403516",
+    "domain": "network",
+    "summary": "National Mutual's network infrastructure presents significant integration challenges due to lack of documented network architecture across 12 locations and 2 data centers. The primary risks are IP address conflicts and connectivity disruption during integration. Critical gaps exist in WAN topology, IP addressing, and firewall configurations that must be addressed immediately.",
+    "complexity_assessment": "high",
+    "estimated_cost_range": "$1M-$2.5M",
+    "estimated_timeline": "12-18 months",
+    "top_risks": [
+      "IP address space conflicts blocking Day 1 connectivity",
+      "Network connectivity disruption during data center consolidation",
+      "DNS namespace conflicts causing application issues"
+    ],
+    "critical_gaps": [
+      "Network architecture and WAN connectivity details",
+      "IP addressing scheme and DHCP/DNS architecture",
+      "Firewall and security zone configuration"
+    ]
+  },
+  "cybersecurity": {
+    "timestamp": "2026-01-07T09:20:18.683572",
+    "domain": "cybersecurity",
+    "summary": "National Mutual presents significant cybersecurity integration challenges with multiple security platform mismatches (QRadar vs Sentinel SIEM, CrowdStrike vs Carbon Black EDR) and critical information gaps around vulnerability posture, compliance status, and incident response maturity. The insurance company's security stack requires comprehensive assessment and careful migration planning to avoid security gaps during integration.",
+    "complexity_assessment": "high",
+    "estimated_cost_range": "$800K-$1.4M",
+    "estimated_timeline": "12-18 months",
+    "top_risks": [
+      "Identity provider integration complexity creating access management gaps",
+      "SIEM migration from QRadar to Sentinel causing monitoring disruption",
+      "Unknown vulnerability posture and compliance status creating liability exposure"
+    ],
+    "critical_gaps": [
+      "Penetration testing and vulnerability assessment results",
+      "Compliance certifications and audit findings",
+      "Incident response plan and testing history",
+      "Data classification and encryption implementation details"
+    ]
+  },
+  "cross-domain": {
+    "timestamp": "2026-01-07T09:21:55.144271",
+    "domain": "cross-domain",
+    "summary": "Project Atlas presents a very high complexity integration with National Mutual's insurance-specific applications, AWS-to-Azure cloud migration, and critical cross-domain dependencies creating an 18-24 month timeline. Total estimated cost of $4M-$8M with medium confidence due to significant information gaps. Recommend proceeding with caution given manageable but substantial risks.",
+    "complexity_assessment": "very_high",
+    "estimated_cost_range": "$4M-$8M",
+    "estimated_timeline": "18-24 months",
+    "top_risks": [
+      "Identity integration delays cascading across all domains",
+      "Network discovery revealing complex IP conflicts",
+      "Insurance application migration complexity exceeding estimates"
+    ],
+    "critical_gaps": [
+      "Network architecture and IP addressing documentation",
+      "Infrastructure inventory and operating system versions",
+      "Security posture and compliance status assessment"
+    ]
+  }
+}

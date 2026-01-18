@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+
+{% block title %}Risks - IT Due Diligence{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Risks</h1>
+    <p>{{ risks|length }} risks identified across all domains</p>
+</div>
+
+<!-- Filters Bar -->
+<form class="filters-bar" method="GET" action="{{ url_for('risks') }}" role="search">
+    <div class="filter-group">
+        <label class="filter-label" for="filter-domain">Domain</label>
+        <select class="filter-select" id="filter-domain" name="domain" onchange="this.form.submit()">
+            <option value="">All Domains</option>
+            {% for domain in domains %}
+            <option value="{{ domain }}" {{ 'selected' if domain_filter == domain }}>{{ domain|replace('_', ' ')|title }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="filter-group">
+        <label class="filter-label" for="filter-severity">Severity</label>
+        <select class="filter-select" id="filter-severity" name="severity" onchange="this.form.submit()">
+            <option value="">All Severities</option>
+            <option value="critical" {{ 'selected' if severity_filter == 'critical' }}>Critical</option>
+            <option value="high" {{ 'selected' if severity_filter == 'high' }}>High</option>
+            <option value="medium" {{ 'selected' if severity_filter == 'medium' }}>Medium</option>
+            <option value="low" {{ 'selected' if severity_filter == 'low' }}>Low</option>
+        </select>
+    </div>
+
+    <div class="filter-group filter-search">
+        <label class="filter-label" for="filter-search">Search</label>
+        <input type="search" class="filter-input" id="filter-search" name="q"
+               placeholder="Search risks..." value="{{ request.args.get('q', '') }}"
+               aria-label="Search risks">
+    </div>
+
+    <div class="filters-actions">
+        {% if domain_filter or severity_filter or request.args.get('q') %}
+        <a href="{{ url_for('risks') }}" class="btn btn-ghost btn-sm">Clear Filters</a>
+        {% endif %}
+        <button type="submit" class="btn btn-secondary btn-sm">Apply</button>
+    </div>
+</form>
+
+<!-- Risks Table -->
+<div class="table-container">
+    <table class="table" aria-label="Risks table">
+        <thead>
+            <tr>
+                <th scope="col" style="width: 100px;">Severity</th>
+                <th scope="col" style="width: 100px;">ID</th>
+                <th scope="col">Title</th>
+                <th scope="col" style="width: 120px;">Domain</th>
+                <th scope="col" style="width: 80px;">Facts</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if risks %}
+            {% for risk in risks %}
+            <tr data-id="{{ risk.risk_id }}"
+                data-severity="{{ risk.severity }}"
+                data-domain="{{ risk.domain }}"
+                data-title="{{ risk.title|e }}"
+                data-description="{{ risk.description|e if risk.description else '' }}"
+                data-mitigation="{{ risk.mitigation|e if risk.mitigation else '' }}"
+                data-based-on="{{ risk.based_on_facts|join(', ') if risk.based_on_facts else '' }}">
+                <td>
+                    <span class="badge badge-{{ risk.severity }}">{{ risk.severity }}</span>
+                </td>
+                <td class="font-mono text-sm">{{ risk.risk_id }}</td>
+                <td>{{ risk.title }}</td>
+                <td class="text-muted text-sm">{{ risk.domain|replace('_', ' ')|title }}</td>
+                <td class="text-muted text-sm">{{ risk.based_on_facts|length if risk.based_on_facts else 0 }}</td>
+            </tr>
+            {% endfor %}
+            {% else %}
+            <tr>
+                <td colspan="5">
+                    <div class="empty-state">
+                        <div class="empty-state-icon">&#x1F50D;</div>
+                        <div class="empty-state-title">No risks found</div>
+                        <div class="empty-state-text">
+                            {% if domain_filter or severity_filter %}
+                            Try adjusting your filters to see more results.
+                            {% else %}
+                            No risks have been identified in this analysis.
+                            {% endif %}
+                        </div>
+                    </div>
+                </td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Summary Stats -->
+{% if risks %}
+<div class="flex gap-4 mt-4 text-sm text-muted">
+    <span><strong>{{ risks|selectattr('severity', 'equalto', 'critical')|list|length }}</strong> Critical</span>
+    <span><strong>{{ risks|selectattr('severity', 'equalto', 'high')|list|length }}</strong> High</span>
+    <span><strong>{{ risks|selectattr('severity', 'equalto', 'medium')|list|length }}</strong> Medium</span>
+    <span><strong>{{ risks|selectattr('severity', 'equalto', 'low')|list|length }}</strong> Low</span>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Handle row selection and open drawer
+    document.addEventListener('rowSelected', function(e) {
+        const row = e.detail.row;
+        const data = row.dataset;
+
+        openDrawer(
+            data.title,
+            `
+            <div class="drawer-section">
+                <div class="drawer-section-title">Severity</div>
+                <div class="drawer-section-content">
+                    <span class="badge badge-${data.severity}">${data.severity.toUpperCase()}</span>
+                </div>
+            </div>
+            <div class="drawer-section">
+                <div class="drawer-section-title">Domain</div>
+                <div class="drawer-section-content">${data.domain.replace('_', ' ')}</div>
+            </div>
+            <div class="drawer-section">
+                <div class="drawer-section-title">Description</div>
+                <div class="drawer-section-content">${data.description || 'No description available'}</div>
+            </div>
+            <div class="drawer-section">
+                <div class="drawer-section-title">Mitigation</div>
+                <div class="drawer-section-content">${data.mitigation || 'No mitigation specified'}</div>
+            </div>
+            <div class="drawer-section">
+                <div class="drawer-section-title">Based On Facts</div>
+                <div class="drawer-section-content font-mono text-sm">${data.basedOn || 'N/A'}</div>
+            </div>
+            `,
+            `
+            <a href="{{ url_for('risk_detail', risk_id='') }}${data.id}" class="btn btn-primary">View Full Details</a>
+            <button class="btn btn-secondary" onclick="closeDrawer()">Close</button>
+            `
+        );
+    });
+
+    // Live search filtering
+    const searchInput = document.getElementById('filter-search');
+    if (searchInput) {
+        let debounceTimer;
+        searchInput.addEventListener('input', function() {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                const query = this.value.toLowerCase();
+                document.querySelectorAll('.table tbody tr[data-id]').forEach(row => {
+                    const title = row.dataset.title.toLowerCase();
+                    const description = row.dataset.description.toLowerCase();
+                    const matches = title.includes(query) || description.includes(query);
+                    row.style.display = matches ? '' : 'none';
+                });
+            }, 200);
+        });
+    }
+</script>
+{% endblock %}

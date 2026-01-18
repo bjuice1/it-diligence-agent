@@ -1,0 +1,152 @@
+[
+  {
+    "id": "G-001",
+    "timestamp": "2026-01-05T20:04:09.045412",
+    "gap": "Specific hosting model breakdown (on-prem vs cloud percentages, data center locations)",
+    "why_needed": "Critical for understanding separation complexity and migration scope - need to know what infrastructure needs to be carved out vs migrated",
+    "domain": "infrastructure",
+    "priority": "critical",
+    "cost_impact": "high",
+    "suggested_source": "Technical assessment with ParentCo IT team, infrastructure inventory review"
+  },
+  {
+    "id": "G-002",
+    "timestamp": "2026-01-05T20:04:13.426480",
+    "gap": "Server operating systems, versions, and age distribution for 110-130 servers",
+    "why_needed": "Essential for identifying EOL/EOS risks, migration complexity, and licensing requirements. Different OS versions have different migration paths and costs.",
+    "domain": "infrastructure",
+    "priority": "high",
+    "cost_impact": "high",
+    "suggested_source": "Server inventory export from ParentCo CMDB or asset management system"
+  },
+  {
+    "id": "G-003",
+    "timestamp": "2026-01-05T20:04:17.728708",
+    "gap": "Virtualization platform details (VMware vs Hyper-V vs cloud-native)",
+    "why_needed": "Critical for migration planning - VMware has licensing implications post-Broadcom acquisition, different platforms require different migration tools and approaches",
+    "domain": "infrastructure",
+    "priority": "high",
+    "cost_impact": "medium",
+    "suggested_source": "Infrastructure architecture documentation, hypervisor inventory"
+  },
+  {
+    "id": "G-004",
+    "timestamp": "2026-01-05T20:04:22.434923",
+    "gap": "Storage architecture, capacity, and data volumes",
+    "why_needed": "Storage migration is often the most complex and time-consuming aspect of infrastructure separation. Need capacity for egress cost estimation and migration timeline planning.",
+    "domain": "infrastructure",
+    "priority": "high",
+    "cost_impact": "high",
+    "suggested_source": "Storage capacity reports, backup system reports"
+  },
+  {
+    "id": "G-005",
+    "timestamp": "2026-01-05T20:05:12.394753",
+    "gap": "TSA terms and duration for infrastructure services",
+    "why_needed": "Critical for timeline planning and cost estimation. Infrastructure separation typically requires 12-24 months, need to ensure TSA covers this period.",
+    "domain": "cross-domain",
+    "priority": "critical",
+    "cost_impact": "high",
+    "suggested_source": "Legal team review of purchase agreement TSA provisions"
+  },
+  {
+    "id": "G-006",
+    "timestamp": "2026-01-05T20:05:17.593011",
+    "gap": "Network architecture and connectivity requirements",
+    "why_needed": "Need to understand network segmentation, bandwidth requirements, and connectivity dependencies to plan network separation and establish connectivity to BuyerCo environment",
+    "domain": "infrastructure",
+    "priority": "high",
+    "cost_impact": "medium",
+    "suggested_source": "Network architecture documentation, bandwidth utilization reports"
+  },
+  {
+    "id": "G-007",
+    "timestamp": "2026-01-05T20:06:05.905691",
+    "gap": "Network topology and architecture details for TargetCo's current environment",
+    "why_needed": "Critical for understanding separation requirements and Day 1 connectivity planning - need to know WAN architecture, site locations, circuit types, and network segmentation",
+    "domain": "network",
+    "priority": "critical",
+    "cost_impact": "high",
+    "suggested_source": "Request network diagrams, site inventory, and circuit documentation from ParentCo IT team"
+  },
+  {
+    "id": "G-008",
+    "timestamp": "2026-01-05T20:06:10.326172",
+    "gap": "IP address scheme and VLAN assignments for TargetCo assets",
+    "why_needed": "Essential for identifying IP conflicts with BuyerCo environment and planning network separation - conflicts will prevent Day 1 connectivity",
+    "domain": "network",
+    "priority": "critical",
+    "cost_impact": "high",
+    "suggested_source": "IPAM system export or network documentation showing current IP allocations and subnet assignments"
+  },
+  {
+    "id": "G-009",
+    "timestamp": "2026-01-05T20:06:15.057089",
+    "gap": "WAN connectivity details including circuit types, carriers, and contract terms",
+    "why_needed": "New circuits have 30-90 day lead times - must identify what connectivity needs to be ordered immediately to avoid timeline delays",
+    "domain": "network",
+    "priority": "critical",
+    "cost_impact": "high",
+    "suggested_source": "Telecom contract review and site connectivity inventory from ParentCo"
+  },
+  {
+    "id": "G-010",
+    "timestamp": "2026-01-05T20:06:19.273321",
+    "gap": "DNS architecture and domain structure for TargetCo",
+    "why_needed": "DNS integration is critical for application access and email functionality - need to understand current DNS zones and dependencies on ParentCo DNS infrastructure",
+    "domain": "network",
+    "priority": "high",
+    "cost_impact": "medium",
+    "suggested_source": "DNS zone files and domain registration details from ParentCo IT"
+  },
+  {
+    "id": "G-011",
+    "timestamp": "2026-01-05T20:06:23.279859",
+    "gap": "Firewall rules and network security policies specific to TargetCo traffic",
+    "why_needed": "Understanding current security zones and firewall rules is essential for maintaining security posture during separation and integration",
+    "domain": "network",
+    "priority": "high",
+    "cost_impact": "medium",
+    "suggested_source": "Firewall configuration export and security policy documentation from ParentCo security team"
+  },
+  {
+    "id": "G-012",
+    "timestamp": "2026-01-05T20:07:53.059876",
+    "gap": "Specific compliance certifications and audit results for TargetCo operations",
+    "why_needed": "Document mentions SOC 2 and ISO-aligned frameworks under ParentCo scope, but unclear if TargetCo operations are specifically included in certifications",
+    "domain": "cybersecurity",
+    "priority": "high",
+    "cost_impact": "high",
+    "suggested_source": "Request ParentCo SOC 2 reports and compliance documentation showing TargetCo scope"
+  },
+  {
+    "id": "G-013",
+    "timestamp": "2026-01-05T20:07:57.913989",
+    "gap": "Recent security assessment or penetration testing results for TargetCo environment",
+    "why_needed": "No security assessment data provided - need to understand current vulnerability posture and security gaps before integration",
+    "domain": "cybersecurity",
+    "priority": "critical",
+    "cost_impact": "high",
+    "suggested_source": "Request recent penetration test reports, vulnerability scans, and security assessments from ParentCo"
+  },
+  {
+    "id": "G-014",
+    "timestamp": "2026-01-05T20:08:02.849124",
+    "gap": "Data classification and handling procedures for TargetCo data",
+    "why_needed": "Document mentions data protection controls but no specifics on data classification, sensitivity levels, or handling requirements for TargetCo's business data",
+    "domain": "cybersecurity",
+    "priority": "high",
+    "cost_impact": "medium",
+    "suggested_source": "Request data classification policy and data inventory showing TargetCo data types and sensitivity levels"
+  },
+  {
+    "id": "G-015",
+    "timestamp": "2026-01-05T20:08:07.252432",
+    "gap": "Incident response history and security incidents involving TargetCo",
+    "why_needed": "No information on past security incidents, breaches, or IR activations that could indicate risk patterns or ongoing threats",
+    "domain": "cybersecurity",
+    "priority": "high",
+    "cost_impact": "high",
+    "suggested_source": "Request incident response logs and security incident history for past 24 months"
+  }
+]

@@ -1,0 +1,399 @@
+[
+  {
+    "id": "W-001",
+    "timestamp": "2026-01-07T09:14:29.172211",
+    "title": "Data Center Consolidation and Migration Planning",
+    "description": "Plan and execute migration from National Mutual's Chicago colocation facilities to Atlantic International's distributed DC footprint. Includes lease termination, equipment migration, and network reconfiguration.",
+    "domain": "infrastructure",
+    "category": "migration",
+    "effort_estimate": "6-12 months",
+    "cost_estimate_range": "$300K-$800K",
+    "timeline_phase": "90_180_days",
+    "skills_required": [
+      "data_center_engineer",
+      "network_engineer",
+      "project_manager"
+    ],
+    "dependencies": [
+      "Infrastructure assessment completion",
+      "Network architecture design",
+      "Application dependency mapping"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-002",
+    "timestamp": "2026-01-07T09:15:06.360884",
+    "title": "AWS to Azure Cloud Migration",
+    "description": "Migrate National Mutual's AWS workloads (41 accounts, $3.4M annual spend) to Atlantic International's Azure environment. Includes service mapping, data migration, network reconfiguration, and application testing.",
+    "domain": "infrastructure",
+    "category": "migration",
+    "effort_estimate": "8-15 months",
+    "cost_estimate_range": "$800K-$2M",
+    "timeline_phase": "90_180_days",
+    "skills_required": [
+      "cloud_architect",
+      "aws_engineer",
+      "azure_engineer",
+      "devops_engineer"
+    ],
+    "dependencies": [
+      "AWS workload assessment",
+      "Azure landing zone preparation",
+      "Network connectivity establishment"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-003",
+    "timestamp": "2026-01-07T09:15:17.940459",
+    "title": "Backup and DR Platform Consolidation",
+    "description": "Migrate from National Mutual's Veeam/Zerto backup solution to Atlantic International's Commvault/Dell Data Protection platform. Includes data migration, policy reconfiguration, and DR testing.",
+    "domain": "infrastructure",
+    "category": "migration",
+    "effort_estimate": "4-8 months",
+    "cost_estimate_range": "$150K-$400K",
+    "timeline_phase": "0_90_days",
+    "skills_required": [
+      "backup_engineer",
+      "storage_engineer",
+      "systems_administrator"
+    ],
+    "dependencies": [
+      "Data classification",
+      "Retention policy alignment",
+      "Storage infrastructure readiness"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-004",
+    "timestamp": "2026-01-07T09:15:34.814808",
+    "title": "Infrastructure Discovery and Assessment",
+    "description": "Comprehensive technical assessment of National Mutual's infrastructure including server inventory, storage systems, network architecture, and application dependencies. Foundation for all migration planning.",
+    "domain": "infrastructure",
+    "category": "assessment",
+    "effort_estimate": "6-10 weeks",
+    "cost_estimate_range": "$150K-$300K",
+    "timeline_phase": "day_1",
+    "skills_required": [
+      "infrastructure_architect",
+      "systems_engineer",
+      "network_engineer",
+      "storage_engineer"
+    ],
+    "dependencies": [
+      "Access to production environments",
+      "Documentation gathering",
+      "Key personnel interviews"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-005",
+    "timestamp": "2026-01-07T09:17:02.078333",
+    "title": "Network Discovery and Documentation",
+    "description": "Comprehensive discovery of National Mutual's network infrastructure including WAN topology, IP addressing, VLAN structure, firewall configurations, and network equipment inventory across all 12 locations and 2 data centers",
+    "domain": "network",
+    "category": "assessment",
+    "effort_estimate": "4-6 weeks",
+    "cost_estimate_range": "$75K-$125K",
+    "timeline_phase": "day_1",
+    "skills_required": [
+      "network_architect",
+      "network_engineer",
+      "security_engineer"
+    ],
+    "dependencies": [
+      "Access to network equipment",
+      "Network team interviews"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-006",
+    "timestamp": "2026-01-07T09:17:07.137278",
+    "title": "IP Address Conflict Analysis and Remediation Planning",
+    "description": "Analyze IP addressing schemes of both companies, identify conflicts, and develop remediation plan including IP renumbering strategy, NAT implementation, or network segmentation approach",
+    "domain": "network",
+    "category": "remediation",
+    "effort_estimate": "3-4 weeks",
+    "cost_estimate_range": "$50K-$100K",
+    "timeline_phase": "day_1",
+    "skills_required": [
+      "network_architect",
+      "network_engineer"
+    ],
+    "dependencies": [
+      "Network Discovery completion",
+      "Buyer network documentation"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-007",
+    "timestamp": "2026-01-07T09:17:13.648339",
+    "title": "Day 1 Network Connectivity Setup",
+    "description": "Establish secure network connectivity between National Mutual and Atlantic International networks for Day 1 operations, including VPN setup, firewall rule configuration, and DNS resolution",
+    "domain": "network",
+    "category": "integration",
+    "effort_estimate": "2-3 weeks",
+    "cost_estimate_range": "$40K-$80K",
+    "timeline_phase": "day_1",
+    "skills_required": [
+      "network_engineer",
+      "security_engineer",
+      "firewall_admin"
+    ],
+    "dependencies": [
+      "IP conflict resolution",
+      "Firewall access",
+      "Circuit availability"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-008",
+    "timestamp": "2026-01-07T09:17:18.768643",
+    "title": "WAN Architecture Integration",
+    "description": "Integrate National Mutual's 12 locations into Atlantic International's WAN architecture, including circuit evaluation, SD-WAN extension or MPLS integration, and redundancy planning",
+    "domain": "network",
+    "category": "integration",
+    "effort_estimate": "8-12 weeks",
+    "cost_estimate_range": "$200K-$500K",
+    "timeline_phase": "0_90_days",
+    "skills_required": [
+      "network_architect",
+      "wan_engineer",
+      "carrier_relations"
+    ],
+    "dependencies": [
+      "WAN discovery",
+      "Carrier contract review",
+      "Circuit lead times"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-009",
+    "timestamp": "2026-01-07T09:17:23.887143",
+    "title": "Data Center Network Migration",
+    "description": "Migrate National Mutual's Chicago data center networks to integrate with Atlantic International's multi-DC architecture, including network equipment migration, VLAN restructuring, and connectivity updates",
+    "domain": "network",
+    "category": "migration",
+    "effort_estimate": "6-10 weeks",
+    "cost_estimate_range": "$150K-$350K",
+    "timeline_phase": "90_180_days",
+    "skills_required": [
+      "data_center_engineer",
+      "network_architect",
+      "project_manager"
+    ],
+    "dependencies": [
+      "DC consolidation strategy",
+      "Application migration timeline",
+      "Network equipment procurement"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-010",
+    "timestamp": "2026-01-07T09:17:30.949210",
+    "title": "DNS and DHCP Integration",
+    "description": "Integrate DNS and DHCP services, resolve namespace conflicts, migrate to buyer's DNS architecture, and ensure proper name resolution across integrated network",
+    "domain": "network",
+    "category": "integration",
+    "effort_estimate": "4-6 weeks",
+    "cost_estimate_range": "$60K-$120K",
+    "timeline_phase": "0_90_days",
+    "skills_required": [
+      "dns_engineer",
+      "network_engineer",
+      "active_directory_admin"
+    ],
+    "dependencies": [
+      "DNS architecture discovery",
+      "AD integration planning",
+      "IP addressing finalization"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-011",
+    "timestamp": "2026-01-07T09:18:53.963613",
+    "title": "Comprehensive Security Assessment",
+    "description": "Conduct thorough security assessment including penetration testing, vulnerability scanning, and security architecture review to establish baseline security posture and identify critical vulnerabilities",
+    "domain": "cybersecurity",
+    "category": "assessment",
+    "effort_estimate": "6-8 weeks",
+    "cost_estimate_range": "$75K-$125K",
+    "timeline_phase": "day_1",
+    "skills_required": [
+      "security_architect",
+      "penetration_tester",
+      "compliance_specialist"
+    ],
+    "dependencies": [
+      "Access to target environment",
+      "Security tool inventory"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-012",
+    "timestamp": "2026-01-07T09:19:00.144294",
+    "title": "Identity and Access Management Integration",
+    "description": "Integrate National Mutual's Microsoft Entra ID with buyer's identity systems, migrate user accounts, implement unified MFA, and establish privileged access management across combined environment",
+    "domain": "cybersecurity",
+    "category": "integration",
+    "effort_estimate": "12-16 weeks",
+    "cost_estimate_range": "$200K-$350K",
+    "timeline_phase": "0_90_days",
+    "skills_required": [
+      "iam_specialist",
+      "security_engineer",
+      "systems_administrator"
+    ],
+    "dependencies": [
+      "Identity architecture assessment",
+      "User account inventory",
+      "Application SSO mapping"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-013",
+    "timestamp": "2026-01-07T09:19:07.108049",
+    "title": "SIEM Migration and Security Operations Integration",
+    "description": "Migrate from IBM QRadar to Microsoft Sentinel, rebuild detection rules and playbooks, integrate with buyer's SOC operations, and ensure continuous security monitoring throughout transition",
+    "domain": "cybersecurity",
+    "category": "migration",
+    "effort_estimate": "16-20 weeks",
+    "cost_estimate_range": "$250K-$400K",
+    "timeline_phase": "90_180_days",
+    "skills_required": [
+      "security_engineer",
+      "siem_specialist",
+      "soc_analyst"
+    ],
+    "dependencies": [
+      "Security log inventory",
+      "Detection rule documentation",
+      "SOC process alignment"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-014",
+    "timestamp": "2026-01-07T09:19:13.623941",
+    "title": "Endpoint Security Platform Migration",
+    "description": "Migrate from CrowdStrike to Carbon Black across 1,800+ endpoints, ensuring no security coverage gaps during transition, and integrate with buyer's endpoint management processes",
+    "domain": "cybersecurity",
+    "category": "migration",
+    "effort_estimate": "8-12 weeks",
+    "cost_estimate_range": "$100K-$175K",
+    "timeline_phase": "90_180_days",
+    "skills_required": [
+      "security_engineer",
+      "systems_administrator",
+      "desktop_support"
+    ],
+    "dependencies": [
+      "Endpoint inventory",
+      "Deployment testing",
+      "User communication plan"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-015",
+    "timestamp": "2026-01-07T09:19:19.092708",
+    "title": "Compliance Assessment and Remediation",
+    "description": "Assess current compliance posture against required frameworks (SOC 2, PCI DSS), identify gaps, and implement remediation measures to maintain certifications post-acquisition",
+    "domain": "cybersecurity",
+    "category": "compliance",
+    "effort_estimate": "10-14 weeks",
+    "cost_estimate_range": "$125K-$250K",
+    "timeline_phase": "0_90_days",
+    "skills_required": [
+      "compliance_specialist",
+      "security_architect",
+      "auditor"
+    ],
+    "dependencies": [
+      "Compliance documentation review",
+      "Control testing",
+      "Audit schedule coordination"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-016",
+    "timestamp": "2026-01-07T09:20:10.355717",
+    "title": "Data Security and Encryption Assessment",
+    "description": "Conduct comprehensive assessment of data classification, encryption implementation (at rest and in transit), DLP controls, and data handling procedures to ensure regulatory compliance and data protection",
+    "domain": "cybersecurity",
+    "category": "assessment",
+    "effort_estimate": "4-6 weeks",
+    "cost_estimate_range": "$50K-$75K",
+    "timeline_phase": "day_1",
+    "skills_required": [
+      "security_architect",
+      "data_privacy_specialist",
+      "compliance_specialist"
+    ],
+    "dependencies": [
+      "Data inventory",
+      "System access",
+      "Application documentation"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-017",
+    "timestamp": "2026-01-07T09:20:52.581880",
+    "title": "Integration Program Management Office (PMO) Establishment",
+    "description": "Establish dedicated PMO to coordinate cross-domain dependencies, manage critical path, and ensure proper sequencing of network discovery, identity integration, and infrastructure migration activities. Include specialized insurance industry expertise for Guidewire/Duck Creek migrations.",
+    "domain": "cross-domain",
+    "category": "integration",
+    "effort_estimate": "12-18 months full engagement",
+    "cost_estimate_range": "$800K-$1.2M",
+    "timeline_phase": "day_1",
+    "skills_required": [
+      "program_manager",
+      "insurance_systems_expert",
+      "cloud_migration_specialist",
+      "network_architect",
+      "security_architect"
+    ],
+    "dependencies": [
+      "Executive sponsorship",
+      "Budget approval",
+      "Resource allocation"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-018",
+    "timestamp": "2026-01-07T09:21:00.041535",
+    "title": "Pre-Close Technical Due Diligence Deep Dive",
+    "description": "Conduct comprehensive technical assessment to fill critical gaps in network architecture, infrastructure inventory, and security posture. Must complete before close to validate integration timeline and cost estimates.",
+    "domain": "cross-domain",
+    "category": "assessment",
+    "effort_estimate": "8-12 weeks",
+    "cost_estimate_range": "$300K-$500K",
+    "timeline_phase": "day_1",
+    "skills_required": [
+      "network_architect",
+      "infrastructure_specialist",
+      "security_assessor",
+      "insurance_systems_expert"
+    ],
+    "dependencies": [
+      "Management access approval",
+      "Technical team availability",
+      "Site access permissions"
+    ],
+    "priority_score": 1
+  }
+]

@@ -1,0 +1,438 @@
+[
+  {
+    "id": "WI-001",
+    "timestamp": "2026-01-07T11:51:05.831754",
+    "title": "Infrastructure Discovery and Assessment",
+    "description": "Conduct comprehensive discovery of target infrastructure including detailed inventory of AWS resources, on-premises systems, network topology, and dependencies. Document current architecture and identify integration touchpoints.",
+    "domain": "infrastructure",
+    "category": "assessment",
+    "phase": "Day_1",
+    "phase_rationale": "Critical to understand what is being acquired and establish baseline for all subsequent integration work",
+    "effort_estimate": "6-8 weeks",
+    "cost_estimate_range": "$150K-$250K",
+    "skills_required": [
+      "infrastructure_architect",
+      "cloud_engineer",
+      "systems_administrator"
+    ],
+    "depends_on": [],
+    "priority_score": 1
+  },
+  {
+    "id": "WI-002",
+    "timestamp": "2026-01-07T11:51:12.077613",
+    "title": "Establish Network Connectivity",
+    "description": "Establish secure network connectivity between target and buyer environments to enable integration activities. Include VPN setup, firewall rules, and basic monitoring.",
+    "domain": "infrastructure",
+    "category": "integration",
+    "phase": "Day_1",
+    "phase_rationale": "Required for business continuity and to enable all other integration activities",
+    "effort_estimate": "2-3 weeks",
+    "cost_estimate_range": "$50K-$100K",
+    "skills_required": [
+      "network_engineer",
+      "security_engineer"
+    ],
+    "depends_on": [],
+    "priority_score": 1
+  },
+  {
+    "id": "WI-003",
+    "timestamp": "2026-01-07T11:51:17.544190",
+    "title": "AWS to Azure Migration Strategy Development",
+    "description": "Develop comprehensive migration strategy for moving target's AWS workloads to buyer's Azure environment. Include application assessment, migration patterns, timeline, and risk mitigation.",
+    "domain": "infrastructure",
+    "category": "migration",
+    "phase": "Day_100",
+    "phase_rationale": "Requires completion of discovery phase and is not critical for immediate business continuity",
+    "effort_estimate": "8-12 weeks",
+    "cost_estimate_range": "$200K-$400K",
+    "depends_on": [
+      "WI-001"
+    ],
+    "skills_required": [
+      "cloud_architect",
+      "migration_specialist",
+      "aws_engineer",
+      "azure_engineer"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "WI-004",
+    "timestamp": "2026-01-07T11:51:23.161637",
+    "title": "Data Center Consolidation Planning",
+    "description": "Plan consolidation of target's Chicago colocation facilities into buyer's data center footprint. Address geographic separation requirements and develop migration timeline.",
+    "domain": "infrastructure",
+    "category": "migration",
+    "phase": "Day_100",
+    "phase_rationale": "Not critical for Day 1 operations but important for cost synergies and risk reduction",
+    "effort_estimate": "6-10 weeks",
+    "cost_estimate_range": "$100K-$200K",
+    "depends_on": [
+      "WI-001"
+    ],
+    "skills_required": [
+      "data_center_specialist",
+      "migration_planner",
+      "infrastructure_architect"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "WI-005",
+    "timestamp": "2026-01-07T11:51:28.839511",
+    "title": "DR Architecture Redesign",
+    "description": "Redesign disaster recovery architecture to address geographic concentration risk and align with buyer's DR standards. Implement geographically separated DR capabilities.",
+    "domain": "infrastructure",
+    "category": "remediation",
+    "phase": "Day_100",
+    "phase_rationale": "Critical for risk mitigation but can be addressed after immediate connectivity needs",
+    "effort_estimate": "12-16 weeks",
+    "cost_estimate_range": "$300K-$600K",
+    "depends_on": [
+      "WI-001",
+      "WI-004"
+    ],
+    "skills_required": [
+      "dr_specialist",
+      "infrastructure_architect",
+      "storage_engineer"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "WI-006",
+    "timestamp": "2026-01-07T11:51:34.709243",
+    "title": "Cloud Workload Migration Execution",
+    "description": "Execute migration of target's AWS workloads to buyer's Azure environment based on developed strategy. Include testing, cutover, and optimization activities.",
+    "domain": "infrastructure",
+    "category": "migration",
+    "phase": "Post_100",
+    "phase_rationale": "Major transformation work that requires completed strategy and can occur after stabilization",
+    "effort_estimate": "20-30 weeks",
+    "cost_estimate_range": "$1.5M-$3M",
+    "depends_on": [
+      "WI-003"
+    ],
+    "skills_required": [
+      "migration_engineer",
+      "cloud_engineer",
+      "application_engineer",
+      "dba"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "WI-007",
+    "timestamp": "2026-01-07T11:51:40.407679",
+    "title": "Infrastructure Team Integration",
+    "description": "Integrate target infrastructure team into buyer organization, including skills assessment, training, role alignment, and knowledge transfer processes.",
+    "domain": "infrastructure",
+    "category": "integration",
+    "phase": "Day_100",
+    "phase_rationale": "Important for maintaining operational capability during integration but not Day 1 critical",
+    "effort_estimate": "8-12 weeks",
+    "cost_estimate_range": "$100K-$200K",
+    "skills_required": [
+      "hr_specialist",
+      "training_coordinator",
+      "infrastructure_manager"
+    ],
+    "depends_on": [],
+    "priority_score": 1
+  },
+  {
+    "id": "WI-008",
+    "timestamp": "2026-01-07T11:53:40.028681",
+    "title": "Network Discovery and Documentation",
+    "description": "Comprehensive discovery of National Mutual's network infrastructure including WAN topology, LAN switching, IP addressing schemes, DNS/DHCP architecture, and security configurations. Document current state to enable integration planning.",
+    "domain": "network",
+    "category": "assessment",
+    "phase": "Day_1",
+    "phase_rationale": "Must understand network architecture before any integration activities can proceed safely",
+    "effort_estimate": "4-6 weeks",
+    "cost_estimate_range": "$50K-$75K",
+    "skills_required": [
+      "network_engineer",
+      "security_engineer",
+      "documentation_specialist"
+    ],
+    "depends_on": [],
+    "priority_score": 1
+  },
+  {
+    "id": "WI-009",
+    "timestamp": "2026-01-07T11:53:47.049118",
+    "title": "IP Address Conflict Analysis and Remediation Planning",
+    "description": "Analyze National Mutual's IP addressing scheme against Atlantic International's networks to identify conflicts. Develop remediation plan for IP renumbering if required, including impact assessment on applications and network devices.",
+    "domain": "network",
+    "category": "assessment",
+    "phase": "Day_1",
+    "phase_rationale": "IP conflicts must be identified immediately to prevent connectivity issues during integration",
+    "effort_estimate": "2-3 weeks",
+    "cost_estimate_range": "$25K-$40K",
+    "depends_on": [
+      "WI-008"
+    ],
+    "skills_required": [
+      "network_engineer",
+      "systems_administrator"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "WI-010",
+    "timestamp": "2026-01-07T11:53:53.386401",
+    "title": "Establish Secure Network Connectivity to Buyer",
+    "description": "Implement secure network connectivity between National Mutual and Atlantic International networks to enable Day 1 operations. This may include VPN tunnels, dedicated circuits, or cloud-based connectivity depending on discovered architecture.",
+    "domain": "network",
+    "category": "integration",
+    "phase": "Day_1",
+    "phase_rationale": "Basic connectivity required for email, authentication, and critical business applications from Day 1",
+    "effort_estimate": "3-4 weeks",
+    "cost_estimate_range": "$40K-$80K",
+    "depends_on": [
+      "WI-008",
+      "WI-009"
+    ],
+    "skills_required": [
+      "network_engineer",
+      "security_engineer",
+      "cloud_engineer"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "WI-011",
+    "timestamp": "2026-01-07T11:54:00.471732",
+    "title": "SIEM Migration from QRadar to Microsoft Sentinel",
+    "description": "Migrate security monitoring from IBM QRadar to Microsoft Sentinel to align with buyer's security platform. Includes data migration, rule conversion, dashboard recreation, and team training.",
+    "domain": "network",
+    "category": "migration",
+    "phase": "Day_100",
+    "phase_rationale": "Security monitoring can continue on existing platform initially, migration provides standardization and cost synergies",
+    "effort_estimate": "8-12 weeks",
+    "cost_estimate_range": "$150K-$250K",
+    "skills_required": [
+      "security_engineer",
+      "siem_specialist",
+      "cloud_engineer"
+    ],
+    "depends_on": [],
+    "priority_score": 1
+  },
+  {
+    "id": "WI-012",
+    "timestamp": "2026-01-07T11:54:06.922076",
+    "title": "MFA Migration from RSA SecurID to Microsoft Authenticator",
+    "description": "Migrate multi-factor authentication from RSA SecurID to Microsoft Authenticator to align with buyer's identity platform. Includes user enrollment, application integration updates, and policy migration.",
+    "domain": "network",
+    "category": "migration",
+    "phase": "Day_100",
+    "phase_rationale": "Existing MFA can continue short-term, migration enables identity consolidation and cost savings",
+    "effort_estimate": "6-8 weeks",
+    "cost_estimate_range": "$75K-$125K",
+    "skills_required": [
+      "identity_engineer",
+      "security_engineer",
+      "application_administrator"
+    ],
+    "depends_on": [],
+    "priority_score": 1
+  },
+  {
+    "id": "WI-013",
+    "timestamp": "2026-01-07T11:54:13.637136",
+    "title": "AWS Region Consolidation Planning",
+    "description": "Evaluate consolidating National Mutual's AWS us-east-1 workloads to Atlantic International's us-east-2 region or establish cross-region connectivity. Assess data transfer costs, latency impacts, and compliance requirements.",
+    "domain": "network",
+    "category": "assessment",
+    "phase": "Post_100",
+    "phase_rationale": "Regional consolidation provides cost optimization but not critical for initial operations",
+    "effort_estimate": "4-6 weeks",
+    "cost_estimate_range": "$40K-$60K",
+    "skills_required": [
+      "cloud_engineer",
+      "network_engineer",
+      "cost_analyst"
+    ],
+    "depends_on": [],
+    "priority_score": 1
+  },
+  {
+    "id": "WI-014",
+    "timestamp": "2026-01-07T11:54:19.678653",
+    "title": "Data Center Consolidation and Geographic Diversification",
+    "description": "Consolidate National Mutual's Chicago-based data centers into Atlantic International's geographically diverse infrastructure. Migrate workloads to Phoenix, Atlanta, or New York facilities to improve resilience.",
+    "domain": "network",
+    "category": "migration",
+    "phase": "Post_100",
+    "phase_rationale": "Major infrastructure consolidation that improves resilience but requires extensive planning and testing",
+    "effort_estimate": "12-18 months",
+    "cost_estimate_range": "$500K-$1M",
+    "depends_on": [
+      "WI-008",
+      "WI-010"
+    ],
+    "skills_required": [
+      "infrastructure_architect",
+      "network_engineer",
+      "project_manager",
+      "migration_specialist"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "WI-015",
+    "timestamp": "2026-01-07T11:57:17.177147",
+    "title": "Security Access Provisioning and Identity Integration",
+    "description": "Establish secure connectivity between buyer and target environments, provision buyer security team access to target systems, integrate Azure AD directories for unified identity management",
+    "domain": "cybersecurity",
+    "category": "integration",
+    "phase": "Day_1",
+    "phase_rationale": "Required for business continuity and buyer security oversight from day one",
+    "effort_estimate": "3-4 weeks",
+    "cost_estimate_range": "$75K-$125K",
+    "skills_required": [
+      "security_architect",
+      "identity_engineer",
+      "network_engineer"
+    ],
+    "depends_on": [],
+    "priority_score": 1
+  },
+  {
+    "id": "WI-016",
+    "timestamp": "2026-01-07T11:57:23.830991",
+    "title": "CrowdStrike Falcon Tenant Integration",
+    "description": "Integrate target's CrowdStrike Falcon deployment with buyer's tenant for unified endpoint visibility and management across combined organization",
+    "domain": "cybersecurity",
+    "category": "integration",
+    "phase": "Day_1",
+    "phase_rationale": "Critical for immediate endpoint security visibility and threat detection across combined environment",
+    "effort_estimate": "1-2 weeks",
+    "cost_estimate_range": "$25K-$50K",
+    "skills_required": [
+      "security_engineer",
+      "endpoint_security_specialist"
+    ],
+    "depends_on": [],
+    "priority_score": 1
+  },
+  {
+    "id": "WI-017",
+    "timestamp": "2026-01-07T11:57:30.541272",
+    "title": "RSA SecurID to Microsoft Authenticator Migration",
+    "description": "Replace RSA SecurID MFA platform with Microsoft Authenticator to align with buyer standards and eliminate EOL risk. Include user training and phased rollout.",
+    "domain": "cybersecurity",
+    "category": "migration",
+    "phase": "Day_100",
+    "phase_rationale": "Addresses technical debt and aligns with buyer MFA standard, but not critical for day-one operations",
+    "effort_estimate": "8-12 weeks",
+    "cost_estimate_range": "$150K-$250K",
+    "skills_required": [
+      "identity_engineer",
+      "security_engineer",
+      "change_management"
+    ],
+    "depends_on": [],
+    "priority_score": 1
+  },
+  {
+    "id": "WI-018",
+    "timestamp": "2026-01-07T11:57:37.040052",
+    "title": "SIEM Migration from Splunk to Microsoft Sentinel",
+    "description": "Migrate security operations from Splunk Enterprise Security to Microsoft Sentinel, including data source configuration, custom rule migration, and SOC team training",
+    "domain": "cybersecurity",
+    "category": "migration",
+    "phase": "Day_100",
+    "phase_rationale": "Enables security operations consolidation and cost synergies, but requires parallel operation during transition",
+    "effort_estimate": "12-16 weeks",
+    "cost_estimate_range": "$300K-$500K",
+    "skills_required": [
+      "siem_engineer",
+      "security_analyst",
+      "azure_security_specialist"
+    ],
+    "depends_on": [
+      "WI-015"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "WI-019",
+    "timestamp": "2026-01-07T11:57:43.596220",
+    "title": "AWS Cloud Security Assessment and Remediation",
+    "description": "Comprehensive security assessment of 41 AWS accounts, implement centralized security controls, remediate misconfigurations, and establish cloud security governance",
+    "domain": "cybersecurity",
+    "category": "assessment",
+    "phase": "Day_100",
+    "phase_rationale": "Critical for understanding cloud security posture and reducing risk, but can operate in parallel with other integration work",
+    "effort_estimate": "6-10 weeks",
+    "cost_estimate_range": "$200K-$400K",
+    "skills_required": [
+      "cloud_security_engineer",
+      "aws_specialist",
+      "compliance_specialist"
+    ],
+    "depends_on": [],
+    "priority_score": 1
+  },
+  {
+    "id": "WI-020",
+    "timestamp": "2026-01-07T11:57:51.890837",
+    "title": "Email Security Platform Consolidation",
+    "description": "Consolidate dual email security vendors (Proofpoint and Mimecast) to single platform aligned with buyer standards, migrate policies and configurations",
+    "domain": "cybersecurity",
+    "category": "migration",
+    "phase": "Post_100",
+    "phase_rationale": "Optimization opportunity that can be addressed after core integration is stable",
+    "effort_estimate": "4-6 weeks",
+    "cost_estimate_range": "$75K-$150K",
+    "skills_required": [
+      "email_security_engineer",
+      "messaging_specialist"
+    ],
+    "depends_on": [],
+    "priority_score": 1
+  },
+  {
+    "id": "WI-021",
+    "timestamp": "2026-01-07T11:58:48.203050",
+    "title": "Integration Program Management Office Establishment",
+    "description": "Establish dedicated PMO to coordinate cross-domain dependencies, manage critical path, and ensure proper sequencing of identity, network, infrastructure, and security migrations",
+    "domain": "cross-domain",
+    "category": "integration",
+    "phase": "Day_1",
+    "phase_rationale": "Critical path management and dependency coordination must begin immediately to avoid timeline delays",
+    "effort_estimate": "12-18 months ongoing",
+    "cost_estimate_range": "$800K-$1.2M",
+    "skills_required": [
+      "program_manager",
+      "integration_architect",
+      "change_manager"
+    ],
+    "depends_on": [],
+    "priority_score": 1
+  },
+  {
+    "id": "WI-022",
+    "timestamp": "2026-01-07T11:58:54.358557",
+    "title": "Platform Migration Strategy and Sequencing",
+    "description": "Develop comprehensive migration strategy addressing AWS->Azure, RSA->Microsoft MFA, Splunk->Sentinel, and QRadar->Sentinel with proper sequencing to maintain security and operational continuity",
+    "domain": "cross-domain",
+    "category": "migration",
+    "phase": "Day_1",
+    "phase_rationale": "Strategy must be defined before any major migrations begin to ensure proper sequencing and risk mitigation",
+    "effort_estimate": "8-12 weeks",
+    "cost_estimate_range": "$200K-$350K",
+    "skills_required": [
+      "solution_architect",
+      "migration_specialist",
+      "security_architect"
+    ],
+    "depends_on": [],
+    "priority_score": 1
+  }
+]

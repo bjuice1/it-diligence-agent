@@ -1,0 +1,280 @@
+# SYNTHETIC IT DISCOVERY DOCUMENT
+# Project Atlas - Target Company: Acme Manufacturing Corp
+# Document Version: 1.0 (Initial Discovery)
+# Date: January 2026
+
+================================================================================
+SECTION 1: EXECUTIVE IT OVERVIEW
+================================================================================
+
+Acme Manufacturing Corp ("Acme" or "Target") is a mid-sized manufacturing company
+with approximately 2,500 employees across 12 locations in North America. The IT
+organization supports manufacturing operations, enterprise systems, and corporate
+functions.
+
+## IT Organization Summary
+- Total IT Staff: 47 FTEs
+- IT Budget (Annual): Approximately $8.2M
+- Primary Data Center: Columbus, OH (company-owned facility)
+- Disaster Recovery: Partial cloud backup to AWS (implemented 2023)
+
+## Key Technology Platforms
+- ERP: SAP S/4HANA (migrated from SAP ECC in 2022)
+- CRM: Salesforce Enterprise
+- Email/Collaboration: Microsoft 365 (E3 licensing)
+- Manufacturing Execution: Rockwell FactoryTalk
+- HR/Payroll: ADP Workforce Now
+
+## Recent IT Initiatives
+- Completed SAP S/4HANA migration (18-month project, $4.2M investment)
+- Deployed Microsoft Teams company-wide in 2023
+- Initiated cybersecurity improvement program following 2022 audit findings
+- Currently evaluating cloud migration strategy for legacy applications
+
+================================================================================
+SECTION 2: INFRASTRUCTURE DETAILS
+================================================================================
+
+## Data Center - Columbus, OH (Primary)
+- Facility: 8,500 sq ft raised floor data center
+- Power: 2MW capacity, N+1 UPS configuration
+- Cooling: Redundant CRAC units
+- Physical Security: Biometric access, 24/7 security personnel
+- Network: 10Gbps backbone, dual ISP connections (AT&T, Lumen)
+
+## Server Infrastructure
+- Physical Servers: 127 servers (mix of Dell PowerEdge and HPE ProLiant)
+- VMware vSphere: Version 7.0 U3 (approximately 340 VMs)
+- Storage: NetApp FAS8200 (primary), 450TB raw capacity
+- Backup: Veeam Backup & Replication, daily backups with 30-day retention
+
+## End User Computing
+- Desktops/Laptops: Approximately 2,800 devices
+- Standard Image: Windows 11 Enterprise (migration 60% complete from Windows 10)
+- Mobile Devices: ~450 company-issued smartphones (iPhone and Android mix)
+- MDM Solution: Microsoft Intune
+
+## Network Infrastructure
+- Core Switches: Cisco Nexus 9000 series (2 years old)
+- Distribution: Cisco Catalyst 9300 series
+- Wireless: Cisco Meraki (deployed 2021)
+- WAN: MPLS network connecting all 12 sites, considering SD-WAN migration
+- Firewall: Palo Alto PA-5250 (primary), Fortinet secondary at DR site
+
+## Cloud Footprint
+- AWS: Limited usage for DR and some development workloads
+  - 3 AWS accounts (Prod, Dev, DR)
+  - Monthly spend: ~$45,000
+  - Primary region: us-east-2
+- Azure: Microsoft 365 only, no IaaS workloads
+- SaaS: 47 sanctioned SaaS applications (per last audit)
+
+================================================================================
+SECTION 3: APPLICATION INVENTORY
+================================================================================
+
+## Tier 1 - Business Critical Applications
+| Application | Vendor | Version | Users | Hosting | Notes |
+|-------------|--------|---------|-------|---------|-------|
+| SAP S/4HANA | SAP | 2022 | 850 | On-prem | Core ERP |
+| Salesforce | Salesforce | Enterprise | 320 | SaaS | CRM |
+| FactoryTalk | Rockwell | 12.0 | 180 | On-prem | MES |
+| ADP Workforce | ADP | Current | 2,500 | SaaS | HR/Payroll |
+| Microsoft 365 | Microsoft | E3 | 2,500 | SaaS | Email/Collab |
+
+## Tier 2 - Important Applications
+| Application | Vendor | Version | Users | Hosting | Notes |
+|-------------|--------|---------|-------|---------|-------|
+| Tableau | Tableau | 2023.1 | 125 | On-prem | Analytics |
+| ServiceNow | ServiceNow | Tokyo | 47 | SaaS | ITSM |
+| Autodesk Vault | Autodesk | 2023 | 85 | On-prem | PLM |
+| Kronos | UKG | Dimensions | 2,200 | SaaS | Time & Attendance |
+| Concur | SAP | Current | 450 | SaaS | Expense |
+
+## Tier 3 - Departmental Applications
+- Engineering: AutoCAD, SolidWorks, MATLAB (approximately 12 applications)
+- Finance: Blackline, Hyperion (legacy, planned retirement)
+- Quality: MasterControl, custom Access databases
+- Supply Chain: Oracle Transportation Management (OTM)
+
+## Legacy Systems (Retirement Candidates)
+- AS/400 system running custom COBOL inventory application
+  - 35+ years old, limited documentation
+  - Single developer (retiring in 18 months) maintains the code
+  - Approximately 15 users in warehouse operations
+  - Data feeds to SAP via nightly batch process
+
+- Lotus Notes databases (12 remaining)
+  - Mostly document repositories and simple workflows
+  - Migration to SharePoint planned but not funded
+
+## Custom Applications
+- Approximately 23 internally developed applications
+- Primary development stack: .NET/C#, SQL Server
+- Limited documentation for older applications
+- Source code in Azure DevOps (migrated from TFS in 2021)
+
+================================================================================
+SECTION 4: CYBERSECURITY POSTURE
+================================================================================
+
+## Security Organization
+- CISO: Position filled in 2023 (previously reporting to CIO)
+- Security Team: 5 FTEs (CISO + 4 analysts/engineers)
+- Security Operations: Outsourced to managed security provider (Secureworks)
+
+## Security Tools & Controls
+- SIEM: Splunk Enterprise (deployed 2022)
+- EDR: CrowdStrike Falcon
+- Email Security: Proofpoint
+- Vulnerability Management: Tenable.io
+- PAM: CyberArk (implementation in progress, 60% complete)
+- DLP: Microsoft Purview (pilot phase)
+
+## Identity & Access Management
+- Active Directory: Windows Server 2019, single forest
+- Azure AD: Hybrid configuration for M365
+- SSO: Okta (deployed 2023, 85% of SaaS apps integrated)
+- MFA: Okta Verify for remote access and SaaS
+  - MFA NOT enforced for on-premises applications
+  - Legacy VPN (Cisco AnyConnect) uses password only
+
+## Recent Security Incidents
+- March 2024: Phishing attack resulted in compromised credentials
+  - 3 executive accounts affected
+  - Contained within 4 hours, no data exfiltration confirmed
+  - Led to accelerated MFA deployment
+
+- June 2023: Ransomware attempt blocked by CrowdStrike
+  - Entry point: USB device at manufacturing site
+  - No systems encrypted, investigation completed
+
+## Compliance & Audits
+- SOC 2 Type II: Not certified, assessment planned for 2025
+- PCI-DSS: Not applicable (no card processing)
+- Last External Penetration Test: Q2 2024
+  - 3 critical findings (all remediated)
+  - 12 high findings (8 remediated, 4 in progress)
+
+## Known Security Gaps
+- No formal security awareness training program
+- Patch management SLA not consistently met (target: 30 days for critical)
+- Third-party risk management process is informal
+- No dedicated OT/ICS security controls for manufacturing systems
+
+================================================================================
+SECTION 5: IT ORGANIZATION & STAFFING
+================================================================================
+
+## IT Leadership Team
+- CIO: Robert Chen (joined 2019, previously at Honeywell)
+- VP Infrastructure: Sarah Martinez (15 years with company)
+- VP Applications: James Wilson (8 years with company)
+- CISO: Michelle Thompson (joined 2023, previously at PwC)
+- Director of IT Operations: Michael Brown (12 years with company)
+
+## IT Staff Distribution
+| Function | Headcount | Contractors | Notes |
+|----------|-----------|-------------|-------|
+| Infrastructure | 12 | 3 | Includes data center ops |
+| Applications | 15 | 8 | SAP team = 6 FTEs |
+| Security | 5 | 0 | + Secureworks managed service |
+| Service Desk | 8 | 2 | 24x5 coverage |
+| Management/PMO | 7 | 0 | Includes CIO |
+
+## Key Person Dependencies
+- AS/400 Developer: Single resource, retiring Q2 2027
+- SAP Basis Administrator: Single resource, critical for S/4HANA
+- Network Architect: Recently departed (Q4 2024), position open
+
+## Vendor Relationships
+- Primary Support: Dell, Cisco, NetApp, SAP (Premium support)
+- Managed Services: Secureworks (SOC), Kyndryl (partial data center ops)
+- Staff Augmentation: Multiple vendors for project work
+
+================================================================================
+SECTION 6: BUSINESS CONTINUITY & DISASTER RECOVERY
+================================================================================
+
+## Current DR Capabilities
+- RPO Target: 24 hours (most systems)
+- RTO Target: 48-72 hours (Tier 1 applications)
+- DR Site: AWS us-west-2 (partial replication only)
+
+## What's Covered
+- SAP S/4HANA: Database replication to AWS, untested failover
+- Microsoft 365: Native Microsoft resilience
+- Veeam backups: Replicated to AWS S3
+
+## What's NOT Covered
+- FactoryTalk MES: No DR capability (manufacturing would halt)
+- AS/400 system: Tape backup only, 72-hour recovery estimate
+- On-premises file servers: Limited replication
+
+## DR Testing
+- Last full DR test: Never conducted
+- Last partial test (SAP only): Q3 2023
+- Documented DR runbooks: Exist for ~40% of Tier 1 systems
+
+================================================================================
+SECTION 7: CURRENT IT PROJECTS & INITIATIVES
+================================================================================
+
+## Active Projects
+1. CyberArk PAM Implementation (60% complete)
+   - Budget: $450K | Timeline: Complete Q2 2025
+
+2. Windows 11 Migration (60% complete)
+   - Budget: $180K | Timeline: Complete Q3 2025
+
+3. SD-WAN Evaluation
+   - Status: RFP phase
+   - Potential vendors: Cato, Zscaler, Palo Alto Prisma
+
+4. Cloud Migration Assessment
+   - Status: Discovery phase with Accenture
+   - Target: Develop 3-year cloud strategy
+
+## Planned Projects (Approved but Not Started)
+- SOC 2 certification preparation
+- SharePoint migration for Lotus Notes
+- Network segmentation for OT/IT separation
+
+## Unfunded Requests
+- AS/400 replacement: $2.5M estimated, no budget allocated
+- Security awareness training platform
+- Full DR capability for manufacturing systems
+
+================================================================================
+SECTION 8: CONTRACTS & LICENSING
+================================================================================
+
+## Major Contracts
+| Vendor | Annual Value | Renewal Date | Terms |
+|--------|--------------|--------------|-------|
+| SAP | $1.8M | Dec 2026 | 3-year agreement |
+| Microsoft EA | $890K | Jun 2025 | 3-year EA |
+| Salesforce | $420K | Mar 2026 | Annual |
+| Secureworks | $380K | Sep 2025 | 2-year |
+| AWS | ~$540K | Usage-based | Reserved instances through 2025 |
+
+## Licensing Considerations
+- SAP licensing: Indirect access terms may need review post-acquisition
+- Microsoft 365: Current E3, potential upgrade to E5 for security features
+- VMware: Perpetual licenses, may be impacted by Broadcom acquisition changes
+
+## Contract Change of Control
+- SAP: Assignment clause requires 90-day notice
+- Salesforce: Standard assignment terms
+- Secureworks: 60-day notice for assignment
+- Others: Review required
+
+================================================================================
+END OF DOCUMENT
+================================================================================
+
+DOCUMENT METADATA:
+- Prepared by: Acme IT Organization
+- Date: January 15, 2026
+- Classification: Confidential - M&A Process
+- Next Update: Upon request or material change

@@ -1,0 +1,187 @@
+
+# IT Infrastructure Overview - Project Atlas Target Company
+
+## Executive Summary
+This document provides an overview of the IT infrastructure for the target acquisition.
+The company operates a manufacturing business with 1,200 employees across 5 locations.
+
+## Data Center & Hosting
+
+### Primary Data Center
+- Location: Chicago, IL (Equinix CH3)
+- Colocation lease expires: March 2026 (18 months remaining)
+- Rack count: 12 racks
+- Power: 2N redundant, 150kW allocated
+
+### Disaster Recovery
+- Location: Dallas, TX (CyrusOne)
+- DR capability: Warm standby, 4-hour RTO target
+- Last DR test: Never formally tested
+
+## Server Environment
+
+### Physical Servers: 15
+- 8x Dell PowerEdge R740 (2019) - VMware hosts
+- 4x HP ProLiant DL380 Gen9 (2016) - Database servers
+- 3x Dell PowerEdge R630 (2015) - Legacy applications
+
+### Virtual Environment: 180 VMs
+- VMware vSphere 6.7 (Note: EOL October 2022)
+- vCenter Standard licensing
+- No vSAN - using NetApp SAN storage
+
+### Operating Systems
+- Windows Server 2019: 45 VMs
+- Windows Server 2016: 80 VMs
+- Windows Server 2012 R2: 30 VMs (EOL - security risk)
+- RHEL 7: 15 VMs
+- RHEL 8: 10 VMs
+
+## Storage Infrastructure
+
+### NetApp FAS8200 (Primary)
+- Capacity: 200TB raw, 140TB usable
+- Current utilization: 85%
+- Protocols: NFS, iSCSI, CIFS
+- Age: 5 years, approaching EOL
+
+### Backup
+- Veeam Backup & Replication v11
+- Backup to secondary NetApp + AWS S3
+- Retention: 30 days local, 1 year cloud
+- RPO: 4 hours
+
+## Cloud Presence
+
+### AWS (Primary Cloud)
+- Monthly spend: ~$45,000
+- Services: EC2, RDS, S3, some Lambda
+- Environment: Mostly lift-and-shift VMs
+- No reserved instances (paying on-demand)
+- Single AWS account for all environments
+
+### Azure
+- Monthly spend: ~$8,000
+- Used only for Azure AD and some M365 workloads
+
+## Network Infrastructure
+
+### WAN
+- AT&T MPLS network connecting all 5 sites
+- Primary circuit: 100 Mbps at HQ
+- Branch circuits: 20-50 Mbps
+- Contract expires: December 2025
+- No SD-WAN currently
+
+### LAN
+- Cisco Catalyst 3850 switches (EOL)
+- Some Cisco 2960 switches at branches (very old)
+- Flat network - limited VLAN segmentation
+- No network access control (NAC)
+
+### IP Addressing
+- Using 10.0.0.0/8 address space
+- No IPAM tool - managed in spreadsheet
+- Known issues with IP conflicts
+
+### Firewalls
+- Palo Alto PA-3220 at HQ (current)
+- Cisco ASA 5515-X at branches (approaching EOL)
+- ~400 firewall rules at HQ
+- Site-to-site VPNs between all locations
+
+### DNS/DHCP
+- AD-integrated DNS
+- Windows DHCP servers
+- Split-brain DNS for external resolution
+
+## Security
+
+### Identity & Access Management
+- On-premises Active Directory (2016 functional level)
+- Azure AD Connect for M365 sync
+- No SSO platform (each app has own login)
+- MFA: Only enabled for M365 and VPN (~40% coverage)
+- Shared admin accounts exist
+- No PAM solution
+
+### Endpoint Security
+- Symantec Endpoint Protection (legacy)
+- No EDR capability
+- BitLocker on ~70% of laptops
+- BYOD allowed with no MDM
+
+### Vulnerability Management
+- Qualys vulnerability scanning (quarterly)
+- Last scan: 3 months ago
+- 45 critical vulnerabilities outstanding
+- Patching: Monthly, often delayed
+
+### Compliance
+- No SOC 2 certification
+- Processing credit cards - need PCI assessment
+- Some HIPAA data from wellness program
+- No formal security policies documented
+
+### Security Operations
+- No SIEM
+- Logs retained 30 days on servers
+- No dedicated security staff
+- IT manager handles security part-time
+- No incident response plan documented
+
+### Recent Incidents
+- Phishing attack 6 months ago - 3 accounts compromised
+- Ransomware scare 18 months ago - caught by AV
+- No formal incident tracking
+
+## Applications
+
+### ERP
+- SAP ECC 6.0 (on-premise)
+- ~150 custom ABAP programs
+- Heavy integration with manufacturing systems
+- Upgrade to S/4HANA not planned
+
+### Email & Collaboration
+- Microsoft 365 E3
+- 1,100 mailboxes
+- SharePoint Online for documents
+- Teams adoption ~60%
+
+### Business Applications
+- Salesforce (CRM)
+- Workday (HR) - implemented 2 years ago
+- Custom manufacturing execution system (MES)
+- Legacy inventory system (AS/400 - IBM i)
+
+## IT Organization
+
+### Headcount: 18 FTEs
+- IT Director: 1
+- Infrastructure: 6
+- Applications: 5
+- Help Desk: 4
+- Security: 0 (IT Director handles)
+- Project Management: 2
+
+### Key Person Risk
+- "Dave" knows the SAP system - 25 years with company
+- No documentation for custom integrations
+- Network managed by one person
+
+### Vendors
+- MSP for after-hours support (Acme IT Services)
+- NetApp support contract expires June 2025
+- VMware licensing through CDW
+
+## Known Issues & Technical Debt
+
+1. Windows Server 2012 R2 systems need immediate attention
+2. VMware 6.7 is end of support
+3. Network switches approaching end of life
+4. SAP ECC will need S/4HANA migration eventually
+5. Legacy AS/400 system - no one knows how to maintain
+6. No disaster recovery testing ever performed
+7. Security posture needs significant improvement
+8. IP addressing conflicts with likely buyer range

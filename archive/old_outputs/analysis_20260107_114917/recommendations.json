@@ -1,0 +1,112 @@
+[
+  {
+    "id": "REC-001",
+    "timestamp": "2026-01-07T11:51:46.013601",
+    "recommendation": "Negotiate extended TSA for infrastructure services to provide buffer during complex cloud migration",
+    "rationale": "AWS to Azure migration is complex and high-risk. Extended TSA provides safety net and allows for proper planning and testing without business disruption",
+    "domain": "infrastructure",
+    "priority": "high",
+    "timing": "pre_close",
+    "investment_required": "TSA fees estimated at $200K-$400K for extended period"
+  },
+  {
+    "id": "REC-002",
+    "timestamp": "2026-01-07T11:51:50.762716",
+    "recommendation": "Conduct immediate geographic DR risk assessment and implement interim mitigation",
+    "rationale": "Both data centers in Chicago creates unacceptable business continuity risk that exists today and will persist through integration",
+    "domain": "infrastructure",
+    "priority": "critical",
+    "timing": "day_1",
+    "investment_required": "$100K-$200K for interim DR capabilities"
+  },
+  {
+    "id": "REC-003",
+    "timestamp": "2026-01-07T11:51:56.733004",
+    "recommendation": "Augment target's cloud engineering capacity immediately post-close",
+    "rationale": "Single cloud engineer is insufficient for $3.38M AWS environment and upcoming migration complexity. Key person risk threatens integration execution",
+    "domain": "infrastructure",
+    "priority": "high",
+    "timing": "day_1",
+    "investment_required": "$300K-$500K annually for additional cloud engineering resources"
+  },
+  {
+    "id": "REC-004",
+    "timestamp": "2026-01-07T11:54:25.322114",
+    "recommendation": "Prioritize network discovery and documentation as first critical activity post-close",
+    "rationale": "Multiple critical knowledge gaps exist around WAN architecture, IP addressing, and LAN infrastructure. Without this baseline, integration planning cannot proceed safely and Day 1 connectivity risks are elevated.",
+    "domain": "network",
+    "priority": "critical",
+    "timing": "day_1",
+    "investment_required": "$50K-$75K for comprehensive network assessment"
+  },
+  {
+    "id": "REC-005",
+    "timestamp": "2026-01-07T11:54:34.044739",
+    "recommendation": "Negotiate extended support contracts for RSA SecurID and IBM QRadar during transition period",
+    "rationale": "Both platforms will be migrated to buyer standards (Microsoft Authenticator and Sentinel) but need to remain operational during transition. Extended support ensures security continuity.",
+    "domain": "network",
+    "priority": "high",
+    "timing": "pre_close",
+    "investment_required": "$100K-$200K for extended vendor support contracts"
+  },
+  {
+    "id": "REC-006",
+    "timestamp": "2026-01-07T11:54:43.065242",
+    "recommendation": "Establish geographic DR capability outside Chicago metro area as risk mitigation priority",
+    "rationale": "Both data centers in Chicago create unacceptable geographic concentration risk. Buyer's distributed infrastructure provides opportunity to improve resilience while achieving integration synergies.",
+    "domain": "network",
+    "priority": "high",
+    "timing": "first_90_days",
+    "investment_required": "$200K-$500K for DR site establishment and connectivity"
+  },
+  {
+    "id": "REC-007",
+    "timestamp": "2026-01-07T11:59:01.338961",
+    "recommendation": "Negotiate extended TSA for shared services with minimum 18-month term and 6-month extension option",
+    "rationale": "Cross-domain dependencies create 18-24 month integration timeline. Geographic concentration in Chicago and platform mismatches require careful sequencing that cannot be rushed",
+    "domain": "deal",
+    "priority": "critical",
+    "timing": "pre_close",
+    "investment_required": "TSA cost escalation clauses and potential extension fees"
+  },
+  {
+    "id": "REC-008",
+    "timestamp": "2026-01-07T11:59:06.805977",
+    "recommendation": "Establish dedicated integration budget of $4M-$6M with 25% contingency for platform migrations",
+    "rationale": "Complete platform mismatch across infrastructure (AWS->Azure), security (RSA->Microsoft, Splunk->Sentinel), and network requires significant investment. Geographic concentration adds DR complexity",
+    "domain": "deal",
+    "priority": "critical",
+    "timing": "pre_close",
+    "investment_required": "$4M-$6M integration budget plus contingency"
+  },
+  {
+    "id": "REC-009",
+    "timestamp": "2026-01-07T11:59:13.103426",
+    "recommendation": "Retain key target IT personnel through 24-month retention packages, especially cloud engineer and security team",
+    "rationale": "Only 1 cloud engineer supporting $3.38M AWS environment and complex security platform migrations create key person dependency. Knowledge loss would significantly increase integration risk and cost",
+    "domain": "cross-domain",
+    "priority": "high",
+    "timing": "pre_close",
+    "investment_required": "$500K-$800K in retention bonuses and extended employment agreements"
+  },
+  {
+    "id": "REC-010",
+    "timestamp": "2026-01-07T11:59:18.720783",
+    "recommendation": "Accelerate geographic diversification by establishing East Coast presence before Chicago data center consolidation",
+    "rationale": "Both data centers in Chicago create unacceptable single point of failure for $500M revenue company. Must establish geographic diversity before consolidating to buyer's infrastructure",
+    "domain": "infrastructure",
+    "priority": "high",
+    "timing": "first_90_days",
+    "investment_required": "$800K-$1.2M for temporary DR site establishment"
+  },
+  {
+    "id": "REC-011",
+    "timestamp": "2026-01-07T11:59:26.305706",
+    "recommendation": "Engage Microsoft as strategic partner for comprehensive platform migration support",
+    "rationale": "Buyer's Azure/Microsoft 365 environment aligns with target's partial Microsoft adoption. Microsoft can provide migration credits, technical resources, and accelerated timelines for Azure, Sentinel, and MFA migrations",
+    "domain": "cross-domain",
+    "priority": "high",
+    "timing": "pre_close",
+    "investment_required": "Microsoft partnership agreement and potential migration credits"
+  }
+]

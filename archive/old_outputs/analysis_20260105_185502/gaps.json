@@ -1,0 +1,162 @@
+[
+  {
+    "id": "G-001",
+    "timestamp": "2026-01-05T18:55:14.491013",
+    "gap": "Specific hosting model details - cloud vs on-premises breakdown",
+    "why_needed": "Critical for understanding migration complexity and TSA requirements. Documents only state \"ParentCo-managed cloud and data center environments\" without specifics",
+    "domain": "infrastructure",
+    "priority": "critical",
+    "cost_impact": "high",
+    "suggested_source": "Technical assessment with ParentCo IT team to map workload placement"
+  },
+  {
+    "id": "G-002",
+    "timestamp": "2026-01-05T18:55:18.365611",
+    "gap": "Server operating systems and versions",
+    "why_needed": "110-130 servers mentioned but no OS details provided. Critical for identifying EOL/EOS risks and migration planning",
+    "domain": "infrastructure",
+    "priority": "high",
+    "cost_impact": "medium",
+    "suggested_source": "Server inventory export from ParentCo CMDB or asset management system"
+  },
+  {
+    "id": "G-003",
+    "timestamp": "2026-01-05T18:55:22.148319",
+    "gap": "Data center locations and lease terms",
+    "why_needed": "Need to understand geographic distribution, lease obligations, and timeline constraints for separation",
+    "domain": "infrastructure",
+    "priority": "high",
+    "cost_impact": "high",
+    "suggested_source": "Facilities management team interview and lease agreement review"
+  },
+  {
+    "id": "G-004",
+    "timestamp": "2026-01-05T18:55:53.189440",
+    "gap": "Shared ERP/CRM/HCM platform separation complexity",
+    "why_needed": "TargetCo operates within shared platforms - need to understand data separation, customization isolation, and extraction requirements",
+    "domain": "infrastructure",
+    "priority": "critical",
+    "cost_impact": "high",
+    "suggested_source": "Application architecture review with ParentCo and platform vendors"
+  },
+  {
+    "id": "G-005",
+    "timestamp": "2026-01-05T18:56:07.657749",
+    "gap": "Network architecture and connectivity requirements",
+    "why_needed": "No details on network topology, WAN connectivity, or bandwidth requirements for 650+ users across multiple locations",
+    "domain": "network",
+    "priority": "high",
+    "cost_impact": "medium",
+    "suggested_source": "Network diagram review and bandwidth analysis with ParentCo network team"
+  },
+  {
+    "id": "G-006",
+    "timestamp": "2026-01-05T18:56:43.563931",
+    "gap": "Storage and backup systems architecture",
+    "why_needed": "No information provided on storage platforms, capacity, backup solutions, or data retention requirements for 110-130 servers",
+    "domain": "infrastructure",
+    "priority": "high",
+    "cost_impact": "medium",
+    "suggested_source": "Storage and backup system inventory from ParentCo infrastructure team"
+  },
+  {
+    "id": "G-007",
+    "timestamp": "2026-01-05T18:56:56.846764",
+    "gap": "Network architecture and topology details",
+    "why_needed": "Critical for understanding current WAN/LAN design, connectivity patterns, and integration complexity. Need to know if MPLS, SD-WAN, or internet-based connectivity.",
+    "domain": "network",
+    "priority": "critical",
+    "cost_impact": "high",
+    "suggested_source": "Network diagram request, technical interview with ParentCo network team"
+  },
+  {
+    "id": "G-008",
+    "timestamp": "2026-01-05T18:57:00.793517",
+    "gap": "IP addressing scheme and DHCP scope allocation",
+    "why_needed": "Essential for identifying IP conflicts between TargetCo (ParentCo) and BuyerCo networks. IP conflicts will block Day 1 connectivity and require renumbering.",
+    "domain": "network",
+    "priority": "critical",
+    "cost_impact": "high",
+    "suggested_source": "IP address management documentation, network configuration exports"
+  },
+  {
+    "id": "G-009",
+    "timestamp": "2026-01-05T18:57:05.034082",
+    "gap": "DNS architecture and domain structure",
+    "why_needed": "Need to understand DNS zones, domain names, and integration with ParentCo AD. Critical for application connectivity and user experience post-separation.",
+    "domain": "network",
+    "priority": "high",
+    "cost_impact": "medium",
+    "suggested_source": "DNS zone files, Active Directory DNS configuration"
+  },
+  {
+    "id": "G-010",
+    "timestamp": "2026-01-05T18:57:09.744225",
+    "gap": "Firewall rules and security zone configuration",
+    "why_needed": "Must understand current security posture and rule complexity to plan firewall separation and rule migration. Complex rulesets significantly increase migration effort and cost.",
+    "domain": "network",
+    "priority": "high",
+    "cost_impact": "high",
+    "suggested_source": "Firewall configuration backup, rule analysis report"
+  },
+  {
+    "id": "G-011",
+    "timestamp": "2026-01-05T18:57:13.859404",
+    "gap": "WAN circuit details and carrier contracts",
+    "why_needed": "Need circuit types, bandwidth, carriers, and contract terms to plan connectivity separation. Long lead times (30-90 days) for new circuits could impact timeline.",
+    "domain": "network",
+    "priority": "high",
+    "cost_impact": "high",
+    "suggested_source": "Telecom contract review, circuit inventory from ParentCo"
+  },
+  {
+    "id": "G-012",
+    "timestamp": "2026-01-05T18:58:46.360821",
+    "gap": "MFA coverage percentage and implementation details",
+    "why_needed": "Document mentions MFA exists but doesn't specify coverage percentage, conditional access policies, or privileged account protection",
+    "domain": "cybersecurity",
+    "priority": "high",
+    "cost_impact": "medium",
+    "suggested_source": "Technical assessment of current Azure AD configuration and MFA enrollment reports"
+  },
+  {
+    "id": "G-013",
+    "timestamp": "2026-01-05T18:58:50.857641",
+    "gap": "Compliance framework details and certification scope",
+    "why_needed": "Document mentions SOC 2 and ISO-aligned but doesn't specify if TargetCo is in scope, certification status, or audit findings",
+    "domain": "cybersecurity",
+    "priority": "critical",
+    "cost_impact": "high",
+    "suggested_source": "Request SOC 2 reports, ISO certificates, and audit findings for TargetCo operations"
+  },
+  {
+    "id": "G-014",
+    "timestamp": "2026-01-05T18:58:54.812625",
+    "gap": "Data classification and sensitive data inventory",
+    "why_needed": "No information provided on data classification, PII/PHI handling, or regulatory data requirements for TargetCo operations",
+    "domain": "cybersecurity",
+    "priority": "high",
+    "cost_impact": "high",
+    "suggested_source": "Data classification assessment and regulatory compliance requirements review"
+  },
+  {
+    "id": "G-015",
+    "timestamp": "2026-01-05T18:58:58.309932",
+    "gap": "Vulnerability management and patching metrics",
+    "why_needed": "No information on patch management SLAs, vulnerability scan results, or security posture metrics",
+    "domain": "cybersecurity",
+    "priority": "high",
+    "cost_impact": "medium",
+    "suggested_source": "Request vulnerability scan reports and patch management metrics from ParentCo"
+  },
+  {
+    "id": "G-016",
+    "timestamp": "2026-01-05T18:59:01.837607",
+    "gap": "Incident response history and security events",
+    "why_needed": "No information on past security incidents, breaches, or security events affecting TargetCo",
+    "domain": "cybersecurity",
+    "priority": "critical",
+    "cost_impact": "high",
+    "suggested_source": "Request security incident history and breach notifications for past 3 years"
+  }
+]

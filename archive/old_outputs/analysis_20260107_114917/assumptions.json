@@ -1,0 +1,12 @@
+[
+  {
+    "id": "A-001",
+    "timestamp": "2026-01-07T11:53:14.488684",
+    "assumption": "Network infrastructure connecting 12 office locations exists but architecture is unknown",
+    "basis": "Document shows 12 office locations and 1,812 employees requiring connectivity, but no WAN details provided",
+    "domain": "network",
+    "confidence": "high",
+    "impact": "medium",
+    "validation_needed": "Network architecture documentation or infrastructure team interview to confirm WAN topology, carriers, and bandwidth"
+  }
+]

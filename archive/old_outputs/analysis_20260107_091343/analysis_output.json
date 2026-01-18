@@ -1,0 +1,1113 @@
+{
+  "assumptions": [
+    {
+      "id": "A-001",
+      "timestamp": "2026-01-07T09:13:50.860833",
+      "assumption": "National Mutual's 2 colocation data centers in Chicago suggest a regional concentration with potential single point of failure risk",
+      "basis": "Both Primary DC (22 racks, $635K annual) and Secondary DC (6 racks, $113K annual) are located in Chicago, IL - same geographic region",
+      "domain": "infrastructure",
+      "confidence": "high",
+      "impact": "medium",
+      "validation_needed": "Confirm exact facility locations and disaster recovery testing procedures"
+    },
+    {
+      "id": "A-002",
+      "timestamp": "2026-01-07T09:14:07.700693",
+      "assumption": "National Mutual has a hybrid hosting model with approximately 60% cloud/SaaS and 40% on-premises based on application analysis",
+      "basis": "Counting applications by hosting type: 22 Cloud/SaaS applications vs 14 On-Prem/Hybrid applications from the inventory",
+      "domain": "infrastructure",
+      "confidence": "medium",
+      "impact": "medium",
+      "validation_needed": "Confirm actual workload distribution by compute/storage rather than application count"
+    },
+    {
+      "id": "A-003",
+      "timestamp": "2026-01-07T09:14:36.304035",
+      "assumption": "Critical insurance applications (Guidewire, Duck Creek, Majesco) will require specialized migration expertise due to industry-specific configurations",
+      "basis": "These are core policy administration and claims management systems with high criticality ratings and significant user bases (700-1,500+ users each)",
+      "domain": "infrastructure",
+      "confidence": "high",
+      "impact": "high",
+      "validation_needed": "Assess customizations, integrations, and data dependencies for each core insurance platform"
+    },
+    {
+      "id": "A-004",
+      "timestamp": "2026-01-07T09:15:00.527424",
+      "assumption": "AWS spend of $3.4M annually suggests significant cloud workloads that will require cross-cloud migration to Azure",
+      "basis": "$281K monthly AWS spend across 41 accounts indicates substantial cloud adoption beyond just SaaS applications",
+      "domain": "infrastructure",
+      "confidence": "high",
+      "impact": "high",
+      "validation_needed": "Detailed AWS service inventory and architecture assessment to understand migration complexity"
+    },
+    {
+      "id": "A-005",
+      "timestamp": "2026-01-07T09:15:12.287508",
+      "assumption": "Current 1-hour RPO/RTO targets are aggressive and may not be achievable during migration periods",
+      "basis": "Hot DR strategy with Tier 2 classification and both DCs in same region suggests current setup may not meet stated targets during disruptions",
+      "domain": "infrastructure",
+      "confidence": "medium",
+      "impact": "high",
+      "validation_needed": "Review DR test results and actual recovery times achieved in recent tests"
+    },
+    {
+      "id": "A-006",
+      "timestamp": "2026-01-07T09:15:23.720598",
+      "assumption": "Security tool consolidation will be required due to platform differences between buyer and seller",
+      "basis": "National Mutual uses Check Point firewalls, IBM QRadar SIEM, RSA SecurID MFA vs Atlantic's Check Point, Microsoft Sentinel, Microsoft Authenticator - partial overlap but different platforms",
+      "domain": "cybersecurity",
+      "confidence": "high",
+      "impact": "medium",
+      "validation_needed": "Detailed security architecture comparison and integration requirements"
+    },
+    {
+      "id": "A-007",
+      "timestamp": "2026-01-07T09:16:27.665278",
+      "assumption": "National Mutual uses standard RFC1918 IP addressing (likely 10.x.x.x or 192.168.x.x ranges)",
+      "basis": "Standard practice for enterprise networks of this size (1,812 employees, 12 locations)",
+      "domain": "network",
+      "confidence": "high",
+      "impact": "high",
+      "validation_needed": "IP address scheme documentation from network team"
+    },
+    {
+      "id": "A-008",
+      "timestamp": "2026-01-07T09:16:32.443401",
+      "assumption": "Multi-site WAN connectivity exists between 12 office locations",
+      "basis": "Enterprise with 12 locations and centralized IT (121 staff) requires inter-site connectivity for shared services",
+      "domain": "network",
+      "confidence": "high",
+      "impact": "medium",
+      "validation_needed": "WAN architecture documentation and circuit inventory"
+    },
+    {
+      "id": "A-009",
+      "timestamp": "2026-01-07T09:16:37.011254",
+      "assumption": "Check Point firewalls are deployed based on security tools inventory",
+      "basis": "Document explicitly lists Check Point as the firewall solution",
+      "domain": "network",
+      "confidence": "high",
+      "impact": "low",
+      "validation_needed": "Check Point version, model, and configuration details"
+    },
+    {
+      "id": "A-010",
+      "timestamp": "2026-01-07T09:18:05.631882",
+      "assumption": "National Mutual has basic MFA coverage with RSA SecurID but likely incomplete deployment across all users and privileged accounts",
+      "basis": "Document shows RSA SecurID as MFA solution but no coverage metrics provided. Insurance companies typically have partial MFA deployment, and RSA SecurID is often deployed for privileged users first",
+      "domain": "cybersecurity",
+      "confidence": "medium",
+      "impact": "high",
+      "validation_needed": "MFA coverage percentage across all users, privileged accounts, and critical applications"
+    },
+    {
+      "id": "A-011",
+      "timestamp": "2026-01-07T09:19:24.470523",
+      "assumption": "National Mutual requires SOC 2 Type II certification as an insurance company handling sensitive customer data",
+      "basis": "Insurance companies typically require SOC 2 certification for customer trust and regulatory compliance. The company handles policy, claims, and billing data requiring security controls",
+      "domain": "cybersecurity",
+      "confidence": "high",
+      "impact": "high",
+      "validation_needed": "Current SOC 2 certification status and any audit findings"
+    },
+    {
+      "id": "A-012",
+      "timestamp": "2026-01-07T09:20:05.068510",
+      "assumption": "National Mutual has basic backup encryption but may lack comprehensive data-at-rest encryption across all systems",
+      "basis": "Zerto and Veeam backup solutions typically include encryption, but comprehensive database and file system encryption is not explicitly documented. Insurance companies handle sensitive data requiring encryption",
+      "domain": "cybersecurity",
+      "confidence": "medium",
+      "impact": "high",
+      "validation_needed": "Comprehensive encryption inventory including databases, file systems, and application-level encryption"
+    }
+  ],
+  "gaps": [
+    {
+      "id": "G-001",
+      "timestamp": "2026-01-07T09:13:56.224111",
+      "gap": "Server inventory details - count, operating systems, virtualization platform, and hardware age",
+      "why_needed": "Critical for migration planning, licensing costs, and timeline estimation. Server count drives migration effort and cost estimates",
+      "domain": "infrastructure",
+      "priority": "critical",
+      "cost_impact": "high",
+      "suggested_source": "Technical assessment or infrastructure inventory document"
+    },
+    {
+      "id": "G-002",
+      "timestamp": "2026-01-07T09:14:01.904395",
+      "gap": "Storage infrastructure details - SAN/NAS platforms, capacity, utilization, and backup architecture",
+      "why_needed": "Storage migration is often the most complex and time-consuming part of infrastructure consolidation. Need to understand data volumes and dependencies",
+      "domain": "infrastructure",
+      "priority": "critical",
+      "cost_impact": "high",
+      "suggested_source": "Storage assessment or infrastructure architecture documents"
+    },
+    {
+      "id": "G-003",
+      "timestamp": "2026-01-07T09:14:48.930505",
+      "gap": "Operating system versions and end-of-life status for on-premises applications",
+      "why_needed": "Several applications show older versions (Duck Creek 10/12, Qlik Sense May 2024, Splunk 9.0) that may be running on EOL operating systems requiring immediate attention",
+      "domain": "infrastructure",
+      "priority": "high",
+      "cost_impact": "medium",
+      "suggested_source": "Technical assessment of server operating systems and patch levels"
+    },
+    {
+      "id": "G-004",
+      "timestamp": "2026-01-07T09:15:29.113923",
+      "gap": "Network architecture details including WAN connectivity, bandwidth, and inter-site connectivity",
+      "why_needed": "Critical for understanding integration complexity, especially with 12 office locations and 2 data centers. Network consolidation often drives timeline and costs",
+      "domain": "network",
+      "priority": "critical",
+      "cost_impact": "high",
+      "suggested_source": "Network architecture diagrams and WAN contract details"
+    },
+    {
+      "id": "G-005",
+      "timestamp": "2026-01-07T09:16:07.904243",
+      "gap": "Network architecture and WAN connectivity details",
+      "why_needed": "Critical for understanding current connectivity between 12 office locations and planning Day 1 integration connectivity",
+      "domain": "network",
+      "priority": "critical",
+      "cost_impact": "high",
+      "suggested_source": "Network architecture document request, interview with infrastructure team"
+    },
+    {
+      "id": "G-006",
+      "timestamp": "2026-01-07T09:16:12.368059",
+      "gap": "IP addressing scheme and DHCP/DNS architecture",
+      "why_needed": "Essential for identifying IP conflicts with buyer network and planning network integration",
+      "domain": "network",
+      "priority": "critical",
+      "cost_impact": "high",
+      "suggested_source": "Network documentation request, IP address management system export"
+    },
+    {
+      "id": "G-007",
+      "timestamp": "2026-01-07T09:16:16.084053",
+      "gap": "Firewall and security zone configuration",
+      "why_needed": "Required for security assessment and planning secure connectivity to buyer network",
+      "domain": "network",
+      "priority": "high",
+      "cost_impact": "medium",
+      "suggested_source": "Firewall configuration export, security architecture documentation"
+    },
+    {
+      "id": "G-008",
+      "timestamp": "2026-01-07T09:16:20.620005",
+      "gap": "Data center network infrastructure details",
+      "why_needed": "Understanding network equipment in Chicago data centers for migration planning and potential decommissioning",
+      "domain": "network",
+      "priority": "high",
+      "cost_impact": "medium",
+      "suggested_source": "Data center network diagrams, equipment inventory"
+    },
+    {
+      "id": "G-009",
+      "timestamp": "2026-01-07T09:18:11.302205",
+      "gap": "No penetration testing or vulnerability assessment results provided",
+      "why_needed": "Critical for understanding current security posture, existing vulnerabilities, and potential breach risks that could affect deal valuation and post-acquisition security investments",
+      "domain": "cybersecurity",
+      "priority": "critical",
+      "cost_impact": "high",
+      "suggested_source": "Request recent penetration test reports, vulnerability scan results, and security assessment findings"
+    },
+    {
+      "id": "G-010",
+      "timestamp": "2026-01-07T09:18:16.123070",
+      "gap": "Compliance certifications and audit results not documented",
+      "why_needed": "Insurance companies typically require SOC 2 Type II, and may need PCI DSS for payment processing. Missing compliance creates regulatory risk and integration complexity",
+      "domain": "cybersecurity",
+      "priority": "high",
+      "cost_impact": "high",
+      "suggested_source": "Request SOC 2 reports, PCI DSS attestations, and any other compliance certifications or audit findings"
+    },
+    {
+      "id": "G-011",
+      "timestamp": "2026-01-07T09:18:41.970174",
+      "gap": "Incident response plan and testing history not provided",
+      "why_needed": "Understanding IR maturity is critical for assessing breach response capability and potential liability. Insurance companies are high-value targets requiring robust IR capabilities",
+      "domain": "cybersecurity",
+      "priority": "high",
+      "cost_impact": "medium",
+      "suggested_source": "Request incident response plan, tabletop exercise results, and any actual incident history"
+    },
+    {
+      "id": "G-012",
+      "timestamp": "2026-01-07T09:18:47.727185",
+      "gap": "Data classification and encryption status unknown",
+      "why_needed": "Insurance companies handle sensitive PII and financial data. Understanding data classification, encryption at rest/transit, and DLP controls is critical for regulatory compliance and breach risk assessment",
+      "domain": "cybersecurity",
+      "priority": "high",
+      "cost_impact": "high",
+      "suggested_source": "Request data classification policy, encryption implementation details, and DLP tool configuration"
+    },
+    {
+      "id": "G-013",
+      "timestamp": "2026-01-07T09:19:35.472258",
+      "gap": "Security awareness training program and phishing simulation results not documented",
+      "why_needed": "Human factor is critical attack vector. Understanding security awareness maturity helps assess social engineering risk and training investment needs",
+      "domain": "cybersecurity",
+      "priority": "medium",
+      "cost_impact": "medium",
+      "suggested_source": "Request security awareness training records, phishing simulation results, and security culture assessment"
+    }
+  ],
+  "risks": [
+    {
+      "id": "R-001",
+      "timestamp": "2026-01-07T09:14:15.693229",
+      "risk": "Cloud platform mismatch - National Mutual uses AWS while buyer (Atlantic International) is Azure-primary",
+      "trigger": "Integration strategy requires platform consolidation to buyer's Azure environment",
+      "domain": "infrastructure",
+      "severity": "high",
+      "likelihood": "high",
+      "impact_description": "Cross-cloud migration required for AWS workloads, increased complexity, potential application re-architecture, extended timeline",
+      "cost_impact_estimate": "$500K-$1.5M for cloud migration services plus 20-40% premium on migration effort",
+      "mitigation": "Evaluate workloads for lift-and-shift vs re-architecture, consider multi-cloud strategy for critical applications, negotiate extended timeline",
+      "risk_score": 9,
+      "priority_rank": 3
+    },
+    {
+      "id": "R-002",
+      "timestamp": "2026-01-07T09:14:22.230848",
+      "risk": "Geographic concentration risk - both data centers in Chicago creates single region failure point",
+      "trigger": "Regional disaster, network outage, or facility issues affecting Chicago area",
+      "domain": "infrastructure",
+      "severity": "high",
+      "likelihood": "low",
+      "impact_description": "Business continuity risk despite 1-hour RPO/RTO targets, potential regulatory compliance issues for insurance company",
+      "cost_impact_estimate": "Business interruption costs could exceed $1M+ per day for insurance operations",
+      "mitigation": "Leverage buyer's geographically distributed DC footprint (Chicago, Phoenix, Atlanta, New York) for improved DR strategy",
+      "risk_score": 3,
+      "priority_rank": 15
+    },
+    {
+      "id": "R-003",
+      "timestamp": "2026-01-07T09:14:42.403107",
+      "risk": "On-premises Guidewire PolicyCenter and Duck Creek Claims systems require complex migration",
+      "trigger": "Integration timeline pressure combined with business-critical nature of these systems",
+      "domain": "infrastructure",
+      "severity": "critical",
+      "likelihood": "medium",
+      "impact_description": "Extended downtime during migration could halt policy issuance and claims processing, regulatory compliance issues, customer impact",
+      "cost_impact_estimate": "$1M-$3M for specialized migration services plus potential business interruption costs",
+      "mitigation": "Engage Guidewire/Duck Creek professional services, plan phased migration with extensive testing, consider parallel run strategy",
+      "risk_score": 8,
+      "priority_rank": 6
+    },
+    {
+      "id": "R-004",
+      "timestamp": "2026-01-07T09:14:54.706351",
+      "risk": "Potential end-of-life operating systems supporting legacy application versions",
+      "trigger": "Security vulnerabilities or compliance requirements forcing immediate OS upgrades",
+      "domain": "infrastructure",
+      "severity": "high",
+      "likelihood": "medium",
+      "impact_description": "Security exposure, compliance violations, forced emergency upgrades during integration",
+      "cost_impact_estimate": "$200K-$600K for emergency OS upgrades and application compatibility testing",
+      "mitigation": "Immediate OS assessment, prioritize application upgrades, include OS remediation in integration timeline",
+      "risk_score": 6,
+      "priority_rank": 7
+    },
+    {
+      "id": "R-005",
+      "timestamp": "2026-01-07T09:16:44.099161",
+      "risk": "IP address space conflict between National Mutual and Atlantic International networks",
+      "trigger": "Both companies likely use common RFC1918 ranges (10.x.x.x) for enterprise networks",
+      "domain": "network",
+      "severity": "critical",
+      "likelihood": "high",
+      "impact_description": "Prevents Day 1 network connectivity, blocks application access, requires IP renumbering project",
+      "cost_impact_estimate": "$500K-$1.5M",
+      "mitigation": "Immediate IP address scheme discovery, plan IP renumbering for smaller network, implement NAT as temporary solution",
+      "risk_score": 12,
+      "priority_rank": 1
+    },
+    {
+      "id": "R-006",
+      "timestamp": "2026-01-07T09:16:49.462124",
+      "risk": "Network connectivity disruption during data center consolidation",
+      "trigger": "Atlantic International has 4 data centers vs National Mutual's 2, requiring network architecture changes",
+      "domain": "network",
+      "severity": "high",
+      "likelihood": "medium",
+      "impact_description": "Business disruption during migration, potential downtime for critical applications",
+      "cost_impact_estimate": "$200K-$500K",
+      "mitigation": "Detailed network migration planning, maintain redundant connectivity during transition, phased approach",
+      "risk_score": 6,
+      "priority_rank": 8
+    },
+    {
+      "id": "R-007",
+      "timestamp": "2026-01-07T09:16:54.906301",
+      "risk": "DNS namespace conflicts and resolution issues",
+      "trigger": "Both companies likely have internal DNS domains that may conflict during integration",
+      "domain": "network",
+      "severity": "medium",
+      "likelihood": "medium",
+      "impact_description": "Application connectivity issues, email delivery problems, authentication failures",
+      "cost_impact_estimate": "$100K-$300K",
+      "mitigation": "DNS architecture assessment, plan namespace consolidation or split-brain DNS configuration",
+      "risk_score": 4,
+      "priority_rank": 14
+    },
+    {
+      "id": "R-008",
+      "timestamp": "2026-01-07T09:18:24.719103",
+      "risk": "Identity provider fragmentation and integration complexity",
+      "trigger": "National Mutual uses Microsoft Entra ID while buyer Atlantic International likely uses different identity systems, creating integration challenges",
+      "domain": "cybersecurity",
+      "severity": "high",
+      "likelihood": "high",
+      "impact_description": "Complex identity integration, potential security gaps during migration, user access disruption, and extended timeline for full integration",
+      "cost_impact_estimate": "$150K-$300K",
+      "mitigation": "Conduct detailed identity architecture assessment, plan phased migration approach, implement identity federation during transition period",
+      "risk_score": 9,
+      "priority_rank": 4
+    },
+    {
+      "id": "R-009",
+      "timestamp": "2026-01-07T09:18:30.690891",
+      "risk": "Legacy SIEM platform creates security monitoring gaps",
+      "trigger": "National Mutual uses IBM QRadar while buyer uses Microsoft Sentinel, requiring SIEM migration and potential monitoring gaps during transition",
+      "domain": "cybersecurity",
+      "severity": "high",
+      "likelihood": "medium",
+      "impact_description": "Reduced threat detection capability during migration, loss of historical security data, need to rebuild detection rules and playbooks",
+      "cost_impact_estimate": "$200K-$400K",
+      "mitigation": "Plan parallel SIEM operation during transition, migrate critical detection rules first, ensure 24/7 SOC coverage throughout migration",
+      "risk_score": 6,
+      "priority_rank": 9
+    },
+    {
+      "id": "R-010",
+      "timestamp": "2026-01-07T09:18:37.208426",
+      "risk": "Endpoint protection platform mismatch creates security gaps",
+      "trigger": "National Mutual uses CrowdStrike while buyer uses Carbon Black, requiring endpoint agent migration across 1,800+ endpoints",
+      "domain": "cybersecurity",
+      "severity": "medium",
+      "likelihood": "high",
+      "impact_description": "Temporary endpoint protection gaps during agent migration, potential malware exposure, user productivity impact from agent changes",
+      "cost_impact_estimate": "$75K-$150K",
+      "mitigation": "Maintain CrowdStrike during integration period, plan phased Carbon Black deployment, ensure no gaps in endpoint coverage",
+      "risk_score": 6,
+      "priority_rank": 10
+    },
+    {
+      "id": "R-011",
+      "timestamp": "2026-01-07T09:19:30.965206",
+      "risk": "Privileged access management gaps with CyberArk on-premises deployment",
+      "trigger": "National Mutual has CyberArk PAM 13.2 on-premises while buyer likely uses cloud-based PAM, creating integration challenges and potential privileged access gaps",
+      "domain": "cybersecurity",
+      "severity": "high",
+      "likelihood": "medium",
+      "impact_description": "Privileged account security gaps during migration, potential for unauthorized admin access, compliance violations",
+      "cost_impact_estimate": "$100K-$200K",
+      "mitigation": "Maintain existing CyberArk during transition, implement cloud PAM migration plan, ensure privileged account inventory and access reviews",
+      "risk_score": 6,
+      "priority_rank": 11
+    },
+    {
+      "id": "R-012",
+      "timestamp": "2026-01-07T09:19:41.309208",
+      "risk": "Email security platform consolidation complexity",
+      "trigger": "National Mutual uses both Proofpoint and Mimecast for email security while buyer uses Mimecast, requiring consolidation and potential security gaps",
+      "domain": "cybersecurity",
+      "severity": "medium",
+      "likelihood": "high",
+      "impact_description": "Email security gaps during migration, potential phishing exposure, configuration complexity with dual platforms",
+      "cost_impact_estimate": "$50K-$100K",
+      "mitigation": "Standardize on Mimecast platform, migrate Proofpoint configurations, maintain email security coverage during transition",
+      "risk_score": 6,
+      "priority_rank": 12
+    },
+    {
+      "id": "R-013",
+      "timestamp": "2026-01-07T09:20:31.592925",
+      "risk": "Critical path dependency risk - Network discovery delays blocking infrastructure migration",
+      "trigger": "Network discovery takes longer than planned or reveals complex IP conflicts requiring extensive remediation",
+      "domain": "cross-domain",
+      "severity": "high",
+      "likelihood": "medium",
+      "impact_description": "Could delay entire integration timeline by 2-3 months if network issues aren't resolved before infrastructure migration begins",
+      "cost_impact_estimate": "$500K-$1M in extended TSA costs and delayed synergies",
+      "mitigation": "Start network discovery immediately upon LOI signing, engage specialized network consultants, develop parallel remediation plans",
+      "risk_score": 6,
+      "priority_rank": 13
+    },
+    {
+      "id": "R-014",
+      "timestamp": "2026-01-07T09:20:37.635421",
+      "risk": "Identity integration blocking application migrations",
+      "trigger": "Azure AD integration with National Mutual's fragmented identity systems takes longer than expected",
+      "domain": "cross-domain",
+      "severity": "critical",
+      "likelihood": "high",
+      "impact_description": "All application migrations depend on identity integration - delays cascade across all domains and could extend timeline by 4-6 months",
+      "cost_impact_estimate": "$1M-$2M in extended costs and delayed synergies",
+      "mitigation": "Prioritize identity assessment and integration planning, consider federated identity as interim solution, engage Microsoft FastTrack services",
+      "risk_score": 12,
+      "priority_rank": 2
+    },
+    {
+      "id": "R-015",
+      "timestamp": "2026-01-07T09:20:45.318533",
+      "risk": "Security monitoring gap during SIEM migration",
+      "trigger": "QRadar to Sentinel migration creates temporary blind spots in security monitoring during critical infrastructure changes",
+      "domain": "cross-domain",
+      "severity": "high",
+      "likelihood": "high",
+      "impact_description": "Reduced security visibility during high-risk migration period could lead to undetected incidents or compliance violations",
+      "cost_impact_estimate": "$200K-$500K for parallel SIEM operations plus potential incident costs",
+      "mitigation": "Run parallel SIEM platforms during migration, implement enhanced monitoring during critical migration phases, accelerate security team cross-training",
+      "risk_score": 9,
+      "priority_rank": 5
+    }
+  ],
+  "work_items": [
+    {
+      "id": "W-001",
+      "timestamp": "2026-01-07T09:14:29.172211",
+      "title": "Data Center Consolidation and Migration Planning",
+      "description": "Plan and execute migration from National Mutual's Chicago colocation facilities to Atlantic International's distributed DC footprint. Includes lease termination, equipment migration, and network reconfiguration.",
+      "domain": "infrastructure",
+      "category": "migration",
+      "effort_estimate": "6-12 months",
+      "cost_estimate_range": "$300K-$800K",
+      "timeline_phase": "90_180_days",
+      "skills_required": [
+        "data_center_engineer",
+        "network_engineer",
+        "project_manager"
+      ],
+      "dependencies": [
+        "Infrastructure assessment completion",
+        "Network architecture design",
+        "Application dependency mapping"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-002",
+      "timestamp": "2026-01-07T09:15:06.360884",
+      "title": "AWS to Azure Cloud Migration",
+      "description": "Migrate National Mutual's AWS workloads (41 accounts, $3.4M annual spend) to Atlantic International's Azure environment. Includes service mapping, data migration, network reconfiguration, and application testing.",
+      "domain": "infrastructure",
+      "category": "migration",
+      "effort_estimate": "8-15 months",
+      "cost_estimate_range": "$800K-$2M",
+      "timeline_phase": "90_180_days",
+      "skills_required": [
+        "cloud_architect",
+        "aws_engineer",
+        "azure_engineer",
+        "devops_engineer"
+      ],
+      "dependencies": [
+        "AWS workload assessment",
+        "Azure landing zone preparation",
+        "Network connectivity establishment"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-003",
+      "timestamp": "2026-01-07T09:15:17.940459",
+      "title": "Backup and DR Platform Consolidation",
+      "description": "Migrate from National Mutual's Veeam/Zerto backup solution to Atlantic International's Commvault/Dell Data Protection platform. Includes data migration, policy reconfiguration, and DR testing.",
+      "domain": "infrastructure",
+      "category": "migration",
+      "effort_estimate": "4-8 months",
+      "cost_estimate_range": "$150K-$400K",
+      "timeline_phase": "0_90_days",
+      "skills_required": [
+        "backup_engineer",
+        "storage_engineer",
+        "systems_administrator"
+      ],
+      "dependencies": [
+        "Data classification",
+        "Retention policy alignment",
+        "Storage infrastructure readiness"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-004",
+      "timestamp": "2026-01-07T09:15:34.814808",
+      "title": "Infrastructure Discovery and Assessment",
+      "description": "Comprehensive technical assessment of National Mutual's infrastructure including server inventory, storage systems, network architecture, and application dependencies. Foundation for all migration planning.",
+      "domain": "infrastructure",
+      "category": "assessment",
+      "effort_estimate": "6-10 weeks",
+      "cost_estimate_range": "$150K-$300K",
+      "timeline_phase": "day_1",
+      "skills_required": [
+        "infrastructure_architect",
+        "systems_engineer",
+        "network_engineer",
+        "storage_engineer"
+      ],
+      "dependencies": [
+        "Access to production environments",
+        "Documentation gathering",
+        "Key personnel interviews"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-005",
+      "timestamp": "2026-01-07T09:17:02.078333",
+      "title": "Network Discovery and Documentation",
+      "description": "Comprehensive discovery of National Mutual's network infrastructure including WAN topology, IP addressing, VLAN structure, firewall configurations, and network equipment inventory across all 12 locations and 2 data centers",
+      "domain": "network",
+      "category": "assessment",
+      "effort_estimate": "4-6 weeks",
+      "cost_estimate_range": "$75K-$125K",
+      "timeline_phase": "day_1",
+      "skills_required": [
+        "network_architect",
+        "network_engineer",
+        "security_engineer"
+      ],
+      "dependencies": [
+        "Access to network equipment",
+        "Network team interviews"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-006",
+      "timestamp": "2026-01-07T09:17:07.137278",
+      "title": "IP Address Conflict Analysis and Remediation Planning",
+      "description": "Analyze IP addressing schemes of both companies, identify conflicts, and develop remediation plan including IP renumbering strategy, NAT implementation, or network segmentation approach",
+      "domain": "network",
+      "category": "remediation",
+      "effort_estimate": "3-4 weeks",
+      "cost_estimate_range": "$50K-$100K",
+      "timeline_phase": "day_1",
+      "skills_required": [
+        "network_architect",
+        "network_engineer"
+      ],
+      "dependencies": [
+        "Network Discovery completion",
+        "Buyer network documentation"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-007",
+      "timestamp": "2026-01-07T09:17:13.648339",
+      "title": "Day 1 Network Connectivity Setup",
+      "description": "Establish secure network connectivity between National Mutual and Atlantic International networks for Day 1 operations, including VPN setup, firewall rule configuration, and DNS resolution",
+      "domain": "network",
+      "category": "integration",
+      "effort_estimate": "2-3 weeks",
+      "cost_estimate_range": "$40K-$80K",
+      "timeline_phase": "day_1",
+      "skills_required": [
+        "network_engineer",
+        "security_engineer",
+        "firewall_admin"
+      ],
+      "dependencies": [
+        "IP conflict resolution",
+        "Firewall access",
+        "Circuit availability"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-008",
+      "timestamp": "2026-01-07T09:17:18.768643",
+      "title": "WAN Architecture Integration",
+      "description": "Integrate National Mutual's 12 locations into Atlantic International's WAN architecture, including circuit evaluation, SD-WAN extension or MPLS integration, and redundancy planning",
+      "domain": "network",
+      "category": "integration",
+      "effort_estimate": "8-12 weeks",
+      "cost_estimate_range": "$200K-$500K",
+      "timeline_phase": "0_90_days",
+      "skills_required": [
+        "network_architect",
+        "wan_engineer",
+        "carrier_relations"
+      ],
+      "dependencies": [
+        "WAN discovery",
+        "Carrier contract review",
+        "Circuit lead times"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-009",
+      "timestamp": "2026-01-07T09:17:23.887143",
+      "title": "Data Center Network Migration",
+      "description": "Migrate National Mutual's Chicago data center networks to integrate with Atlantic International's multi-DC architecture, including network equipment migration, VLAN restructuring, and connectivity updates",
+      "domain": "network",
+      "category": "migration",
+      "effort_estimate": "6-10 weeks",
+      "cost_estimate_range": "$150K-$350K",
+      "timeline_phase": "90_180_days",
+      "skills_required": [
+        "data_center_engineer",
+        "network_architect",
+        "project_manager"
+      ],
+      "dependencies": [
+        "DC consolidation strategy",
+        "Application migration timeline",
+        "Network equipment procurement"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-010",
+      "timestamp": "2026-01-07T09:17:30.949210",
+      "title": "DNS and DHCP Integration",
+      "description": "Integrate DNS and DHCP services, resolve namespace conflicts, migrate to buyer's DNS architecture, and ensure proper name resolution across integrated network",
+      "domain": "network",
+      "category": "integration",
+      "effort_estimate": "4-6 weeks",
+      "cost_estimate_range": "$60K-$120K",
+      "timeline_phase": "0_90_days",
+      "skills_required": [
+        "dns_engineer",
+        "network_engineer",
+        "active_directory_admin"
+      ],
+      "dependencies": [
+        "DNS architecture discovery",
+        "AD integration planning",
+        "IP addressing finalization"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-011",
+      "timestamp": "2026-01-07T09:18:53.963613",
+      "title": "Comprehensive Security Assessment",
+      "description": "Conduct thorough security assessment including penetration testing, vulnerability scanning, and security architecture review to establish baseline security posture and identify critical vulnerabilities",
+      "domain": "cybersecurity",
+      "category": "assessment",
+      "effort_estimate": "6-8 weeks",
+      "cost_estimate_range": "$75K-$125K",
+      "timeline_phase": "day_1",
+      "skills_required": [
+        "security_architect",
+        "penetration_tester",
+        "compliance_specialist"
+      ],
+      "dependencies": [
+        "Access to target environment",
+        "Security tool inventory"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-012",
+      "timestamp": "2026-01-07T09:19:00.144294",
+      "title": "Identity and Access Management Integration",
+      "description": "Integrate National Mutual's Microsoft Entra ID with buyer's identity systems, migrate user accounts, implement unified MFA, and establish privileged access management across combined environment",
+      "domain": "cybersecurity",
+      "category": "integration",
+      "effort_estimate": "12-16 weeks",
+      "cost_estimate_range": "$200K-$350K",
+      "timeline_phase": "0_90_days",
+      "skills_required": [
+        "iam_specialist",
+        "security_engineer",
+        "systems_administrator"
+      ],
+      "dependencies": [
+        "Identity architecture assessment",
+        "User account inventory",
+        "Application SSO mapping"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-013",
+      "timestamp": "2026-01-07T09:19:07.108049",
+      "title": "SIEM Migration and Security Operations Integration",
+      "description": "Migrate from IBM QRadar to Microsoft Sentinel, rebuild detection rules and playbooks, integrate with buyer's SOC operations, and ensure continuous security monitoring throughout transition",
+      "domain": "cybersecurity",
+      "category": "migration",
+      "effort_estimate": "16-20 weeks",
+      "cost_estimate_range": "$250K-$400K",
+      "timeline_phase": "90_180_days",
+      "skills_required": [
+        "security_engineer",
+        "siem_specialist",
+        "soc_analyst"
+      ],
+      "dependencies": [
+        "Security log inventory",
+        "Detection rule documentation",
+        "SOC process alignment"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-014",
+      "timestamp": "2026-01-07T09:19:13.623941",
+      "title": "Endpoint Security Platform Migration",
+      "description": "Migrate from CrowdStrike to Carbon Black across 1,800+ endpoints, ensuring no security coverage gaps during transition, and integrate with buyer's endpoint management processes",
+      "domain": "cybersecurity",
+      "category": "migration",
+      "effort_estimate": "8-12 weeks",
+      "cost_estimate_range": "$100K-$175K",
+      "timeline_phase": "90_180_days",
+      "skills_required": [
+        "security_engineer",
+        "systems_administrator",
+        "desktop_support"
+      ],
+      "dependencies": [
+        "Endpoint inventory",
+        "Deployment testing",
+        "User communication plan"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-015",
+      "timestamp": "2026-01-07T09:19:19.092708",
+      "title": "Compliance Assessment and Remediation",
+      "description": "Assess current compliance posture against required frameworks (SOC 2, PCI DSS), identify gaps, and implement remediation measures to maintain certifications post-acquisition",
+      "domain": "cybersecurity",
+      "category": "compliance",
+      "effort_estimate": "10-14 weeks",
+      "cost_estimate_range": "$125K-$250K",
+      "timeline_phase": "0_90_days",
+      "skills_required": [
+        "compliance_specialist",
+        "security_architect",
+        "auditor"
+      ],
+      "dependencies": [
+        "Compliance documentation review",
+        "Control testing",
+        "Audit schedule coordination"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-016",
+      "timestamp": "2026-01-07T09:20:10.355717",
+      "title": "Data Security and Encryption Assessment",
+      "description": "Conduct comprehensive assessment of data classification, encryption implementation (at rest and in transit), DLP controls, and data handling procedures to ensure regulatory compliance and data protection",
+      "domain": "cybersecurity",
+      "category": "assessment",
+      "effort_estimate": "4-6 weeks",
+      "cost_estimate_range": "$50K-$75K",
+      "timeline_phase": "day_1",
+      "skills_required": [
+        "security_architect",
+        "data_privacy_specialist",
+        "compliance_specialist"
+      ],
+      "dependencies": [
+        "Data inventory",
+        "System access",
+        "Application documentation"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-017",
+      "timestamp": "2026-01-07T09:20:52.581880",
+      "title": "Integration Program Management Office (PMO) Establishment",
+      "description": "Establish dedicated PMO to coordinate cross-domain dependencies, manage critical path, and ensure proper sequencing of network discovery, identity integration, and infrastructure migration activities. Include specialized insurance industry expertise for Guidewire/Duck Creek migrations.",
+      "domain": "cross-domain",
+      "category": "integration",
+      "effort_estimate": "12-18 months full engagement",
+      "cost_estimate_range": "$800K-$1.2M",
+      "timeline_phase": "day_1",
+      "skills_required": [
+        "program_manager",
+        "insurance_systems_expert",
+        "cloud_migration_specialist",
+        "network_architect",
+        "security_architect"
+      ],
+      "dependencies": [
+        "Executive sponsorship",
+        "Budget approval",
+        "Resource allocation"
+      ],
+      "priority_score": 1
+    },
+    {
+      "id": "W-018",
+      "timestamp": "2026-01-07T09:21:00.041535",
+      "title": "Pre-Close Technical Due Diligence Deep Dive",
+      "description": "Conduct comprehensive technical assessment to fill critical gaps in network architecture, infrastructure inventory, and security posture. Must complete before close to validate integration timeline and cost estimates.",
+      "domain": "cross-domain",
+      "category": "assessment",
+      "effort_estimate": "8-12 weeks",
+      "cost_estimate_range": "$300K-$500K",
+      "timeline_phase": "day_1",
+      "skills_required": [
+        "network_architect",
+        "infrastructure_specialist",
+        "security_assessor",
+        "insurance_systems_expert"
+      ],
+      "dependencies": [
+        "Management access approval",
+        "Technical team availability",
+        "Site access permissions"
+      ],
+      "priority_score": 1
+    }
+  ],
+  "recommendations": [
+    {
+      "id": "REC-001",
+      "timestamp": "2026-01-07T09:15:40.562612",
+      "recommendation": "Negotiate extended integration timeline due to cloud platform mismatch and critical system complexity",
+      "rationale": "AWS to Azure migration plus complex insurance applications (Guidewire, Duck Creek) will require 12-18 months minimum. Rushing could cause business disruption",
+      "domain": "deal",
+      "priority": "critical",
+      "timing": "pre_close",
+      "investment_required": "Additional project management and specialized migration resources"
+    },
+    {
+      "id": "REC-002",
+      "timestamp": "2026-01-07T09:15:47.093442",
+      "recommendation": "Prioritize infrastructure assessment and engage insurance platform specialists immediately post-close",
+      "rationale": "Critical gaps in server inventory and application dependencies must be filled before migration planning. Insurance platforms require specialized expertise not typically available",
+      "domain": "infrastructure",
+      "priority": "critical",
+      "timing": "day_1",
+      "investment_required": "$300K-$500K for assessment and specialist resources"
+    },
+    {
+      "id": "REC-003",
+      "timestamp": "2026-01-07T09:15:53.725001",
+      "recommendation": "Leverage buyer's geographic DC distribution to improve National Mutual's DR posture during integration",
+      "rationale": "Current Chicago-only DC setup creates geographic risk. Buyer has distributed footprint (Chicago, Phoenix, Atlanta, NYC) that can provide better resilience",
+      "domain": "infrastructure",
+      "priority": "high",
+      "timing": "first_90_days",
+      "investment_required": "Network connectivity and DR solution reconfiguration costs"
+    },
+    {
+      "id": "REC-004",
+      "timestamp": "2026-01-07T09:17:35.969885",
+      "recommendation": "Immediately initiate network discovery and IP address scheme documentation",
+      "rationale": "IP address conflicts are the #1 blocker for Day 1 connectivity. Without knowing current addressing schemes, integration planning cannot proceed effectively",
+      "domain": "network",
+      "priority": "critical",
+      "timing": "pre_close",
+      "investment_required": "$75K-$125K for comprehensive network assessment"
+    },
+    {
+      "id": "REC-005",
+      "timestamp": "2026-01-07T09:17:40.680120",
+      "recommendation": "Plan for IP renumbering of the smaller network (National Mutual)",
+      "rationale": "Atlantic International is 5x larger (8,954 vs 1,812 employees) making it more cost-effective to renumber the smaller network to avoid conflicts",
+      "domain": "network",
+      "priority": "high",
+      "timing": "first_90_days",
+      "investment_required": "$500K-$1M for comprehensive IP renumbering across 12 locations"
+    },
+    {
+      "id": "REC-006",
+      "timestamp": "2026-01-07T09:17:45.198798",
+      "recommendation": "Establish temporary VPN connectivity for Day 1 operations",
+      "rationale": "Provides immediate secure connectivity while permanent WAN integration is planned and implemented, ensuring business continuity",
+      "domain": "network",
+      "priority": "high",
+      "timing": "day_1",
+      "investment_required": "$40K-$80K for VPN setup and configuration"
+    },
+    {
+      "id": "REC-007",
+      "timestamp": "2026-01-07T09:17:50.201286",
+      "recommendation": "Evaluate WAN carrier contracts for early termination or extension opportunities",
+      "rationale": "WAN integration may require new circuits or contract modifications. Early evaluation prevents timeline delays and identifies cost optimization opportunities",
+      "domain": "network",
+      "priority": "medium",
+      "timing": "pre_close",
+      "investment_required": "Legal review costs $10K-$25K, potential contract penalties or savings TBD"
+    },
+    {
+      "id": "REC-008",
+      "timestamp": "2026-01-07T09:19:48.372126",
+      "recommendation": "Conduct immediate cybersecurity due diligence assessment before deal close",
+      "rationale": "Multiple security gaps identified including unknown vulnerability posture, compliance status, and incident response maturity. Insurance companies are high-value targets requiring comprehensive security assessment to avoid inheriting significant cyber liabilities",
+      "domain": "cybersecurity",
+      "priority": "critical",
+      "timing": "pre_close",
+      "investment_required": "$75K-$125K for comprehensive assessment"
+    },
+    {
+      "id": "REC-009",
+      "timestamp": "2026-01-07T09:19:54.947756",
+      "recommendation": "Establish security integration timeline with parallel operations approach",
+      "rationale": "Multiple security platform mismatches (SIEM, endpoint protection, PAM) require careful migration planning to avoid security gaps. Parallel operations ensure continuous protection during integration",
+      "domain": "cybersecurity",
+      "priority": "high",
+      "timing": "day_1",
+      "investment_required": "$100K-$200K additional operational costs for parallel systems"
+    },
+    {
+      "id": "REC-010",
+      "timestamp": "2026-01-07T09:19:59.845705",
+      "recommendation": "Negotiate cyber insurance coverage and warranty provisions in deal structure",
+      "rationale": "Unknown security posture and potential vulnerabilities create significant cyber liability risk. Insurance coverage and seller warranties provide financial protection against inherited security issues",
+      "domain": "deal",
+      "priority": "high",
+      "timing": "pre_close",
+      "investment_required": "Cyber insurance premium increase and warranty escrow provisions"
+    },
+    {
+      "id": "REC-011",
+      "timestamp": "2026-01-07T09:21:05.692575",
+      "recommendation": "Negotiate extended TSA for shared services minimum 18 months with option for 24 months",
+      "rationale": "Complex insurance applications (Guidewire, Duck Creek), AWS to Azure migration, and network integration dependencies create high timeline risk. Standard 12-month TSA insufficient given cross-domain complexity and critical path dependencies.",
+      "domain": "deal",
+      "priority": "critical",
+      "timing": "pre_close",
+      "investment_required": "$2M-$3M additional TSA costs but reduces integration risk"
+    },
+    {
+      "id": "REC-012",
+      "timestamp": "2026-01-07T09:21:13.273883",
+      "recommendation": "Establish dedicated insurance systems Center of Excellence",
+      "rationale": "National Mutual has critical Guidewire PolicyCenter, Duck Creek Claims, and Majesco Policy systems requiring specialized expertise. These represent $1.1M+ in annual costs and serve 3,000+ users. Integration failure would be business-critical.",
+      "domain": "infrastructure",
+      "priority": "high",
+      "timing": "pre_close",
+      "investment_required": "$500K-$800K for specialized consulting and training"
+    },
+    {
+      "id": "REC-013",
+      "timestamp": "2026-01-07T09:21:20.905579",
+      "recommendation": "Implement parallel security monitoring during SIEM migration",
+      "rationale": "QRadar to Sentinel migration during infrastructure changes creates unacceptable security blind spots. Insurance company regulatory requirements demand continuous monitoring capability.",
+      "domain": "cybersecurity",
+      "priority": "high",
+      "timing": "first_90_days",
+      "investment_required": "$200K-$400K for parallel operations"
+    },
+    {
+      "id": "REC-014",
+      "timestamp": "2026-01-07T09:21:25.347411",
+      "recommendation": "Accelerate network discovery and IP conflict resolution to critical path",
+      "rationale": "Network architecture gaps and potential IP conflicts block all infrastructure migration work. Must be resolved in first 6 weeks to avoid cascading delays across 18-month integration timeline.",
+      "domain": "network",
+      "priority": "critical",
+      "timing": "day_1",
+      "investment_required": "$150K-$250K for specialized network consultants"
+    },
+    {
+      "id": "REC-015",
+      "timestamp": "2026-01-07T09:21:30.574308",
+      "recommendation": "Consider carve-out structure for complex insurance applications",
+      "rationale": "Guidewire and Duck Creek systems represent significant migration risk and cost ($2M+ estimated). Carve-out could reduce integration complexity while preserving operational continuity for critical insurance operations.",
+      "domain": "deal",
+      "priority": "medium",
+      "timing": "pre_close",
+      "investment_required": "Extended TSA costs but reduced integration risk and faster synergy realization in other areas"
+    }
+  ],
+  "domain_summaries": {
+    "infrastructure": {
+      "timestamp": "2026-01-07T09:16:01.092078",
+      "domain": "infrastructure",
+      "summary": "National Mutual presents a complex infrastructure integration challenge with significant cloud platform mismatch (AWS vs Azure), critical insurance applications requiring specialized migration expertise, and geographic concentration risk in Chicago data centers. The $3.4M AWS spend and mix of on-premises insurance platforms will drive substantial migration costs and extended timelines.",
+      "complexity_assessment": "high",
+      "estimated_cost_range": "$1.5M-$4M",
+      "estimated_timeline": "12-18 months",
+      "top_risks": [
+        "AWS to Azure cloud migration complexity",
+        "Critical insurance application migration risk",
+        "Geographic concentration in Chicago data centers"
+      ],
+      "critical_gaps": [
+        "Server inventory and OS versions",
+        "Storage infrastructure details",
+        "Network architecture and WAN connectivity"
+      ]
+    },
+    "network": {
+      "timestamp": "2026-01-07T09:17:58.403516",
+      "domain": "network",
+      "summary": "National Mutual's network infrastructure presents significant integration challenges due to lack of documented network architecture across 12 locations and 2 data centers. The primary risks are IP address conflicts and connectivity disruption during integration. Critical gaps exist in WAN topology, IP addressing, and firewall configurations that must be addressed immediately.",
+      "complexity_assessment": "high",
+      "estimated_cost_range": "$1M-$2.5M",
+      "estimated_timeline": "12-18 months",
+      "top_risks": [
+        "IP address space conflicts blocking Day 1 connectivity",
+        "Network connectivity disruption during data center consolidation",
+        "DNS namespace conflicts causing application issues"
+      ],
+      "critical_gaps": [
+        "Network architecture and WAN connectivity details",
+        "IP addressing scheme and DHCP/DNS architecture",
+        "Firewall and security zone configuration"
+      ]
+    },
+    "cybersecurity": {
+      "timestamp": "2026-01-07T09:20:18.683572",
+      "domain": "cybersecurity",
+      "summary": "National Mutual presents significant cybersecurity integration challenges with multiple security platform mismatches (QRadar vs Sentinel SIEM, CrowdStrike vs Carbon Black EDR) and critical information gaps around vulnerability posture, compliance status, and incident response maturity. The insurance company's security stack requires comprehensive assessment and careful migration planning to avoid security gaps during integration.",
+      "complexity_assessment": "high",
+      "estimated_cost_range": "$800K-$1.4M",
+      "estimated_timeline": "12-18 months",
+      "top_risks": [
+        "Identity provider integration complexity creating access management gaps",
+        "SIEM migration from QRadar to Sentinel causing monitoring disruption",
+        "Unknown vulnerability posture and compliance status creating liability exposure"
+      ],
+      "critical_gaps": [
+        "Penetration testing and vulnerability assessment results",
+        "Compliance certifications and audit findings",
+        "Incident response plan and testing history",
+        "Data classification and encryption implementation details"
+      ]
+    },
+    "cross-domain": {
+      "timestamp": "2026-01-07T09:21:55.144271",
+      "domain": "cross-domain",
+      "summary": "Project Atlas presents a very high complexity integration with National Mutual's insurance-specific applications, AWS-to-Azure cloud migration, and critical cross-domain dependencies creating an 18-24 month timeline. Total estimated cost of $4M-$8M with medium confidence due to significant information gaps. Recommend proceeding with caution given manageable but substantial risks.",
+      "complexity_assessment": "very_high",
+      "estimated_cost_range": "$4M-$8M",
+      "estimated_timeline": "18-24 months",
+      "top_risks": [
+        "Identity integration delays cascading across all domains",
+        "Network discovery revealing complex IP conflicts",
+        "Insurance application migration complexity exceeding estimates"
+      ],
+      "critical_gaps": [
+        "Network architecture and IP addressing documentation",
+        "Infrastructure inventory and operating system versions",
+        "Security posture and compliance status assessment"
+      ]
+    }
+  },
+  "statistics": {
+    "total_assumptions": 12,
+    "total_gaps": 13,
+    "total_risks": 15,
+    "total_work_items": 18,
+    "total_recommendations": 15,
+    "domains_analyzed": [
+      "infrastructure",
+      "network",
+      "cybersecurity",
+      "cross-domain"
+    ]
+  },
+  "validation": {
+    "valid": true,
+    "issues": [],
+    "warnings": [],
+    "quality_score": 100
+  }
+}

@@ -1,0 +1,162 @@
+[
+  {
+    "id": "REC-001",
+    "timestamp": "2026-01-06T17:22:53.804123",
+    "recommendation": "Negotiate comprehensive TSA covering all infrastructure domains for 12-18 months",
+    "rationale": "TargetCo is fully integrated into ParentCo infrastructure with no independent capabilities. Separation will require 12-18 months minimum, and business continuity depends on ParentCo services during transition.",
+    "domain": "deal",
+    "priority": "critical",
+    "timing": "pre_close",
+    "investment_required": "TSA fees estimated at $200K-$400K monthly"
+  },
+  {
+    "id": "REC-002",
+    "timestamp": "2026-01-06T17:22:59.280364",
+    "recommendation": "Prioritize Azure AD tenant separation as critical path item",
+    "rationale": "Identity is foundational to all other systems. Delays in Azure AD migration will cascade to application access, device management, and security tool deployment. Both companies use Azure AD, creating opportunity for streamlined integration.",
+    "domain": "infrastructure",
+    "priority": "critical",
+    "timing": "day_1",
+    "investment_required": "$200K-$400K plus dedicated identity architect resource"
+  },
+  {
+    "id": "REC-003",
+    "timestamp": "2026-01-06T17:23:04.939338",
+    "recommendation": "Conduct immediate infrastructure discovery to validate server counts and identify end-of-life systems",
+    "rationale": "Server count range of 110-130 indicates uncertainty. Need precise inventory to identify Windows Server 2012 R2, legacy Linux, and other end-of-life systems requiring immediate attention and budget allocation.",
+    "domain": "infrastructure",
+    "priority": "high",
+    "timing": "day_1",
+    "investment_required": "$150K-$250K for comprehensive discovery"
+  },
+  {
+    "id": "REC-004",
+    "timestamp": "2026-01-07T08:39:36.535974",
+    "recommendation": "Immediately initiate network discovery and site survey to understand TargetCo's network dependencies within ParentCo",
+    "rationale": "TargetCo operates entirely on ParentCo's shared network infrastructure with no independent network architecture. Without understanding the current topology, IP schemes, and site connectivity, it's impossible to plan separation or integration approach",
+    "domain": "network",
+    "priority": "critical",
+    "timing": "pre_close",
+    "investment_required": "$50K-$100K for comprehensive network assessment"
+  },
+  {
+    "id": "REC-005",
+    "timestamp": "2026-01-07T08:39:42.432659",
+    "recommendation": "Begin WAN circuit planning and ordering process immediately upon deal announcement",
+    "rationale": "Telecom circuits have 30-90 day lead times and TargetCo will need new connectivity independent from ParentCo. Delaying circuit orders will extend integration timeline and increase temporary connectivity costs",
+    "domain": "network",
+    "priority": "high",
+    "timing": "pre_close",
+    "investment_required": "Circuit costs vary by site but expect $100K-$300K in setup and monthly recurring costs"
+  },
+  {
+    "id": "REC-006",
+    "timestamp": "2026-01-07T08:39:47.816290",
+    "recommendation": "Plan for IP address renumbering as likely requirement for network integration",
+    "rationale": "Both organizations likely use common RFC1918 address ranges which typically conflict. IP conflicts prevent network integration and must be resolved before full connectivity can be established",
+    "domain": "network",
+    "priority": "high",
+    "timing": "first_90_days",
+    "investment_required": "$100K-$500K depending on scope of renumbering required"
+  },
+  {
+    "id": "REC-007",
+    "timestamp": "2026-01-07T08:51:57.366593",
+    "recommendation": "Conduct immediate security assessment before deal close",
+    "rationale": "TargetCo's security posture is completely dependent on ParentCo with no independent assessment available. Unknown vulnerabilities or security gaps could represent significant liability",
+    "domain": "cybersecurity",
+    "priority": "critical",
+    "timing": "pre_close",
+    "investment_required": "$75K-$150K for comprehensive assessment"
+  },
+  {
+    "id": "REC-008",
+    "timestamp": "2026-01-07T08:52:02.640993",
+    "recommendation": "Negotiate extended ParentCo security services transition period",
+    "rationale": "Complete security dependency on ParentCo creates critical risk if services are terminated abruptly. Need 6-12 month transition period to build independent capabilities",
+    "domain": "cybersecurity",
+    "priority": "critical",
+    "timing": "pre_close",
+    "investment_required": "Transition services agreement costs plus accelerated capability buildout"
+  },
+  {
+    "id": "REC-009",
+    "timestamp": "2026-01-07T08:52:07.453630",
+    "recommendation": "Establish interim managed security services",
+    "rationale": "Loss of ParentCo SOC and security expertise creates immediate security monitoring gap. MSSP can provide bridge capability during transition",
+    "domain": "cybersecurity",
+    "priority": "high",
+    "timing": "day_1",
+    "investment_required": "$200K-$400K annually for comprehensive MSSP services"
+  },
+  {
+    "id": "REC-010",
+    "timestamp": "2026-01-07T08:52:13.309492",
+    "recommendation": "Prioritize identity migration planning",
+    "rationale": "IAM migration affects all 650 users and 45+ applications. Poor execution could disrupt business operations and create security gaps",
+    "domain": "cybersecurity",
+    "priority": "high",
+    "timing": "first_90_days",
+    "investment_required": "$150K-$300K for comprehensive IAM migration"
+  },
+  {
+    "id": "REC-011",
+    "timestamp": "2026-01-07T08:52:19.023717",
+    "recommendation": "Accelerate compliance certification timeline",
+    "rationale": "Loss of ParentCo compliance scope could impact customer contracts and business opportunities. Independent certifications needed quickly",
+    "domain": "cybersecurity",
+    "priority": "high",
+    "timing": "first_90_days",
+    "investment_required": "$150K-$300K for SOC 2 and ISO 27001 certifications"
+  },
+  {
+    "id": "REC-012",
+    "timestamp": "2026-01-07T08:53:10.331326",
+    "recommendation": "Negotiate minimum 24-month TSA with ParentCo covering all IT services",
+    "rationale": "Given the complete integration of TargetCo into ParentCo systems and sequential dependencies across domains, 18-24 months will be required for safe separation. Standard 12-month TSAs are insufficient for this complexity level.",
+    "domain": "deal",
+    "priority": "critical",
+    "timing": "pre_close",
+    "investment_required": "$1.5M-$3M in TSA fees"
+  },
+  {
+    "id": "REC-013",
+    "timestamp": "2026-01-07T08:53:14.933885",
+    "recommendation": "Establish dedicated integration PMO with experienced carve-out specialists",
+    "rationale": "The complexity of separating from shared Azure AD, network infrastructure, and security systems requires specialized expertise and dedicated program management to coordinate sequential dependencies and minimize business disruption.",
+    "domain": "cross-domain",
+    "priority": "critical",
+    "timing": "day_1",
+    "investment_required": "$400K-$600K for PMO team"
+  },
+  {
+    "id": "REC-014",
+    "timestamp": "2026-01-07T08:53:19.645402",
+    "recommendation": "Begin Azure AD separation planning immediately post-close as critical path item",
+    "rationale": "Azure AD tenant separation is the foundational dependency for all other integration work. Delays here cascade to network and security migrations, potentially extending timeline to 30+ months.",
+    "domain": "infrastructure",
+    "priority": "critical",
+    "timing": "day_1",
+    "investment_required": "$300K-$600K for identity migration specialists"
+  },
+  {
+    "id": "REC-015",
+    "timestamp": "2026-01-07T08:53:24.152721",
+    "recommendation": "Conduct immediate comprehensive technical discovery across all domains",
+    "rationale": "Critical gaps exist in network topology, security configurations, and infrastructure dependencies. Without this information, cost estimates could be 50-100% higher and timeline could extend significantly.",
+    "domain": "cross-domain",
+    "priority": "high",
+    "timing": "pre_close",
+    "investment_required": "$200K-$300K for technical assessments"
+  },
+  {
+    "id": "REC-016",
+    "timestamp": "2026-01-07T08:53:28.659729",
+    "recommendation": "Implement comprehensive change management and communication program",
+    "rationale": "650 users will experience significant changes to identity, network access, security tools, and core applications over 18-24 months. Without proper change management, productivity loss and employee satisfaction issues are likely.",
+    "domain": "cross-domain",
+    "priority": "high",
+    "timing": "first_90_days",
+    "investment_required": "$150K-$250K for change management resources"
+  }
+]

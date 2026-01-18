@@ -1,0 +1,122 @@
+[
+  {
+    "id": "A-001",
+    "timestamp": "2026-01-07T09:13:50.860833",
+    "assumption": "National Mutual's 2 colocation data centers in Chicago suggest a regional concentration with potential single point of failure risk",
+    "basis": "Both Primary DC (22 racks, $635K annual) and Secondary DC (6 racks, $113K annual) are located in Chicago, IL - same geographic region",
+    "domain": "infrastructure",
+    "confidence": "high",
+    "impact": "medium",
+    "validation_needed": "Confirm exact facility locations and disaster recovery testing procedures"
+  },
+  {
+    "id": "A-002",
+    "timestamp": "2026-01-07T09:14:07.700693",
+    "assumption": "National Mutual has a hybrid hosting model with approximately 60% cloud/SaaS and 40% on-premises based on application analysis",
+    "basis": "Counting applications by hosting type: 22 Cloud/SaaS applications vs 14 On-Prem/Hybrid applications from the inventory",
+    "domain": "infrastructure",
+    "confidence": "medium",
+    "impact": "medium",
+    "validation_needed": "Confirm actual workload distribution by compute/storage rather than application count"
+  },
+  {
+    "id": "A-003",
+    "timestamp": "2026-01-07T09:14:36.304035",
+    "assumption": "Critical insurance applications (Guidewire, Duck Creek, Majesco) will require specialized migration expertise due to industry-specific configurations",
+    "basis": "These are core policy administration and claims management systems with high criticality ratings and significant user bases (700-1,500+ users each)",
+    "domain": "infrastructure",
+    "confidence": "high",
+    "impact": "high",
+    "validation_needed": "Assess customizations, integrations, and data dependencies for each core insurance platform"
+  },
+  {
+    "id": "A-004",
+    "timestamp": "2026-01-07T09:15:00.527424",
+    "assumption": "AWS spend of $3.4M annually suggests significant cloud workloads that will require cross-cloud migration to Azure",
+    "basis": "$281K monthly AWS spend across 41 accounts indicates substantial cloud adoption beyond just SaaS applications",
+    "domain": "infrastructure",
+    "confidence": "high",
+    "impact": "high",
+    "validation_needed": "Detailed AWS service inventory and architecture assessment to understand migration complexity"
+  },
+  {
+    "id": "A-005",
+    "timestamp": "2026-01-07T09:15:12.287508",
+    "assumption": "Current 1-hour RPO/RTO targets are aggressive and may not be achievable during migration periods",
+    "basis": "Hot DR strategy with Tier 2 classification and both DCs in same region suggests current setup may not meet stated targets during disruptions",
+    "domain": "infrastructure",
+    "confidence": "medium",
+    "impact": "high",
+    "validation_needed": "Review DR test results and actual recovery times achieved in recent tests"
+  },
+  {
+    "id": "A-006",
+    "timestamp": "2026-01-07T09:15:23.720598",
+    "assumption": "Security tool consolidation will be required due to platform differences between buyer and seller",
+    "basis": "National Mutual uses Check Point firewalls, IBM QRadar SIEM, RSA SecurID MFA vs Atlantic's Check Point, Microsoft Sentinel, Microsoft Authenticator - partial overlap but different platforms",
+    "domain": "cybersecurity",
+    "confidence": "high",
+    "impact": "medium",
+    "validation_needed": "Detailed security architecture comparison and integration requirements"
+  },
+  {
+    "id": "A-007",
+    "timestamp": "2026-01-07T09:16:27.665278",
+    "assumption": "National Mutual uses standard RFC1918 IP addressing (likely 10.x.x.x or 192.168.x.x ranges)",
+    "basis": "Standard practice for enterprise networks of this size (1,812 employees, 12 locations)",
+    "domain": "network",
+    "confidence": "high",
+    "impact": "high",
+    "validation_needed": "IP address scheme documentation from network team"
+  },
+  {
+    "id": "A-008",
+    "timestamp": "2026-01-07T09:16:32.443401",
+    "assumption": "Multi-site WAN connectivity exists between 12 office locations",
+    "basis": "Enterprise with 12 locations and centralized IT (121 staff) requires inter-site connectivity for shared services",
+    "domain": "network",
+    "confidence": "high",
+    "impact": "medium",
+    "validation_needed": "WAN architecture documentation and circuit inventory"
+  },
+  {
+    "id": "A-009",
+    "timestamp": "2026-01-07T09:16:37.011254",
+    "assumption": "Check Point firewalls are deployed based on security tools inventory",
+    "basis": "Document explicitly lists Check Point as the firewall solution",
+    "domain": "network",
+    "confidence": "high",
+    "impact": "low",
+    "validation_needed": "Check Point version, model, and configuration details"
+  },
+  {
+    "id": "A-010",
+    "timestamp": "2026-01-07T09:18:05.631882",
+    "assumption": "National Mutual has basic MFA coverage with RSA SecurID but likely incomplete deployment across all users and privileged accounts",
+    "basis": "Document shows RSA SecurID as MFA solution but no coverage metrics provided. Insurance companies typically have partial MFA deployment, and RSA SecurID is often deployed for privileged users first",
+    "domain": "cybersecurity",
+    "confidence": "medium",
+    "impact": "high",
+    "validation_needed": "MFA coverage percentage across all users, privileged accounts, and critical applications"
+  },
+  {
+    "id": "A-011",
+    "timestamp": "2026-01-07T09:19:24.470523",
+    "assumption": "National Mutual requires SOC 2 Type II certification as an insurance company handling sensitive customer data",
+    "basis": "Insurance companies typically require SOC 2 certification for customer trust and regulatory compliance. The company handles policy, claims, and billing data requiring security controls",
+    "domain": "cybersecurity",
+    "confidence": "high",
+    "impact": "high",
+    "validation_needed": "Current SOC 2 certification status and any audit findings"
+  },
+  {
+    "id": "A-012",
+    "timestamp": "2026-01-07T09:20:05.068510",
+    "assumption": "National Mutual has basic backup encryption but may lack comprehensive data-at-rest encryption across all systems",
+    "basis": "Zerto and Veeam backup solutions typically include encryption, but comprehensive database and file system encryption is not explicitly documented. Insurance companies handle sensitive data requiring encryption",
+    "domain": "cybersecurity",
+    "confidence": "medium",
+    "impact": "high",
+    "validation_needed": "Comprehensive encryption inventory including databases, file systems, and application-level encryption"
+  }
+]

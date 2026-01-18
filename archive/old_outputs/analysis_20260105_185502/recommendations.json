@@ -1,0 +1,132 @@
+[
+  {
+    "id": "REC-001",
+    "timestamp": "2026-01-05T18:56:23.666775",
+    "recommendation": "Negotiate extended TSA timeline of 18-24 months for infrastructure separation",
+    "rationale": "Complete ParentCo dependency across all infrastructure domains requires comprehensive separation. Rushing could cause business disruption. Complex migrations need adequate time for testing and validation.",
+    "domain": "deal",
+    "priority": "critical",
+    "timing": "pre_close",
+    "investment_required": "TSA costs estimated at $200K-$500K per month"
+  },
+  {
+    "id": "REC-002",
+    "timestamp": "2026-01-05T18:56:28.665264",
+    "recommendation": "Prioritize Azure AD migration as foundation for all other infrastructure work",
+    "rationale": "Identity is the foundation for all other systems. 650+ users in ParentCo tenant creates dependency for all applications and services. Must be resolved before other migrations can proceed effectively.",
+    "domain": "infrastructure",
+    "priority": "critical",
+    "timing": "day_1",
+    "investment_required": "$150K-$300K plus dedicated identity architect"
+  },
+  {
+    "id": "REC-003",
+    "timestamp": "2026-01-05T18:58:15.282953",
+    "recommendation": "Initiate immediate network discovery and circuit procurement to mitigate timeline risks",
+    "rationale": "Network separation from ParentCo is complex with long lead times for WAN circuits (30-90 days). Early action is critical to avoid integration delays and extended TSA dependencies.",
+    "domain": "network",
+    "priority": "critical",
+    "timing": "pre_close",
+    "investment_required": "$150K-$400K for discovery and initial circuit orders"
+  },
+  {
+    "id": "REC-004",
+    "timestamp": "2026-01-05T18:58:19.817319",
+    "recommendation": "Negotiate extended network TSA with ParentCo to provide separation buffer",
+    "rationale": "Complete network separation will take 6-12 months given infrastructure complexity. TSA provides safety net while new infrastructure is implemented and tested.",
+    "domain": "network",
+    "priority": "high",
+    "timing": "pre_close",
+    "investment_required": "$50K-$150K monthly TSA costs"
+  },
+  {
+    "id": "REC-005",
+    "timestamp": "2026-01-05T18:58:24.321178",
+    "recommendation": "Plan for IP renumbering as likely requirement due to enterprise-scale conflict probability",
+    "rationale": "Both environments are large enterprises likely using common IP ranges. Proactive renumbering planning reduces Day 1 connectivity risks and enables smoother integration.",
+    "domain": "network",
+    "priority": "high",
+    "timing": "first_90_days",
+    "investment_required": "$200K-$500K for renumbering execution"
+  },
+  {
+    "id": "REC-006",
+    "timestamp": "2026-01-05T18:59:59.589855",
+    "recommendation": "Negotiate extended security services agreement with ParentCo for 90-180 days post-close",
+    "rationale": "TargetCo has zero independent security capability and requires time to establish monitoring, incident response, and security operations without creating dangerous security gaps",
+    "domain": "cybersecurity",
+    "priority": "critical",
+    "timing": "pre_close",
+    "investment_required": "$200K-$400K for extended services"
+  },
+  {
+    "id": "REC-007",
+    "timestamp": "2026-01-05T19:00:03.819580",
+    "recommendation": "Conduct immediate cybersecurity due diligence assessment",
+    "rationale": "Critical security information is missing including incident history, compliance status, vulnerability posture, and data classification - these gaps represent significant deal risk",
+    "domain": "cybersecurity",
+    "priority": "critical",
+    "timing": "pre_close",
+    "investment_required": "$75K-$150K for comprehensive assessment"
+  },
+  {
+    "id": "REC-008",
+    "timestamp": "2026-01-05T19:00:08.710171",
+    "recommendation": "Establish cyber insurance coverage for TargetCo operations immediately post-close",
+    "rationale": "Unknown security posture and transition risks require comprehensive cyber insurance coverage to protect against potential breaches during integration period",
+    "domain": "cybersecurity",
+    "priority": "high",
+    "timing": "day_1",
+    "investment_required": "$100K-$200K annually for coverage"
+  },
+  {
+    "id": "REC-009",
+    "timestamp": "2026-01-05T19:00:13.456166",
+    "recommendation": "Implement emergency incident response capability before ParentCo separation",
+    "rationale": "TargetCo will lose all incident response capability when separated from ParentCo SOC - emergency IR capability needed to handle potential security events during transition",
+    "domain": "cybersecurity",
+    "priority": "critical",
+    "timing": "day_1",
+    "investment_required": "$50K-$100K for emergency IR retainer"
+  },
+  {
+    "id": "REC-010",
+    "timestamp": "2026-01-05T19:01:02.507256",
+    "recommendation": "Negotiate extended TSA with minimum 24-month terms and detailed service level agreements",
+    "rationale": "TargetCo has zero standalone IT capability across all domains. The complex separation requires 18-24 months minimum, and any TSA termination would cause immediate business disruption. Extended terms provide flexibility for timeline overruns.",
+    "domain": "deal",
+    "priority": "critical",
+    "timing": "pre_close",
+    "investment_required": "$50K-$100K additional legal and negotiation costs"
+  },
+  {
+    "id": "REC-011",
+    "timestamp": "2026-01-05T19:01:08.572541",
+    "recommendation": "Establish dedicated integration PMO with senior technical leadership",
+    "rationale": "The complexity and interdependencies across all domains require dedicated program management. Sequential dependencies mean delays cascade across work streams. Senior technical leadership needed to navigate complex architectural decisions.",
+    "domain": "cross-domain",
+    "priority": "critical",
+    "timing": "day_1",
+    "investment_required": "$300K-$500K for 24-month program"
+  },
+  {
+    "id": "REC-012",
+    "timestamp": "2026-01-05T19:01:12.855607",
+    "recommendation": "Consider phased migration approach starting with identity services",
+    "rationale": "Identity migration is the critical path blocking all other work. A phased approach allows parallel work streams once basic identity services are established, potentially reducing overall timeline by 3-6 months.",
+    "domain": "cross-domain",
+    "priority": "high",
+    "timing": "first_90_days",
+    "investment_required": "Additional $200K-$400K for parallel infrastructure and tooling"
+  },
+  {
+    "id": "REC-013",
+    "timestamp": "2026-01-05T19:01:17.805060",
+    "recommendation": "Increase deal contingency to 25-30% given complexity and unknowns",
+    "rationale": "Very high complexity across all domains, significant knowledge gaps, and complete dependency on ParentCo create substantial cost and timeline risk. Standard 15-20% contingency is insufficient for this level of uncertainty.",
+    "domain": "deal",
+    "priority": "high",
+    "timing": "pre_close",
+    "investment_required": "Additional $800K-$1.5M contingency budget"
+  }
+]

@@ -1,0 +1,82 @@
+[
+  {
+    "id": "G-001",
+    "timestamp": "2026-01-07T11:52:02.926251",
+    "gap": "Detailed AWS resource inventory and architecture diagrams",
+    "why_needed": "Required to accurately estimate migration complexity and costs for AWS to Azure transition",
+    "domain": "infrastructure",
+    "priority": "high",
+    "cost_impact": "high",
+    "suggested_source": "Technical assessment with AWS cost and usage reports, architecture review"
+  },
+  {
+    "id": "G-002",
+    "timestamp": "2026-01-07T11:52:07.179003",
+    "gap": "Network topology and bandwidth utilization details",
+    "why_needed": "Critical for planning network integration and estimating connectivity costs between environments",
+    "domain": "infrastructure",
+    "priority": "high",
+    "cost_impact": "medium",
+    "suggested_source": "Network documentation review and technical interview with infrastructure team"
+  },
+  {
+    "id": "G-003",
+    "timestamp": "2026-01-07T11:52:32.285904",
+    "gap": "WAN connectivity architecture and providers",
+    "why_needed": "Critical for Day 1 connectivity planning and understanding single points of failure. Need to know if MPLS, SD-WAN, or internet VPN, carrier contracts, and bandwidth per site.",
+    "domain": "network",
+    "priority": "critical",
+    "cost_impact": "high",
+    "suggested_source": "Network architecture documentation, carrier contracts, or technical interview with infrastructure team"
+  },
+  {
+    "id": "G-004",
+    "timestamp": "2026-01-07T11:52:42.402081",
+    "gap": "LAN/switching infrastructure details",
+    "why_needed": "Need to understand network equipment age, vendor, EOL status for security and operational risk assessment. Critical for determining refresh requirements.",
+    "domain": "network",
+    "priority": "high",
+    "cost_impact": "medium",
+    "suggested_source": "Network inventory documentation or infrastructure team interview"
+  },
+  {
+    "id": "G-005",
+    "timestamp": "2026-01-07T11:52:47.358377",
+    "gap": "IP addressing scheme and DHCP/DNS architecture",
+    "why_needed": "Essential for integration planning to identify IP conflicts with buyer (Atlantic International). DNS architecture affects email, authentication, and application integration.",
+    "domain": "network",
+    "priority": "critical",
+    "cost_impact": "high",
+    "suggested_source": "Network documentation or technical assessment"
+  },
+  {
+    "id": "G-006",
+    "timestamp": "2026-01-07T11:56:55.711998",
+    "gap": "MFA coverage percentage and privileged account MFA status",
+    "why_needed": "Critical for assessing account compromise risk and determining MFA rollout scope and urgency",
+    "domain": "cybersecurity",
+    "priority": "high",
+    "cost_impact": "medium",
+    "suggested_source": "Technical assessment of RSA SecurID deployment and Azure AD MFA configuration"
+  },
+  {
+    "id": "G-007",
+    "timestamp": "2026-01-07T11:57:03.352270",
+    "gap": "Compliance certifications held and regulatory requirements",
+    "why_needed": "Insurance industry has specific regulatory requirements (state insurance regulations, NAIC, potentially SOX) that affect security controls and integration approach",
+    "domain": "cybersecurity",
+    "priority": "high",
+    "cost_impact": "high",
+    "suggested_source": "Document request for compliance certifications, audit reports, and regulatory correspondence"
+  },
+  {
+    "id": "G-008",
+    "timestamp": "2026-01-07T11:57:09.517641",
+    "gap": "Incident response plan testing history and recent security incidents",
+    "why_needed": "Assesses security operations maturity and potential hidden liabilities from recent breaches or incidents",
+    "domain": "cybersecurity",
+    "priority": "medium",
+    "cost_impact": "medium",
+    "suggested_source": "Interview with CISO/Security Manager, review of incident logs and tabletop exercise documentation"
+  }
+]

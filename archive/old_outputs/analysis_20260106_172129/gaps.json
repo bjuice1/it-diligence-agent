@@ -1,0 +1,132 @@
+[
+  {
+    "id": "G-001",
+    "timestamp": "2026-01-06T17:21:40.940142",
+    "gap": "Specific cloud platform details for TargetCo workloads",
+    "why_needed": "Need to understand if TargetCo runs on Azure (matching buyer) or other platforms to estimate migration complexity and costs",
+    "domain": "infrastructure",
+    "priority": "critical",
+    "cost_impact": "high",
+    "suggested_source": "Technical assessment of current hosting platforms and cloud resource inventory"
+  },
+  {
+    "id": "G-002",
+    "timestamp": "2026-01-06T17:21:45.604703",
+    "gap": "Server operating systems, versions, and age distribution",
+    "why_needed": "Critical for identifying end-of-life systems requiring immediate attention and estimating migration/refresh costs",
+    "domain": "infrastructure",
+    "priority": "high",
+    "cost_impact": "high",
+    "suggested_source": "Server inventory report with OS versions, patch levels, and hardware age"
+  },
+  {
+    "id": "G-003",
+    "timestamp": "2026-01-06T17:21:49.296942",
+    "gap": "Data center locations and lease terms",
+    "why_needed": "Need to understand physical infrastructure commitments, lease expiration dates, and exit costs for separation planning",
+    "domain": "infrastructure",
+    "priority": "high",
+    "cost_impact": "medium",
+    "suggested_source": "Facilities contracts and data center lease agreements"
+  },
+  {
+    "id": "G-004",
+    "timestamp": "2026-01-06T17:21:53.292661",
+    "gap": "Storage capacity, platforms, and data volumes",
+    "why_needed": "Essential for estimating data migration costs, timeline, and storage platform consolidation requirements",
+    "domain": "infrastructure",
+    "priority": "high",
+    "cost_impact": "high",
+    "suggested_source": "Storage inventory with capacity utilization, growth rates, and platform details"
+  },
+  {
+    "id": "G-005",
+    "timestamp": "2026-01-06T17:23:35.241444",
+    "gap": "Complete network topology and architecture documentation",
+    "why_needed": "Cannot assess network separation complexity, IP addressing schemes, or integration approach without understanding current network design",
+    "domain": "network",
+    "priority": "critical",
+    "cost_impact": "high",
+    "suggested_source": "Request detailed network diagrams, IP addressing schemes, and site connectivity maps from ParentCo IT"
+  },
+  {
+    "id": "G-006",
+    "timestamp": "2026-01-06T17:23:39.892947",
+    "gap": "IP address scheme and DHCP/DNS configuration details",
+    "why_needed": "IP conflicts are the #1 network integration blocker - must understand current addressing to plan integration and identify conflicts with BuyerCo",
+    "domain": "network",
+    "priority": "critical",
+    "cost_impact": "high",
+    "suggested_source": "Technical assessment with ParentCo network team to document IP ranges, DHCP scopes, and DNS zones"
+  },
+  {
+    "id": "G-007",
+    "timestamp": "2026-01-06T17:23:45.289568",
+    "gap": "Physical site locations and WAN connectivity details",
+    "why_needed": "Need to understand which sites TargetCo operates from and how they connect to plan Day 1 connectivity and new circuit requirements",
+    "domain": "network",
+    "priority": "high",
+    "cost_impact": "high",
+    "suggested_source": "Site survey and facilities documentation from TargetCo operations team"
+  },
+  {
+    "id": "G-008",
+    "timestamp": "2026-01-06T17:23:49.725713",
+    "gap": "Firewall rules and security zone configuration",
+    "why_needed": "Document mentions ParentCo-managed network security controls but no details on firewall architecture, rules, or security zones that will need migration",
+    "domain": "network",
+    "priority": "high",
+    "cost_impact": "medium",
+    "suggested_source": "Firewall configuration export and security architecture documentation from ParentCo security team"
+  },
+  {
+    "id": "G-009",
+    "timestamp": "2026-01-07T08:50:28.154219",
+    "gap": "Security assessment results and penetration testing reports",
+    "why_needed": "Cannot assess actual security posture without understanding vulnerabilities, control effectiveness, and risk exposure",
+    "domain": "cybersecurity",
+    "priority": "critical",
+    "cost_impact": "high",
+    "suggested_source": "Request recent security assessments, penetration test reports, and vulnerability scan results from ParentCo"
+  },
+  {
+    "id": "G-010",
+    "timestamp": "2026-01-07T08:50:32.937647",
+    "gap": "Compliance certifications and audit reports",
+    "why_needed": "SOC 2 and ISO alignment mentioned but no certification details provided. Need to understand compliance scope and any findings",
+    "domain": "cybersecurity",
+    "priority": "high",
+    "cost_impact": "high",
+    "suggested_source": "Request SOC 2 Type II reports, ISO certifications, and any compliance audit findings"
+  },
+  {
+    "id": "G-011",
+    "timestamp": "2026-01-07T08:50:37.954139",
+    "gap": "Incident response plan and recent incident history",
+    "why_needed": "Need to understand IR capabilities and any recent security incidents that could indicate ongoing risks",
+    "domain": "cybersecurity",
+    "priority": "high",
+    "cost_impact": "medium",
+    "suggested_source": "Request incident response procedures and incident log for past 24 months"
+  },
+  {
+    "id": "G-012",
+    "timestamp": "2026-01-07T08:50:42.321776",
+    "gap": "Data classification and handling procedures",
+    "why_needed": "No mention of data classification scheme or DLP controls. Critical for understanding data protection posture and privacy compliance",
+    "domain": "cybersecurity",
+    "priority": "high",
+    "cost_impact": "medium",
+    "suggested_source": "Request data classification policy, DLP configuration, and data inventory"
+  },
+  {
+    "id": "G-013",
+    "timestamp": "2026-01-07T08:50:48.093463",
+    "gap": "Privileged access management (PAM) solution details",
+    "why_needed": "25-40 privileged accounts mentioned but no PAM solution described. Critical for understanding privileged access controls",
+    "domain": "cybersecurity",
+    "priority": "high",
+    "cost_impact": "medium",
+    "suggested_source": "Technical interview to understand privileged account management, vaulting, and session monitoring"
+  }
+]

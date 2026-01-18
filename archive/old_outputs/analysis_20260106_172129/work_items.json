@@ -1,0 +1,432 @@
+[
+  {
+    "id": "W-001",
+    "timestamp": "2026-01-06T17:22:21.082232",
+    "title": "Infrastructure Discovery and Dependency Mapping",
+    "description": "Comprehensive assessment of TargetCo infrastructure including server inventory, network topology, storage platforms, application dependencies, and integration points with ParentCo systems",
+    "domain": "infrastructure",
+    "category": "assessment",
+    "effort_estimate": "6-8 weeks",
+    "cost_estimate_range": "$150K-$250K",
+    "timeline_phase": "day_1",
+    "skills_required": [
+      "infrastructure_architect",
+      "network_engineer",
+      "systems_analyst"
+    ],
+    "dependencies": [
+      "Access to ParentCo infrastructure documentation",
+      "Technical interviews with ParentCo IT team"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-002",
+    "timestamp": "2026-01-06T17:22:26.792771",
+    "title": "Azure AD Tenant Separation and User Migration",
+    "description": "Migrate 650 TargetCo users from ParentCo Azure AD tenant to BuyerCo tenant, including user accounts, group memberships, application registrations, and authentication policies",
+    "domain": "infrastructure",
+    "category": "migration",
+    "effort_estimate": "8-12 weeks",
+    "cost_estimate_range": "$200K-$400K",
+    "timeline_phase": "0_90_days",
+    "skills_required": [
+      "identity_architect",
+      "azure_engineer",
+      "powershell_developer"
+    ],
+    "dependencies": [
+      "Infrastructure discovery completion",
+      "TSA agreement for identity services"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-003",
+    "timestamp": "2026-01-06T17:22:32.113892",
+    "title": "Server Infrastructure Migration",
+    "description": "Migrate 110-130 servers from ParentCo environment to BuyerCo infrastructure, including OS updates, application testing, and cutover coordination",
+    "domain": "infrastructure",
+    "category": "migration",
+    "effort_estimate": "16-24 weeks",
+    "cost_estimate_range": "$800K-$1.5M",
+    "timeline_phase": "90_180_days",
+    "skills_required": [
+      "systems_engineer",
+      "cloud_engineer",
+      "database_administrator",
+      "application_specialist"
+    ],
+    "dependencies": [
+      "Server inventory and assessment",
+      "Network connectivity established",
+      "Storage migration completed"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-004",
+    "timestamp": "2026-01-06T17:22:36.916344",
+    "title": "Network Infrastructure Separation",
+    "description": "Establish independent network infrastructure for TargetCo including firewall configuration, VPN setup, network segmentation, and connectivity to BuyerCo network",
+    "domain": "network",
+    "category": "migration",
+    "effort_estimate": "10-14 weeks",
+    "cost_estimate_range": "$300K-$600K",
+    "timeline_phase": "0_90_days",
+    "skills_required": [
+      "network_architect",
+      "security_engineer",
+      "firewall_specialist"
+    ],
+    "dependencies": [
+      "Network topology documentation",
+      "Security requirements definition"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-005",
+    "timestamp": "2026-01-06T17:22:42.024747",
+    "title": "Device Management Integration",
+    "description": "Migrate 620 devices from ParentCo Intune to BuyerCo device management, including policy migration, certificate updates, and application deployment",
+    "domain": "infrastructure",
+    "category": "migration",
+    "effort_estimate": "6-10 weeks",
+    "cost_estimate_range": "$150K-$300K",
+    "timeline_phase": "90_180_days",
+    "skills_required": [
+      "device_management_specialist",
+      "intune_administrator",
+      "powershell_developer"
+    ],
+    "dependencies": [
+      "Azure AD migration completion",
+      "Policy standardization"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-006",
+    "timestamp": "2026-01-06T17:22:48.484932",
+    "title": "TSA Infrastructure Services Setup",
+    "description": "Establish Transition Service Agreements for critical infrastructure services including identity, security monitoring, network connectivity, and application hosting during separation period",
+    "domain": "cross-domain",
+    "category": "integration",
+    "effort_estimate": "4-6 weeks",
+    "cost_estimate_range": "$100K-$200K",
+    "timeline_phase": "day_1",
+    "skills_required": [
+      "program_manager",
+      "legal_counsel",
+      "technical_architect"
+    ],
+    "dependencies": [
+      "Deal closure",
+      "Service level requirements definition"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-007",
+    "timestamp": "2026-01-06T17:24:14.913852",
+    "title": "Network Discovery and Documentation",
+    "description": "Conduct comprehensive discovery of TargetCo's current network infrastructure within ParentCo environment including topology mapping, IP addressing schemes, DHCP/DNS configuration, firewall rules, and site connectivity",
+    "domain": "network",
+    "category": "assessment",
+    "effort_estimate": "4-6 weeks",
+    "timeline_phase": "day_1",
+    "cost_estimate_range": "$50K-$100K",
+    "skills_required": [
+      "network_architect",
+      "network_engineer",
+      "security_engineer"
+    ],
+    "dependencies": [
+      "Access to ParentCo network documentation",
+      "Coordination with ParentCo IT team"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-008",
+    "timestamp": "2026-01-06T17:24:20.488662",
+    "title": "IP Address Conflict Analysis and Resolution Planning",
+    "description": "Analyze IP addressing schemes between TargetCo (via ParentCo) and BuyerCo networks to identify conflicts and develop renumbering plan if needed. Include DHCP scope analysis and DNS zone conflicts",
+    "domain": "network",
+    "category": "assessment",
+    "effort_estimate": "2-3 weeks",
+    "timeline_phase": "day_1",
+    "cost_estimate_range": "$25K-$50K",
+    "skills_required": [
+      "network_architect",
+      "network_engineer"
+    ],
+    "dependencies": [
+      "Network discovery completion",
+      "BuyerCo IP scheme documentation"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-009",
+    "timestamp": "2026-01-06T17:24:26.177641",
+    "title": "Day 1 Connectivity Solution Design and Implementation",
+    "description": "Design and implement temporary network connectivity solution to ensure TargetCo maintains business operations on Day 1 of separation from ParentCo. May include site-to-site VPNs, temporary circuits, or hybrid connectivity",
+    "domain": "network",
+    "category": "integration",
+    "effort_estimate": "6-8 weeks",
+    "timeline_phase": "day_1",
+    "cost_estimate_range": "$100K-$250K",
+    "skills_required": [
+      "network_architect",
+      "network_engineer",
+      "security_engineer",
+      "project_manager"
+    ],
+    "dependencies": [
+      "Network discovery",
+      "Site location identification",
+      "Firewall configuration"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-010",
+    "timestamp": "2026-01-06T17:24:31.995405",
+    "title": "Network Security Migration and Firewall Configuration",
+    "description": "Migrate network security controls from ParentCo-managed environment to BuyerCo network including firewall rule migration, security zone configuration, and VPN setup. Ensure security posture is maintained during transition",
+    "domain": "network",
+    "category": "migration",
+    "effort_estimate": "4-6 weeks",
+    "timeline_phase": "0_90_days",
+    "cost_estimate_range": "$75K-$150K",
+    "skills_required": [
+      "security_engineer",
+      "network_engineer",
+      "firewall_specialist"
+    ],
+    "dependencies": [
+      "Firewall rule documentation",
+      "Security zone mapping",
+      "Day 1 connectivity"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-011",
+    "timestamp": "2026-01-07T08:39:30.177688",
+    "title": "Permanent WAN Connectivity Implementation",
+    "description": "Design and implement permanent WAN connectivity solution for TargetCo sites to integrate with BuyerCo network. May include MPLS extension, SD-WAN deployment, or new dedicated circuits based on requirements",
+    "domain": "network",
+    "category": "integration",
+    "effort_estimate": "12-16 weeks",
+    "timeline_phase": "90_180_days",
+    "cost_estimate_range": "$200K-$500K",
+    "skills_required": [
+      "network_architect",
+      "network_engineer",
+      "project_manager",
+      "vendor_management"
+    ],
+    "dependencies": [
+      "Site survey completion",
+      "Circuit ordering",
+      "Carrier coordination"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-012",
+    "timestamp": "2026-01-07T08:51:16.148264",
+    "title": "Comprehensive Security Assessment",
+    "description": "Conduct thorough security assessment of TargetCo's current security posture including vulnerability assessment, penetration testing, and security control evaluation",
+    "domain": "cybersecurity",
+    "category": "assessment",
+    "effort_estimate": "6-8 weeks",
+    "cost_estimate_range": "$75K-$150K",
+    "timeline_phase": "day_1",
+    "skills_required": [
+      "security_assessor",
+      "penetration_tester",
+      "compliance_auditor"
+    ],
+    "dependencies": [
+      "Access to ParentCo security documentation",
+      "Technical environment access"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-013",
+    "timestamp": "2026-01-07T08:51:22.701778",
+    "title": "Identity and Access Management Migration",
+    "description": "Migrate 650 users from ParentCo Azure AD to BuyerCo Azure AD including user accounts, groups, MFA settings, and application integrations",
+    "domain": "cybersecurity",
+    "category": "migration",
+    "effort_estimate": "8-12 weeks",
+    "cost_estimate_range": "$150K-$300K",
+    "timeline_phase": "0_90_days",
+    "skills_required": [
+      "iam_specialist",
+      "azure_ad_expert",
+      "identity_architect"
+    ],
+    "dependencies": [
+      "User inventory completion",
+      "Application dependency mapping",
+      "MFA device inventory"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-014",
+    "timestamp": "2026-01-07T08:51:29.051343",
+    "title": "Security Operations Center (SOC) Establishment",
+    "description": "Establish independent security monitoring capability including SIEM deployment, log source configuration, detection rule creation, and SOC staffing or MSSP engagement",
+    "domain": "cybersecurity",
+    "category": "security",
+    "effort_estimate": "12-16 weeks",
+    "cost_estimate_range": "$200K-$500K",
+    "timeline_phase": "0_90_days",
+    "skills_required": [
+      "siem_engineer",
+      "security_analyst",
+      "soc_architect"
+    ],
+    "dependencies": [
+      "SIEM platform selection",
+      "Log source inventory",
+      "Detection use case definition"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-015",
+    "timestamp": "2026-01-07T08:51:34.684780",
+    "title": "Endpoint Security Migration",
+    "description": "Migrate 620 endpoints from ParentCo CrowdStrike instance to BuyerCo security management including agent reconfiguration and policy alignment",
+    "domain": "cybersecurity",
+    "category": "migration",
+    "effort_estimate": "4-6 weeks",
+    "cost_estimate_range": "$50K-$100K",
+    "timeline_phase": "0_90_days",
+    "skills_required": [
+      "endpoint_security_engineer",
+      "systems_administrator"
+    ],
+    "dependencies": [
+      "Endpoint inventory",
+      "CrowdStrike licensing negotiation",
+      "Policy standardization"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-016",
+    "timestamp": "2026-01-07T08:51:40.833174",
+    "title": "Privileged Access Management Implementation",
+    "description": "Implement PAM solution for 25-40 privileged accounts including account vaulting, session recording, and access workflow management",
+    "domain": "cybersecurity",
+    "category": "security",
+    "effort_estimate": "8-10 weeks",
+    "cost_estimate_range": "$100K-$200K",
+    "timeline_phase": "90_180_days",
+    "skills_required": [
+      "pam_specialist",
+      "security_engineer",
+      "iam_architect"
+    ],
+    "dependencies": [
+      "Privileged account inventory",
+      "PAM platform selection",
+      "Access workflow definition"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-017",
+    "timestamp": "2026-01-07T08:51:45.738163",
+    "title": "Compliance Certification Establishment",
+    "description": "Establish independent SOC 2 Type II and ISO 27001 certifications including control implementation, documentation, and audit preparation",
+    "domain": "cybersecurity",
+    "category": "compliance",
+    "effort_estimate": "16-20 weeks",
+    "cost_estimate_range": "$150K-$300K",
+    "timeline_phase": "90_180_days",
+    "skills_required": [
+      "compliance_specialist",
+      "auditor",
+      "security_architect"
+    ],
+    "dependencies": [
+      "Control framework selection",
+      "Policy documentation",
+      "Audit firm selection"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-018",
+    "timestamp": "2026-01-07T08:51:51.792887",
+    "title": "Incident Response Capability Development",
+    "description": "Develop independent incident response capability including IR plan creation, team training, forensic capability, and legal counsel engagement",
+    "domain": "cybersecurity",
+    "category": "security",
+    "effort_estimate": "6-8 weeks",
+    "cost_estimate_range": "$75K-$150K",
+    "timeline_phase": "0_90_days",
+    "skills_required": [
+      "incident_response_specialist",
+      "forensic_analyst",
+      "security_architect"
+    ],
+    "dependencies": [
+      "IR team identification",
+      "Legal counsel selection",
+      "Forensic tool procurement"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-019",
+    "timestamp": "2026-01-07T08:52:59.167422",
+    "title": "Integration Program Management Office (PMO) Establishment",
+    "description": "Establish dedicated PMO to manage complex cross-domain dependencies, timeline coordination, and stakeholder communication across 18-24 month integration",
+    "domain": "cross-domain",
+    "category": "integration",
+    "effort_estimate": "18-24 months continuous",
+    "cost_estimate_range": "$400K-$600K",
+    "timeline_phase": "day_1",
+    "skills_required": [
+      "program_manager",
+      "integration_specialist",
+      "change_management"
+    ],
+    "dependencies": [
+      "Executive sponsorship",
+      "Budget approval"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-020",
+    "timestamp": "2026-01-07T08:53:05.003204",
+    "title": "Comprehensive TSA Negotiation and Management",
+    "description": "Negotiate and manage extended TSA covering all shared services (Azure AD, network, security, ERP/CRM/HCM) with clear SLAs and exit criteria",
+    "domain": "cross-domain",
+    "category": "integration",
+    "effort_estimate": "Pre-close through 24 months",
+    "cost_estimate_range": "$1.5M-$3M in TSA fees",
+    "timeline_phase": "day_1",
+    "skills_required": [
+      "legal",
+      "commercial_negotiator",
+      "technical_architect"
+    ],
+    "dependencies": [
+      "Deal structure finalization"
+    ],
+    "priority_score": 1
+  }
+]

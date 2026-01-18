@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+
+{% block title %}Work Items - IT Due Diligence{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Work Items</h1>
+    <p>Integration and remediation tasks by phase</p>
+</div>
+
+<!-- Filters Bar -->
+<form class="filters-bar" method="GET" action="{{ url_for('work_items') }}" role="search">
+    <div class="filter-group">
+        <label class="filter-label" for="filter-phase">Phase</label>
+        <select class="filter-select" id="filter-phase" name="phase" onchange="this.form.submit()">
+            <option value="">All Phases</option>
+            <option value="Day_1" {{ 'selected' if phase_filter == 'Day_1' }}>Day 1</option>
+            <option value="Day_100" {{ 'selected' if phase_filter == 'Day_100' }}>Day 100</option>
+            <option value="Post_100" {{ 'selected' if phase_filter == 'Post_100' }}>Post 100</option>
+        </select>
+    </div>
+
+    <div class="filter-group">
+        <label class="filter-label" for="filter-domain">Domain</label>
+        <select class="filter-select" id="filter-domain" name="domain" onchange="this.form.submit()">
+            <option value="">All Domains</option>
+            {% for domain in domains %}
+            <option value="{{ domain }}" {{ 'selected' if domain_filter == domain }}>{{ domain|replace('_', ' ')|title }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="filter-group filter-search">
+        <label class="filter-label" for="filter-search">Search</label>
+        <input type="search" class="filter-input" id="filter-search" name="q"
+               placeholder="Search work items..." value="{{ request.args.get('q', '') }}"
+               aria-label="Search work items">
+    </div>
+
+    <div class="filters-actions">
+        {% if domain_filter or phase_filter or request.args.get('q') %}
+        <a href="{{ url_for('work_items') }}" class="btn btn-ghost btn-sm">Clear Filters</a>
+        {% endif %}
+    </div>
+</form>
+
+<!-- Tabs for Phases -->
+<div class="tabs" role="tablist">
+    <a href="{{ url_for('work_items') }}?phase=Day_1{% if domain_filter %}&domain={{ domain_filter }}{% endif %}"
+       class="tab {{ 'active' if phase_filter == 'Day_1' or not phase_filter }}" role="tab"
+       {% if phase_filter == 'Day_1' or not phase_filter %}aria-selected="true"{% endif %}>
+        Day 1
+        <span class="tab-count">{{ totals.Day_1.count }}</span>
+    </a>
+    <a href="{{ url_for('work_items') }}?phase=Day_100{% if domain_filter %}&domain={{ domain_filter }}{% endif %}"
+       class="tab {{ 'active' if phase_filter == 'Day_100' }}" role="tab"
+       {% if phase_filter == 'Day_100' %}aria-selected="true"{% endif %}>
+        Day 100
+        <span class="tab-count">{{ totals.Day_100.count }}</span>
+    </a>
+    <a href="{{ url_for('work_items') }}?phase=Post_100{% if domain_filter %}&domain={{ domain_filter }}{% endif %}"
+       class="tab {{ 'active' if phase_filter == 'Post_100' }}" role="tab"
+       {% if phase_filter == 'Post_100' %}aria-selected="true"{% endif %}>
+        Post 100
+        <span class="tab-count">{{ totals.Post_100.count }}</span>
+    </a>
+</div>
+
+<!-- Work Items Table -->
+{% set active_phase = phase_filter if phase_filter else 'Day_1' %}
+{% set items = by_phase.get(active_phase, []) %}
+
+<div class="table-container">
+    <table class="table" aria-label="Work items table">
+        <thead>
+            <tr>
+                <th scope="col" style="width: 100px;">ID</th>
+                <th scope="col">Title</th>
+                <th scope="col" style="width: 120px;">Domain</th>
+                <th scope="col" style="width: 100px;">Owner</th>
+                <th scope="col" style="width: 80px;">Priority</th>
+                <th scope="col" style="width: 140px; text-align: right;">Cost Estimate</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if items %}
+            {% for wi in items %}
+            <tr data-id="{{ wi.work_item_id }}"
+                data-title="{{ wi.title|e }}"
+                data-description="{{ wi.description|e if wi.description else '' }}"
+                data-domain="{{ wi.domain }}"
+                data-phase="{{ wi.phase }}"
+                data-owner="{{ wi.owner }}"
+                data-priority="{{ wi.priority|default('medium') }}"
+                data-cost="{{ wi.cost_estimate }}">
+                <td class="font-mono text-sm">{{ wi.work_item_id }}</td>
+                <td>{{ wi.title }}</td>
+                <td class="text-muted text-sm">{{ wi.domain|replace('_', ' ')|title }}</td>
+                <td>
+                    <span class="badge badge-outline badge-info">{{ wi.owner }}</span>
+                </td>
+                <td>
+                    <span class="badge badge-{{ wi.priority|default('medium') }}">{{ wi.priority|default('medium') }}</span>
+                </td>
+                <td style="text-align: right;" class="cost-range">{{ wi.cost_estimate }}</td>
+            </tr>
+            {% endfor %}
+            {% else %}
+            <tr>
+                <td colspan="6">
+                    <div class="empty-state">
+                        <div class="empty-state-icon">&#x2705;</div>
+                        <div class="empty-state-title">No work items for {{ active_phase|replace('_', ' ') }}</div>
+                        <div class="empty-state-text">No tasks have been identified for this phase.</div>
+                    </div>
+                </td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Phase Cost Summary -->
+{% if items %}
+<div class="card mt-4">
+    <div class="card-body flex justify-between items-center">
+        <span class="text-muted">{{ active_phase|replace('_', ' ') }} Total ({{ items|length }} items)</span>
+        <span class="cost-range font-semibold">
+            ${{ "{:,.0f}".format(totals[active_phase].low) }} - ${{ "{:,.0f}".format(totals[active_phase].high) }}
+        </span>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Handle row selection and open drawer
+    document.addEventListener('rowSelected', function(e) {
+        const row = e.detail.row;
+        const data = row.dataset;
+
+        // Get cost range values
+        const costRanges = {{ cost_ranges|tojson|safe }};
+        const costRange = costRanges[data.cost] || { low: 0, high: 0 };
+
+        openDrawer(
+            data.title,
+            `
+            <div class="drawer-section">
+                <div class="drawer-section-title">Phase</div>
+                <div class="drawer-section-content">
+                    <span class="badge badge-${data.phase.toLowerCase().replace('_', '')}">${data.phase.replace('_', ' ')}</span>
+                </div>
+            </div>
+            <div class="drawer-section">
+                <div class="drawer-section-title">Domain</div>
+                <div class="drawer-section-content">${data.domain.replace('_', ' ')}</div>
+            </div>
+            <div class="drawer-section">
+                <div class="drawer-section-title">Owner</div>
+                <div class="drawer-section-content">${data.owner}</div>
+            </div>
+            <div class="drawer-section">
+                <div class="drawer-section-title">Priority</div>
+                <div class="drawer-section-content">
+                    <span class="badge badge-${data.priority}">${data.priority.toUpperCase()}</span>
+                </div>
+            </div>
+            <div class="drawer-section">
+                <div class="drawer-section-title">Cost Estimate</div>
+                <div class="drawer-section-content font-mono">
+                    ${data.cost}<br>
+                    <span class="text-muted">$${costRange.low.toLocaleString()} - $${costRange.high.toLocaleString()}</span>
+                </div>
+            </div>
+            <div class="drawer-section">
+                <div class="drawer-section-title">Description</div>
+                <div class="drawer-section-content">${data.description || 'No description available'}</div>
+            </div>
+            `,
+            `
+            <a href="{{ url_for('work_item_detail', wi_id='') }}${data.id}" class="btn btn-primary">View Full Details</a>
+            <button class="btn btn-secondary" onclick="closeDrawer()">Close</button>
+            `
+        );
+    });
+</script>
+{% endblock %}

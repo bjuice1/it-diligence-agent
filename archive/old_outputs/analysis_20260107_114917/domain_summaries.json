@@ -1,0 +1,38 @@
+{
+  "network": {
+    "timestamp": "2026-01-07T11:54:52.435595",
+    "domain": "network",
+    "summary": "National Mutual operates a distributed network across 12 locations with concentrated Chicago data centers and AWS cloud infrastructure. Significant knowledge gaps exist around WAN architecture and IP addressing. Security platforms show partial alignment with buyer. Geographic concentration creates standalone risk requiring mitigation.",
+    "complexity_assessment": "medium",
+    "top_risks": [
+      "Geographic concentration of both data centers in Chicago",
+      "Single cloud provider dependency (AWS)",
+      "Unknown WAN architecture creating Day 1 connectivity risk"
+    ],
+    "critical_gaps": [
+      "WAN connectivity architecture and providers",
+      "IP addressing scheme and DNS architecture",
+      "LAN/switching infrastructure details"
+    ],
+    "estimated_cost_range": "$900K-$1.6M",
+    "estimated_timeline": "12-18 months for full integration"
+  },
+  "cross-domain": {
+    "timestamp": "2026-01-07T11:59:59.891427",
+    "domain": "cross-domain",
+    "summary": "National Mutual presents a high-complexity integration requiring comprehensive platform migrations across all domains. While the target has strong SaaS adoption and reasonable IT investment, complete platform mismatch with buyer environment creates 18-24 month integration timeline. Geographic concentration in Chicago adds immediate business continuity risk requiring urgent attention.",
+    "complexity_assessment": "high",
+    "estimated_cost_range": "$4M-$6M",
+    "estimated_timeline": "18-24 months",
+    "top_risks": [
+      "Geographic concentration creates business continuity risk",
+      "Platform migration complexity extends integration timeline",
+      "Key person dependency on single cloud engineer creates execution risk"
+    ],
+    "critical_gaps": [
+      "Detailed AWS architecture and resource inventory",
+      "Network topology and IP addressing schemes",
+      "Compliance requirements and regulatory obligations"
+    ]
+  }
+}

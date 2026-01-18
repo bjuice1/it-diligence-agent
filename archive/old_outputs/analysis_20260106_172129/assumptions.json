@@ -1,0 +1,82 @@
+[
+  {
+    "id": "A-001",
+    "timestamp": "2026-01-06T17:21:36.235543",
+    "assumption": "TargetCo operates in a shared ParentCo infrastructure environment requiring full separation",
+    "basis": "Document states TargetCo operates as business unit within ParentCo with ParentCo owning cloud tenant, network, identity, and security operations. This is a classic carve-out scenario.",
+    "domain": "infrastructure",
+    "confidence": "high",
+    "impact": "high",
+    "validation_needed": "Detailed infrastructure dependency mapping and TSA requirements assessment"
+  },
+  {
+    "id": "A-002",
+    "timestamp": "2026-01-06T17:23:09.953454",
+    "assumption": "TargetCo workloads are likely running on Azure given ParentCo uses Azure AD",
+    "basis": "ParentCo uses Azure AD for identity services, suggesting Azure cloud preference. This would align with BuyerCo's Azure environment and reduce migration complexity.",
+    "domain": "infrastructure",
+    "confidence": "medium",
+    "impact": "medium",
+    "validation_needed": "Cloud platform inventory to confirm Azure usage vs other platforms"
+  },
+  {
+    "id": "A-003",
+    "timestamp": "2026-01-06T17:23:14.701710",
+    "assumption": "Significant end-of-life systems present requiring immediate remediation",
+    "basis": "110-130 servers in enterprise environment likely includes Windows Server 2012 R2 (EOL Oct 2023), older Linux distributions, and aging hardware requiring refresh or migration",
+    "domain": "infrastructure",
+    "confidence": "high",
+    "impact": "high",
+    "validation_needed": "Complete server inventory with OS versions, patch levels, and hardware age"
+  },
+  {
+    "id": "A-004",
+    "timestamp": "2026-01-06T17:23:30.415600",
+    "assumption": "TargetCo operates on ParentCo's shared network infrastructure with no independent WAN or LAN architecture",
+    "basis": "Infrastructure disclosure states \"Network: ParentCo\" ownership and that TargetCo operates as a business unit within ParentCo with shared infrastructure",
+    "domain": "network",
+    "confidence": "high",
+    "impact": "high",
+    "validation_needed": "Detailed network topology and physical site locations to understand separation requirements"
+  },
+  {
+    "id": "A-005",
+    "timestamp": "2026-01-07T08:39:58.761153",
+    "assumption": "TargetCo uses standard enterprise network equipment that can be migrated to BuyerCo standards",
+    "basis": "ParentCo appears to be an enterprise organization with 650+ users and shared infrastructure, suggesting enterprise-grade network equipment",
+    "domain": "network",
+    "confidence": "medium",
+    "impact": "medium",
+    "validation_needed": "Network equipment inventory and compatibility assessment with BuyerCo standards"
+  },
+  {
+    "id": "A-006",
+    "timestamp": "2026-01-07T08:40:03.665797",
+    "assumption": "TargetCo has multiple physical sites requiring network connectivity",
+    "basis": "Organization size of 650 users and 620 devices suggests multi-site operations typical for business units of this scale",
+    "domain": "network",
+    "confidence": "medium",
+    "impact": "high",
+    "validation_needed": "Site survey to identify all TargetCo locations and their connectivity requirements"
+  },
+  {
+    "id": "A-007",
+    "timestamp": "2026-01-07T08:50:18.707135",
+    "assumption": "TargetCo inherits ParentCo's security posture and maturity level",
+    "basis": "All cybersecurity controls, tooling, and operations are centrally managed by ParentCo. TargetCo has no independent security organization or tooling.",
+    "domain": "cybersecurity",
+    "confidence": "high",
+    "impact": "high",
+    "validation_needed": "Security assessment of ParentCo's actual security maturity and control effectiveness"
+  },
+  {
+    "id": "A-008",
+    "timestamp": "2026-01-07T08:50:23.243485",
+    "assumption": "TargetCo's security controls are enterprise-grade based on tooling mentioned",
+    "basis": "CrowdStrike EDR, Microsoft Sentinel SIEM, Azure AD with MFA, and centralized SOC suggest mature security stack",
+    "domain": "cybersecurity",
+    "confidence": "medium",
+    "impact": "medium",
+    "validation_needed": "Verification of actual implementation quality, coverage, and effectiveness of these tools"
+  }
+]

@@ -1,0 +1,152 @@
+[
+  {
+    "id": "REC-001",
+    "timestamp": "2026-01-05T20:05:22.652821",
+    "recommendation": "Negotiate extended TSA period (18-24 months) for infrastructure services",
+    "rationale": "Complete infrastructure separation from ParentCo will be complex and time-consuming. Standard 12-month TSA periods are insufficient for this scope of work.",
+    "domain": "deal",
+    "priority": "critical",
+    "timing": "pre_close",
+    "investment_required": "TSA fees estimated at $200K-$500K annually"
+  },
+  {
+    "id": "REC-002",
+    "timestamp": "2026-01-05T20:05:26.727935",
+    "recommendation": "Implement phased migration approach starting with non-critical systems",
+    "rationale": "Given the complete dependency on ParentCo infrastructure, a big-bang migration approach would be too risky. Phased approach allows for learning and risk mitigation.",
+    "domain": "infrastructure",
+    "priority": "high",
+    "timing": "day_1",
+    "investment_required": "Additional project management and coordination effort"
+  },
+  {
+    "id": "REC-003",
+    "timestamp": "2026-01-05T20:05:46.390425",
+    "recommendation": "Establish dedicated integration PMO with ParentCo liaison",
+    "rationale": "Complex separation requires strong coordination between BuyerCo and ParentCo teams. Dedicated PMO ensures proper governance and communication.",
+    "domain": "cross-domain",
+    "priority": "high",
+    "timing": "day_1",
+    "investment_required": "$200K-$400K annually for dedicated PMO resources"
+  },
+  {
+    "id": "REC-004",
+    "timestamp": "2026-01-05T20:07:22.787916",
+    "recommendation": "Immediately initiate network discovery and circuit ordering process",
+    "rationale": "TargetCo has no independent network infrastructure and relies entirely on ParentCo. WAN circuits have 30-90 day lead times which will be critical path for integration timeline",
+    "domain": "network",
+    "priority": "critical",
+    "timing": "pre_close",
+    "investment_required": "$50K-$100K for discovery; $200K-$800K for circuits"
+  },
+  {
+    "id": "REC-005",
+    "timestamp": "2026-01-05T20:07:27.242830",
+    "recommendation": "Develop comprehensive IP address conflict mitigation strategy",
+    "rationale": "Both organizations likely use common RFC1918 address ranges which will create conflicts preventing Day 1 connectivity. This is a common integration blocker that requires early planning",
+    "domain": "network",
+    "priority": "critical",
+    "timing": "pre_close",
+    "investment_required": "$75K-$200K for analysis and renumbering"
+  },
+  {
+    "id": "REC-006",
+    "timestamp": "2026-01-05T20:07:31.602406",
+    "recommendation": "Establish temporary connectivity solutions for Day 1 business continuity",
+    "rationale": "Given the complete network separation required and circuit lead times, temporary solutions will be essential to maintain business operations while permanent infrastructure is deployed",
+    "domain": "network",
+    "priority": "high",
+    "timing": "day_1",
+    "investment_required": "$50K-$150K for temporary solutions"
+  },
+  {
+    "id": "REC-007",
+    "timestamp": "2026-01-05T20:09:16.917750",
+    "recommendation": "Negotiate extended Transition Services Agreement (TSA) for security services",
+    "rationale": "TargetCo has complete dependency on ParentCo security infrastructure. Immediate separation would create critical security gaps. TSA provides time to establish independent security capabilities while maintaining protection.",
+    "domain": "cybersecurity",
+    "priority": "critical",
+    "timing": "pre_close",
+    "investment_required": "$50K-$150K monthly TSA fees"
+  },
+  {
+    "id": "REC-008",
+    "timestamp": "2026-01-05T20:09:21.479490",
+    "recommendation": "Conduct comprehensive security due diligence before close",
+    "rationale": "No security assessment data provided and unknown vulnerability posture creates significant risk. Security assessment will identify gaps, compliance issues, and remediation costs that could affect deal valuation.",
+    "domain": "cybersecurity",
+    "priority": "critical",
+    "timing": "pre_close",
+    "investment_required": "$75K-$150K for assessment"
+  },
+  {
+    "id": "REC-009",
+    "timestamp": "2026-01-05T20:09:26.617778",
+    "recommendation": "Establish security integration budget of $1M-$2M for first year",
+    "rationale": "Complete security infrastructure carve-out required including identity migration, security tooling, SOC establishment, and compliance certification. Costs are significant due to enterprise-grade security requirements.",
+    "domain": "cybersecurity",
+    "priority": "high",
+    "timing": "pre_close",
+    "investment_required": "$1M-$2M first year, $500K-$800K annually ongoing"
+  },
+  {
+    "id": "REC-010",
+    "timestamp": "2026-01-05T20:09:31.559996",
+    "recommendation": "Prioritize identity integration as critical path item",
+    "rationale": "650 users depend on ParentCo Azure AD for authentication and application access. Identity migration is prerequisite for most other integration activities and has highest user impact if delayed.",
+    "domain": "cybersecurity",
+    "priority": "critical",
+    "timing": "day_1",
+    "investment_required": "$150K-$300K plus dedicated identity architect resource"
+  },
+  {
+    "id": "REC-011",
+    "timestamp": "2026-01-05T20:09:36.292369",
+    "recommendation": "Verify cyber insurance coverage for acquisition integration period",
+    "rationale": "Security infrastructure transition creates elevated risk period. Current ParentCo coverage may not extend to carved-out entity, and BuyerCo coverage may not include acquisition activities.",
+    "domain": "cybersecurity",
+    "priority": "high",
+    "timing": "pre_close",
+    "investment_required": "Insurance premium adjustments and potential coverage gaps"
+  },
+  {
+    "id": "REC-012",
+    "timestamp": "2026-01-05T20:10:27.312216",
+    "recommendation": "Negotiate minimum 18-month TSA with ParentCo covering all IT services including infrastructure, network, and security operations",
+    "rationale": "The complete dependency on ParentCo systems and the critical path timeline of 18+ months requires extended transition services. Shorter TSA terms create unacceptable business continuity risk.",
+    "domain": "deal",
+    "priority": "critical",
+    "timing": "pre_close",
+    "investment_required": "$3M-$5M in TSA fees over 18 months"
+  },
+  {
+    "id": "REC-013",
+    "timestamp": "2026-01-05T20:10:32.210055",
+    "recommendation": "Establish $2M integration contingency fund for unforeseen complexities and timeline extensions",
+    "rationale": "Very high complexity integration with significant unknowns (15 critical gaps identified) and complete system separation required. Historical experience shows 20-30% cost overruns on complex carve-outs.",
+    "domain": "deal",
+    "priority": "high",
+    "timing": "pre_close",
+    "investment_required": "$2M contingency reserve"
+  },
+  {
+    "id": "REC-014",
+    "timestamp": "2026-01-05T20:10:36.714035",
+    "recommendation": "Immediately begin WAN circuit procurement and Azure AD tenant setup upon LOI signing",
+    "rationale": "WAN circuits have 12-16 week lead times and Azure AD tenant migration requires 8-12 weeks. These are critical path items that can begin before close to compress overall timeline.",
+    "domain": "cross-domain",
+    "priority": "critical",
+    "timing": "pre_close",
+    "investment_required": "$200K-$500K in pre-close procurement"
+  },
+  {
+    "id": "REC-015",
+    "timestamp": "2026-01-05T20:10:41.447889",
+    "recommendation": "Conduct comprehensive technical due diligence to fill 15 critical information gaps before final valuation",
+    "rationale": "Current assessment has low confidence due to significant unknowns in network topology, security posture, and infrastructure details. These gaps could materially impact integration costs and timeline.",
+    "domain": "deal",
+    "priority": "high",
+    "timing": "pre_close",
+    "investment_required": "$150K-$300K for technical assessments"
+  }
+]

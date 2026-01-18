@@ -1,0 +1,407 @@
+[
+  {
+    "id": "W-001",
+    "timestamp": "2026-01-05T20:04:52.019063",
+    "title": "Infrastructure Discovery and Dependency Mapping",
+    "description": "Comprehensive assessment of TargetCo's infrastructure footprint within ParentCo environment including server inventory, network dependencies, storage systems, and application hosting models. Map all dependencies to inform separation strategy.",
+    "domain": "infrastructure",
+    "category": "assessment",
+    "effort_estimate": "4-6 weeks",
+    "cost_estimate_range": "$100K-$150K",
+    "timeline_phase": "day_1",
+    "skills_required": [
+      "infrastructure_architect",
+      "network_engineer",
+      "cloud_engineer"
+    ],
+    "dependencies": [
+      "TSA execution",
+      "ParentCo cooperation"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-002",
+    "timestamp": "2026-01-05T20:04:57.559573",
+    "title": "Azure AD Tenant Migration Planning",
+    "description": "Plan migration of 650 TargetCo users from ParentCo Azure AD to BuyerCo Azure AD including identity mapping, application SSO reconfiguration, and access rights transfer. Include testing and rollback procedures.",
+    "domain": "infrastructure",
+    "category": "migration",
+    "effort_estimate": "8-12 weeks",
+    "cost_estimate_range": "$200K-$400K",
+    "timeline_phase": "0_90_days",
+    "skills_required": [
+      "identity_architect",
+      "azure_engineer",
+      "application_specialist"
+    ],
+    "dependencies": [
+      "Infrastructure discovery",
+      "Application inventory"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-003",
+    "timestamp": "2026-01-05T20:05:02.972061",
+    "title": "Server Migration to BuyerCo Environment",
+    "description": "Migrate 110-130 servers from ParentCo infrastructure to BuyerCo Azure environment. Includes VM conversion, network reconfiguration, application testing, and cutover coordination.",
+    "domain": "infrastructure",
+    "category": "migration",
+    "effort_estimate": "16-24 weeks",
+    "cost_estimate_range": "$800K-$1.5M",
+    "timeline_phase": "90_180_days",
+    "skills_required": [
+      "cloud_engineer",
+      "system_administrator",
+      "network_engineer",
+      "dba"
+    ],
+    "dependencies": [
+      "Infrastructure discovery",
+      "Network design",
+      "Identity migration"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-004",
+    "timestamp": "2026-01-05T20:05:07.966892",
+    "title": "Device Management Migration",
+    "description": "Migrate 620 devices from ParentCo Intune to BuyerCo device management, including policy migration, certificate updates, and user communication.",
+    "domain": "infrastructure",
+    "category": "migration",
+    "effort_estimate": "6-10 weeks",
+    "cost_estimate_range": "$150K-$300K",
+    "timeline_phase": "0_90_days",
+    "skills_required": [
+      "endpoint_engineer",
+      "intune_specialist",
+      "security_engineer"
+    ],
+    "dependencies": [
+      "Identity migration",
+      "Network connectivity"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-005",
+    "timestamp": "2026-01-05T20:05:41.915736",
+    "title": "SaaS Application Migration and Reconfiguration",
+    "description": "Reconfigure 45 SaaS applications for BuyerCo identity system, transfer licenses where possible, establish new vendor relationships, and update integrations.",
+    "domain": "infrastructure",
+    "category": "migration",
+    "effort_estimate": "12-16 weeks",
+    "cost_estimate_range": "$300K-$600K",
+    "timeline_phase": "90_180_days",
+    "skills_required": [
+      "application_specialist",
+      "identity_engineer",
+      "vendor_management"
+    ],
+    "dependencies": [
+      "SaaS inventory",
+      "Identity migration",
+      "Vendor negotiations"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-006",
+    "timestamp": "2026-01-05T20:06:52.366430",
+    "title": "Network Discovery and Documentation",
+    "description": "Comprehensive discovery of TargetCo's current network footprint within ParentCo infrastructure including topology mapping, IP address inventory, VLAN assignments, and circuit documentation",
+    "domain": "network",
+    "category": "assessment",
+    "effort_estimate": "4-6 weeks",
+    "cost_estimate_range": "$50K-$100K",
+    "timeline_phase": "day_1",
+    "skills_required": [
+      "network_architect",
+      "network_engineer",
+      "project_manager"
+    ],
+    "dependencies": [
+      "Access to ParentCo network documentation",
+      "ParentCo IT team cooperation"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-007",
+    "timestamp": "2026-01-05T20:06:57.709173",
+    "title": "WAN Circuit Procurement and Installation",
+    "description": "Order and install new WAN circuits for all TargetCo locations including internet, MPLS/SD-WAN, and backup connectivity based on business requirements and site criticality",
+    "domain": "network",
+    "category": "migration",
+    "effort_estimate": "12-16 weeks",
+    "cost_estimate_range": "$200K-$800K",
+    "timeline_phase": "0_90_days",
+    "skills_required": [
+      "network_architect",
+      "telecom_specialist",
+      "project_manager"
+    ],
+    "dependencies": [
+      "Site inventory",
+      "Business requirements",
+      "Carrier selection"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-008",
+    "timestamp": "2026-01-05T20:07:02.410473",
+    "title": "IP Address Conflict Analysis and Renumbering Plan",
+    "description": "Analyze IP address schemes of both TargetCo and BuyerCo environments, identify conflicts, and develop comprehensive renumbering plan with minimal business disruption",
+    "domain": "network",
+    "category": "migration",
+    "effort_estimate": "6-8 weeks",
+    "cost_estimate_range": "$75K-$200K",
+    "timeline_phase": "0_90_days",
+    "skills_required": [
+      "network_architect",
+      "network_engineer",
+      "application_specialist"
+    ],
+    "dependencies": [
+      "IP address discovery",
+      "Application dependency mapping"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-009",
+    "timestamp": "2026-01-05T20:07:07.026095",
+    "title": "Day 1 Temporary Connectivity Setup",
+    "description": "Establish temporary network connectivity solutions to ensure business continuity on Day 1 including VPN tunnels, temporary circuits, and network address translation as needed",
+    "domain": "network",
+    "category": "migration",
+    "effort_estimate": "3-4 weeks",
+    "cost_estimate_range": "$50K-$150K",
+    "timeline_phase": "day_1",
+    "skills_required": [
+      "network_engineer",
+      "security_engineer",
+      "project_manager"
+    ],
+    "dependencies": [
+      "Network discovery",
+      "Business continuity requirements"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-010",
+    "timestamp": "2026-01-05T20:07:11.586854",
+    "title": "DNS Migration and Domain Setup",
+    "description": "Establish new DNS infrastructure for TargetCo, migrate DNS zones from ParentCo, and implement mail routing during transition period",
+    "domain": "network",
+    "category": "migration",
+    "effort_estimate": "4-6 weeks",
+    "cost_estimate_range": "$40K-$100K",
+    "timeline_phase": "0_90_days",
+    "skills_required": [
+      "network_engineer",
+      "dns_specialist",
+      "email_administrator"
+    ],
+    "dependencies": [
+      "Domain registration",
+      "DNS zone documentation"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-011",
+    "timestamp": "2026-01-05T20:07:17.934188",
+    "title": "Network Security Infrastructure Deployment",
+    "description": "Deploy firewalls, intrusion prevention systems, and network security controls for TargetCo's independent network infrastructure aligned with BuyerCo security standards",
+    "domain": "network",
+    "category": "security",
+    "effort_estimate": "8-12 weeks",
+    "cost_estimate_range": "$150K-$400K",
+    "timeline_phase": "90_180_days",
+    "skills_required": [
+      "security_engineer",
+      "network_architect",
+      "firewall_specialist"
+    ],
+    "dependencies": [
+      "Security policy alignment",
+      "Network topology design"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-012",
+    "timestamp": "2026-01-05T20:08:40.470674",
+    "title": "Identity Migration from ParentCo to BuyerCo Azure AD",
+    "description": "Migrate 650 TargetCo users from ParentCo Azure AD tenant to BuyerCo Azure AD tenant, including user accounts, group memberships, MFA settings, and application access permissions. Establish hybrid authentication during transition period.",
+    "domain": "cybersecurity",
+    "category": "migration",
+    "effort_estimate": "8-12 weeks",
+    "cost_estimate_range": "$150K-$300K",
+    "skills_required": [
+      "identity_architect",
+      "azure_ad_specialist",
+      "powershell_developer"
+    ],
+    "timeline_phase": "0_90_days",
+    "dependencies": [
+      "TSA for identity services",
+      "Application inventory and SSO mapping"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-013",
+    "timestamp": "2026-01-05T20:08:46.077842",
+    "title": "Standalone Security Infrastructure Deployment",
+    "description": "Deploy independent security tooling stack for TargetCo including EDR (CrowdStrike or equivalent), SIEM solution, vulnerability management, and backup/DR capabilities. Establish security monitoring and incident response procedures.",
+    "domain": "cybersecurity",
+    "category": "security",
+    "effort_estimate": "12-16 weeks",
+    "cost_estimate_range": "$400K-$800K",
+    "skills_required": [
+      "security_architect",
+      "siem_engineer",
+      "security_analyst"
+    ],
+    "timeline_phase": "0_90_days",
+    "dependencies": [
+      "Security tooling procurement",
+      "Network infrastructure readiness"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-014",
+    "timestamp": "2026-01-05T20:08:53.170090",
+    "title": "Pre-Close Security Assessment",
+    "description": "Conduct comprehensive security assessment of TargetCo environment including vulnerability scanning, penetration testing, configuration review, and compliance gap analysis to identify security risks before acquisition close.",
+    "domain": "cybersecurity",
+    "category": "assessment",
+    "effort_estimate": "4-6 weeks",
+    "cost_estimate_range": "$75K-$150K",
+    "skills_required": [
+      "security_assessor",
+      "penetration_tester",
+      "compliance_specialist"
+    ],
+    "timeline_phase": "day_1",
+    "dependencies": [
+      "Access to TargetCo environment",
+      "ParentCo cooperation"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-015",
+    "timestamp": "2026-01-05T20:08:59.599380",
+    "title": "Compliance Certification Establishment",
+    "description": "Establish independent SOC 2 Type II and other required compliance certifications for TargetCo operations, including gap remediation, control implementation, and audit preparation.",
+    "domain": "cybersecurity",
+    "category": "compliance",
+    "effort_estimate": "6-9 months",
+    "cost_estimate_range": "$100K-$250K",
+    "skills_required": [
+      "compliance_specialist",
+      "auditor",
+      "security_architect"
+    ],
+    "timeline_phase": "90_180_days",
+    "dependencies": [
+      "Security infrastructure deployment",
+      "Policy and procedure development"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-016",
+    "timestamp": "2026-01-05T20:09:06.373565",
+    "title": "Privileged Access Management (PAM) Implementation",
+    "description": "Implement PAM solution for 25-40 privileged accounts, including service account management, session recording, and just-in-time access controls to replace ParentCo's privileged access controls.",
+    "domain": "cybersecurity",
+    "category": "security",
+    "effort_estimate": "6-10 weeks",
+    "cost_estimate_range": "$75K-$200K",
+    "skills_required": [
+      "pam_specialist",
+      "identity_architect",
+      "security_engineer"
+    ],
+    "timeline_phase": "90_180_days",
+    "dependencies": [
+      "Identity migration completion",
+      "PAM tooling procurement"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-017",
+    "timestamp": "2026-01-05T20:09:12.398838",
+    "title": "Security Operations Center (SOC) Establishment",
+    "description": "Establish 24/7 security monitoring capability either through managed security service provider (MSSP) or internal SOC, including threat detection, incident response, and security analytics for TargetCo environment.",
+    "domain": "cybersecurity",
+    "category": "security",
+    "effort_estimate": "8-12 weeks",
+    "cost_estimate_range": "$200K-$500K setup + $300K-$600K annually",
+    "skills_required": [
+      "soc_analyst",
+      "incident_responder",
+      "security_architect"
+    ],
+    "timeline_phase": "0_90_days",
+    "dependencies": [
+      "SIEM deployment",
+      "Security tooling integration"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-018",
+    "timestamp": "2026-01-05T20:10:16.351582",
+    "title": "Integration Program Management Office (PMO) Establishment",
+    "description": "Establish dedicated PMO to coordinate complex multi-domain integration with critical path dependencies. Includes program manager, technical leads for each domain, vendor management, and executive reporting.",
+    "domain": "cross-domain",
+    "category": "integration",
+    "effort_estimate": "18-24 months full-time team",
+    "cost_estimate_range": "$800K-$1.2M",
+    "timeline_phase": "day_1",
+    "skills_required": [
+      "program_manager",
+      "technical_architect",
+      "vendor_manager",
+      "change_manager"
+    ],
+    "dependencies": [
+      "Deal close",
+      "TSA execution"
+    ],
+    "priority_score": 1
+  },
+  {
+    "id": "W-019",
+    "timestamp": "2026-01-05T20:10:21.769244",
+    "title": "Day 1 Readiness and Cutover Planning",
+    "description": "Comprehensive planning and testing for Day 1 operations including temporary connectivity, emergency procedures, rollback plans, and user communication. Critical for managing business continuity during transition.",
+    "domain": "cross-domain",
+    "category": "integration",
+    "effort_estimate": "12-16 weeks",
+    "cost_estimate_range": "$200K-$400K",
+    "timeline_phase": "0_90_days",
+    "skills_required": [
+      "business_continuity_planner",
+      "technical_architect",
+      "change_manager"
+    ],
+    "dependencies": [
+      "TSA terms",
+      "Network discovery",
+      "Identity migration plan"
+    ],
+    "priority_score": 1
+  }
+]

@@ -1,0 +1,76 @@
+{
+  "infrastructure": {
+    "timestamp": "2026-01-05T20:05:54.848539",
+    "domain": "infrastructure",
+    "summary": "TargetCo operates as a fully integrated business unit within ParentCo's infrastructure with complete dependency on parent systems including Azure AD, shared ERP/CRM/HCM platforms, and centralized IT operations. This creates a complex separation scenario requiring comprehensive infrastructure buildout and migration affecting 650 users, 620 devices, and 110-130 servers.",
+    "complexity_assessment": "very_high",
+    "estimated_cost_range": "$3M-$7M",
+    "estimated_timeline": "18-24 months",
+    "top_risks": [
+      "Complete dependency on ParentCo infrastructure requiring full separation",
+      "Azure AD tenant mismatch requiring complex identity migration",
+      "Shared enterprise platforms may require system replacement"
+    ],
+    "critical_gaps": [
+      "Specific hosting model and data center locations",
+      "Server OS versions and EOL status",
+      "TSA terms and duration for infrastructure services"
+    ]
+  },
+  "network": {
+    "timestamp": "2026-01-05T20:07:38.071268",
+    "domain": "network",
+    "summary": "TargetCo operates entirely on ParentCo's shared network infrastructure with no independent network assets, requiring complete network separation and buildout. Critical gaps exist in network topology, IP addressing, and connectivity details. Major risks include IP conflicts, circuit lead times, and DNS dependencies.",
+    "complexity_assessment": "very_high",
+    "estimated_cost_range": "$500K-$1.5M",
+    "estimated_timeline": "12-18 months",
+    "top_risks": [
+      "Complete network separation required with no independent infrastructure",
+      "IP address conflicts preventing Day 1 connectivity",
+      "WAN circuit lead times delaying integration timeline"
+    ],
+    "critical_gaps": [
+      "Network topology and architecture documentation",
+      "IP address schemes and VLAN assignments",
+      "WAN connectivity and circuit details"
+    ]
+  },
+  "cybersecurity": {
+    "timestamp": "2026-01-05T20:09:44.670747",
+    "domain": "cybersecurity",
+    "summary": "TargetCo operates with complete dependency on ParentCo's security infrastructure including Azure AD, CrowdStrike EDR, Microsoft Sentinel SIEM, and centralized SOC. While this provides enterprise-grade security currently, it creates significant carve-out complexity requiring comprehensive security infrastructure rebuild. The 650 users and 620 endpoints will need complete identity migration and new security tooling stack.",
+    "complexity_assessment": "very_high",
+    "estimated_cost_range": "$1M-$2M first year, $500K-$800K annually",
+    "estimated_timeline": "12-18 months for full security independence",
+    "top_risks": [
+      "Complete loss of security infrastructure on Day 1 without TSA",
+      "Identity migration complexity affecting 650 users",
+      "Unknown vulnerability posture due to lack of security assessment"
+    ],
+    "critical_gaps": [
+      "Recent security assessment results",
+      "Compliance certification scope and coverage",
+      "Incident response history and security incidents"
+    ]
+  },
+  "cross-domain": {
+    "timestamp": "2026-01-05T20:11:08.663704",
+    "domain": "cross-domain",
+    "summary": "Project Atlas represents a very high complexity integration requiring complete separation of TargetCo from ParentCo's IT infrastructure. With 650 users, 620 devices, and 110-130 servers operating on fully shared systems, the integration demands comprehensive buildout across infrastructure, network, and cybersecurity domains. Critical path dependencies create an 18-24 month timeline with significant cost implications.",
+    "complexity_assessment": "very_high",
+    "estimated_cost_range": "$6M-$12M over 18-24 months",
+    "estimated_timeline": "18-24 months",
+    "top_risks": [
+      "Complete business disruption during Day 1 cutover without proper transition planning",
+      "18+ month critical path timeline with cumulative $2M-$4M in additional TSA costs",
+      "Azure AD tenant separation complexity affecting all user access and application authentication"
+    ],
+    "critical_gaps": [
+      "Network topology and IP addressing scheme details",
+      "Security posture and compliance certification status",
+      "Shared ERP/CRM/HCM data separation complexity",
+      "TSA terms and ParentCo cooperation willingness",
+      "Hidden system dependencies and customizations"
+    ]
+  }
+}

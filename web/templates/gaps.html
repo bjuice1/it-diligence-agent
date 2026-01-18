@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+
+{% block title %}Information Gaps - IT Due Diligence{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Information Gaps</h1>
+    <p>{{ gaps|length }} gaps requiring additional information from VDR</p>
+</div>
+
+<!-- Filters Bar -->
+<form class="filters-bar" method="GET" action="{{ url_for('gaps') }}" role="search">
+    <div class="filter-group">
+        <label class="filter-label" for="filter-domain">Domain</label>
+        <select class="filter-select" id="filter-domain" name="domain" onchange="this.form.submit()">
+            <option value="">All Domains</option>
+            {% for domain in domains %}
+            <option value="{{ domain }}" {{ 'selected' if domain_filter == domain }}>{{ domain|replace('_', ' ')|title }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="filter-group">
+        <label class="filter-label" for="filter-importance">Importance</label>
+        <select class="filter-select" id="filter-importance" name="importance" onchange="this.form.submit()">
+            <option value="">All Importance</option>
+            <option value="critical" {{ 'selected' if importance_filter == 'critical' }}>Critical</option>
+            <option value="high" {{ 'selected' if importance_filter == 'high' }}>High</option>
+            <option value="medium" {{ 'selected' if importance_filter == 'medium' }}>Medium</option>
+            <option value="low" {{ 'selected' if importance_filter == 'low' }}>Low</option>
+        </select>
+    </div>
+
+    <div class="filter-group filter-search">
+        <label class="filter-label" for="filter-search">Search</label>
+        <input type="search" class="filter-input" id="filter-search" name="q"
+               placeholder="Search gaps..." value="{{ request.args.get('q', '') }}"
+               aria-label="Search gaps">
+    </div>
+
+    <div class="filters-actions">
+        {% if domain_filter or importance_filter or request.args.get('q') %}
+        <a href="{{ url_for('gaps') }}" class="btn btn-ghost btn-sm">Clear Filters</a>
+        {% endif %}
+    </div>
+</form>
+
+<!-- Gaps Table -->
+<div class="table-container">
+    <table class="table" aria-label="Information gaps table">
+        <thead>
+            <tr>
+                <th scope="col" style="width: 100px;">Importance</th>
+                <th scope="col" style="width: 120px;">ID</th>
+                <th scope="col">Description</th>
+                <th scope="col" style="width: 120px;">Domain</th>
+                <th scope="col" style="width: 120px;">Category</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if gaps %}
+            {% for gap in gaps %}
+            <tr data-id="{{ gap.gap_id }}"
+                data-description="{{ gap.description|e }}"
+                data-domain="{{ gap.domain }}"
+                data-category="{{ gap.category }}"
+                data-importance="{{ gap.importance }}">
+                <td>
+                    <span class="badge badge-{{ gap.importance }}">{{ gap.importance }}</span>
+                </td>
+                <td class="font-mono text-sm">{{ gap.gap_id }}</td>
+                <td>{{ gap.description }}</td>
+                <td class="text-muted text-sm">{{ gap.domain|replace('_', ' ')|title }}</td>
+                <td class="text-muted text-sm">{{ gap.category|replace('_', ' ')|title }}</td>
+            </tr>
+            {% endfor %}
+            {% else %}
+            <tr>
+                <td colspan="5">
+                    <div class="empty-state">
+                        <div class="empty-state-icon">&#x2705;</div>
+                        <div class="empty-state-title">No information gaps</div>
+                        <div class="empty-state-text">
+                            {% if domain_filter or importance_filter %}
+                            Try adjusting your filters to see more results.
+                            {% else %}
+                            All required information has been documented.
+                            {% endif %}
+                        </div>
+                    </div>
+                </td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Summary Stats -->
+{% if gaps %}
+<div class="flex gap-4 mt-4 text-sm text-muted">
+    <span><strong>{{ gaps|selectattr('importance', 'equalto', 'critical')|list|length }}</strong> Critical</span>
+    <span><strong>{{ gaps|selectattr('importance', 'equalto', 'high')|list|length }}</strong> High</span>
+    <span><strong>{{ gaps|selectattr('importance', 'equalto', 'medium')|list|length }}</strong> Medium</span>
+    <span><strong>{{ gaps|selectattr('importance', 'equalto', 'low')|list|length }}</strong> Low</span>
+</div>
+
+<!-- Export VDR Requests -->
+<div class="mt-4">
+    <a href="{{ url_for('export_vdr') }}" class="btn btn-primary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        Export VDR Request List
+    </a>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Handle row selection and open drawer
+    document.addEventListener('rowSelected', function(e) {
+        const row = e.detail.row;
+        const data = row.dataset;
+
+        openDrawer(
+            'Information Gap',
+            `
+            <div class="drawer-section">
+                <div class="drawer-section-title">ID</div>
+                <div class="drawer-section-content font-mono">${data.id}</div>
+            </div>
+            <div class="drawer-section">
+                <div class="drawer-section-title">Importance</div>
+                <div class="drawer-section-content">
+                    <span class="badge badge-${data.importance}">${data.importance.toUpperCase()}</span>
+                </div>
+            </div>
+            <div class="drawer-section">
+                <div class="drawer-section-title">Domain</div>
+                <div class="drawer-section-content">${data.domain.replace('_', ' ')}</div>
+            </div>
+            <div class="drawer-section">
+                <div class="drawer-section-title">Category</div>
+                <div class="drawer-section-content">${data.category.replace('_', ' ')}</div>
+            </div>
+            <div class="drawer-section">
+                <div class="drawer-section-title">Description</div>
+                <div class="drawer-section-content">${data.description}</div>
+            </div>
+            <div class="drawer-section">
+                <div class="drawer-section-title">VDR Request</div>
+                <div class="drawer-section-content">
+                    <p class="text-muted mb-2">Suggested request to send to target:</p>
+                    <div style="background: var(--bg-surface-sunken); padding: var(--space-3); border-radius: var(--radius-md);">
+                        Please provide documentation for: ${data.description}
+                    </div>
+                </div>
+            </div>
+            `,
+            `<button class="btn btn-secondary" onclick="closeDrawer()">Close</button>`
+        );
+    });
+</script>
+{% endblock %}

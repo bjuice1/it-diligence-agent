@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+
+{% block title %}Facts - IT Due Diligence{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Facts</h1>
+    <p>{{ facts|length }} facts discovered during analysis</p>
+</div>
+
+<!-- Filters Bar -->
+<form class="filters-bar" method="GET" action="{{ url_for('facts') }}" role="search">
+    <div class="filter-group">
+        <label class="filter-label" for="filter-domain">Domain</label>
+        <select class="filter-select" id="filter-domain" name="domain" onchange="this.form.submit()">
+            <option value="">All Domains</option>
+            {% for domain in domains %}
+            <option value="{{ domain }}" {{ 'selected' if domain_filter == domain }}>{{ domain|replace('_', ' ')|title }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="filter-group">
+        <label class="filter-label" for="filter-category">Category</label>
+        <select class="filter-select" id="filter-category" name="category" onchange="this.form.submit()">
+            <option value="">All Categories</option>
+            {% for category in categories %}
+            <option value="{{ category }}" {{ 'selected' if category_filter == category }}>{{ category|replace('_', ' ')|title }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="filter-group">
+        <label class="filter-label" for="filter-entity">Entity</label>
+        <select class="filter-select" id="filter-entity" name="entity" onchange="this.form.submit()">
+            <option value="">All Entities</option>
+            <option value="target" {{ 'selected' if entity_filter == 'target' }}>Target</option>
+            <option value="buyer" {{ 'selected' if entity_filter == 'buyer' }}>Buyer</option>
+        </select>
+    </div>
+
+    <div class="filter-group filter-search">
+        <label class="filter-label" for="filter-search">Search</label>
+        <input type="search" class="filter-input" id="filter-search" name="q"
+               placeholder="Search facts..." value="{{ request.args.get('q', '') }}"
+               aria-label="Search facts">
+    </div>
+
+    <div class="filters-actions">
+        {% if domain_filter or category_filter or entity_filter or request.args.get('q') %}
+        <a href="{{ url_for('facts') }}" class="btn btn-ghost btn-sm">Clear Filters</a>
+        {% endif %}
+    </div>
+</form>
+
+<!-- Facts Table -->
+<div class="table-container">
+    <table class="table" aria-label="Facts table">
+        <thead>
+            <tr>
+                <th scope="col" style="width: 120px;">ID</th>
+                <th scope="col" style="width: 80px;">Entity</th>
+                <th scope="col">Item</th>
+                <th scope="col" style="width: 120px;">Category</th>
+                <th scope="col" style="width: 100px;">Domain</th>
+                <th scope="col" style="width: 100px;">Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if facts %}
+            {% for fact in facts %}
+            <tr data-id="{{ fact.fact_id }}"
+                data-item="{{ fact.item|e }}"
+                data-category="{{ fact.category }}"
+                data-domain="{{ fact.domain }}"
+                data-entity="{{ fact.entity|default('target') }}"
+                data-status="{{ fact.status }}"
+                data-details="{{ fact.details|tojson|e if fact.details else '{}' }}"
+                data-evidence="{{ fact.evidence.exact_quote|e if fact.evidence and fact.evidence.exact_quote else '' }}"
+                data-source="{{ fact.evidence.source_section|e if fact.evidence and fact.evidence.source_section else '' }}">
+                <td class="font-mono text-sm">{{ fact.fact_id }}</td>
+                <td>
+                    {% if fact.entity == 'buyer' %}
+                    <span class="badge badge-info">Buyer</span>
+                    {% else %}
+                    <span class="badge badge-outline badge-info">Target</span>
+                    {% endif %}
+                </td>
+                <td>{{ fact.item }}</td>
+                <td class="text-muted text-sm">{{ fact.category|replace('_', ' ')|title }}</td>
+                <td class="text-muted text-sm">{{ fact.domain|replace('_', ' ')|title }}</td>
+                <td>
+                    {% if fact.status == 'gap' %}
+                    <span class="badge badge-critical">Gap</span>
+                    {% elif fact.status == 'partial' %}
+                    <span class="badge badge-medium">Partial</span>
+                    {% else %}
+                    <span class="badge badge-low">Documented</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            {% else %}
+            <tr>
+                <td colspan="6">
+                    <div class="empty-state">
+                        <div class="empty-state-icon">&#x1F4C4;</div>
+                        <div class="empty-state-title">No facts found</div>
+                        <div class="empty-state-text">
+                            {% if domain_filter or category_filter %}
+                            Try adjusting your filters to see more results.
+                            {% else %}
+                            No facts have been discovered yet.
+                            {% endif %}
+                        </div>
+                    </div>
+                </td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Handle row selection and open drawer
+    document.addEventListener('rowSelected', function(e) {
+        const row = e.detail.row;
+        const data = row.dataset;
+        let details = {};
+        try {
+            details = JSON.parse(data.details);
+        } catch(e) {}
+
+        // Format details as list
+        let detailsHtml = '';
+        for (const [key, value] of Object.entries(details)) {
+            detailsHtml += `<div class="mb-2"><strong>${key}:</strong> ${value}</div>`;
+        }
+        if (!detailsHtml) detailsHtml = '<span class="text-muted">No additional details</span>';
+
+        openDrawer(
+            data.item,
+            `
+            <div class="drawer-section">
+                <div class="drawer-section-title">ID</div>
+                <div class="drawer-section-content font-mono">${data.id}</div>
+            </div>
+            <div class="drawer-section">
+                <div class="drawer-section-title">Entity</div>
+                <div class="drawer-section-content">
+                    <span class="badge badge-${data.entity === 'buyer' ? 'info' : 'outline badge-info'}">${data.entity.toUpperCase()}</span>
+                </div>
+            </div>
+            <div class="drawer-section">
+                <div class="drawer-section-title">Domain / Category</div>
+                <div class="drawer-section-content">${data.domain.replace('_', ' ')} / ${data.category.replace('_', ' ')}</div>
+            </div>
+            <div class="drawer-section">
+                <div class="drawer-section-title">Status</div>
+                <div class="drawer-section-content">${data.status}</div>
+            </div>
+            <div class="drawer-section">
+                <div class="drawer-section-title">Details</div>
+                <div class="drawer-section-content">${detailsHtml}</div>
+            </div>
+            <div class="drawer-section">
+                <div class="drawer-section-title">Evidence</div>
+                <div class="drawer-section-content">
+                    <blockquote style="border-left: 3px solid var(--border-muted); padding-left: var(--space-3); margin: 0; font-style: italic;">
+                        ${data.evidence || 'No evidence quote available'}
+                    </blockquote>
+                    ${data.source ? `<div class="text-muted text-xs mt-2">Source: ${data.source}</div>` : ''}
+                </div>
+            </div>
+            `,
+            `<button class="btn btn-secondary" onclick="closeDrawer()">Close</button>`
+        );
+    });
+</script>
+{% endblock %}

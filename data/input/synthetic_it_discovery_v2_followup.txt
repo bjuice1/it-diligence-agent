@@ -1,0 +1,268 @@
+# SYNTHETIC IT DISCOVERY DOCUMENT - FOLLOW-UP RESPONSES
+# Project Atlas - Target Company: Acme Manufacturing Corp
+# Document Version: 2.0 (Management Responses to Due Diligence Questions)
+# Date: January 2026
+
+================================================================================
+FOLLOW-UP INFORMATION REQUEST RESPONSES
+================================================================================
+
+This document contains responses to due diligence questions submitted following
+the initial IT discovery review.
+
+================================================================================
+SECTION 1: AS/400 LEGACY SYSTEM - DETAILED INFORMATION
+================================================================================
+
+## Current State (Expanded Details)
+The AS/400 system (IBM iSeries Model 720) was originally deployed in 1989 and
+has been continuously modified. Key details:
+
+- Operating System: IBM i 7.3 (upgraded 2019)
+- Programming Languages: RPG III, COBOL, CL
+- Lines of Code: Approximately 2.4 million lines
+- Database: DB2 for i, 847 tables, 12TB of data
+- Integrations: 23 batch interfaces to SAP (nightly)
+- Custom Reports: 340+ active report programs
+
+## Developer Situation - CRITICAL UPDATE
+We need to disclose that our AS/400 developer, Harold Jenkins (age 67):
+- Has announced formal retirement effective March 31, 2027
+- Has declined extended consulting arrangement post-retirement
+- Has NOT documented approximately 60% of the custom modifications
+- Is the ONLY person who understands the warehouse allocation logic
+
+We attempted to hire a replacement but:
+- Received zero qualified candidates in 6-month search
+- RPG/AS400 skills are extremely scarce in the market
+- Local consulting firms quoted $350/hour minimum
+
+## Replacement Project Status
+A preliminary assessment by Deloitte in 2024 estimated:
+- Full replacement cost: $3.2M - $4.5M
+- Implementation timeline: 18-24 months
+- Risk: HIGH due to undocumented business logic
+
+This project is currently UNFUNDED as management did not approve the investment.
+
+================================================================================
+SECTION 2: SECURITY INCIDENT DETAILS - EXPANDED
+================================================================================
+
+## March 2024 Phishing Incident - Full Disclosure
+
+Upon further review of our incident records, we need to provide additional details:
+
+### Timeline
+- March 12, 2024 08:47 AM: Phishing email received by CFO
+- March 12, 2024 09:15 AM: CFO credentials compromised via fake M365 login
+- March 12, 2024 09:18 AM: Attacker accessed CFO email, forwarded 47 emails
+- March 12, 2024 01:22 PM: Security team alerted by automated rule
+- March 12, 2024 01:45 PM: Account disabled, investigation started
+
+### Impact Assessment (Previously Not Disclosed)
+- 47 emails forwarded to external address before containment
+- Emails included:
+  - Q1 2024 preliminary financial results
+  - Board meeting minutes from February 2024
+  - M&A discussion with different potential acquirer (Project Bluestone)
+  - Executive compensation details
+- External forensics firm (Mandiant) engaged
+- No evidence of further lateral movement
+- Attacker IP traced to Eastern European proxy
+
+### Regulatory Considerations
+- Legal counsel advised no notification requirement (no PII/PHI)
+- Board was notified in April 2024
+- Incident NOT disclosed to cyber insurance carrier
+- Policy may have been violated (notification within 72 hours required)
+
+## Additional Security Concerns Identified
+
+During document gathering, we identified the following previously undisclosed items:
+
+1. **Shadow IT Discovery**: Audit found 23 unsanctioned SaaS applications
+   - Including file sharing services with company data
+   - 3 applications contained customer information
+
+2. **Privileged Access Issues**:
+   - 14 IT staff have domain admin rights
+   - 3 former employees still had active accounts (now remediated)
+   - Service accounts with non-expiring passwords: 127 accounts
+
+3. **OT/ICS Vulnerabilities**:
+   - Manufacturing PLCs are running outdated firmware
+   - Engineering workstations have direct internet access
+   - No network segmentation between IT and OT networks
+   - Last OT security assessment: Never performed
+
+================================================================================
+SECTION 3: DISASTER RECOVERY - HONEST ASSESSMENT
+================================================================================
+
+## DR Capability Reality Check
+
+Following your questions, we conducted an internal review and must provide
+a more accurate picture:
+
+### SAP DR Capability
+- Database is replicated to AWS, but...
+- Application servers are NOT replicated
+- Last successful replication test: Q1 2023 (data only)
+- Estimated actual RTO: 5-7 business days (not 48-72 hours as stated)
+- DR runbook is 18 months out of date
+
+### Manufacturing Systems (FactoryTalk)
+- ZERO disaster recovery capability
+- Single points of failure in every plant
+- If Columbus data center fails, all 12 plants would halt production
+- Estimated production loss: $2.8M per day
+
+### Backup Gaps Discovered
+- 12 file servers are NOT included in Veeam backup scope
+- These servers contain ~8TB of engineering drawings and specifications
+- Last known backup of these servers: Tape backup from 2021
+
+### Insurance Implications
+- Business interruption coverage: $50M limit
+- Cyber insurance: $10M limit
+- Waiting period: 24 hours
+- Current state likely does NOT meet policy requirements for DR
+
+================================================================================
+SECTION 4: TECHNICAL DEBT & DEFERRED MAINTENANCE
+================================================================================
+
+## Infrastructure Age Analysis
+After detailed review, we provide the following asset age breakdown:
+
+### Servers Beyond Vendor Support
+- 34 physical servers past end-of-life (Dell 12th gen or older)
+- 12 servers running Windows Server 2012 R2 (extended support ended)
+- 8 servers running Windows Server 2008 R2 (completely unsupported)
+- 3 SQL Server 2012 instances (extended support ended April 2022)
+
+### Network Equipment
+- 40% of access switches are Cisco Catalyst 2960 series (end-of-sale 2020)
+- Core UPS system batteries: 6 years old (replacement recommended at 4 years)
+- Backup generators: Last load test failed (December 2024)
+  - Repair estimated at $180K, currently unfunded
+
+### Application Technical Debt
+- Hyperion (Oracle EPM): Running version from 2018, 3 versions behind
+- Custom .NET applications: 8 applications still on .NET Framework 4.5
+- API integrations: 45% use deprecated authentication methods
+
+## Deferred Maintenance Backlog
+We estimate the following to address critical deferred maintenance:
+
+| Category | Estimated Cost | Priority |
+|----------|---------------|----------|
+| Server refresh | $1.2M | Critical |
+| Network refresh | $800K | High |
+| Generator repair | $180K | Critical |
+| UPS batteries | $95K | High |
+| Application updates | $650K | Medium |
+| **TOTAL** | **$2.925M** | |
+
+================================================================================
+SECTION 5: VENDOR & CONTRACT CLARIFICATIONS
+================================================================================
+
+## SAP Licensing - Important Disclosure
+
+Following legal review of our SAP contract, we must disclose:
+
+1. **Indirect Access Exposure**
+   - 3 third-party systems access SAP data via custom APIs
+   - This was implemented without proper licensing review
+   - SAP audit is scheduled for Q2 2025
+   - Potential exposure: $500K - $2M in additional licensing
+
+2. **S/4HANA Conversion License**
+   - Our conversion license expires December 2026
+   - After expiration, we lose rights to SAP ECC environment
+   - Risk if issues discovered require rollback
+
+## Microsoft Enterprise Agreement
+
+- Current EA expires June 2025
+- Under new Microsoft terms, pricing increase expected: 15-25%
+- E5 upgrade (recommended for security) would add ~$450K annually
+- No "most favored nation" clause in current agreement
+
+## Secureworks Managed Security
+
+- Contract includes "change of control" termination right for vendor
+- Secureworks has indicated they may invoke this clause
+- 60-day transition period if terminated
+- Alternative SOC providers quoted: $520K-$680K annually
+
+================================================================================
+SECTION 6: ORGANIZATIONAL UPDATES
+================================================================================
+
+## Recent Departures (Not Previously Disclosed)
+
+Since initial discovery document:
+
+1. **Network Architect (Senior)** - Departed October 2024
+   - Role still open, search in progress
+   - Interim coverage via Cisco TAC escalations
+   - Tribal knowledge loss regarding WAN architecture
+
+2. **Senior SAP Basis Administrator** - Resigned January 2, 2026
+   - Joined competitor
+   - 2-week notice, departed January 17
+   - Single point of failure for S/4HANA administration
+   - Currently using SAP Premium Support for coverage
+
+3. **Security Analyst** - On extended medical leave
+   - Unknown return date
+   - Team operating with 4 of 5 positions filled
+
+## IT Staff Sentiment
+
+Anonymous survey conducted Q4 2024:
+- 45% of IT staff "actively looking" for new roles
+- Primary concerns: Understaffing, technical debt, lack of investment
+- Flight risk assessment: HIGH for infrastructure team
+
+================================================================================
+SECTION 7: ADDITIONAL FINDINGS FROM DOCUMENT REVIEW
+================================================================================
+
+## Discovered During Document Gathering
+
+1. **Environmental/Compliance**
+   - Data center has pending OSHA citation (electrical safety)
+   - Fire suppression system inspection: Overdue by 14 months
+   - Generator diesel tank: Environmental permit expired
+
+2. **Legal/Litigation**
+   - Active lawsuit from former employee (wrongful termination)
+   - Employee was IT Security Analyst terminated in 2023
+   - Claims include alleged retaliation for reporting security concerns
+
+3. **Audit Findings**
+   - Internal audit report from August 2024 rated IT controls as "Needs Improvement"
+   - 23 findings, 8 classified as "High" priority
+   - 3 high findings still open
+
+================================================================================
+END OF FOLLOW-UP DOCUMENT
+================================================================================
+
+DOCUMENT METADATA:
+- Prepared by: Acme IT Organization
+- Date: January 22, 2026
+- Classification: Confidential - M&A Process
+- Prepared in response to: Due Diligence Request List dated January 18, 2026
+
+ATTESTATION:
+The information contained herein is accurate and complete to the best of our
+knowledge. We acknowledge that material omissions or inaccuracies may have
+legal consequences.
+
+Signed: Robert Chen, CIO
+Date: January 22, 2026

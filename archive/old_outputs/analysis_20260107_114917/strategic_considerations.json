@@ -1,0 +1,158 @@
+[
+  {
+    "id": "SC-001",
+    "timestamp": "2026-01-07T11:50:34.954424",
+    "theme": "Cloud Platform Mismatch",
+    "observation": "Target company uses AWS as primary cloud provider with $3.38M annual spend, while buyer uses Azure as primary cloud platform",
+    "implication": "Significant integration complexity requiring either dual cloud management or costly migration of cloud-hosted applications and infrastructure",
+    "deal_relevance": [
+      "integration_risk",
+      "cost_exposure",
+      "timeline_risk"
+    ],
+    "buyer_alignment": "misaligned",
+    "confidence": "high",
+    "domain": "infrastructure"
+  },
+  {
+    "id": "SC-002",
+    "timestamp": "2026-01-07T11:50:46.398801",
+    "theme": "Data Center Consolidation Opportunity",
+    "observation": "Target has 2 colocation facilities in Chicago ($748K annual cost) while buyer has 4 data centers including Chicago primary facility",
+    "implication": "Potential for data center consolidation and cost synergies, but requires careful migration planning to avoid geographic concentration risks",
+    "deal_relevance": [
+      "synergy_barrier",
+      "execution_risk"
+    ],
+    "buyer_alignment": "partial",
+    "confidence": "medium",
+    "domain": "infrastructure"
+  },
+  {
+    "id": "SC-003",
+    "timestamp": "2026-01-07T11:50:52.752727",
+    "theme": "Infrastructure Team Scale Mismatch",
+    "observation": "Target has 21 infrastructure staff supporting $4.1M infrastructure spend, while buyer has 101 infrastructure staff supporting larger environment",
+    "implication": "Target team may lack scale and specialization needed for complex integration, particularly in cloud engineering (only 1 cloud engineer)",
+    "deal_relevance": [
+      "execution_risk",
+      "integration_risk"
+    ],
+    "buyer_alignment": "partial",
+    "confidence": "high",
+    "domain": "infrastructure"
+  },
+  {
+    "id": "SC-004",
+    "timestamp": "2026-01-07T11:50:58.577620",
+    "theme": "DR Architecture Incompatibility",
+    "observation": "Target has hot DR with both sites in Chicago, while buyer has warm DR across multiple geographic regions",
+    "implication": "Target's DR approach violates geographic separation principles and may not meet buyer's resilience standards, requiring DR architecture redesign",
+    "deal_relevance": [
+      "integration_risk",
+      "value_leakage"
+    ],
+    "buyer_alignment": "misaligned",
+    "confidence": "high",
+    "domain": "infrastructure"
+  },
+  {
+    "id": "SC-005",
+    "timestamp": "2026-01-07T11:53:22.016188",
+    "theme": "Cloud Platform Mismatch",
+    "observation": "National Mutual uses AWS (us-east-1, $3.4M annual) while Atlantic International uses AWS (us-east-2, $3.9M annual) - same provider but different regions",
+    "implication": "Regional difference creates network latency and data transfer costs between environments, but same cloud provider simplifies integration compared to multi-cloud scenario",
+    "deal_relevance": [
+      "integration_risk",
+      "execution_risk"
+    ],
+    "buyer_alignment": "partial",
+    "confidence": "high",
+    "domain": "network"
+  },
+  {
+    "id": "SC-006",
+    "timestamp": "2026-01-07T11:53:27.798814",
+    "theme": "Security Platform Alignment",
+    "observation": "Both companies use Check Point firewalls and Mimecast email security, but differ on SIEM (National Mutual: IBM QRadar vs Atlantic International: Microsoft Sentinel) and MFA (RSA SecurID vs Microsoft Authenticator)",
+    "implication": "Partial security stack alignment reduces integration complexity for firewalls and email security, but SIEM and MFA consolidation will require migration work",
+    "deal_relevance": [
+      "integration_risk",
+      "synergy_barrier"
+    ],
+    "buyer_alignment": "partial",
+    "confidence": "high",
+    "domain": "network"
+  },
+  {
+    "id": "SC-007",
+    "timestamp": "2026-01-07T11:53:33.020783",
+    "theme": "Geographic Data Center Concentration",
+    "observation": "National Mutual has both data centers in Chicago while Atlantic International has geographically diverse facilities (Chicago, Phoenix, Atlanta, New York)",
+    "implication": "Target's geographic concentration creates integration opportunity to leverage buyer's distributed infrastructure for improved resilience, but may require significant network architecture changes",
+    "deal_relevance": [
+      "integration_risk",
+      "value_leakage"
+    ],
+    "buyer_alignment": "misaligned",
+    "confidence": "high",
+    "domain": "network"
+  },
+  {
+    "id": "SC-008",
+    "timestamp": "2026-01-07T11:56:32.404999",
+    "theme": "Identity Platform Alignment",
+    "observation": "Target uses Microsoft Entra ID (Azure AD) as primary identity provider, matching buyer's Azure AD environment",
+    "implication": "Strong identity platform alignment reduces integration complexity and enables faster user onboarding, but RSA SecurID MFA replacement still required",
+    "deal_relevance": [
+      "execution_risk",
+      "synergy_barrier"
+    ],
+    "buyer_alignment": "aligned",
+    "confidence": "high",
+    "domain": "cybersecurity"
+  },
+  {
+    "id": "SC-009",
+    "timestamp": "2026-01-07T11:56:38.201257",
+    "theme": "Cloud Security Architecture Mismatch",
+    "observation": "Target operates primarily on AWS (41 accounts, $3.4M annual spend) while buyer is Azure-centric with Microsoft security stack",
+    "implication": "Significant cloud platform migration or multi-cloud security management required, impacting synergy realization timeline and costs",
+    "deal_relevance": [
+      "integration_risk",
+      "synergy_barrier",
+      "execution_risk"
+    ],
+    "buyer_alignment": "misaligned",
+    "confidence": "high",
+    "domain": "cybersecurity"
+  },
+  {
+    "id": "SC-010",
+    "timestamp": "2026-01-07T11:56:45.022349",
+    "theme": "Security Operations Consolidation Opportunity",
+    "observation": "Target has mature security team (14 FTEs, $2.3M cost) with Splunk SIEM, while buyer uses Microsoft Sentinel",
+    "implication": "Opportunity for security operations consolidation and cost synergies, but requires SIEM migration and potential team restructuring",
+    "deal_relevance": [
+      "synergy_barrier",
+      "execution_risk",
+      "value_leakage"
+    ],
+    "buyer_alignment": "partial",
+    "confidence": "medium",
+    "domain": "cybersecurity"
+  },
+  {
+    "id": "SC-011",
+    "timestamp": "2026-01-07T11:56:49.936785",
+    "theme": "Endpoint Security Platform Alignment",
+    "observation": "Both target (CrowdStrike Falcon) and buyer (CrowdStrike Falcon) use the same EDR platform",
+    "implication": "Excellent alignment enables rapid endpoint security integration and immediate visibility across combined environment",
+    "deal_relevance": [
+      "execution_risk"
+    ],
+    "buyer_alignment": "aligned",
+    "confidence": "high",
+    "domain": "cybersecurity"
+  }
+]

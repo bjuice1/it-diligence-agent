@@ -1,0 +1,10 @@
+{
+  "valid": false,
+  "issues": [
+    "Missing summary for infrastructure",
+    "Missing summary for network",
+    "Missing summary for cybersecurity"
+  ],
+  "warnings": [],
+  "quality_score": 70.0
+}

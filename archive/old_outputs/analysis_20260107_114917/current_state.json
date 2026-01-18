@@ -1,0 +1,196 @@
+[
+  {
+    "id": "CS-001",
+    "timestamp": "2026-01-07T11:49:28.420161",
+    "domain": "infrastructure",
+    "category": "hosting_model",
+    "summary": "National Mutual operates a hybrid hosting model with 2 colocation data centers in Chicago (Tier 3, 28 total racks) and AWS cloud presence. Primary DC has 22 racks ($635,935 annual), secondary DC has 6 racks ($112,822 annual). AWS spend is $3.38M annually across 41 accounts in us-east-1 region.",
+    "maturity": "medium",
+    "key_characteristics": [
+      "Dual colocation facilities",
+      "Single AWS region deployment",
+      "41 AWS accounts suggesting decentralized governance",
+      "Total infrastructure spend $4.1M annually"
+    ],
+    "standalone_viability": "viable",
+    "evidence": "Document shows \"Data Centers: 2\", \"Primary DC - Chicago: Tier 3, 22 racks, $635,935\", \"Secondary DC - Chicago: Tier 3, 6 racks, $112,822\", \"AWS us-east-1, 41 accounts, $281,399 monthly\""
+  },
+  {
+    "id": "CS-002",
+    "timestamp": "2026-01-07T11:49:35.871902",
+    "domain": "infrastructure",
+    "category": "cloud_presence",
+    "summary": "Single cloud provider (AWS) deployment concentrated in us-east-1 region with $3.38M annual spend. Application hosting shows mixed model: 14 applications on-premises, 11 SaaS, 8 cloud-hosted, 3 hybrid. No evidence of Infrastructure as Code, cloud governance, or FinOps practices.",
+    "maturity": "low",
+    "key_characteristics": [
+      "Single region deployment (us-east-1)",
+      "41 AWS accounts indicating potential sprawl",
+      "No reserved instance strategy mentioned",
+      "Mixed hosting without clear cloud-first strategy"
+    ],
+    "standalone_viability": "constrained",
+    "evidence": "Application inventory shows hosting distribution, AWS spend data, and lack of cloud governance indicators in the infrastructure summary"
+  },
+  {
+    "id": "CS-003",
+    "timestamp": "2026-01-07T11:49:43.164256",
+    "domain": "infrastructure",
+    "category": "disaster_recovery",
+    "summary": "Hot DR strategy with Tier 2 classification, 1-hour RPO and 1-hour RTO targets. Both data centers located in Chicago creating geographic concentration risk. Uses Zerto (v9.5) and Veeam (v12.0) for backup and DR capabilities.",
+    "maturity": "medium",
+    "key_characteristics": [
+      "Hot DR with aggressive 1-hour targets",
+      "Geographic concentration in single metro",
+      "Dual backup solutions (Zerto + Veeam)",
+      "Tier 2 DR classification"
+    ],
+    "standalone_viability": "constrained",
+    "evidence": "Document states \"DR Strategy: Hot, DR Tier: Tier 2, RPO: 1 hours, RTO: 1 hours\" and both DCs listed as Chicago, IL"
+  },
+  {
+    "id": "CS-004",
+    "timestamp": "2026-01-07T11:49:50.398265",
+    "domain": "infrastructure",
+    "category": "it_organization",
+    "summary": "Centralized IT organization with 121 total headcount, $17.3M personnel cost, and minimal outsourcing (4% overall). Infrastructure team has 21 people including 1 cloud engineer, 3 senior systems administrators, and 15 systems administrators. CIO reports to COO with C-level positions for CIO, CISO, and CTO.",
+    "maturity": "medium",
+    "key_characteristics": [
+      "Centralized model with 7 teams",
+      "Low outsourcing dependency",
+      "Single cloud engineer for $3.38M AWS spend",
+      "Strong leadership structure with dedicated C-level roles"
+    ],
+    "standalone_viability": "viable",
+    "evidence": "Document shows \"Total IT Headcount: 121\", \"Outsourced %: 4%\", \"Infrastructure team: 21 headcount\", \"Cloud Engineer: 1\""
+  },
+  {
+    "id": "CS-005",
+    "timestamp": "2026-01-07T11:52:18.741206",
+    "domain": "network",
+    "category": "infrastructure_overview",
+    "summary": "National Mutual operates from 12 office locations with 2 data centers (both in Chicago - primary colocation Tier 3 with 22 racks, secondary colocation Tier 3 with 6 racks). Uses AWS as single cloud provider (us-east-1 region, 41 accounts, $3.4M annual spend). Has 1,812 employees across distributed locations requiring network connectivity.",
+    "maturity": "medium",
+    "key_characteristics": [
+      "12 distributed office locations",
+      "Dual Chicago data centers",
+      "Single cloud provider (AWS)",
+      "41 AWS accounts",
+      "Tier 3 colocation facilities"
+    ],
+    "standalone_viability": "viable",
+    "evidence": "Document shows 12 office locations, 2 data centers both in Chicago (Primary DC - 22 racks $635,935 annual, Secondary DC - 6 racks $112,822 annual), AWS us-east-1 region with 41 accounts and $281,399 monthly spend"
+  },
+  {
+    "id": "CS-006",
+    "timestamp": "2026-01-07T11:52:25.981236",
+    "domain": "network",
+    "category": "security_infrastructure",
+    "summary": "Network security implemented with Check Point firewalls, IBM QRadar SIEM, and RSA SecurID for MFA. Email security provided by Mimecast. Endpoint protection via CrowdStrike. Security team of 14 people managing these tools.",
+    "maturity": "medium",
+    "key_characteristics": [
+      "Check Point firewall platform",
+      "IBM QRadar SIEM",
+      "RSA SecurID MFA",
+      "Mimecast email security",
+      "14-person security team"
+    ],
+    "standalone_viability": "viable",
+    "evidence": "Security tools section lists Check Point (Firewall), IBM QRadar (SIEM), RSA SecurID (MFA), Mimecast (Email Security). Security & Compliance team shows 14 headcount with $2,315,625 personnel cost"
+  },
+  {
+    "id": "CS-007",
+    "timestamp": "2026-01-07T11:55:02.312537",
+    "domain": "cybersecurity",
+    "category": "identity_access_management",
+    "summary": "National Mutual has a hybrid IAM environment with Microsoft Entra ID (Azure AD) as primary identity provider serving 1,077 users, complemented by CyberArk Privileged Access Management (version 13.2) on-premises for 1,166 users. RSA SecurID provides MFA capabilities. Total annual IAM cost is $205,603.",
+    "maturity": "medium",
+    "key_characteristics": [
+      "Cloud-based primary identity provider",
+      "PAM solution deployed",
+      "MFA available via RSA SecurID",
+      "Hybrid architecture with on-prem PAM"
+    ],
+    "standalone_viability": "viable",
+    "evidence": "Application inventory shows Microsoft Entra ID (Azure AD) with 1,077 users at $108,379 annual cost, and CyberArk Privileged Access version 13.2 on-premises with 1,166 users at $97,225 annual cost. Security tools section lists RSA SecurID for MFA."
+  },
+  {
+    "id": "CS-008",
+    "timestamp": "2026-01-07T11:55:09.890281",
+    "domain": "cybersecurity",
+    "category": "endpoint_security",
+    "summary": "National Mutual deploys CrowdStrike Falcon EDR across 700 endpoints with evergreen licensing model, costing $165,287 annually. This represents modern endpoint detection and response capability with cloud-based management.",
+    "maturity": "high",
+    "key_characteristics": [
+      "Modern EDR platform",
+      "Cloud-managed",
+      "Evergreen licensing",
+      "700 endpoints covered"
+    ],
+    "standalone_viability": "viable",
+    "evidence": "Application inventory shows CrowdStrike Falcon as Security category application with evergreen version, SaaS hosting, 700 users, $165,287 annual cost, and HIGH criticality rating."
+  },
+  {
+    "id": "CS-009",
+    "timestamp": "2026-01-07T11:55:18.085315",
+    "domain": "cybersecurity",
+    "category": "security_operations",
+    "summary": "Security operations center around Splunk Enterprise Security version 9.0 on-premises serving 1,126 users at $86,700 annually. The environment includes 14 security and compliance staff with dedicated Security Manager and 2 Senior Security Engineers, plus 9 Security Engineers and 2 Security Analysts.",
+    "maturity": "medium",
+    "key_characteristics": [
+      "On-premises SIEM platform",
+      "Dedicated security team of 14 FTEs",
+      "Splunk Enterprise Security v9.0",
+      "Security team cost $2.3M annually"
+    ],
+    "standalone_viability": "viable",
+    "evidence": "Application inventory shows Splunk Enterprise Security version 9.0, on-premises, 1,126 users, $86,700 annual cost, HIGH criticality. Team summary shows Security & Compliance team with 14 headcount and $2,315,625 personnel cost."
+  },
+  {
+    "id": "CS-010",
+    "timestamp": "2026-01-07T11:55:24.739335",
+    "domain": "cybersecurity",
+    "category": "email_security",
+    "summary": "Email security implemented through dual-vendor approach: Proofpoint Email Protection (855 users, $55,893 annually) and Mimecast Email Security (1,096 users, $37,392 annually). Both are SaaS-based with evergreen licensing, totaling $93,285 in annual email security costs.",
+    "maturity": "medium",
+    "key_characteristics": [
+      "Dual email security vendors",
+      "SaaS-based solutions",
+      "Overlapping user coverage",
+      "Combined 1,951 protected users"
+    ],
+    "standalone_viability": "viable",
+    "evidence": "Application inventory shows Proofpoint Email Protection (evergreen, SaaS, 855 users, $55,893, MEDIUM criticality) and Mimecast Email Security (evergreen, SaaS, 1,096 users, $37,392, LOW criticality) under Email & Communication category."
+  },
+  {
+    "id": "CS-011",
+    "timestamp": "2026-01-07T11:55:32.042631",
+    "domain": "cybersecurity",
+    "category": "network_security",
+    "summary": "Network security anchored by Check Point firewall solution. Infrastructure spans 2 colocation data centers in Chicago (Tier 3) with 28 total racks, plus AWS cloud presence in us-east-1 region with 41 accounts and $3.4M annual spend.",
+    "maturity": "medium",
+    "key_characteristics": [
+      "Check Point firewall platform",
+      "Dual data center setup",
+      "Significant AWS cloud footprint",
+      "41 AWS accounts"
+    ],
+    "standalone_viability": "viable",
+    "evidence": "Security tools section lists Check Point for Firewall. Infrastructure summary shows 2 data centers in Chicago (Primary: 22 racks, $635,935; Secondary: 6 racks, $112,822) and AWS cloud with 41 accounts, $281,399 monthly spend."
+  },
+  {
+    "id": "CS-012",
+    "timestamp": "2026-01-07T11:55:39.896127",
+    "domain": "cybersecurity",
+    "category": "backup_disaster_recovery",
+    "summary": "Backup and DR strategy uses Veeam Backup & Replication v12.0 (1,343 users, $37,963) and Zerto v9.5 (747 users, $25,000), both on-premises. Hot DR strategy with Tier 2 classification, 1-hour RPO and RTO targets. Total annual B&DR cost is $62,963.",
+    "maturity": "medium",
+    "key_characteristics": [
+      "Dual backup solutions",
+      "Hot DR strategy",
+      "1-hour RPO/RTO",
+      "On-premises backup infrastructure"
+    ],
+    "standalone_viability": "viable",
+    "evidence": "Application inventory shows Veeam Backup & Replication 12.0 (on-prem, 1,343 users, $37,963, MEDIUM criticality) and Zerto 9.5 (on-prem, 747 users, $25,000, MEDIUM criticality). DR Strategy shows Hot/Tier 2/1 hour RPO/1 hour RTO."
+  }
+]

@@ -1,0 +1,152 @@
+[
+  {
+    "id": "REC-001",
+    "timestamp": "2026-01-07T09:15:40.562612",
+    "recommendation": "Negotiate extended integration timeline due to cloud platform mismatch and critical system complexity",
+    "rationale": "AWS to Azure migration plus complex insurance applications (Guidewire, Duck Creek) will require 12-18 months minimum. Rushing could cause business disruption",
+    "domain": "deal",
+    "priority": "critical",
+    "timing": "pre_close",
+    "investment_required": "Additional project management and specialized migration resources"
+  },
+  {
+    "id": "REC-002",
+    "timestamp": "2026-01-07T09:15:47.093442",
+    "recommendation": "Prioritize infrastructure assessment and engage insurance platform specialists immediately post-close",
+    "rationale": "Critical gaps in server inventory and application dependencies must be filled before migration planning. Insurance platforms require specialized expertise not typically available",
+    "domain": "infrastructure",
+    "priority": "critical",
+    "timing": "day_1",
+    "investment_required": "$300K-$500K for assessment and specialist resources"
+  },
+  {
+    "id": "REC-003",
+    "timestamp": "2026-01-07T09:15:53.725001",
+    "recommendation": "Leverage buyer's geographic DC distribution to improve National Mutual's DR posture during integration",
+    "rationale": "Current Chicago-only DC setup creates geographic risk. Buyer has distributed footprint (Chicago, Phoenix, Atlanta, NYC) that can provide better resilience",
+    "domain": "infrastructure",
+    "priority": "high",
+    "timing": "first_90_days",
+    "investment_required": "Network connectivity and DR solution reconfiguration costs"
+  },
+  {
+    "id": "REC-004",
+    "timestamp": "2026-01-07T09:17:35.969885",
+    "recommendation": "Immediately initiate network discovery and IP address scheme documentation",
+    "rationale": "IP address conflicts are the #1 blocker for Day 1 connectivity. Without knowing current addressing schemes, integration planning cannot proceed effectively",
+    "domain": "network",
+    "priority": "critical",
+    "timing": "pre_close",
+    "investment_required": "$75K-$125K for comprehensive network assessment"
+  },
+  {
+    "id": "REC-005",
+    "timestamp": "2026-01-07T09:17:40.680120",
+    "recommendation": "Plan for IP renumbering of the smaller network (National Mutual)",
+    "rationale": "Atlantic International is 5x larger (8,954 vs 1,812 employees) making it more cost-effective to renumber the smaller network to avoid conflicts",
+    "domain": "network",
+    "priority": "high",
+    "timing": "first_90_days",
+    "investment_required": "$500K-$1M for comprehensive IP renumbering across 12 locations"
+  },
+  {
+    "id": "REC-006",
+    "timestamp": "2026-01-07T09:17:45.198798",
+    "recommendation": "Establish temporary VPN connectivity for Day 1 operations",
+    "rationale": "Provides immediate secure connectivity while permanent WAN integration is planned and implemented, ensuring business continuity",
+    "domain": "network",
+    "priority": "high",
+    "timing": "day_1",
+    "investment_required": "$40K-$80K for VPN setup and configuration"
+  },
+  {
+    "id": "REC-007",
+    "timestamp": "2026-01-07T09:17:50.201286",
+    "recommendation": "Evaluate WAN carrier contracts for early termination or extension opportunities",
+    "rationale": "WAN integration may require new circuits or contract modifications. Early evaluation prevents timeline delays and identifies cost optimization opportunities",
+    "domain": "network",
+    "priority": "medium",
+    "timing": "pre_close",
+    "investment_required": "Legal review costs $10K-$25K, potential contract penalties or savings TBD"
+  },
+  {
+    "id": "REC-008",
+    "timestamp": "2026-01-07T09:19:48.372126",
+    "recommendation": "Conduct immediate cybersecurity due diligence assessment before deal close",
+    "rationale": "Multiple security gaps identified including unknown vulnerability posture, compliance status, and incident response maturity. Insurance companies are high-value targets requiring comprehensive security assessment to avoid inheriting significant cyber liabilities",
+    "domain": "cybersecurity",
+    "priority": "critical",
+    "timing": "pre_close",
+    "investment_required": "$75K-$125K for comprehensive assessment"
+  },
+  {
+    "id": "REC-009",
+    "timestamp": "2026-01-07T09:19:54.947756",
+    "recommendation": "Establish security integration timeline with parallel operations approach",
+    "rationale": "Multiple security platform mismatches (SIEM, endpoint protection, PAM) require careful migration planning to avoid security gaps. Parallel operations ensure continuous protection during integration",
+    "domain": "cybersecurity",
+    "priority": "high",
+    "timing": "day_1",
+    "investment_required": "$100K-$200K additional operational costs for parallel systems"
+  },
+  {
+    "id": "REC-010",
+    "timestamp": "2026-01-07T09:19:59.845705",
+    "recommendation": "Negotiate cyber insurance coverage and warranty provisions in deal structure",
+    "rationale": "Unknown security posture and potential vulnerabilities create significant cyber liability risk. Insurance coverage and seller warranties provide financial protection against inherited security issues",
+    "domain": "deal",
+    "priority": "high",
+    "timing": "pre_close",
+    "investment_required": "Cyber insurance premium increase and warranty escrow provisions"
+  },
+  {
+    "id": "REC-011",
+    "timestamp": "2026-01-07T09:21:05.692575",
+    "recommendation": "Negotiate extended TSA for shared services minimum 18 months with option for 24 months",
+    "rationale": "Complex insurance applications (Guidewire, Duck Creek), AWS to Azure migration, and network integration dependencies create high timeline risk. Standard 12-month TSA insufficient given cross-domain complexity and critical path dependencies.",
+    "domain": "deal",
+    "priority": "critical",
+    "timing": "pre_close",
+    "investment_required": "$2M-$3M additional TSA costs but reduces integration risk"
+  },
+  {
+    "id": "REC-012",
+    "timestamp": "2026-01-07T09:21:13.273883",
+    "recommendation": "Establish dedicated insurance systems Center of Excellence",
+    "rationale": "National Mutual has critical Guidewire PolicyCenter, Duck Creek Claims, and Majesco Policy systems requiring specialized expertise. These represent $1.1M+ in annual costs and serve 3,000+ users. Integration failure would be business-critical.",
+    "domain": "infrastructure",
+    "priority": "high",
+    "timing": "pre_close",
+    "investment_required": "$500K-$800K for specialized consulting and training"
+  },
+  {
+    "id": "REC-013",
+    "timestamp": "2026-01-07T09:21:20.905579",
+    "recommendation": "Implement parallel security monitoring during SIEM migration",
+    "rationale": "QRadar to Sentinel migration during infrastructure changes creates unacceptable security blind spots. Insurance company regulatory requirements demand continuous monitoring capability.",
+    "domain": "cybersecurity",
+    "priority": "high",
+    "timing": "first_90_days",
+    "investment_required": "$200K-$400K for parallel operations"
+  },
+  {
+    "id": "REC-014",
+    "timestamp": "2026-01-07T09:21:25.347411",
+    "recommendation": "Accelerate network discovery and IP conflict resolution to critical path",
+    "rationale": "Network architecture gaps and potential IP conflicts block all infrastructure migration work. Must be resolved in first 6 weeks to avoid cascading delays across 18-month integration timeline.",
+    "domain": "network",
+    "priority": "critical",
+    "timing": "day_1",
+    "investment_required": "$150K-$250K for specialized network consultants"
+  },
+  {
+    "id": "REC-015",
+    "timestamp": "2026-01-07T09:21:30.574308",
+    "recommendation": "Consider carve-out structure for complex insurance applications",
+    "rationale": "Guidewire and Duck Creek systems represent significant migration risk and cost ($2M+ estimated). Carve-out could reduce integration complexity while preserving operational continuity for critical insurance operations.",
+    "domain": "deal",
+    "priority": "medium",
+    "timing": "pre_close",
+    "investment_required": "Extended TSA costs but reduced integration risk and faster synergy realization in other areas"
+  }
+]
