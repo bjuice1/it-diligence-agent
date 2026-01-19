@@ -559,22 +559,32 @@ def run_analysis(
         if len(document_text) < 500:
             print(f"[DEBUG] WARNING: Very short document text!")
             print(f"[DEBUG] Content preview: {document_text[:500]}")
+            results["errors"].append(f"Document text very short: {len(document_text)} chars")
 
         # Phase 2: Discovery
         if progress_callback:
             progress_callback(0.2, "Running discovery (extracting facts)...")
 
-        fact_store = run_parallel_discovery(
-            document_text=document_text,
-            domains=domains,
-            max_workers=3,
-            target_name=target_name
-        )
-        results["facts"] = {
-            "count": len(fact_store.facts),
-            "gaps": len(fact_store.gaps),
-            "by_domain": {d: len([f for f in fact_store.facts if f.domain == d]) for d in domains}
-        }
+        try:
+            fact_store = run_parallel_discovery(
+                document_text=document_text,
+                domains=domains,
+                max_workers=3,
+                target_name=target_name
+            )
+            results["facts"] = {
+                "count": len(fact_store.facts),
+                "gaps": len(fact_store.gaps),
+                "by_domain": {d: len([f for f in fact_store.facts if f.domain == d]) for d in domains}
+            }
+            print(f"[DEBUG] Discovery complete: {len(fact_store.facts)} facts, {len(fact_store.gaps)} gaps")
+        except Exception as discovery_error:
+            print(f"[DEBUG] Discovery FAILED: {type(discovery_error).__name__}: {discovery_error}")
+            results["errors"].append(f"Discovery failed: {discovery_error}")
+            # Create empty fact store to continue
+            from tools_v2.fact_store import FactStore
+            fact_store = FactStore()
+            results["facts"] = {"count": 0, "gaps": 0, "by_domain": {}}
 
         # Save facts
         facts_file = FACTS_DIR / f"facts_{timestamp}.json"
@@ -1720,14 +1730,35 @@ def main():
 
                     # Run analysis (inside temp dir context)
                     with st.spinner("Running analysis..."):
-                        results = run_analysis(
-                            input_dir=temp_path,
-                            target_name=target_name,
-                            deal_type=deal_type,
-                            buyer_name=buyer_name if buyer_name else None,
-                            domains=selected_domains,
-                            progress_callback=update_progress
-                        )
+                        try:
+                            # Debug: Show temp directory contents
+                            st.write(f"**DEBUG:** temp_path = {temp_path}")
+                            target_subdir = temp_path / "target"
+                            if target_subdir.exists():
+                                st.write(f"**DEBUG:** target/ contents = {list(target_subdir.iterdir())}")
+                            else:
+                                st.error(f"**DEBUG:** target/ directory not found!")
+
+                            results = run_analysis(
+                                input_dir=temp_path,
+                                target_name=target_name,
+                                deal_type=deal_type,
+                                buyer_name=buyer_name if buyer_name else None,
+                                domains=selected_domains,
+                                progress_callback=update_progress
+                            )
+
+                            # Debug: Show results summary
+                            st.write(f"**DEBUG:** Analysis status = {results.get('status')}")
+                            st.write(f"**DEBUG:** Doc length = {results.get('doc_length', 0)}")
+                            st.write(f"**DEBUG:** Facts = {results.get('facts')}")
+                            if results.get('errors'):
+                                st.error(f"**DEBUG:** Errors = {results.get('errors')}")
+                        except Exception as e:
+                            st.error(f"**DEBUG:** Analysis exception: {type(e).__name__}: {e}")
+                            import traceback
+                            st.code(traceback.format_exc())
+                            raise
 
                     # Store results (inside temp dir context)
                     st.session_state["results"] = results
