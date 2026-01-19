@@ -3,7 +3,8 @@ Organization Chart View - Streamlit UI Components
 
 Visualizes organizational structure with:
 - Interactive org chart (mermaid diagram)
-- Dropdown filters for departments/roles
+- Dropdown filters for departments/roles/teams
+- Headcount breakdown by team
 - Links to organizational facts and findings
 """
 
@@ -12,7 +13,7 @@ import streamlit.components.v1 as components
 import pandas as pd
 from pathlib import Path
 from typing import Optional, Dict, Any, List
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 # Import our modules
 import sys
@@ -25,172 +26,164 @@ except ImportError as e:
     st.error(f"Import error: {e}")
 
 
-@dataclass
-class OrgNode:
-    """Represents a node in the org chart."""
-    id: str
-    title: str
-    name: Optional[str] = None
-    department: Optional[str] = None
-    reports_to: Optional[str] = None
-    headcount: Optional[int] = None
-    facts: List[str] = None  # Fact IDs related to this node
+# =============================================================================
+# SAMPLE ORG DATA (when no facts available)
+# =============================================================================
 
-    def __post_init__(self):
-        if self.facts is None:
-            self.facts = []
+SAMPLE_ORG_STRUCTURE = {
+    "Executive Leadership": {
+        "icon": "👔",
+        "roles": [
+            {"title": "CEO", "name": "", "headcount": 1},
+            {"title": "CFO", "name": "", "headcount": 1},
+            {"title": "CTO", "name": "", "headcount": 1},
+            {"title": "COO", "name": "", "headcount": 1},
+        ],
+        "total": 4
+    },
+    "IT / Technology": {
+        "icon": "💻",
+        "roles": [
+            {"title": "VP of Engineering", "name": "", "headcount": 1},
+            {"title": "IT Director", "name": "", "headcount": 1},
+            {"title": "Infrastructure Team", "name": "", "headcount": 8},
+            {"title": "Security Team", "name": "", "headcount": 4},
+            {"title": "Help Desk", "name": "", "headcount": 6},
+        ],
+        "total": 20
+    },
+    "Applications": {
+        "icon": "📱",
+        "roles": [
+            {"title": "VP of Applications", "name": "", "headcount": 1},
+            {"title": "ERP Team", "name": "", "headcount": 12},
+            {"title": "Web Development", "name": "", "headcount": 15},
+            {"title": "QA Team", "name": "", "headcount": 8},
+            {"title": "DevOps", "name": "", "headcount": 10},
+        ],
+        "total": 46
+    },
+    "Finance": {
+        "icon": "💰",
+        "roles": [
+            {"title": "Controller", "name": "", "headcount": 1},
+            {"title": "Accounting Team", "name": "", "headcount": 8},
+            {"title": "FP&A", "name": "", "headcount": 4},
+        ],
+        "total": 13
+    },
+    "Operations": {
+        "icon": "⚙️",
+        "roles": [
+            {"title": "VP Operations", "name": "", "headcount": 1},
+            {"title": "Supply Chain", "name": "", "headcount": 15},
+            {"title": "Manufacturing", "name": "", "headcount": 50},
+            {"title": "Quality", "name": "", "headcount": 10},
+        ],
+        "total": 76
+    }
+}
 
 
-def extract_org_structure(fact_store: FactStore) -> Dict[str, Any]:
+def extract_org_from_facts(fact_store: FactStore) -> Dict[str, Any]:
     """
     Extract organizational structure from facts.
-
-    Looks for org-related facts and builds a hierarchy.
     """
+    if not fact_store:
+        return {}
+
     org_facts = [f for f in fact_store.facts if f.domain == "organization"]
 
-    # Build org nodes from facts
-    nodes = {}
-    relationships = []
+    if not org_facts:
+        return {}
 
-    # Extract roles, departments, and reporting structures
+    # Group by category
+    org_structure = {}
+
     for fact in org_facts:
-        category = fact.category.lower()
-        item = fact.item
-        details = fact.details or {}
+        category = fact.category.replace("_", " ").title()
 
-        if category in ["leadership", "executive", "management", "c-suite"]:
-            node_id = f"exec_{len(nodes)}"
-            nodes[node_id] = OrgNode(
-                id=node_id,
-                title=details.get("title", item),
-                name=details.get("name", ""),
-                department=details.get("department", "Executive"),
-                reports_to=details.get("reports_to"),
-                headcount=details.get("headcount"),
-                facts=[fact.fact_id]
-            )
+        if category not in org_structure:
+            org_structure[category] = {
+                "icon": "👤",
+                "roles": [],
+                "total": 0,
+                "facts": []
+            }
 
-        elif category in ["department", "team", "function", "division"]:
-            node_id = f"dept_{len(nodes)}"
-            nodes[node_id] = OrgNode(
-                id=node_id,
-                title=item,
-                department=item,
-                headcount=details.get("headcount") or details.get("count"),
-                facts=[fact.fact_id]
-            )
+        # Extract headcount from details
+        headcount = 1
+        if fact.details:
+            headcount = fact.details.get("headcount") or fact.details.get("count") or fact.details.get("fte") or 1
+            if isinstance(headcount, str):
+                try:
+                    headcount = int(headcount)
+                except:
+                    headcount = 1
 
-        elif category in ["headcount", "staffing", "fte"]:
-            # Add to existing or create new
-            dept = details.get("department", "General")
-            node_id = f"hc_{len(nodes)}"
-            nodes[node_id] = OrgNode(
-                id=node_id,
-                title=f"{dept} Team",
-                department=dept,
-                headcount=details.get("count") or details.get("headcount"),
-                facts=[fact.fact_id]
-            )
+        org_structure[category]["roles"].append({
+            "title": fact.item,
+            "name": fact.details.get("name", "") if fact.details else "",
+            "headcount": headcount,
+            "fact_id": fact.fact_id,
+            "verified": fact.verified
+        })
+        org_structure[category]["total"] += headcount
+        org_structure[category]["facts"].append(fact)
 
-    return {
-        "nodes": nodes,
-        "relationships": relationships,
-        "total_facts": len(org_facts),
-        "raw_facts": org_facts
-    }
+    return org_structure
 
 
-def generate_mermaid_org_chart(org_data: Dict[str, Any], selected_dept: str = "All") -> str:
-    """
-    Generate a Mermaid diagram for the org chart.
-    """
-    nodes = org_data.get("nodes", {})
+def render_mermaid_chart(org_structure: Dict, selected_dept: str = "All"):
+    """Render mermaid org chart."""
 
-    if not nodes:
-        # Return a sample org chart if no data
-        return """
-flowchart TD
-    CEO[CEO / President]
-    CFO[CFO]
-    CTO[CTO]
-    COO[COO]
-    CISO[CISO]
-
-    CEO --> CFO
-    CEO --> CTO
-    CEO --> COO
-    CTO --> CISO
-
-    CFO --> FIN[Finance Team]
-    CTO --> ENG[Engineering]
-    CTO --> IT[IT Operations]
-    COO --> OPS[Operations]
-    CISO --> SEC[Security Team]
-
-    style CEO fill:#f97316,color:#fff
-    style CFO fill:#3b82f6,color:#fff
-    style CTO fill:#3b82f6,color:#fff
-    style COO fill:#3b82f6,color:#fff
-    style CISO fill:#10b981,color:#fff
-"""
-
-    # Build mermaid from actual nodes
+    # Build mermaid code
     lines = ["flowchart TD"]
 
-    # Filter by department if selected
-    filtered_nodes = nodes.values()
-    if selected_dept != "All":
-        filtered_nodes = [n for n in nodes.values() if n.department == selected_dept]
+    # Add CEO at top
+    lines.append('    CEO["👔 CEO / President"]')
 
-    # Add nodes
-    for node in filtered_nodes:
-        label = node.title
-        if node.name:
-            label = f"{node.title}<br/>{node.name}"
-        if node.headcount:
-            label += f"<br/>({node.headcount} FTE)"
+    # Add departments
+    dept_ids = []
+    for i, (dept_name, dept_data) in enumerate(org_structure.items()):
+        if selected_dept != "All" and dept_name != selected_dept:
+            continue
 
-        lines.append(f'    {node.id}["{label}"]')
+        dept_id = f"DEPT{i}"
+        dept_ids.append(dept_id)
+        icon = dept_data.get("icon", "📁")
+        total = dept_data.get("total", 0)
+        lines.append(f'    {dept_id}["{icon} {dept_name}<br/>({total} FTE)"]')
+        lines.append(f'    CEO --> {dept_id}')
 
-    # Add relationships
-    for node in filtered_nodes:
-        if node.reports_to and node.reports_to in nodes:
-            lines.append(f"    {node.reports_to} --> {node.id}")
+        # Add roles under department
+        for j, role in enumerate(dept_data.get("roles", [])[:5]):  # Limit to 5 roles
+            role_id = f"R{i}_{j}"
+            title = role.get("title", "Role")
+            hc = role.get("headcount", 1)
+            if hc > 1:
+                lines.append(f'    {role_id}["{title}<br/>({hc})"]')
+            else:
+                lines.append(f'    {role_id}["{title}"]')
+            lines.append(f'    {dept_id} --> {role_id}')
 
-    # Add styling
+    # Styling
     lines.append("")
-    lines.append("    %% Styling")
-    for i, node in enumerate(filtered_nodes):
-        if "exec" in node.id or "ceo" in node.id.lower():
-            lines.append(f"    style {node.id} fill:#f97316,color:#fff")
-        elif "dept" in node.id:
-            lines.append(f"    style {node.id} fill:#3b82f6,color:#fff")
+    lines.append("    style CEO fill:#f97316,color:#fff")
+    for dept_id in dept_ids:
+        lines.append(f"    style {dept_id} fill:#3b82f6,color:#fff")
 
-    return "\n".join(lines)
+    mermaid_code = "\n".join(lines)
 
-
-def render_mermaid(mermaid_code: str, height: int = 400):
-    """
-    Render a Mermaid diagram in Streamlit.
-    """
+    # Render
     html = f"""
     <html>
     <head>
         <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
         <script>mermaid.initialize({{startOnLoad:true, theme:'neutral'}});</script>
         <style>
-            body {{
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                margin: 0;
-                padding: 20px;
-                background: transparent;
-            }}
-            .mermaid {{
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            }}
+            body {{ margin: 0; padding: 20px; background: transparent; }}
+            .mermaid {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; }}
         </style>
     </head>
     <body>
@@ -200,124 +193,169 @@ def render_mermaid(mermaid_code: str, height: int = 400):
     </body>
     </html>
     """
-    components.html(html, height=height, scrolling=True)
+    components.html(html, height=500, scrolling=True)
+
+    return mermaid_code
 
 
-def render_org_dropdown(fact_store: FactStore, reasoning_store: ReasoningStore = None):
+def render_org_dropdown_explorer(org_structure: Dict):
     """
-    Render dropdown-based org explorer.
+    Render the main org dropdown explorer.
+    THIS IS THE KEY COMPONENT - shows dropdown for each department.
     """
-    st.subheader("Organization Explorer")
+    st.subheader("👥 Organization Explorer")
 
-    org_facts = [f for f in fact_store.facts if f.domain == "organization"]
+    # Calculate totals
+    total_headcount = sum(d.get("total", 0) for d in org_structure.values())
+    dept_count = len(org_structure)
 
-    if not org_facts:
-        st.info("No organizational facts found. Run analysis on documents containing org information.")
-        return
+    # Summary metrics
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total Headcount", total_headcount)
+    with col2:
+        st.metric("Departments", dept_count)
+    with col3:
+        st.metric("Roles Tracked", sum(len(d.get("roles", [])) for d in org_structure.values()))
 
-    # Get unique categories/departments
-    categories = list(set(f.category for f in org_facts))
+    st.divider()
 
-    # Dropdown for category
-    selected_category = st.selectbox(
-        "Select Area",
-        ["All"] + sorted(categories),
-        key="org_category_select"
+    # MAIN DROPDOWN - Select Department
+    dept_names = list(org_structure.keys())
+
+    selected_dept = st.selectbox(
+        "🏢 Select Department/Team",
+        ["-- Select a Department --"] + dept_names,
+        key="org_dept_dropdown",
+        help="Select a department to see its team structure and roles"
     )
 
-    # Filter facts
-    if selected_category != "All":
-        filtered_facts = [f for f in org_facts if f.category == selected_category]
+    if selected_dept and selected_dept != "-- Select a Department --":
+        dept_data = org_structure.get(selected_dept, {})
+
+        st.markdown(f"### {dept_data.get('icon', '📁')} {selected_dept}")
+        st.markdown(f"**Total Headcount: {dept_data.get('total', 0)} FTE**")
+
+        st.divider()
+
+        # Show roles in this department
+        roles = dept_data.get("roles", [])
+
+        if roles:
+            st.markdown("#### Team Breakdown")
+
+            # Create a table of roles
+            role_data = []
+            for role in roles:
+                role_data.append({
+                    "Role/Team": role.get("title", "Unknown"),
+                    "Name": role.get("name", "-"),
+                    "Headcount": role.get("headcount", 1),
+                    "Verified": "✅" if role.get("verified", False) else "⚠️"
+                })
+
+            df = pd.DataFrame(role_data)
+
+            # Display as styled table
+            st.dataframe(
+                df,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Role/Team": st.column_config.TextColumn("Role/Team", width="medium"),
+                    "Headcount": st.column_config.NumberColumn("Headcount", width="small"),
+                    "Verified": st.column_config.TextColumn("Status", width="small")
+                }
+            )
+
+            # Visual breakdown
+            st.markdown("#### Headcount Distribution")
+            chart_data = pd.DataFrame({
+                "Role": [r.get("title", "") for r in roles],
+                "Headcount": [r.get("headcount", 1) for r in roles]
+            })
+            st.bar_chart(chart_data.set_index("Role"))
+
+        else:
+            st.info("No detailed roles available for this department.")
+
     else:
-        filtered_facts = org_facts
+        # Show all departments as cards when nothing selected
+        st.markdown("### All Departments")
 
-    # Display as expandable cards
-    for fact in filtered_facts:
-        with st.expander(f"👤 {fact.item} ({fact.category})"):
-            col1, col2 = st.columns([2, 1])
+        cols = st.columns(2)
+        for i, (dept_name, dept_data) in enumerate(org_structure.items()):
+            with cols[i % 2]:
+                with st.container():
+                    icon = dept_data.get("icon", "📁")
+                    total = dept_data.get("total", 0)
+                    role_count = len(dept_data.get("roles", []))
 
-            with col1:
-                st.markdown(f"**{fact.item}**")
-                if fact.details:
-                    for k, v in fact.details.items():
-                        st.markdown(f"- {k}: {v}")
-
-                # Show evidence
-                quote = fact.evidence.get("exact_quote", "")
-                if quote:
-                    st.markdown("**Evidence:**")
-                    st.markdown(f"> {quote[:200]}...")
-
-            with col2:
-                st.caption(f"Fact ID: {fact.fact_id}")
-                st.caption(f"Status: {fact.status}")
-                if fact.verified:
-                    st.success("✅ Verified")
-                else:
-                    st.warning("⚠️ Unverified")
+                    st.markdown(f"""
+                    <div style="border:1px solid #ddd; border-radius:8px; padding:15px; margin:5px 0;">
+                        <h4>{icon} {dept_name}</h4>
+                        <p><strong>{total}</strong> FTE across <strong>{role_count}</strong> roles</p>
+                    </div>
+                    """, unsafe_allow_html=True)
 
 
 def render_org_considerations(reasoning_store: ReasoningStore):
-    """
-    Render organizational considerations with dropdowns.
-    """
-    st.subheader("Organizational Considerations")
+    """Render org-related risks and work items."""
+    st.subheader("⚠️ Organizational Considerations")
 
     if not reasoning_store:
-        st.info("No reasoning data available.")
+        st.info("No findings data available.")
         return
 
-    # Get org-related risks and work items
     org_risks = [r for r in reasoning_store.risks if r.domain == "organization"]
     org_work_items = [w for w in reasoning_store.work_items if w.domain == "organization"]
-    org_strategic = [s for s in reasoning_store.strategic_considerations if s.domain == "organization"]
 
-    # Dropdown for consideration type
-    consideration_type = st.selectbox(
-        "Consideration Type",
-        ["All", "Risks", "Work Items", "Strategic Considerations"],
+    if not org_risks and not org_work_items:
+        st.info("No organization-specific risks or work items found.")
+        return
+
+    # Dropdown for type
+    view_type = st.selectbox(
+        "View",
+        ["All", "Risks Only", "Work Items Only"],
         key="org_consideration_type"
     )
 
-    # Display based on selection
-    if consideration_type in ["All", "Risks"] and org_risks:
+    if view_type in ["All", "Risks Only"] and org_risks:
         st.markdown("### Organizational Risks")
         for risk in org_risks:
             severity_icon = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}.get(risk.severity, "⚪")
             with st.expander(f"{severity_icon} {risk.title}"):
                 st.markdown(risk.description)
-                st.markdown(f"**Mitigation:** {risk.mitigation}")
-                st.caption(f"Based on: {', '.join(risk.based_on_facts)}")
+                if risk.mitigation:
+                    st.markdown(f"**Mitigation:** {risk.mitigation}")
 
-    if consideration_type in ["All", "Work Items"] and org_work_items:
+    if view_type in ["All", "Work Items Only"] and org_work_items:
         st.markdown("### Organizational Work Items")
         for wi in org_work_items:
             with st.expander(f"📋 {wi.title} ({wi.phase})"):
                 st.markdown(wi.description)
-                st.markdown(f"**Owner:** {wi.owner_type}")
-                st.markdown(f"**Cost:** {wi.cost_estimate}")
-
-    if consideration_type in ["All", "Strategic Considerations"] and org_strategic:
-        st.markdown("### Strategic Considerations")
-        for sc in org_strategic:
-            with st.expander(f"💡 {sc.title}"):
-                st.markdown(sc.description)
+                st.markdown(f"**Owner:** {wi.owner_type} | **Cost:** {wi.cost_estimate}")
 
 
 def render_org_chart_section(session_dir: Path):
     """
     Main entry point for the org chart UI.
     """
-    # Load data
-    facts_path = session_dir / "facts.json"
-    findings_path = session_dir / "findings.json"
+    st.header("🏢 Organization Structure")
 
+    # Try to load actual data
     fact_store = None
     reasoning_store = None
+    org_structure = None
+
+    facts_path = session_dir / "facts.json"
+    findings_path = session_dir / "findings.json"
 
     if facts_path.exists():
         try:
             fact_store = FactStore.load(str(facts_path))
+            org_structure = extract_org_from_facts(fact_store)
         except Exception as e:
             st.warning(f"Could not load facts: {e}")
 
@@ -325,47 +363,36 @@ def render_org_chart_section(session_dir: Path):
         try:
             reasoning_store = ReasoningStore.load(str(findings_path))
         except Exception as e:
-            st.warning(f"Could not load findings: {e}")
+            pass
+
+    # Use sample data if no real org data
+    if not org_structure:
+        st.info("📊 Showing sample organization structure. Run analysis with organizational documents to populate with real data.")
+        org_structure = SAMPLE_ORG_STRUCTURE
 
     # Create tabs
-    tab1, tab2, tab3 = st.tabs(["Org Chart", "Org Explorer", "Considerations"])
+    tab1, tab2, tab3 = st.tabs(["📊 Org Explorer", "🗺️ Org Chart", "⚠️ Considerations"])
 
     with tab1:
+        render_org_dropdown_explorer(org_structure)
+
+    with tab2:
         st.subheader("Organization Chart")
 
-        # Department filter
-        if fact_store:
-            org_data = extract_org_structure(fact_store)
-            departments = list(set(n.department for n in org_data["nodes"].values() if n.department))
+        # Department filter for chart
+        dept_filter = st.selectbox(
+            "Filter Chart by Department",
+            ["All"] + list(org_structure.keys()),
+            key="chart_dept_filter"
+        )
 
-            selected_dept = st.selectbox(
-                "Filter by Department",
-                ["All"] + sorted(departments),
-                key="org_chart_dept_filter"
-            )
+        mermaid_code = render_mermaid_chart(org_structure, dept_filter)
 
-            mermaid_code = generate_mermaid_org_chart(org_data, selected_dept)
-        else:
-            st.info("No org data loaded - showing sample chart")
-            mermaid_code = generate_mermaid_org_chart({})
-
-        render_mermaid(mermaid_code, height=500)
-
-        # Show raw mermaid code option
         with st.expander("View Diagram Code"):
             st.code(mermaid_code, language="mermaid")
 
-    with tab2:
-        if fact_store:
-            render_org_dropdown(fact_store, reasoning_store)
-        else:
-            st.info("Load facts to explore organizational data.")
-
     with tab3:
-        if reasoning_store:
-            render_org_considerations(reasoning_store)
-        else:
-            st.info("Load findings to view organizational considerations.")
+        render_org_considerations(reasoning_store)
 
 
 # =============================================================================
@@ -375,11 +402,4 @@ def render_org_chart_section(session_dir: Path):
 if __name__ == "__main__":
     st.set_page_config(page_title="Organization Chart", layout="wide")
     st.title("Organization Chart Viewer")
-
-    session_dir = st.text_input(
-        "Session Directory",
-        value="sessions/test_session"
-    )
-
-    if session_dir:
-        render_org_chart_section(Path(session_dir))
+    render_org_chart_section(Path("sessions/test"))
