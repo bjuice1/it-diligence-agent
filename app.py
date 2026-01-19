@@ -34,6 +34,13 @@ try:
 except ImportError:
     VERIFICATION_AVAILABLE = False
 
+# Import org chart UI (organizational structure visualization)
+try:
+    from ui.org_chart_view import render_org_chart_section
+    ORG_CHART_AVAILABLE = True
+except ImportError:
+    ORG_CHART_AVAILABLE = False
+
 # Set page config first (must be first Streamlit command)
 st.set_page_config(
     page_title="IT Due Diligence Agent",
@@ -736,7 +743,7 @@ def display_results(results: Dict[str, Any]):
 
         st.subheader("🔍 Detailed Findings")
 
-        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["Risks", "Work Items", "Recommendations", "Facts", "Granular Inventory", "Verification"])
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["Risks", "Work Items", "Recommendations", "Facts", "Granular Inventory", "Verification", "Org Chart"])
 
         with tab1:
             if reasoning_store.risks:
@@ -875,6 +882,22 @@ def display_results(results: Dict[str, Any]):
                 render_verification_section(session_dir)
             else:
                 st.warning("Verification module not available. Check ui/verification_view.py")
+
+        with tab7:
+            # Org Chart - Organizational structure visualization
+            if ORG_CHART_AVAILABLE:
+                # Get session directory from results
+                session_dir = None
+                if "session_dir" in results:
+                    session_dir = Path(results["session_dir"])
+                elif "output_dir" in results:
+                    session_dir = Path(results["output_dir"])
+                else:
+                    session_dir = Path(st.session_state.get("output_dir", "sessions/current"))
+
+                render_org_chart_section(session_dir)
+            else:
+                st.warning("Org Chart module not available. Check ui/org_chart_view.py")
 
     # Output files with download buttons
     st.subheader("📄 Output Files")
