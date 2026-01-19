@@ -41,9 +41,11 @@ REASONING_MAX_TOKENS = 8192   # Analysis needs more space
 DISCOVERY_MAX_ITERATIONS = 30
 REASONING_MAX_ITERATIONS = 40
 
-# Temperature
-DISCOVERY_TEMPERATURE = 0.2  # Lower for consistent extraction
-REASONING_TEMPERATURE = 0.4  # Slightly higher for nuanced analysis
+# Temperature - SET TO 0 FOR DETERMINISTIC OUTPUT
+# This is critical for consistency between runs
+DISCOVERY_TEMPERATURE = 0.0  # Zero for fully deterministic extraction
+REASONING_TEMPERATURE = 0.0  # Zero for deterministic scoring and analysis
+NARRATIVE_TEMPERATURE = 0.1  # Slight variation allowed for prose (non-critical)
 
 
 # =============================================================================

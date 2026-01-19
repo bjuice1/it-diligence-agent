@@ -29,18 +29,20 @@ from tools_v2.narrative_tools import (
     DomainNarrative
 )
 
-# Import cost estimation and rate limiting config
+# Import cost estimation, rate limiting config, and temperature
 try:
     from config_v2 import (
         estimate_cost,
         API_RATE_LIMIT_SEMAPHORE_SIZE,
-        API_RATE_LIMIT_PER_MINUTE
+        API_RATE_LIMIT_PER_MINUTE,
+        NARRATIVE_TEMPERATURE
     )
 except ImportError:
     def estimate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
         return 0.0
     API_RATE_LIMIT_SEMAPHORE_SIZE = 5
     API_RATE_LIMIT_PER_MINUTE = 50
+    NARRATIVE_TEMPERATURE = 0.1  # Slight variation for prose
 
 # Import rate limiter
 try:
@@ -342,9 +344,11 @@ After writing the narrative, use complete_narrative to finish."""
                 raise TimeoutError("Rate limiter timeout: could not acquire API call slot")
         
         try:
+            # Use low temperature for more consistent narrative output
             response = self.client.messages.create(
                 model=self.model,
                 max_tokens=self.max_tokens,
+                temperature=NARRATIVE_TEMPERATURE,  # Low temp for consistent prose
                 system=system_prompt,
                 tools=self.tools,
                 messages=self.messages,

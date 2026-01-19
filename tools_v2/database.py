@@ -566,21 +566,29 @@ def load_reasoning_store(deal_id: str, db_path: Path = None) -> ReasoningStore:
 
     reasoning_store = ReasoningStore()
 
+    # Helper to safely get column value (handles old schemas)
+    def safe_get(row, column, default=''):
+        try:
+            val = row[column]
+            return val if val is not None else default
+        except (IndexError, KeyError):
+            return default
+
     # Load risks
     cursor.execute('SELECT * FROM risks WHERE deal_id = ?', (deal_id,))
     for row in cursor.fetchall():
         risk = Risk(
             finding_id=row['risk_id'],
             domain=row['domain'],
-            category=row['category'] or '',
+            category=safe_get(row, 'category', ''),
             title=row['title'],
             description=row['description'],
             severity=row['severity'],
-            mitigation=row['mitigation'] or '',
-            reasoning=row['reasoning'] or '',
-            integration_dependent=bool(row['integration_dependent']),
+            mitigation=safe_get(row, 'mitigation', ''),
+            reasoning=safe_get(row, 'reasoning', ''),
+            integration_dependent=bool(safe_get(row, 'integration_dependent', False)),
             based_on_facts=json.loads(row['based_on_facts']) if row['based_on_facts'] else [],
-            confidence=row['confidence']
+            confidence=safe_get(row, 'confidence', 'medium')
         )
         reasoning_store.risks.append(risk)
 
@@ -593,14 +601,14 @@ def load_reasoning_store(deal_id: str, db_path: Path = None) -> ReasoningStore:
             title=row['title'],
             description=row['description'],
             phase=row['phase'],
-            priority=row['priority'],
-            owner_type=row['owner_type'] or '',
-            cost_estimate=row['cost_estimate'] or 'under_25k',
-            reasoning=row['reasoning'] or '',
-            triggered_by=json.loads(row['triggered_by']) if row['triggered_by'] else [],
-            triggered_by_risks=json.loads(row['triggered_by_risks']) if row['triggered_by_risks'] else [],
-            based_on_facts=json.loads(row['based_on_facts']) if row['based_on_facts'] else [],
-            confidence=row['confidence'] or 'medium'
+            priority=safe_get(row, 'priority', 'medium'),
+            owner_type=safe_get(row, 'owner_type', ''),
+            cost_estimate=safe_get(row, 'cost_estimate', 'under_25k'),
+            reasoning=safe_get(row, 'reasoning', ''),
+            triggered_by=json.loads(row['triggered_by']) if safe_get(row, 'triggered_by') else [],
+            triggered_by_risks=json.loads(row['triggered_by_risks']) if safe_get(row, 'triggered_by_risks') else [],
+            based_on_facts=json.loads(row['based_on_facts']) if safe_get(row, 'based_on_facts') else [],
+            confidence=safe_get(row, 'confidence', 'medium')
         )
         reasoning_store.work_items.append(wi)
 
@@ -612,10 +620,11 @@ def load_reasoning_store(deal_id: str, db_path: Path = None) -> ReasoningStore:
             domain=row['domain'],
             title=row['title'],
             description=row['description'],
-            lens=row['lens'] or '',
-            implication=row['implication'] or '',
-            based_on_facts=json.loads(row['based_on_facts']) if row['based_on_facts'] else [],
-            confidence=row['confidence']
+            lens=safe_get(row, 'lens', ''),
+            implication=safe_get(row, 'implication', ''),
+            based_on_facts=json.loads(row['based_on_facts']) if safe_get(row, 'based_on_facts') else [],
+            confidence=safe_get(row, 'confidence', 'medium'),
+            reasoning=safe_get(row, 'reasoning', '')
         )
         reasoning_store.strategic_considerations.append(sc)
 
@@ -627,12 +636,12 @@ def load_reasoning_store(deal_id: str, db_path: Path = None) -> ReasoningStore:
             domain=row['domain'],
             title=row['title'],
             description=row['description'],
-            action_type=row['action_type'] or '',
-            urgency=row['urgency'],
-            rationale=row['rationale'] or '',
-            based_on_facts=json.loads(row['based_on_facts']) if row['based_on_facts'] else [],
-            confidence='medium',
-            reasoning=''
+            action_type=safe_get(row, 'action_type', ''),
+            urgency=safe_get(row, 'urgency', 'post-close'),
+            rationale=safe_get(row, 'rationale', ''),
+            based_on_facts=json.loads(row['based_on_facts']) if safe_get(row, 'based_on_facts') else [],
+            confidence=safe_get(row, 'confidence', 'medium'),
+            reasoning=safe_get(row, 'reasoning', '')
         )
         reasoning_store.recommendations.append(rec)
 

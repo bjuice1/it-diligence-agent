@@ -28,9 +28,14 @@ from tools_v2.reasoning_tools import (
     ReasoningStore
 )
 
-# Import cost estimation, rate limiter, and circuit breaker
+# Import cost estimation, rate limiter, circuit breaker, and temperature
 try:
-    from config_v2 import estimate_cost, API_RATE_LIMIT_SEMAPHORE_SIZE, API_RATE_LIMIT_PER_MINUTE
+    from config_v2 import (
+        estimate_cost,
+        API_RATE_LIMIT_SEMAPHORE_SIZE,
+        API_RATE_LIMIT_PER_MINUTE,
+        REASONING_TEMPERATURE
+    )
     from tools_v2.rate_limiter import APIRateLimiter
     from tools_v2.circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitBreakerOpenError
 except ImportError:
@@ -38,6 +43,7 @@ except ImportError:
         return 0.0
     API_RATE_LIMIT_SEMAPHORE_SIZE = 3
     API_RATE_LIMIT_PER_MINUTE = 40
+    REASONING_TEMPERATURE = 0.0  # Default to deterministic
     APIRateLimiter = None
     CircuitBreaker = None
     CircuitBreakerConfig = None
@@ -340,9 +346,11 @@ class BaseReasoningAgent(ABC):
                         raise TimeoutError("Rate limiter timeout: could not acquire API call slot")
                 
                 try:
+                    # CRITICAL: temperature=0 for deterministic, consistent scoring
                     response = self.client.messages.create(
                         model=self.model,
                         max_tokens=self.max_tokens,
+                        temperature=REASONING_TEMPERATURE,  # Deterministic analysis
                         system=system_prompt,
                         tools=self.tools,
                         messages=self.messages,

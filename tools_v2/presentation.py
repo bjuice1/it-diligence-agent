@@ -23,6 +23,8 @@ from tools_v2.fact_store import FactStore
 from tools_v2.reasoning_tools import ReasoningStore, COST_RANGE_VALUES
 from tools_v2.narrative_tools import NarrativeStore, DomainNarrative, CostNarrative
 from tools_v2.html_report import _synthesize_fact_statement
+from tools_v2.complexity_scorer import calculate_complexity_score, get_complexity_assessment
+from tools_v2.cost_calculator import calculate_costs_from_work_items, format_cost_summary
 
 
 # Domain display configuration
@@ -488,22 +490,20 @@ def _build_executive_summary(
     total_risks = len(reasoning_store.risks)
     total_work_items = len(reasoning_store.work_items)
 
-    # Cost summary by phase
+    # CRITICAL: Calculate costs using centralized cost calculator
+    # This ensures costs are ALWAYS computed from work items, never ad-hoc
+    cost_breakdown = calculate_costs_from_work_items(list(reasoning_store.work_items))
+    cost_summary = format_cost_summary(cost_breakdown)
+
+    # Extract phase costs from centralized calculation
     cost_by_phase = {
-        'Day_1': {'low': 0, 'high': 0, 'count': 0},
-        'Day_100': {'low': 0, 'high': 0, 'count': 0},
-        'Post_100': {'low': 0, 'high': 0, 'count': 0}
+        'Day_1': cost_summary['by_phase'].get('Day_1', {'low': 0, 'high': 0, 'count': 0}),
+        'Day_100': cost_summary['by_phase'].get('Day_100', {'low': 0, 'high': 0, 'count': 0}),
+        'Post_100': cost_summary['by_phase'].get('Post_100', {'low': 0, 'high': 0, 'count': 0})
     }
 
-    for wi in reasoning_store.work_items:
-        if wi.phase in cost_by_phase:
-            cost_range = COST_RANGE_VALUES.get(wi.cost_estimate, {'low': 0, 'high': 0})
-            cost_by_phase[wi.phase]['low'] += cost_range['low']
-            cost_by_phase[wi.phase]['high'] += cost_range['high']
-            cost_by_phase[wi.phase]['count'] += 1
-
-    total_low = sum(p['low'] for p in cost_by_phase.values())
-    total_high = sum(p['high'] for p in cost_by_phase.values())
+    total_low = cost_breakdown.total_low
+    total_high = cost_breakdown.total_high
 
     # Top risks (critical and high severity)
     top_risks = [r for r in reasoning_store.risks if r.severity in ('critical', 'high')]
@@ -518,10 +518,27 @@ def _build_executive_summary(
     # Identify key systems from facts
     key_systems = _identify_key_systems(fact_store)
 
-    # Generate bottom line assessment
-    bottom_line = _generate_bottom_line(
-        total_risks, severity_counts, total_low, total_high, total_gaps
+    # Calculate DETERMINISTIC complexity score using rule-based triggers
+    # This replaces the previous severity-count-based approach for consistency
+    complexity_score, complexity_level, triggered_rules = calculate_complexity_score(
+        facts=list(fact_store.facts),
+        gaps=list(fact_store.gaps),
+        risks=list(reasoning_store.risks),
+        work_items=list(reasoning_store.work_items)
     )
+
+    # Get full complexity assessment with bottom line
+    complexity_assessment = get_complexity_assessment(
+        score=complexity_score,
+        level=complexity_level,
+        triggered_rules=triggered_rules,
+        total_cost_low=total_low,
+        total_cost_high=total_high,
+        total_gaps=total_gaps
+    )
+
+    # Bottom line from complexity assessment (deterministic)
+    bottom_line = complexity_assessment["bottom_line"]
 
     return {
         'target_name': target_name,
@@ -536,7 +553,9 @@ def _build_executive_summary(
         'top_risks': top_risks,
         'cost_by_phase': cost_by_phase,
         'total_cost': {'low': total_low, 'high': total_high},
-        'bottom_line': bottom_line
+        'bottom_line': bottom_line,
+        'complexity_assessment': complexity_assessment,  # Rule-based complexity
+        'cost_summary': cost_summary  # Full cost traceability from work items
     }
 
 

@@ -12,21 +12,22 @@ Tool Functions:
 - complete_reasoning: Signal reasoning phase complete
 """
 
-from typing import Dict, List, Any, Optional, TYPE_CHECKING
+from typing import Dict, List, Any, Optional, TYPE_CHECKING, Set
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 import logging
 import re
 import threading
+import hashlib
 
 
 def _generate_timestamp() -> str:
     """
     Generate ISO format timestamp and validate it.
-    
+
     Returns:
         ISO format timestamp string (YYYY-MM-DDTHH:MM:SS.ffffff)
-    
+
     Raises:
         ValueError: If timestamp format is invalid
     """
@@ -36,6 +37,59 @@ def _generate_timestamp() -> str:
     if not re.match(iso_pattern, timestamp):
         raise ValueError(f"Generated timestamp has invalid format: {timestamp}")
     return timestamp
+
+
+def _normalize_string(s: str) -> str:
+    """
+    Normalize a string for stable ID generation.
+
+    - Lowercase
+    - Remove extra whitespace
+    - Strip punctuation (except underscores)
+    """
+    if not s:
+        return ""
+    # Lowercase and strip
+    s = s.lower().strip()
+    # Replace multiple spaces with single space
+    s = re.sub(r'\s+', ' ', s)
+    # Remove punctuation except underscores
+    s = re.sub(r'[^\w\s]', '', s)
+    return s
+
+
+def _generate_stable_id(prefix: str, domain: str, title: str, owner: Optional[str] = None) -> str:
+    """
+    Generate a stable, deterministic ID based on content hash.
+
+    This ensures the same item always gets the same ID, preventing duplicates
+    when parallel agents create the same finding independently.
+
+    Args:
+        prefix: ID prefix (WI, R, SC, REC)
+        domain: The domain name
+        title: The finding title
+        owner: Optional owner type (for work items)
+
+    Returns:
+        Stable ID in format PREFIX-XXXX (e.g., WI-a3f2)
+    """
+    # Build content string for hashing
+    parts = [
+        _normalize_string(domain),
+        _normalize_string(title),
+    ]
+    if owner:
+        parts.append(_normalize_string(owner))
+
+    content = "|".join(parts)
+
+    # Generate short hash (4 hex chars = 65536 possibilities)
+    # For a typical DD run with <100 items per type, collision risk is negligible
+    full_hash = hashlib.sha256(content.encode('utf-8')).hexdigest()
+    short_hash = full_hash[:4]
+
+    return f"{prefix}-{short_hash}"
 
 if TYPE_CHECKING:
     from tools_v2.fact_store import FactStore
@@ -261,25 +315,71 @@ class ReasoningStore:
         self.strategic_considerations: List[StrategicConsideration] = []
         self.work_items: List[WorkItem] = []
         self.recommendations: List[Recommendation] = []
-        self._counters: Dict[str, int] = {}
+        self._counters: Dict[str, int] = {}  # Kept for backwards compatibility
+        self._used_ids: Set[str] = set()  # Track all used IDs to prevent duplicates
         self.metadata: Dict[str, Any] = {
             "created_at": _generate_timestamp(),
-            "version": "2.0"
+            "version": "2.1"  # Version bump for stable ID change
         }
         # Thread safety: Lock for all mutating operations
         self._lock = threading.RLock()
 
     def _generate_id(self, prefix: str) -> str:
         """
-        Generate unique finding ID.
-        
+        Generate unique finding ID using counter (legacy method).
+
         NOTE: Must be called within self._lock context.
         This method modifies self._counters and is not thread-safe on its own.
+
+        Prefer _generate_stable_id_safe() for new code.
         """
         if prefix not in self._counters:
             self._counters[prefix] = 0
         self._counters[prefix] += 1
-        return f"{prefix}-{self._counters[prefix]:03d}"
+        new_id = f"{prefix}-{self._counters[prefix]:03d}"
+        self._used_ids.add(new_id)
+        return new_id
+
+    def _generate_stable_id_safe(
+        self,
+        prefix: str,
+        domain: str,
+        title: str,
+        owner: Optional[str] = None
+    ) -> str:
+        """
+        Generate a stable, deterministic ID with collision handling.
+
+        This creates IDs based on content hash, ensuring the same finding
+        always gets the same ID. If a collision occurs (same hash but
+        different content already exists), adds a numeric suffix.
+
+        NOTE: Must be called within self._lock context.
+
+        Args:
+            prefix: ID prefix (WI, R, SC, REC)
+            domain: The domain name
+            title: The finding title
+            owner: Optional owner type
+
+        Returns:
+            Stable unique ID
+        """
+        base_id = _generate_stable_id(prefix, domain, title, owner)
+
+        # Check for collision
+        if base_id not in self._used_ids:
+            self._used_ids.add(base_id)
+            return base_id
+
+        # Handle collision by adding numeric suffix
+        suffix = 2
+        while f"{base_id}-{suffix}" in self._used_ids:
+            suffix += 1
+        final_id = f"{base_id}-{suffix}"
+        self._used_ids.add(final_id)
+        logger.debug(f"ID collision detected for {base_id}, using {final_id}")
+        return final_id
 
     def validate_fact_citations(self, fact_ids: List[str], fail_fast: bool = False) -> Dict[str, Any]:
         """
@@ -312,9 +412,12 @@ class ReasoningStore:
         return result
 
     def add_risk(self, **kwargs) -> str:
-        """Add a risk and return its ID."""
+        """Add a risk and return its ID (uses stable hashing)."""
         with self._lock:
-            risk_id = self._generate_id("R")
+            # Generate stable ID based on domain + title
+            domain = kwargs.get("domain", "unknown")
+            title = kwargs.get("title", "")
+            risk_id = self._generate_stable_id_safe("R", domain, title)
             kwargs["finding_id"] = risk_id
 
             # Validate fact/gap citations (fail fast if configured)
@@ -336,9 +439,12 @@ class ReasoningStore:
             return risk_id
 
     def add_strategic_consideration(self, **kwargs) -> str:
-        """Add a strategic consideration and return its ID."""
+        """Add a strategic consideration and return its ID (uses stable hashing)."""
         with self._lock:
-            sc_id = self._generate_id("SC")
+            # Generate stable ID based on domain + title
+            domain = kwargs.get("domain", "unknown")
+            title = kwargs.get("title", "")
+            sc_id = self._generate_stable_id_safe("SC", domain, title)
             kwargs["finding_id"] = sc_id
 
             # Validate fact/gap citations
@@ -353,9 +459,13 @@ class ReasoningStore:
             return sc_id
 
     def add_work_item(self, **kwargs) -> str:
-        """Add a work item and return its ID."""
+        """Add a work item and return its ID (uses stable hashing with domain+title+owner)."""
         with self._lock:
-            wi_id = self._generate_id("WI")
+            # Generate stable ID based on domain + title + owner_type
+            domain = kwargs.get("domain", "unknown")
+            title = kwargs.get("title", "")
+            owner_type = kwargs.get("owner_type", "")
+            wi_id = self._generate_stable_id_safe("WI", domain, title, owner_type)
             kwargs["finding_id"] = wi_id
 
             # Validate fact/gap citations
@@ -386,9 +496,12 @@ class ReasoningStore:
             return wi_id
 
     def add_recommendation(self, **kwargs) -> str:
-        """Add a recommendation and return its ID."""
+        """Add a recommendation and return its ID (uses stable hashing)."""
         with self._lock:
-            rec_id = self._generate_id("REC")
+            # Generate stable ID based on domain + title
+            domain = kwargs.get("domain", "unknown")
+            title = kwargs.get("title", "")
+            rec_id = self._generate_stable_id_safe("REC", domain, title)
             kwargs["finding_id"] = rec_id
 
             # Validate fact/gap citations
@@ -660,6 +773,7 @@ class ReasoningStore:
                     continue
                 self.risks.append(risk)
                 existing_risk_ids.add(risk.finding_id)
+                self._used_ids.add(risk.finding_id)  # Track stable ID
                 counts["risks"] += 1
                 update_counter(risk.finding_id, "R")
 
@@ -670,6 +784,7 @@ class ReasoningStore:
                     continue
                 self.strategic_considerations.append(sc)
                 existing_sc_ids.add(sc.finding_id)
+                self._used_ids.add(sc.finding_id)  # Track stable ID
                 counts["strategic"] += 1
                 update_counter(sc.finding_id, "SC")
 
@@ -680,6 +795,7 @@ class ReasoningStore:
                     continue
                 self.work_items.append(wi)
                 existing_wi_ids.add(wi.finding_id)
+                self._used_ids.add(wi.finding_id)  # Track stable ID
                 counts["work_items"] += 1
                 update_counter(wi.finding_id, "WI")
 
@@ -690,8 +806,12 @@ class ReasoningStore:
                     continue
                 self.recommendations.append(rec)
                 existing_rec_ids.add(rec.finding_id)
+                self._used_ids.add(rec.finding_id)  # Track stable ID
                 counts["recommendations"] += 1
                 update_counter(rec.finding_id, "REC")
+
+            # Also merge _used_ids from other store
+            self._used_ids.update(other._used_ids)
 
         logger.info(f"Merged {counts['risks']} risks, {counts['work_items']} work items (skipped {counts['duplicates']} duplicates)")
         return counts
@@ -728,6 +848,7 @@ class ReasoningStore:
             for risk_dict in findings_dict.get("risks", []):
                 risk = Risk.from_dict(risk_dict)
                 self.risks.append(risk)
+                self._used_ids.add(risk.finding_id)  # Track stable ID
                 counts["risks"] += 1
                 update_counter(risk.finding_id, "R")
 
@@ -735,6 +856,7 @@ class ReasoningStore:
             for sc_dict in findings_dict.get("strategic_considerations", []):
                 sc = StrategicConsideration.from_dict(sc_dict)
                 self.strategic_considerations.append(sc)
+                self._used_ids.add(sc.finding_id)  # Track stable ID
                 counts["strategic"] += 1
                 update_counter(sc.finding_id, "SC")
 
@@ -742,6 +864,7 @@ class ReasoningStore:
             for wi_dict in findings_dict.get("work_items", []):
                 wi = WorkItem.from_dict(wi_dict)
                 self.work_items.append(wi)
+                self._used_ids.add(wi.finding_id)  # Track stable ID
                 counts["work_items"] += 1
                 update_counter(wi.finding_id, "WI")
 
@@ -749,6 +872,7 @@ class ReasoningStore:
             for rec_dict in findings_dict.get("recommendations", []):
                 rec = Recommendation.from_dict(rec_dict)
                 self.recommendations.append(rec)
+                self._used_ids.add(rec.finding_id)  # Track stable ID
                 counts["recommendations"] += 1
                 update_counter(rec.finding_id, "REC")
 
@@ -757,12 +881,13 @@ class ReasoningStore:
     def save(self, path: str):
         """Save reasoning store to JSON file with retry logic."""
         from tools_v2.io_utils import safe_file_write
-        
+
         data = self.get_all_findings()
-        data["_counters"] = self._counters  # Preserve counters for continuation
-        
+        data["_counters"] = self._counters  # Preserve counters for backward compat
+        data["_used_ids"] = list(self._used_ids)  # Preserve used IDs for stable hashing
+
         safe_file_write(path, data, mode='w', encoding='utf-8', max_retries=3)
-        
+
         logger.info(f"Saved {len(self.risks)} risks, {len(self.work_items)} work items to {path}")
 
     @classmethod
@@ -804,10 +929,26 @@ class ReasoningStore:
             rec = Recommendation.from_dict(rec_dict)
             store.recommendations.append(rec)
 
-        # Restore counters for continuation
+        # Restore counters for backward compat
         store._counters = data.get("_counters", {})
 
-        # If no counters saved, calculate from loaded IDs (with robust parsing)
+        # Restore used IDs set (for stable ID collision detection)
+        saved_used_ids = data.get("_used_ids", [])
+        if saved_used_ids:
+            store._used_ids = set(saved_used_ids)
+        else:
+            # Rebuild _used_ids from loaded findings
+            store._used_ids = set()
+            for r in store.risks:
+                store._used_ids.add(r.finding_id)
+            for sc in store.strategic_considerations:
+                store._used_ids.add(sc.finding_id)
+            for wi in store.work_items:
+                store._used_ids.add(wi.finding_id)
+            for rec in store.recommendations:
+                store._used_ids.add(rec.finding_id)
+
+        # If no counters saved, calculate from loaded IDs (backward compat)
         if not store._counters:
             def safe_parse_seq(finding_id: str, prefix: str) -> int:
                 """Safely parse sequence number from finding ID."""

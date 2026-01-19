@@ -22,9 +22,14 @@ from dataclasses import dataclass
 from tools_v2.fact_store import FactStore
 from tools_v2.discovery_tools import DISCOVERY_TOOLS, execute_discovery_tool
 
-# Import cost estimation, rate limiter, and circuit breaker
+# Import cost estimation, rate limiter, circuit breaker, and temperature
 try:
-    from config_v2 import estimate_cost, API_RATE_LIMIT_SEMAPHORE_SIZE, API_RATE_LIMIT_PER_MINUTE
+    from config_v2 import (
+        estimate_cost,
+        API_RATE_LIMIT_SEMAPHORE_SIZE,
+        API_RATE_LIMIT_PER_MINUTE,
+        DISCOVERY_TEMPERATURE
+    )
     from tools_v2.rate_limiter import APIRateLimiter
     from tools_v2.circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitBreakerOpenError
 except ImportError:
@@ -32,6 +37,7 @@ except ImportError:
         return 0.0
     API_RATE_LIMIT_SEMAPHORE_SIZE = 3
     API_RATE_LIMIT_PER_MINUTE = 40
+    DISCOVERY_TEMPERATURE = 0.0  # Default to deterministic
     APIRateLimiter = None
     CircuitBreaker = None
     CircuitBreakerConfig = None
@@ -300,11 +306,13 @@ class BaseDiscoveryAgent(ABC):
                 
                 try:
                     # Use circuit breaker to protect API call
+                    # CRITICAL: temperature=0 for deterministic, consistent extraction
                     if self.circuit_breaker:
                         response = self.circuit_breaker.call(
                             self.client.messages.create,
                             model=self.model,
                             max_tokens=self.max_tokens,
+                            temperature=DISCOVERY_TEMPERATURE,  # Deterministic extraction
                             system=self.system_prompt,
                             tools=self.tools,
                             messages=self.messages,
@@ -314,6 +322,7 @@ class BaseDiscoveryAgent(ABC):
                         response = self.client.messages.create(
                             model=self.model,
                             max_tokens=self.max_tokens,
+                            temperature=DISCOVERY_TEMPERATURE,  # Deterministic extraction
                             system=self.system_prompt,
                             tools=self.tools,
                             messages=self.messages,
