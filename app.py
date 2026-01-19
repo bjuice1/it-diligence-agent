@@ -1695,30 +1695,22 @@ def main():
                     with st.spinner("Preparing documents..."):
                         saved_files = []
 
-                        # DEBUG: Show what we're working with
-                        st.write(f"**DEBUG:** target_files = {target_files}")
-                        st.write(f"**DEBUG:** target_notes length = {len(target_notes) if target_notes else 0}")
-                        st.write(f"**DEBUG:** buyer_files = {buyer_files}")
-
                         if target_files:
                             saved_files.extend(save_uploaded_files(target_files, temp_path, entity="target"))
-                            st.write(f"**DEBUG:** Saved {len(target_files)} target files")
 
                         if target_notes and target_notes.strip():
                             notes_file = save_notes_as_file(target_notes, temp_path, entity="target")
                             if notes_file:
                                 saved_files.append(notes_file)
-                                st.write(f"**DEBUG:** Saved notes file")
 
                         if buyer_files:
                             saved_files.extend(save_uploaded_files(buyer_files, temp_path, entity="buyer"))
-                            st.write(f"**DEBUG:** Saved {len(buyer_files)} buyer files")
-
-                        st.write(f"**DEBUG:** Total saved files: {len(saved_files)}")
 
                         if not saved_files:
                             st.error("❌ No documents to analyze! Please upload files or use sample documents.")
                             st.stop()
+
+                        st.info(f"📄 Loaded {len(saved_files)} document(s)")
 
                     # Progress tracking (inside temp dir context)
                     progress_bar = st.progress(0)
@@ -1731,14 +1723,6 @@ def main():
                     # Run analysis (inside temp dir context)
                     with st.spinner("Running analysis..."):
                         try:
-                            # Debug: Show temp directory contents
-                            st.write(f"**DEBUG:** temp_path = {temp_path}")
-                            target_subdir = temp_path / "target"
-                            if target_subdir.exists():
-                                st.write(f"**DEBUG:** target/ contents = {list(target_subdir.iterdir())}")
-                            else:
-                                st.error(f"**DEBUG:** target/ directory not found!")
-
                             results = run_analysis(
                                 input_dir=temp_path,
                                 target_name=target_name,
@@ -1748,16 +1732,15 @@ def main():
                                 progress_callback=update_progress
                             )
 
-                            # Debug: Show results summary
-                            st.write(f"**DEBUG:** Analysis status = {results.get('status')}")
-                            st.write(f"**DEBUG:** Doc length = {results.get('doc_length', 0)}")
-                            st.write(f"**DEBUG:** Facts = {results.get('facts')}")
+                            # Show errors if any
                             if results.get('errors'):
-                                st.error(f"**DEBUG:** Errors = {results.get('errors')}")
+                                for err in results.get('errors', []):
+                                    st.warning(f"⚠️ {err}")
                         except Exception as e:
-                            st.error(f"**DEBUG:** Analysis exception: {type(e).__name__}: {e}")
+                            st.error(f"❌ Analysis failed: {type(e).__name__}: {e}")
                             import traceback
-                            st.code(traceback.format_exc())
+                            with st.expander("Error details"):
+                                st.code(traceback.format_exc())
                             raise
 
                     # Store results (inside temp dir context)
