@@ -20,6 +20,13 @@ from typing import Optional, Dict, Any
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
+# Import granular facts UI (multi-pass extraction)
+try:
+    from ui.granular_facts_view import render_granular_facts_section, load_granular_data
+    GRANULAR_FACTS_AVAILABLE = True
+except ImportError:
+    GRANULAR_FACTS_AVAILABLE = False
+
 # Set page config first (must be first Streamlit command)
 st.set_page_config(
     page_title="IT Due Diligence Agent",
@@ -722,7 +729,7 @@ def display_results(results: Dict[str, Any]):
 
         st.subheader("🔍 Detailed Findings")
 
-        tab1, tab2, tab3, tab4 = st.tabs(["Risks", "Work Items", "Recommendations", "Facts"])
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["Risks", "Work Items", "Recommendations", "Facts", "Granular Inventory"])
 
         with tab1:
             if reasoning_store.risks:
@@ -792,6 +799,59 @@ def display_results(results: Dict[str, Any]):
                         if fact.evidence.get("exact_quote"):
                             st.caption(f"📄 Source: \"{fact.evidence['exact_quote'][:150]}...\"")
                         st.divider()
+
+        with tab5:
+            # Granular Inventory - Multi-Pass Extraction Results
+            if GRANULAR_FACTS_AVAILABLE:
+                # Get session directory from results
+                session_dir = None
+                if "session_dir" in results:
+                    session_dir = Path(results["session_dir"])
+                elif "output_dir" in results:
+                    session_dir = Path(results["output_dir"])
+                else:
+                    # Try to find from session state
+                    session_dir = Path(st.session_state.get("output_dir", "sessions/current"))
+
+                # Check if granular data exists
+                granular_data = load_granular_data(session_dir)
+
+                if granular_data["has_data"]:
+                    render_granular_facts_section(session_dir)
+                else:
+                    st.info("📊 **Granular Inventory** - Line-item level facts")
+                    st.markdown("""
+                    The multi-pass extraction system captures detailed, line-item facts:
+
+                    - **Pass 1:** System Discovery → Identifies all platforms & vendors
+                    - **Pass 2:** Detail Extraction → Counts, versions, costs, configs
+                    - **Pass 3:** Validation → Cross-checks summaries vs details
+
+                    **To populate this view:**
+                    ```python
+                    from agents_v2.multipass_orchestrator import run_multipass_extraction
+
+                    result = run_multipass_extraction(
+                        documents=[{"name": "doc.pdf", "content": "..."}],
+                        session_id="my-session"
+                    )
+                    ```
+
+                    This will extract 500+ granular facts with full traceability.
+                    """)
+
+                    # Show export options even without data
+                    st.markdown("---")
+                    st.markdown("**Export Options** (available after multi-pass extraction)")
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.button("📥 Download Excel", disabled=True, help="Run multi-pass extraction first")
+                    with col2:
+                        st.button("📥 Download CSV", disabled=True, help="Run multi-pass extraction first")
+                    with col3:
+                        st.button("📥 Download JSON", disabled=True, help="Run multi-pass extraction first")
+            else:
+                st.warning("Granular facts module not available. Check ui/granular_facts_view.py")
 
     # Output files with download buttons
     st.subheader("📄 Output Files")
