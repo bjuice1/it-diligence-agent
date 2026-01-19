@@ -392,6 +392,37 @@ def check_api_key() -> bool:
     return False
 
 
+def test_api_connection() -> tuple[bool, str]:
+    """Test that the API connection works. Returns (success, message)."""
+    try:
+        import anthropic
+        # Get API key from various sources
+        api_key = ANTHROPIC_API_KEY
+        if not api_key:
+            try:
+                api_key = st.secrets.get('ANTHROPIC_API_KEY')
+            except:
+                pass
+
+        if not api_key:
+            return False, "No API key found"
+
+        client = anthropic.Anthropic(api_key=api_key)
+        # Quick test call
+        response = client.messages.create(
+            model="claude-3-5-haiku-20241022",
+            max_tokens=10,
+            messages=[{"role": "user", "content": "Say OK"}]
+        )
+        return True, "API connection successful"
+    except anthropic.AuthenticationError:
+        return False, "Invalid API key"
+    except anthropic.RateLimitError:
+        return False, "Rate limited - try again later"
+    except Exception as e:
+        return False, f"API error: {type(e).__name__}: {str(e)[:100]}"
+
+
 def save_uploaded_files(uploaded_files, target_dir: Path, entity: str = "target") -> list:
     """Save uploaded files to target directory with entity subdirectory."""
     saved_files = []
@@ -559,7 +590,12 @@ def run_analysis(
         if len(document_text) < 500:
             print(f"[DEBUG] WARNING: Very short document text!")
             print(f"[DEBUG] Content preview: {document_text[:500]}")
-            results["errors"].append(f"Document text very short: {len(document_text)} chars")
+            results["errors"].append(f"Document text very short ({len(document_text)} chars) - check document loading")
+
+        if len(document_text) == 0:
+            results["errors"].append("No document text extracted - files may not have loaded correctly")
+            results["status"] = "error"
+            return results
 
         # Phase 2: Discovery
         if progress_callback:
@@ -1355,8 +1391,22 @@ def main():
 
     if not check_api_key():
         st.error("API key not configured!")
-        st.info("Set ANTHROPIC_API_KEY in your environment or .env file")
+        st.info("Set ANTHROPIC_API_KEY in your environment or Streamlit secrets")
         return
+
+    # API connection test (only show if not already tested)
+    if "api_tested" not in st.session_state:
+        with st.spinner("Testing API connection..."):
+            success, message = test_api_connection()
+            st.session_state["api_tested"] = success
+            st.session_state["api_message"] = message
+
+        if not success:
+            st.error(f"❌ API Connection Failed: {message}")
+            if st.button("Retry API Test"):
+                del st.session_state["api_tested"]
+                st.rerun()
+            return
 
     # Default values
     all_domains = ["infrastructure", "network", "cybersecurity", "applications", "identity_access", "organization"]
