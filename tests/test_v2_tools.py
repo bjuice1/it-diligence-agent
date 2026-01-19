@@ -353,6 +353,83 @@ class TestFactStore:
         for domain in expected_domains:
             assert domain in DOMAIN_PREFIXES or domain == "general"
 
+    def test_verify_fact(self):
+        """Test verifying a fact."""
+        store = FactStore()
+        fact_id = store.add_fact(
+            domain="infrastructure",
+            category="compute",
+            item="VMware",
+            details={},
+            status="documented",
+            evidence={"exact_quote": "VMware vSphere 6.7"},
+            entity="target"
+        )
+
+        # Fact should start unverified
+        fact = store.get_fact(fact_id)
+        assert fact.verified is False
+        assert fact.verified_by is None
+
+        # Verify the fact
+        result = store.verify_fact(fact_id, "reviewer@example.com")
+        assert result is True
+
+        # Check it's now verified
+        fact = store.get_fact(fact_id)
+        assert fact.verified is True
+        assert fact.verified_by == "reviewer@example.com"
+        assert fact.verified_at is not None
+
+    def test_verification_stats(self):
+        """Test verification statistics."""
+        store = FactStore()
+
+        # Add some facts
+        id1 = store.add_fact(
+            domain="infrastructure", category="compute", item="VMware",
+            details={}, status="documented", evidence={"exact_quote": "q"}, entity="target"
+        )
+        id2 = store.add_fact(
+            domain="infrastructure", category="storage", item="NetApp",
+            details={}, status="documented", evidence={"exact_quote": "q"}, entity="target"
+        )
+        id3 = store.add_fact(
+            domain="network", category="firewall", item="Palo Alto",
+            details={}, status="documented", evidence={"exact_quote": "q"}, entity="target"
+        )
+
+        # Verify one
+        store.verify_fact(id1, "tester")
+
+        stats = store.get_verification_stats()
+        assert stats["total_facts"] == 3
+        assert stats["verified_count"] == 1
+        assert stats["unverified_count"] == 2
+        assert stats["verification_rate"] == 1/3
+
+    def test_bulk_verify(self):
+        """Test bulk verification."""
+        store = FactStore()
+
+        ids = []
+        for i in range(5):
+            fact_id = store.add_fact(
+                domain="infrastructure", category="compute", item=f"Server{i}",
+                details={}, status="documented", evidence={"exact_quote": "q"}, entity="target"
+            )
+            ids.append(fact_id)
+
+        # Bulk verify first 3
+        results = store.bulk_verify(ids[:3], "bulk_reviewer")
+        assert results["verified"] == 3
+        assert results["not_found"] == 0
+
+        # Check stats
+        stats = store.get_verification_stats()
+        assert stats["verified_count"] == 3
+        assert stats["unverified_count"] == 2
+
 
 # =============================================================================
 # DISCOVERY TOOLS TESTS

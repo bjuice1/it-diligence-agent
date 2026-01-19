@@ -27,6 +27,13 @@ try:
 except ImportError:
     GRANULAR_FACTS_AVAILABLE = False
 
+# Import verification UI (human-in-the-loop anti-hallucination)
+try:
+    from ui.verification_view import render_verification_section
+    VERIFICATION_AVAILABLE = True
+except ImportError:
+    VERIFICATION_AVAILABLE = False
+
 # Set page config first (must be first Streamlit command)
 st.set_page_config(
     page_title="IT Due Diligence Agent",
@@ -729,7 +736,7 @@ def display_results(results: Dict[str, Any]):
 
         st.subheader("🔍 Detailed Findings")
 
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["Risks", "Work Items", "Recommendations", "Facts", "Granular Inventory"])
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["Risks", "Work Items", "Recommendations", "Facts", "Granular Inventory", "Verification"])
 
         with tab1:
             if reasoning_store.risks:
@@ -852,6 +859,22 @@ def display_results(results: Dict[str, Any]):
                         st.button("📥 Download JSON", disabled=True, help="Run multi-pass extraction first")
             else:
                 st.warning("Granular facts module not available. Check ui/granular_facts_view.py")
+
+        with tab6:
+            # Verification - Human-in-the-loop fact verification
+            if VERIFICATION_AVAILABLE:
+                # Get session directory from results
+                session_dir = None
+                if "session_dir" in results:
+                    session_dir = Path(results["session_dir"])
+                elif "output_dir" in results:
+                    session_dir = Path(results["output_dir"])
+                else:
+                    session_dir = Path(st.session_state.get("output_dir", "sessions/current"))
+
+                render_verification_section(session_dir)
+            else:
+                st.warning("Verification module not available. Check ui/verification_view.py")
 
     # Output files with download buttons
     st.subheader("📄 Output Files")

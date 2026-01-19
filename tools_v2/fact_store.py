@@ -58,6 +58,11 @@ class Fact:
 
     Facts are observations from the document - NOT conclusions.
     The Reasoning phase will analyze facts and draw conclusions.
+
+    Verification Status:
+    - verified: Has a human reviewed and confirmed this fact?
+    - verified_by: Who verified it (username/email)
+    - verified_at: When it was verified (ISO timestamp)
     """
     fact_id: str              # F-INFRA-001
     domain: str               # infrastructure, network, etc.
@@ -70,6 +75,10 @@ class Fact:
     source_document: str = "" # Filename of source document (for incremental updates)
     created_at: str = field(default_factory=lambda: _generate_timestamp())
     updated_at: str = ""      # Set when fact is modified
+    # Verification fields - for human-in-the-loop validation
+    verified: bool = False              # Has human verified this fact?
+    verified_by: Optional[str] = None   # Who verified (username/email)
+    verified_at: Optional[str] = None   # When verified (ISO timestamp)
 
     def to_dict(self) -> Dict:
         return asdict(self)
@@ -561,6 +570,144 @@ class FactStore:
             "total_cited": len(cited_ids),
             "validation_rate": len(valid) / len(cited_ids) if cited_ids else 1.0
         }
+
+    # =========================================================================
+    # HUMAN VERIFICATION (anti-hallucination anchor)
+    # =========================================================================
+
+    def verify_fact(self, fact_id: str, verified_by: str) -> bool:
+        """
+        Mark a fact as human-verified.
+
+        Args:
+            fact_id: The fact ID to verify
+            verified_by: Username/email of person verifying
+
+        Returns:
+            True if fact was found and verified, False otherwise
+        """
+        with self._lock:
+            fact = self._fact_index.get(fact_id)
+            if not fact:
+                logger.warning(f"Cannot verify - fact not found: {fact_id}")
+                return False
+
+            fact.verified = True
+            fact.verified_by = verified_by
+            fact.verified_at = _generate_timestamp()
+            fact.updated_at = _generate_timestamp()
+            logger.info(f"Fact {fact_id} verified by {verified_by}")
+            return True
+
+    def unverify_fact(self, fact_id: str) -> bool:
+        """
+        Remove verification status from a fact.
+
+        Args:
+            fact_id: The fact ID to unverify
+
+        Returns:
+            True if fact was found and unverified, False otherwise
+        """
+        with self._lock:
+            fact = self._fact_index.get(fact_id)
+            if not fact:
+                return False
+
+            fact.verified = False
+            fact.verified_by = None
+            fact.verified_at = None
+            fact.updated_at = _generate_timestamp()
+            logger.info(f"Fact {fact_id} verification removed")
+            return True
+
+    def get_verified_facts(self, domain: str = None) -> List[Fact]:
+        """
+        Get all verified facts, optionally filtered by domain.
+
+        Args:
+            domain: Optional domain filter
+
+        Returns:
+            List of verified facts
+        """
+        with self._lock:
+            facts = [f for f in self.facts if f.verified]
+            if domain:
+                facts = [f for f in facts if f.domain == domain]
+            return facts
+
+    def get_unverified_facts(self, domain: str = None) -> List[Fact]:
+        """
+        Get all unverified facts, optionally filtered by domain.
+
+        Args:
+            domain: Optional domain filter
+
+        Returns:
+            List of unverified facts
+        """
+        with self._lock:
+            facts = [f for f in self.facts if not f.verified]
+            if domain:
+                facts = [f for f in facts if f.domain == domain]
+            return facts
+
+    def get_verification_stats(self) -> Dict[str, Any]:
+        """
+        Get verification statistics across all facts.
+
+        Returns:
+            Dict with counts, rates, and breakdown by domain
+        """
+        with self._lock:
+            total = len(self.facts)
+            verified = sum(1 for f in self.facts if f.verified)
+            unverified = total - verified
+
+            # Breakdown by domain
+            by_domain = {}
+            for fact in self.facts:
+                if fact.domain not in by_domain:
+                    by_domain[fact.domain] = {"total": 0, "verified": 0}
+                by_domain[fact.domain]["total"] += 1
+                if fact.verified:
+                    by_domain[fact.domain]["verified"] += 1
+
+            # Calculate rates
+            for domain in by_domain:
+                domain_total = by_domain[domain]["total"]
+                domain_verified = by_domain[domain]["verified"]
+                by_domain[domain]["rate"] = (
+                    domain_verified / domain_total if domain_total > 0 else 0.0
+                )
+
+            return {
+                "total_facts": total,
+                "verified_count": verified,
+                "unverified_count": unverified,
+                "verification_rate": verified / total if total > 0 else 0.0,
+                "by_domain": by_domain
+            }
+
+    def bulk_verify(self, fact_ids: List[str], verified_by: str) -> Dict[str, int]:
+        """
+        Verify multiple facts at once.
+
+        Args:
+            fact_ids: List of fact IDs to verify
+            verified_by: Username/email of person verifying
+
+        Returns:
+            Dict with success and failure counts
+        """
+        results = {"verified": 0, "not_found": 0}
+        for fact_id in fact_ids:
+            if self.verify_fact(fact_id, verified_by):
+                results["verified"] += 1
+            else:
+                results["not_found"] += 1
+        return results
 
     def mark_discovery_complete(self, domain: str,
                                  categories_covered: List[str],
