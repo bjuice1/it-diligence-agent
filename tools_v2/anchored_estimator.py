@@ -348,6 +348,88 @@ class AnchoredEstimator:
 
         return adjusted_low, adjusted_high, rationale
 
+    def identify_tsa_exposure(self, facts: List[Dict]) -> List[Dict]:
+        """
+        Identify services/functions that will likely require TSA coverage.
+
+        NOTE: We do NOT estimate TSA costs - seller provides pricing.
+        We identify WHAT needs TSA so buyer knows what to negotiate.
+        """
+        tsa_patterns = {
+            "identity_services": {
+                "patterns": ["parent ad", "parent azure", "corporate okta", "federated",
+                            "shared identity", "parent-managed identity"],
+                "service": "Identity & Authentication",
+                "typical_duration": "6-12 months",
+                "criticality": "Day-1 Critical"
+            },
+            "email_services": {
+                "patterns": ["parent email", "corporate exchange", "shared microsoft 365",
+                            "parent m365", "corporate email"],
+                "service": "Email & Collaboration",
+                "typical_duration": "3-6 months",
+                "criticality": "Day-1 Critical"
+            },
+            "service_desk": {
+                "patterns": ["parent service desk", "corporate helpdesk", "shared itsm",
+                            "parent-managed tickets", "parent support"],
+                "service": "Service Desk / IT Support",
+                "typical_duration": "6-12 months",
+                "criticality": "Day-1 Important"
+            },
+            "infrastructure": {
+                "patterns": ["parent data center", "shared hosting", "corporate network",
+                            "parent wan", "shared infrastructure", "parent-hosted"],
+                "service": "Infrastructure & Hosting",
+                "typical_duration": "12-18 months",
+                "criticality": "Day-1 Critical"
+            },
+            "security_services": {
+                "patterns": ["parent soc", "corporate security", "shared siem",
+                            "parent-managed security", "corporate firewall"],
+                "service": "Security Operations",
+                "typical_duration": "6-12 months",
+                "criticality": "Day-1 Critical"
+            },
+            "erp_support": {
+                "patterns": ["parent erp support", "shared erp", "corporate sap",
+                            "parent-managed erp"],
+                "service": "ERP Support & Maintenance",
+                "typical_duration": "12-24 months",
+                "criticality": "Day-1 Important"
+            },
+            "network_services": {
+                "patterns": ["parent network", "corporate wan", "shared mpls",
+                            "parent internet", "corporate vpn"],
+                "service": "Network & Connectivity",
+                "typical_duration": "6-12 months",
+                "criticality": "Day-1 Critical"
+            },
+        }
+
+        exposures = []
+
+        for category, config in tsa_patterns.items():
+            matching_facts = []
+            for fact in facts:
+                content = fact.get("content", "").lower()
+                for pattern in config["patterns"]:
+                    if pattern in content:
+                        matching_facts.append(fact.get("fact_id", "unknown"))
+                        break
+
+            if matching_facts:
+                exposures.append({
+                    "category": category,
+                    "service": config["service"],
+                    "typical_duration": config["typical_duration"],
+                    "criticality": config["criticality"],
+                    "supporting_facts": matching_facts,
+                    "action": f"Confirm TSA coverage for {config['service']} in seller proposal"
+                })
+
+        return exposures
+
     def estimate_separation_cost(
         self,
         user_count: int,
@@ -355,8 +437,7 @@ class AnchoredEstimator:
         facts: List[Dict],
         has_shared_services: bool = True,
         has_parent_licenses: bool = True,
-        dc_count: int = 1,
-        tsa_months: int = 12
+        dc_count: int = 1
     ) -> Dict[str, Any]:
         """
         Produce a complete anchored estimate with fact-based adjustments.
@@ -393,25 +474,9 @@ class AnchoredEstimator:
                 rationale=rationale if rationale else ["No adjustments - standard market rates apply"]
             ))
 
-        # TSA costs
-        if has_shared_services:
-            tsa_est = self.deterministic.estimate_tsa_cost(
-                "it_services_per_user", user_count, tsa_months
-            )
-            anchor_low, anchor_high = tsa_est["total_cost_range"]
-            adj_low, adj_high, rationale = self.calculate_adjusted_cost(
-                "tsa", anchor_low, anchor_high, matched_rules
-            )
-            categories.append(CostCategory(
-                category_id="tsa",
-                name=f"TSA Services ({tsa_months} months)",
-                anchor_low=anchor_low,
-                anchor_high=anchor_high,
-                anchor_source="Market benchmark: IT TSA rates $100-300/user/month",
-                adjusted_low=adj_low,
-                adjusted_high=adj_high,
-                rationale=rationale if rationale else ["No adjustments - standard TSA rates apply"]
-            ))
+        # NOTE: TSA costs are NOT estimated here - seller provides TSA pricing
+        # Instead, we identify TSA-exposed services for negotiation
+        # See tsa_exposure_flags in result for what needs TSA coverage
 
         # Identity separation (carveout)
         if deal_type == "carveout":
@@ -533,6 +598,13 @@ class AnchoredEstimator:
                  max(subtotal_anchor_low + subtotal_anchor_high, 1) - 1) * 100, 1
             ),
 
+            # TSA Exposure (NOT costs - seller provides pricing)
+            # This identifies WHAT needs TSA for negotiation
+            "tsa_exposure": self.identify_tsa_exposure(facts),
+
+            # Note about TSA
+            "tsa_note": "TSA costs not estimated - seller provides pricing. Above identifies services requiring TSA coverage.",
+
             # Methodology
             "methodology": "anchored_estimation",
             "input_hash": self._get_input_hash({
@@ -586,7 +658,7 @@ class AnchoredEstimator:
         lines.extend([
             "",
             "-" * 70,
-            "TOTALS",
+            "TOTALS (Buyer One-Time Costs)",
             "-" * 70,
             f"Subtotal (Anchor):   ${estimate['subtotal_anchor'][0]:,.0f} - ${estimate['subtotal_anchor'][1]:,.0f}",
             f"Subtotal (Adjusted): ${estimate['subtotal_adjusted'][0]:,.0f} - ${estimate['subtotal_adjusted'][1]:,.0f}",
@@ -595,7 +667,28 @@ class AnchoredEstimator:
             "",
             f"TOTAL ESTIMATE: ${estimate['total_range'][0]:,.0f} - ${estimate['total_range'][1]:,.0f}",
             f"Midpoint: ${estimate['total_midpoint']:,.0f}",
-            "",
+        ])
+
+        # TSA Exposure section
+        tsa_exposure = estimate.get("tsa_exposure", [])
+        if tsa_exposure:
+            lines.extend([
+                "",
+                "-" * 70,
+                "TSA EXPOSURE (Confirm Coverage with Seller)",
+                "-" * 70,
+                "Note: TSA costs provided by seller - below identifies services needing coverage",
+                "",
+            ])
+            for exp in tsa_exposure:
+                lines.append(f"  ⚠️ {exp['service']}")
+                lines.append(f"     Typical Duration: {exp['typical_duration']}")
+                lines.append(f"     Criticality: {exp['criticality']}")
+                lines.append(f"     Facts: {', '.join(exp['supporting_facts'][:2])}")
+                lines.append("")
+
+        lines.extend([
+            "-" * 70,
             f"Methodology: {estimate['methodology']}",
             f"Input Hash: {estimate['input_hash']}",
             "=" * 70,
