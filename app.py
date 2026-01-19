@@ -41,6 +41,20 @@ try:
 except ImportError:
     ORG_CHART_AVAILABLE = False
 
+# Import deal readout UI (executive summary 1-pager)
+try:
+    from ui.deal_readout_view import render_deal_readout_section
+    DEAL_READOUT_AVAILABLE = True
+except ImportError:
+    DEAL_READOUT_AVAILABLE = False
+
+# Import infrastructure inventory panel
+try:
+    from ui.inventory_panel_view import render_inventory_panel_section
+    INVENTORY_PANEL_AVAILABLE = True
+except ImportError:
+    INVENTORY_PANEL_AVAILABLE = False
+
 # Set page config first (must be first Streamlit command)
 st.set_page_config(
     page_title="IT Due Diligence Agent",
@@ -743,9 +757,24 @@ def display_results(results: Dict[str, Any]):
 
         st.subheader("🔍 Detailed Findings")
 
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["Risks", "Work Items", "Recommendations", "Facts", "Granular Inventory", "Verification", "Org Chart"])
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs(["📊 Deal Readout", "Risks", "Work Items", "Recommendations", "Facts", "Granular Inventory", "Verification", "Org Chart", "🖥️ Infra Inventory"])
 
         with tab1:
+            # Deal Readout - Executive Summary 1-pager
+            if DEAL_READOUT_AVAILABLE:
+                session_dir = None
+                if "session_dir" in results:
+                    session_dir = Path(results["session_dir"])
+                elif "output_dir" in results:
+                    session_dir = Path(results["output_dir"])
+                else:
+                    session_dir = Path(st.session_state.get("output_dir", "sessions/current"))
+
+                render_deal_readout_section(session_dir)
+            else:
+                st.warning("Deal Readout module not available. Check ui/deal_readout_view.py")
+
+        with tab2:
             if reasoning_store.risks:
                 for risk in reasoning_store.risks:
                     severity_color = {
@@ -762,7 +791,7 @@ def display_results(results: Dict[str, Any]):
             else:
                 st.info("No risks identified")
 
-        with tab2:
+        with tab3:
             if reasoning_store.work_items:
                 # Group by phase
                 for phase in ["Day_1", "Day_100", "Post_100"]:
@@ -777,7 +806,7 @@ def display_results(results: Dict[str, Any]):
             else:
                 st.info("No work items identified")
 
-        with tab3:
+        with tab4:
             if reasoning_store.recommendations:
                 for rec in reasoning_store.recommendations:
                     with st.expander(f"📋 {rec.title}"):
@@ -787,7 +816,7 @@ def display_results(results: Dict[str, Any]):
             else:
                 st.info("No recommendations")
 
-        with tab4:
+        with tab5:
             # Import fact synthesis function
             from tools_v2.html_report import _synthesize_fact_statement
 
@@ -814,7 +843,7 @@ def display_results(results: Dict[str, Any]):
                             st.caption(f"📄 Source: \"{fact.evidence['exact_quote'][:150]}...\"")
                         st.divider()
 
-        with tab5:
+        with tab6:
             # Granular Inventory - Multi-Pass Extraction Results
             if GRANULAR_FACTS_AVAILABLE:
                 # Get session directory from results
@@ -867,7 +896,7 @@ def display_results(results: Dict[str, Any]):
             else:
                 st.warning("Granular facts module not available. Check ui/granular_facts_view.py")
 
-        with tab6:
+        with tab7:
             # Verification - Human-in-the-loop fact verification
             if VERIFICATION_AVAILABLE:
                 # Get session directory from results
@@ -883,7 +912,7 @@ def display_results(results: Dict[str, Any]):
             else:
                 st.warning("Verification module not available. Check ui/verification_view.py")
 
-        with tab7:
+        with tab8:
             # Org Chart - Organizational structure visualization
             if ORG_CHART_AVAILABLE:
                 # Get session directory from results
@@ -898,6 +927,21 @@ def display_results(results: Dict[str, Any]):
                 render_org_chart_section(session_dir)
             else:
                 st.warning("Org Chart module not available. Check ui/org_chart_view.py")
+
+        with tab9:
+            # Infrastructure Inventory - Coverage Analysis
+            if INVENTORY_PANEL_AVAILABLE:
+                session_dir = None
+                if "session_dir" in results:
+                    session_dir = Path(results["session_dir"])
+                elif "output_dir" in results:
+                    session_dir = Path(results["output_dir"])
+                else:
+                    session_dir = Path(st.session_state.get("output_dir", "sessions/current"))
+
+                render_inventory_panel_section(session_dir)
+            else:
+                st.warning("Infrastructure Inventory module not available. Check ui/inventory_panel_view.py")
 
     # Output files with download buttons
     st.subheader("📄 Output Files")
