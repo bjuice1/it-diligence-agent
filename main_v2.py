@@ -71,6 +71,8 @@ from tools_v2.excel_export import export_to_excel, OPENPYXL_AVAILABLE
 from agents_v2.discovery import DISCOVERY_AGENTS
 from agents_v2.reasoning import REASONING_AGENTS
 from agents_v2.narrative import NARRATIVE_AGENTS, CostSynthesisAgent
+from agents_v2.narrative_synthesis_agent import NarrativeSynthesisAgent
+from agents_v2.narrative_review_agent import NarrativeReviewAgent
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 
@@ -1255,6 +1257,104 @@ Phases:
                     print(f"  Note: {len(failed_narratives)} domain(s) failed: {', '.join(failed_narratives)}")
             else:
                 print("[WARN] No narratives to save - all domain agents failed")
+
+        # Phase 7: Executive Narrative Synthesis (new in game plan)
+        executive_narrative_result = None
+        if merged_reasoning_store:
+            print(f"\n{'='*60}")
+            print("PHASE 7: EXECUTIVE NARRATIVE SYNTHESIS")
+            print(f"{'='*60}")
+
+            try:
+                # Build deal context for narrative synthesis
+                exec_deal_context = {
+                    'company_name': args.target_name,
+                    'deal_type': args.deal_type.replace('_', '') if hasattr(args, 'deal_type') else 'acquisition'
+                }
+                if dd_session:
+                    exec_deal_context['company_name'] = dd_session.state.deal_context.target_name
+                    exec_deal_context['deal_type'] = dd_session.state.deal_context.deal_type
+
+                # Create and run narrative synthesis agent
+                narrative_synthesis_agent = NarrativeSynthesisAgent(
+                    api_key=ANTHROPIC_API_KEY,
+                    model=REASONING_MODEL
+                )
+
+                executive_narrative_result = narrative_synthesis_agent.synthesize_quick(
+                    reasoning_store=merged_reasoning_store,
+                    deal_context=exec_deal_context,
+                    fact_store=fact_store
+                )
+
+                if executive_narrative_result.get('status') == 'success':
+                    # Save executive narrative as JSON
+                    exec_narrative_file = OUTPUT_DIR / f"executive_narrative_{timestamp}.json"
+                    with open(exec_narrative_file, 'w') as f:
+                        json.dump(executive_narrative_result['narrative'], f, indent=2)
+                    print(f"Executive narrative JSON saved to: {exec_narrative_file}")
+
+                    # Save executive narrative as Markdown
+                    exec_narrative_md = OUTPUT_DIR / f"executive_narrative_{timestamp}.md"
+                    with open(exec_narrative_md, 'w') as f:
+                        f.write(executive_narrative_result['narrative_markdown'])
+                    print(f"Executive narrative Markdown saved to: {exec_narrative_md}")
+
+                    # Report validation results
+                    validation = executive_narrative_result.get('validation', {})
+                    if validation.get('issues'):
+                        print(f"  Validation issues: {len(validation['issues'])}")
+                        for issue in validation['issues'][:3]:
+                            print(f"    - {issue}")
+                    print(f"  Quality score: {validation.get('score', 0)}/100")
+                else:
+                    print(f"[WARN] Executive narrative synthesis failed: {executive_narrative_result.get('error')}")
+
+            except Exception as e:
+                print(f"[ERROR] Executive narrative synthesis failed: {e}")
+                logger.exception("Executive narrative synthesis error")
+
+        # Phase 8: Narrative Quality Review
+        review_result = None
+        if executive_narrative_result and executive_narrative_result.get('status') == 'success':
+            print(f"\n{'='*60}")
+            print("PHASE 8: NARRATIVE QUALITY REVIEW")
+            print(f"{'='*60}")
+
+            try:
+                review_agent = NarrativeReviewAgent(api_key=ANTHROPIC_API_KEY)
+                review_result = review_agent.review(
+                    narrative=executive_narrative_result['narrative'],
+                    deal_context=exec_deal_context,
+                    use_llm=False  # Use fast local review by default
+                )
+
+                # Save review result
+                review_file = OUTPUT_DIR / f"narrative_review_{timestamp}.json"
+                with open(review_file, 'w') as f:
+                    json.dump(review_result.to_dict(), f, indent=2)
+                print(f"Review saved to: {review_file}")
+
+                # Report summary
+                print(f"\nReview Result: {'PASS' if review_result.overall_pass else 'NEEDS REVISION'}")
+                print(f"Quality Score: {review_result.score:.0f}/100")
+
+                if review_result.issues:
+                    critical = [i for i in review_result.issues if i.severity.value == 'critical']
+                    major = [i for i in review_result.issues if i.severity.value == 'major']
+                    if critical:
+                        print(f"  Critical issues: {len(critical)}")
+                    if major:
+                        print(f"  Major issues: {len(major)}")
+
+                if review_result.improvements:
+                    print("\nSuggested improvements:")
+                    for imp in review_result.improvements[:3]:
+                        print(f"  - {imp}")
+
+            except Exception as e:
+                print(f"[WARN] Narrative review failed: {e}")
+                logger.exception("Narrative review error")
 
         # Generate HTML Report
         html_report_file = None

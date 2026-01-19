@@ -115,6 +115,9 @@ CONFIDENCE_LEVELS = ["high", "medium", "low"]
 WORK_PHASES = ["Day_1", "Day_100", "Post_100"]
 PRIORITY_LEVELS = ["critical", "high", "medium", "low"]
 
+# M&A Lenses - every finding must connect to at least one
+MNA_LENSES = ["day_1_continuity", "tsa_exposure", "separation_complexity", "synergy_opportunity", "cost_driver"]
+
 # Cost estimate ranges for work items
 COST_RANGES = [
     "under_25k",      # < $25,000
@@ -205,6 +208,8 @@ class Risk:
     based_on_facts: List[str]  # Fact IDs that support this finding
     confidence: str
     reasoning: str  # Explain HOW facts led to this conclusion
+    mna_lens: str = ""  # Primary M&A lens (day_1_continuity, tsa_exposure, etc.)
+    mna_implication: str = ""  # Specific deal implication (1-2 sentences)
     timeline: Optional[str] = None  # When this becomes critical
     created_at: str = field(default_factory=lambda: _generate_timestamp())
 
@@ -228,6 +233,8 @@ class StrategicConsideration:
     based_on_facts: List[str]  # Fact IDs that support this finding
     confidence: str
     reasoning: str  # Explain HOW facts led to this conclusion
+    mna_lens: str = ""  # Primary M&A lens (day_1_continuity, tsa_exposure, etc.)
+    mna_implication: str = ""  # Specific deal implication (1-2 sentences)
     created_at: str = field(default_factory=lambda: _generate_timestamp())
 
     def to_dict(self) -> Dict:
@@ -259,6 +266,10 @@ class WorkItem:
     # NEW: Link to risks that this work item addresses
     triggered_by_risks: List[str] = field(default_factory=list)  # Risk IDs (R-001, R-002)
 
+    # M&A Framing
+    mna_lens: str = ""  # Primary M&A lens (day_1_continuity, tsa_exposure, etc.)
+    mna_implication: str = ""  # Specific deal implication (1-2 sentences)
+
     dependencies: List[str] = field(default_factory=list)  # Other work items
     created_at: str = field(default_factory=lambda: _generate_timestamp())
 
@@ -287,6 +298,8 @@ class Recommendation:
     based_on_facts: List[str]  # Fact IDs that support this recommendation
     confidence: str
     reasoning: str  # Explain the reasoning chain
+    mna_lens: str = ""  # Primary M&A lens (day_1_continuity, tsa_exposure, etc.)
+    mna_implication: str = ""  # Specific deal implication (1-2 sentences)
     created_at: str = field(default_factory=lambda: _generate_timestamp())
 
     def to_dict(self) -> Dict:
@@ -295,6 +308,39 @@ class Recommendation:
     @classmethod
     def from_dict(cls, data: Dict) -> "Recommendation":
         return cls(**data)
+
+
+# =============================================================================
+# FUNCTION STORY (imported from template)
+# =============================================================================
+
+# Import FunctionStory from the template module
+try:
+    from prompts.shared.function_story_template import FunctionStory
+except ImportError:
+    # Fallback if import fails - define minimal version
+    @dataclass
+    class FunctionStory:
+        """A structured narrative story for an IT function/team."""
+        function_name: str
+        domain: str
+        day_to_day: str
+        strengths: List[str]
+        constraints: List[str]
+        upstream_dependencies: List[str]
+        downstream_dependents: List[str]
+        mna_implication: str
+        mna_lens: str
+        based_on_facts: List[str]
+        inferences: List[str]
+        confidence: str = "medium"
+        created_at: str = field(default_factory=lambda: _generate_timestamp())
+
+        def to_dict(self) -> Dict:
+            return asdict(self)
+
+        def to_markdown(self) -> str:
+            return f"### {self.function_name}\n{self.day_to_day}"
 
 
 # =============================================================================
@@ -315,11 +361,12 @@ class ReasoningStore:
         self.strategic_considerations: List[StrategicConsideration] = []
         self.work_items: List[WorkItem] = []
         self.recommendations: List[Recommendation] = []
+        self.function_stories: List[FunctionStory] = []  # Phase 3: Function narratives
         self._counters: Dict[str, int] = {}  # Kept for backwards compatibility
         self._used_ids: Set[str] = set()  # Track all used IDs to prevent duplicates
         self.metadata: Dict[str, Any] = {
             "created_at": _generate_timestamp(),
-            "version": "2.1"  # Version bump for stable ID change
+            "version": "2.2"  # Version bump for function stories
         }
         # Thread safety: Lock for all mutating operations
         self._lock = threading.RLock()
@@ -515,6 +562,35 @@ class ReasoningStore:
             logger.debug(f"Added recommendation {rec_id}: {rec.title}")
             return rec_id
 
+    def add_function_story(self, **kwargs) -> str:
+        """Add a function story and return the function name as ID."""
+        with self._lock:
+            function_name = kwargs.get("function_name", "unknown")
+            domain = kwargs.get("domain", "unknown")
+
+            # Validate fact/gap citations
+            based_on = kwargs.get("based_on_facts", [])
+            validation = self.validate_fact_citations(based_on)
+            if validation.get("invalid"):
+                logger.warning(f"Function story {function_name} cites unknown IDs: {validation['invalid']}")
+
+            story = FunctionStory(**kwargs)
+            self.function_stories.append(story)
+            logger.debug(f"Added function story: {function_name} ({domain})")
+            return f"FS-{domain}-{function_name}"
+
+    def get_function_stories(self) -> List[Dict]:
+        """Get all function stories as dicts (thread-safe)."""
+        with self._lock:
+            return [s.to_dict() for s in self.function_stories]
+
+    def get_function_stories_markdown(self) -> str:
+        """Get all function stories as markdown narrative (thread-safe)."""
+        with self._lock:
+            if not self.function_stories:
+                return ""
+            return "\n\n".join([s.to_markdown() for s in self.function_stories])
+
     def get_all_findings(self) -> Dict[str, Any]:
         """Get all reasoning outputs (thread-safe)."""
         with self._lock:
@@ -524,12 +600,14 @@ class ReasoningStore:
                     "risks": len(self.risks),
                     "strategic_considerations": len(self.strategic_considerations),
                     "work_items": len(self.work_items),
-                    "recommendations": len(self.recommendations)
+                    "recommendations": len(self.recommendations),
+                    "function_stories": len(self.function_stories)
                 },
                 "risks": [r.to_dict() for r in self.risks],
                 "strategic_considerations": [sc.to_dict() for sc in self.strategic_considerations],
                 "work_items": [wi.to_dict() for wi in self.work_items],
-                "recommendations": [rec.to_dict() for rec in self.recommendations]
+                "recommendations": [rec.to_dict() for rec in self.recommendations],
+                "function_stories": [fs.to_dict() for fs in self.function_stories]
             }
 
     def get_evidence_chain(self, finding_id: str) -> Dict[str, Any]:
@@ -1041,12 +1119,21 @@ REASONING_TOOLS = [
                 },
                 "reasoning": {
                     "type": "string",
-                    "description": "Explain HOW the cited facts lead to this risk conclusion"
+                    "description": "REQUIRED: Provide explicit analytical reasoning (50-150 words). Structure: 'I observed [specific fact] → This indicates [interpretation] → Combined with [other fact], this means [conclusion] → For this deal, this matters because [deal impact].' Must connect evidence to conclusion with clear logic chain."
+                },
+                "mna_lens": {
+                    "type": "string",
+                    "enum": ["day_1_continuity", "tsa_exposure", "separation_complexity", "synergy_opportunity", "cost_driver"],
+                    "description": "REQUIRED: Primary M&A lens this finding connects to. day_1_continuity=affects Day 1 ops, tsa_exposure=requires transition services, separation_complexity=entanglement with parent, synergy_opportunity=value creation potential, cost_driver=affects IT costs"
+                },
+                "mna_implication": {
+                    "type": "string",
+                    "description": "REQUIRED: Specific implication for THIS deal (1-2 sentences). Example: 'For this carveout, the single AD forest shared with parent means identity services will require 12-18 month TSA and $400-600K standalone build.'"
                 }
             },
             "required": ["domain", "title", "description", "category", "severity",
                         "integration_dependent", "mitigation", "based_on_facts",
-                        "confidence", "reasoning"]
+                        "confidence", "reasoning", "mna_lens", "mna_implication"]
         }
     },
     {
@@ -1096,11 +1183,20 @@ REASONING_TOOLS = [
                 },
                 "reasoning": {
                     "type": "string",
-                    "description": "Explain HOW the cited facts lead to this conclusion"
+                    "description": "REQUIRED: Provide explicit analytical reasoning (50-150 words). Structure: 'Based on [facts], I conclude [observation] because [logic]. This affects deal value/integration/timeline because [specific impact]. The buyer should consider [implication].' Must show clear cause-and-effect thinking."
+                },
+                "mna_lens": {
+                    "type": "string",
+                    "enum": ["day_1_continuity", "tsa_exposure", "separation_complexity", "synergy_opportunity", "cost_driver"],
+                    "description": "REQUIRED: Primary M&A lens this consideration connects to"
+                },
+                "mna_implication": {
+                    "type": "string",
+                    "description": "REQUIRED: Specific implication for THIS deal (1-2 sentences). Quantify where possible (timeline, cost, risk level)."
                 }
             },
             "required": ["domain", "title", "description", "lens", "implication",
-                        "based_on_facts", "confidence", "reasoning"]
+                        "based_on_facts", "confidence", "reasoning", "mna_lens", "mna_implication"]
         }
     },
     {
@@ -1177,11 +1273,20 @@ REASONING_TOOLS = [
                 },
                 "reasoning": {
                     "type": "string",
-                    "description": "Explain WHY this work is needed based on facts"
+                    "description": "REQUIRED: Explain the business logic (50-150 words). Structure: 'This work is needed because [specific gap/risk from facts]. If not done by [phase], [consequence]. This must happen [before/after] [other work] because [dependency logic]. The [owner] is responsible because [rationale].' Show sequencing logic."
+                },
+                "mna_lens": {
+                    "type": "string",
+                    "enum": ["day_1_continuity", "tsa_exposure", "separation_complexity", "synergy_opportunity", "cost_driver"],
+                    "description": "REQUIRED: Primary M&A lens this work item addresses"
+                },
+                "mna_implication": {
+                    "type": "string",
+                    "description": "REQUIRED: Why this work matters for the deal (1-2 sentences). Connect to Day-1 readiness, TSA exit, separation, synergy capture, or cost."
                 }
             },
             "required": ["domain", "title", "description", "phase", "priority",
-                        "owner_type", "cost_estimate", "triggered_by", "confidence", "reasoning"]
+                        "owner_type", "cost_estimate", "triggered_by", "confidence", "reasoning", "mna_lens", "mna_implication"]
         }
     },
     {
@@ -1235,11 +1340,95 @@ REASONING_TOOLS = [
                 },
                 "reasoning": {
                     "type": "string",
-                    "description": "Explain the reasoning chain from facts to recommendation"
+                    "description": "REQUIRED: Full reasoning chain (50-150 words). Structure: 'The evidence shows [facts] → This creates [situation] → The deal team should [action] because [logic] → If they don't, [risk/missed opportunity] → Timing is [urgency] because [driver].' Connect dots from evidence to action."
+                },
+                "mna_lens": {
+                    "type": "string",
+                    "enum": ["day_1_continuity", "tsa_exposure", "separation_complexity", "synergy_opportunity", "cost_driver"],
+                    "description": "REQUIRED: Primary M&A lens this recommendation addresses"
+                },
+                "mna_implication": {
+                    "type": "string",
+                    "description": "REQUIRED: Deal impact if recommendation is followed vs ignored (1-2 sentences). Be specific about timeline, cost, or risk."
                 }
             },
             "required": ["domain", "title", "description", "action_type", "urgency",
-                        "rationale", "based_on_facts", "confidence", "reasoning"]
+                        "rationale", "based_on_facts", "confidence", "reasoning", "mna_lens", "mna_implication"]
+        }
+    },
+    {
+        "name": "create_function_story",
+        "description": """Create a narrative story for an IT function/team.
+
+        Function stories provide the contextual depth for executive narratives.
+        Each story describes: what the function does, strengths, constraints,
+        dependencies, and M&A implications.
+
+        Use this to build rich narratives for IT teams and functional areas.""",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "function_name": {
+                    "type": "string",
+                    "description": "Name of the function (e.g., 'ERP', 'Service Desk', 'Security Operations')"
+                },
+                "domain": {
+                    "type": "string",
+                    "enum": ALL_DOMAINS,
+                    "description": "Domain this function belongs to"
+                },
+                "day_to_day": {
+                    "type": "string",
+                    "description": "2-3 sentences describing what this function primarily does day-to-day"
+                },
+                "strengths": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "1-3 strengths based on evidence. Format: '[Strength]. Evidence: [fact ref]'"
+                },
+                "constraints": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "1-3 constraints/bottlenecks. Format: '[Constraint]. Evidence: [fact ref]. Inference: [implication]'"
+                },
+                "upstream_dependencies": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "What this function depends on (2-4 items)"
+                },
+                "downstream_dependents": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "What depends on this function (2-4 items)"
+                },
+                "mna_implication": {
+                    "type": "string",
+                    "description": "1-2 sentences on Day-1/TSA/Separation/Synergy relevance"
+                },
+                "mna_lens": {
+                    "type": "string",
+                    "enum": ["day_1_continuity", "tsa_exposure", "separation_complexity", "synergy_opportunity", "cost_driver"],
+                    "description": "Primary M&A lens for this function"
+                },
+                "based_on_facts": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Fact IDs supporting this story"
+                },
+                "inferences": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Labeled inferences made (e.g., 'Inference: Lean staffing suggests capacity risk')"
+                },
+                "confidence": {
+                    "type": "string",
+                    "enum": CONFIDENCE_LEVELS,
+                    "description": "Confidence in this story based on evidence quality"
+                }
+            },
+            "required": ["function_name", "domain", "day_to_day", "strengths", "constraints",
+                        "upstream_dependencies", "downstream_dependents", "mna_implication",
+                        "mna_lens", "based_on_facts", "confidence"]
         }
     },
     {
@@ -1305,6 +1494,8 @@ def execute_reasoning_tool(
         return _execute_create_work_item(tool_input, reasoning_store)
     elif tool_name == "create_recommendation":
         return _execute_create_recommendation(tool_input, reasoning_store)
+    elif tool_name == "create_function_story":
+        return _execute_create_function_story(tool_input, reasoning_store)
     elif tool_name == "complete_reasoning":
         return _execute_complete_reasoning(tool_input, reasoning_store)
     else:
@@ -1379,7 +1570,9 @@ def _execute_identify_risk(
             timeline=input_data.get("timeline"),
             based_on_facts=based_on,
             confidence=input_data.get("confidence"),
-            reasoning=input_data.get("reasoning")
+            reasoning=input_data.get("reasoning"),
+            mna_lens=input_data.get("mna_lens", ""),
+            mna_implication=input_data.get("mna_implication", "")
         )
 
         return {
@@ -1418,7 +1611,9 @@ def _execute_create_strategic_consideration(
             implication=input_data.get("implication"),
             based_on_facts=based_on,
             confidence=input_data.get("confidence"),
-            reasoning=input_data.get("reasoning")
+            reasoning=input_data.get("reasoning"),
+            mna_lens=input_data.get("mna_lens", ""),
+            mna_implication=input_data.get("mna_implication", "")
         )
 
         return {
@@ -1507,7 +1702,9 @@ def _execute_create_work_item(
             confidence=input_data.get("confidence"),
             reasoning=input_data.get("reasoning"),
             cost_estimate=cost_estimate,
-            triggered_by_risks=input_data.get("triggered_by_risks", [])
+            triggered_by_risks=input_data.get("triggered_by_risks", []),
+            mna_lens=input_data.get("mna_lens", ""),
+            mna_implication=input_data.get("mna_implication", "")
         )
 
         return {
@@ -1546,7 +1743,9 @@ def _execute_create_recommendation(
             rationale=input_data.get("rationale"),
             based_on_facts=based_on,
             confidence=input_data.get("confidence"),
-            reasoning=input_data.get("reasoning")
+            reasoning=input_data.get("reasoning"),
+            mna_lens=input_data.get("mna_lens", ""),
+            mna_implication=input_data.get("mna_implication", "")
         )
 
         return {
@@ -1557,6 +1756,49 @@ def _execute_create_recommendation(
 
     except Exception as e:
         logger.error(f"Error in create_recommendation: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+def _execute_create_function_story(
+    input_data: Dict[str, Any],
+    reasoning_store: ReasoningStore
+) -> Dict[str, Any]:
+    """Execute create_function_story tool."""
+    try:
+        # Validate required fields
+        required_fields = ["function_name", "domain", "day_to_day", "strengths",
+                          "constraints", "upstream_dependencies", "downstream_dependents",
+                          "mna_implication", "mna_lens", "based_on_facts", "confidence"]
+        missing = [f for f in required_fields if not input_data.get(f)]
+        if missing:
+            return {
+                "status": "error",
+                "message": f"Missing required fields: {', '.join(missing)}"
+            }
+
+        story_id = reasoning_store.add_function_story(
+            function_name=input_data.get("function_name"),
+            domain=input_data.get("domain"),
+            day_to_day=input_data.get("day_to_day"),
+            strengths=input_data.get("strengths", []),
+            constraints=input_data.get("constraints", []),
+            upstream_dependencies=input_data.get("upstream_dependencies", []),
+            downstream_dependents=input_data.get("downstream_dependents", []),
+            mna_implication=input_data.get("mna_implication"),
+            mna_lens=input_data.get("mna_lens"),
+            based_on_facts=input_data.get("based_on_facts", []),
+            inferences=input_data.get("inferences", []),
+            confidence=input_data.get("confidence")
+        )
+
+        return {
+            "status": "success",
+            "story_id": story_id,
+            "message": f"Function story recorded: {input_data.get('function_name')}"
+        }
+
+    except Exception as e:
+        logger.error(f"Error in create_function_story: {e}")
         return {"status": "error", "message": str(e)}
 
 

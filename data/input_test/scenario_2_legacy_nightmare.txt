@@ -1,0 +1,345 @@
+# SYNTHETIC IT DISCOVERY DOCUMENT
+# Scenario 2: Legacy Nightmare - Tests MAXIMUM COMPLEXITY SIGNALS
+# Project Phoenix - Target Company: Heritage Industrial Corp
+# Date: January 2026
+
+================================================================================
+EXPECTED BEHAVIOR: This environment is a disaster waiting to happen.
+The system should flag MANY CRITICAL risks, detect ALL complexity signals,
+and generate EXTENSIVE work items. This tests maximum detection capability.
+================================================================================
+
+SECTION 1: EXECUTIVE IT OVERVIEW
+================================================================================
+
+Heritage Industrial Corp ("Heritage" or "Target") is a 75-year-old industrial
+manufacturing company with 3,200 employees across 8 plants. IT has been
+chronically underfunded. The CIO retired 6 months ago and hasn't been replaced.
+
+## IT Organization Summary
+- Total IT Staff: 11 FTEs (severely understaffed)
+- IT Budget (Annual): $1.8M (grossly underfunded for size)
+- Primary Data Center: On-premises in company HQ basement (flood zone)
+- Disaster Recovery: None
+- Security Team: None (IT Manager "handles" security)
+
+## Key Technology Platforms
+- ERP: Two systems - SAP R/3 (1999) AND Oracle E-Business Suite 11i (2003)
+  - Result of 2008 acquisition that was "never fully integrated"
+- Email: On-premises Exchange 2010 (end of life)
+- Manufacturing: Custom COBOL applications on AS/400
+- HR/Payroll: ADP (the only modern system)
+
+================================================================================
+SECTION 2: INFRASTRUCTURE DETAILS
+================================================================================
+
+## Data Center - HQ Basement (CRITICAL ISSUES)
+- Location: Basement of 1950s building, known flood zone
+- Last flood: 2019, caused 3-day outage
+- Power: Single utility feed, generator "sometimes works"
+- Cooling: Window AC units supplementing failing HVAC
+- Fire Suppression: None (grandfathered building code)
+- Physical Security: Badge access (badges never deactivated)
+
+## Server Infrastructure (Ancient)
+- Physical Servers: 67 servers
+  - 23x Dell PowerEdge 1950/2950 (2007-2009 vintage)
+  - 15x HP ProLiant DL380 G5 (2006-2008)
+  - 12x IBM System x3650 (2008)
+  - Various other servers of unknown provenance
+  - IBM Power7 for AS/400 (2011, approaching EOL)
+
+## Operating Systems (EOL Everywhere)
+- Windows Server 2003: 8 servers (unsupported since 2015)
+- Windows Server 2008: 22 servers (unsupported since 2020)
+- Windows Server 2008 R2: 15 servers (unsupported since 2020)
+- Windows Server 2012: 12 servers (unsupported since 2023)
+- Windows Server 2016: 10 servers (current, finally)
+- IBM i (AS/400): V7R2 (current, but skills scarce)
+- Red Hat Enterprise Linux 5: 4 servers (unsupported since 2017)
+- Red Hat Enterprise Linux 6: 6 servers (unsupported since 2020)
+
+## Virtualization
+- VMware vSphere 5.5 (end of support 2018)
+- No vCenter - managed via individual host clients
+- 45 VMs on aging hosts
+- No vMotion, no HA, no DRS
+
+## Storage (Failing)
+- EMC CLARiiON CX4 (2009, no vendor support available)
+  - Multiple disk failures in past year
+  - No hot spares remaining
+  - 89% utilized
+- NetApp FAS2020 (2008, unsupported)
+- Various direct-attached storage on servers
+- Total capacity unknown - "we think around 80TB"
+
+## Backup (Inadequate)
+- Veritas Backup Exec 2010 (unsupported)
+- Backup to tape library (LTO-4, tapes stored on-site next to servers)
+- Last successful full backup: "A few months ago, probably"
+- Backup test/restore: Never performed
+- RPO: Unknown
+- AS/400 backups: Weekly to tape, stored in CFO's office
+
+## Network Infrastructure (Dangerous)
+- Core Switch: Cisco Catalyst 6500 (2005, EOL)
+- Distribution: Mix of Cisco 3560, 2960, and some unmanaged switches
+- Wireless: Consumer-grade Linksys access points
+- Flat network: Single VLAN for everything
+- No network monitoring
+- No network documentation ("Bob knows where everything is")
+
+## WAN/Internet
+- Single T1 line at HQ (1.5 Mbps) - yes, T1
+- Plants connected via consumer-grade DSL/Cable
+- No site-to-site VPN (RDP exposed to internet)
+- No firewall at 4 of 8 plants
+- Internet router: Cisco 1841 (2005, EOL)
+
+## Firewall
+- Cisco ASA 5505 at HQ (approaching EOL)
+- 2,847 firewall rules accumulated over 15 years
+- No one knows what most rules do
+- "Any any" rules exist
+
+## IP Addressing
+- 192.168.1.0/24 at all sites (conflicts everywhere)
+- IP addresses assigned by "whoever installs the server"
+- Documented in sticky notes on Bob's monitor
+- DHCP server: Unknown Windows server, "somewhere"
+
+================================================================================
+SECTION 3: APPLICATION INVENTORY
+================================================================================
+
+## ERP Systems (DUAL - Never Integrated)
+
+### SAP R/3 (1999)
+- Version: 4.6C (three major versions behind current)
+- Custom ABAP programs: 340+
+- No documentation for customizations
+- Last upgrade: 2004
+- Support: SAP ended standard support in 2015
+- Users: Manufacturing (1,800 users)
+- Single SAP Basis admin (Harold, 62, planning retirement "soon")
+
+### Oracle E-Business Suite 11i (2003)
+- Acquired company still runs on separate instance
+- Users: Finance and one plant (400 users)
+- No DBA on staff - "we call a consultant when it breaks"
+- Last patched: 2012
+- Runs on Oracle Database 9i (unsupported since 2010)
+
+## Manufacturing Systems
+
+### AS/400 Applications (CRITICAL DEPENDENCY)
+- Custom COBOL inventory system: 180,000 lines of code
+- Written 1985-1995, modified through 2005
+- Original developer: Deceased
+- Documentation: None
+- Runs core inventory for all plants
+- Interfaces to SAP via nightly batch files
+- Users: 450 warehouse staff
+- Backup developer: None
+- "We don't touch it because it works"
+
+### Shop Floor Systems
+- Mix of DOS-based and Windows XP machines controlling PLCs
+- Wonderware InTouch 7.1 (2001) for HMI
+- SCADA system: Undocumented, "the Siemens guy set it up"
+- No OT/IT segmentation
+- PLCs accessible from office network
+
+## Other Applications
+- Custom Access databases: 47 (business critical, no documentation)
+- Excel spreadsheets with macros: "Hundreds, probably"
+- FoxPro application for quality control (developer retired 2018)
+- Lotus Notes: 230 databases (no one knows what's in them)
+- QuickBooks: Used by 2 plants for local accounting
+
+## Shadow IT
+- Departments have purchased various cloud services
+- No inventory of cloud applications
+- IT discovers them when invoices arrive
+- Known: Dropbox, personal Gmail, various project tools
+
+================================================================================
+SECTION 4: CYBERSECURITY POSTURE
+================================================================================
+
+## Security Organization
+- Dedicated Security Staff: 0
+- Security Responsibility: IT Manager (also does help desk)
+- Security Budget: $0 line item
+- Last Security Assessment: 2014 (PCI compliance, failed)
+
+## Security Tools (Or Lack Thereof)
+- Antivirus: Symantec Endpoint Protection 11 (2010, definitions "mostly current")
+- Firewall: Cisco ASA (see network section)
+- SIEM: None
+- EDR: None
+- Vulnerability Scanner: None
+- DLP: None
+- Email Security: None (spam filtering via ISP)
+
+## Identity & Access Management
+- Active Directory: Windows Server 2008 (functional level 2003)
+- No Azure AD, no cloud identity
+- SSO: None (every application has separate login)
+- MFA: None
+- Password Policy: 8 characters, no complexity, never expires
+- Shared accounts: Widespread
+  - "admin/admin" on many systems
+  - Shared "Finance" account for ERP
+  - Generic "Plant1", "Plant2" accounts
+- Service accounts: 127 accounts, all with non-expiring passwords
+- Last password audit: Never
+- Terminated employee accounts: Not consistently disabled
+  - Found 89 active accounts for former employees
+
+## Privileged Access
+- Domain Admin accounts: 23 (most people who asked)
+- Local admin on workstations: Everyone
+- Root access to servers: Shared among IT team
+- No PAM solution
+- Admin passwords: Sticky notes, shared document
+
+## Patch Management
+- Process: "When we remember and have time"
+- Windows Updates: Disabled on most servers ("they break things")
+- Critical patches outstanding: 847 across all systems
+- Java versions: 6 through 8 various
+- Flash: Still installed on many systems
+
+## Compliance Status
+- PCI-DSS: Non-compliant (process credit cards at 3 plants)
+- SOC 2: None
+- Recent Audit: State found OSHA violations at 2 plants
+- Data Privacy: No documented policies
+- GDPR: Some EU customers, no compliance program
+
+## Security Incidents (Known)
+- 2023: Ransomware encrypted 12 servers, paid $180K ransom
+  - Never disclosed publicly
+  - No changes made after incident
+- 2024: Cryptominer found on 6 servers (running for "a while")
+- 2024: Customer data found on public-facing FTP server
+  - FTP server turned off, incident not investigated
+- Ongoing: Phishing successful approximately monthly
+  - "Users just need to be more careful"
+
+================================================================================
+SECTION 5: IT ORGANIZATION & STAFFING
+================================================================================
+
+## IT Leadership
+- CIO: Position vacant since July 2025
+- IT Manager: Bob Thompson, 35 years with company
+  - "Bob knows everything, is close to retirement"
+  - No succession plan
+  - Refuses to document ("job security")
+
+## IT Staff
+| Role | Name | Tenure | Risk |
+|------|------|--------|------|
+| IT Manager | Bob | 35 years | Retiring 2027, no documentation |
+| Help Desk | Various | 2-5 years | High turnover |
+| Server Admin | Harold | 28 years | SAP-only, retiring "soon" |
+| Network | Bob | (same person) | Single point of failure |
+| AS/400 | None | N/A | No one knows the system |
+| Security | None | N/A | No dedicated resource |
+| DBA | None | N/A | Call consultants |
+| Apps | Contract | Varies | No internal knowledge |
+
+## Key Person Dependencies (CRITICAL)
+- Bob: Network, servers, AD, "everything"
+  - Undocumented tribal knowledge
+  - No backup
+  - "If Bob gets hit by a bus..."
+- Harold: SAP only person, planning retirement
+  - 340 custom programs only he understands
+  - No documentation
+  - No cross-training
+- AS/400: No one
+  - Original developer passed away
+  - Last person who understood it left in 2019
+
+## Outsourcing
+- MSP: None
+- Contractors: Called ad-hoc when things break
+- Offshore: None
+- Key vendors: "We call whoever answers"
+
+## Documentation
+- Network diagram: Hand-drawn, 2009, "mostly accurate"
+- Server inventory: Excel spreadsheet, "somewhat current"
+- Password list: Bob's encrypted (?) file
+- Runbooks: None
+- DR Plan: "Bob will figure it out"
+
+================================================================================
+SECTION 6: BUSINESS CONTINUITY & DISASTER RECOVERY
+================================================================================
+
+## DR Capabilities
+- Documented DR Plan: None
+- DR Site: None
+- Replication: None
+- Off-site Backups: Tapes in CFO's closet
+- DR Testing: Never
+
+## Business Impact
+- Estimated downtime cost: $2.8M per day (per CFO)
+- Max acceptable downtime: "Less than a day"
+- Actual recovery capability: "Weeks, probably"
+
+## Single Points of Failure
+1. Single data center in flood zone
+2. Single internet connection
+3. Single person (Bob) for most systems
+4. Single AS/400 with no backup capability
+5. Single copy of backups (on-site)
+
+## Past Incidents
+- 2019 Flood: 3 days down, $4.2M impact
+- 2023 Ransomware: 5 days down, $180K ransom + $2M impact
+- 2024 Power outage: Generator failed, 18 hours down
+
+================================================================================
+SECTION 7: CONTRACTS & LICENSING
+================================================================================
+
+## Major Issues
+- SAP: License audit scheduled Q2 2026
+  - Estimated exposure: $2M - $8M (indirect access never addressed)
+  - Named user licenses: 400 purchased, ~1800 actual users
+- Oracle: No support contract since 2018
+- VMware: Perpetual licenses, Broadcom transition unclear
+- Microsoft: SA lapsed, running unlicensed
+  - Audit risk: Unknown but significant
+
+## Contract Problems
+- Many contracts have change of control clauses
+- Some vendors may not transfer
+- Several contracts on month-to-month (no leverage)
+- Support contracts expired on most infrastructure
+
+================================================================================
+END OF DOCUMENT - SCENARIO 2: LEGACY NIGHTMARE
+================================================================================
+
+VALIDATION NOTES:
+- Expected critical risks: 15+
+- Expected high risks: 20+
+- Complexity signals to detect:
+  - Legacy systems: YES (AS/400, COBOL, Windows 2003/2008)
+  - Technical debt: YES (extensive)
+  - Single point of failure: YES (multiple)
+  - Key person dependency: YES (Bob, Harold)
+  - Dual ERP: YES (SAP + Oracle)
+  - Security gaps: YES (critical)
+  - No DR: YES
+  - Compliance gaps: YES (PCI, ransomware non-disclosure)
+- If system doesn't flag 30+ total risks, detection is too weak

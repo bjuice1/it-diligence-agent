@@ -1,0 +1,67 @@
+{
+  "test_case_id": "TC-04",
+  "overall_score": 95.4,
+  "passing": true,
+  "dimension_scores": {
+    "mna_framing": {
+      "score": 5.0,
+      "weight": 0.25,
+      "weighted_score": 1.25,
+      "issues": [],
+      "suggestions": []
+    },
+    "evidence_discipline": {
+      "score": 4.0,
+      "weight": 0.2,
+      "weighted_score": 0.8,
+      "issues": [
+        "Only 3 fact citations found (minimum 5 expected)"
+      ],
+      "suggestions": [
+        "Add explicit citations (F-DOMAIN-###) to key claims"
+      ]
+    },
+    "actionability": {
+      "score": 5.0,
+      "weight": 0.2,
+      "weighted_score": 1.0,
+      "issues": [],
+      "suggestions": []
+    },
+    "narrative_flow": {
+      "score": 5.0,
+      "weight": 0.15,
+      "weighted_score": 0.75,
+      "issues": [],
+      "suggestions": []
+    },
+    "completeness": {
+      "score": 5.0,
+      "weight": 0.1,
+      "weighted_score": 0.5,
+      "issues": [],
+      "suggestions": []
+    },
+    "tone": {
+      "score": 4.7,
+      "weight": 0.1,
+      "weighted_score": 0.47000000000000003,
+      "issues": [
+        "Could use more consulting-style terminology"
+      ],
+      "suggestions": []
+    }
+  },
+  "critical_issues": [],
+  "improvement_areas": [
+    "Add explicit citations (F-DOMAIN-###) to key claims"
+  ],
+  "strengths": [
+    "mna_framing: M&A framing score: 5.0/5. Deal mentions in summary: 2. Separation considerations: 6.",
+    "evidence_discipline: Evidence discipline score: 4.0/5. Citations: 3, Labeled inferences: 3.",
+    "actionability: Actionability score: 5.0/5.",
+    "narrative_flow: Narrative flow score: 5.0/5. Sections present: 6/6.",
+    "completeness: Completeness score: 5.0/5. Risks: 5, Synergies: 4, Teams: 8.",
+    "tone: Tone score: 4.7/5. Consulting terms: 1, Academic: 0."
+  ]
+}

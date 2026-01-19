@@ -1,0 +1,75 @@
+{
+  "test_case_id": "TC-05",
+  "overall_score": 88.9,
+  "passing": true,
+  "dimension_scores": {
+    "mna_framing": {
+      "score": 4.5,
+      "weight": 0.25,
+      "weighted_score": 1.125,
+      "issues": [
+        "Carveout missing TSA-exposed functions list"
+      ],
+      "suggestions": []
+    },
+    "evidence_discipline": {
+      "score": 4.0,
+      "weight": 0.2,
+      "weighted_score": 0.8,
+      "issues": [
+        "Only 2 fact citations found (minimum 5 expected)"
+      ],
+      "suggestions": [
+        "Add explicit citations (F-DOMAIN-###) to key claims"
+      ]
+    },
+    "actionability": {
+      "score": 5.0,
+      "weight": 0.2,
+      "weighted_score": 1.0,
+      "issues": [],
+      "suggestions": []
+    },
+    "narrative_flow": {
+      "score": 4.2,
+      "weight": 0.15,
+      "weighted_score": 0.63,
+      "issues": [
+        "Missing sections: team_stories",
+        "Only 0 team stories (minimum 3 expected)"
+      ],
+      "suggestions": []
+    },
+    "completeness": {
+      "score": 4.2,
+      "weight": 0.1,
+      "weighted_score": 0.42000000000000004,
+      "issues": [
+        "Only 1 benchmark statements (minimum 4)",
+        "Only 0 team stories (expected ~4)"
+      ],
+      "suggestions": []
+    },
+    "tone": {
+      "score": 4.7,
+      "weight": 0.1,
+      "weighted_score": 0.47000000000000003,
+      "issues": [
+        "Could use more consulting-style terminology"
+      ],
+      "suggestions": []
+    }
+  },
+  "critical_issues": [],
+  "improvement_areas": [
+    "Add explicit citations (F-DOMAIN-###) to key claims"
+  ],
+  "strengths": [
+    "mna_framing: M&A framing score: 4.5/5. Deal mentions in summary: 2. Separation considerations: 6.",
+    "evidence_discipline: Evidence discipline score: 4.0/5. Citations: 2, Labeled inferences: 3.",
+    "actionability: Actionability score: 5.0/5.",
+    "narrative_flow: Narrative flow score: 4.2/5. Sections present: 5/6.",
+    "completeness: Completeness score: 4.2/5. Risks: 5, Synergies: 4, Teams: 0.",
+    "tone: Tone score: 4.7/5. Consulting terms: 2, Academic: 0."
+  ]
+}

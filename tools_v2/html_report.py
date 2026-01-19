@@ -2,14 +2,31 @@
 HTML Report Generator for IT Due Diligence Agent.
 
 Generates static HTML reports that can be opened in any browser.
+
+COST CALCULATION:
+- Uses the consistency_engine for deterministic cost calculations
+- Base costs are mid-market benchmarks (250-500 employees)
+- Adjusted by company profile: size × industry × geography × IT maturity
+- AI's cost_estimate field is shown for reference but NOT used for totals
 """
 
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from datetime import datetime
 from tools_v2.fact_store import FactStore
 from tools_v2.reasoning_tools import ReasoningStore
 from tools_v2.reasoning_tools import COST_RANGE_VALUES
+from tools_v2.consistency_engine import (
+    calculate_total_costs,
+    calculate_complexity_score,
+    CompanyProfile,
+    categorize_work_item
+)
+from tools_v2.cost_database import get_database_stats
+
+# Report version for tracking
+REPORT_VERSION = "2.1.0"
+METHODOLOGY_VERSION = "January 2026"
 
 
 def generate_html_report(
@@ -17,15 +34,29 @@ def generate_html_report(
     reasoning_store: ReasoningStore,
     output_dir: Path,
     timestamp: str = None,
-    target_name: str = None
+    target_name: str = None,
+    company_profile: CompanyProfile = None
 ) -> Path:
-    """Generate a complete HTML report."""
+    """
+    Generate a complete HTML report.
+
+    Args:
+        fact_store: FactStore with extracted facts
+        reasoning_store: ReasoningStore with risks, gaps, work items
+        output_dir: Directory to save the report
+        timestamp: Optional timestamp for filename
+        target_name: Name of the target company
+        company_profile: Optional CompanyProfile for cost adjustments
+
+    Returns:
+        Path to the generated HTML file
+    """
     if timestamp is None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     output_file = output_dir / f"it_dd_report_{timestamp}.html"
 
-    html = _build_html(fact_store, reasoning_store, timestamp, target_name)
+    html = _build_html(fact_store, reasoning_store, timestamp, target_name, company_profile)
     output_file.write_text(html)
 
     return output_file
@@ -52,11 +83,21 @@ def _phase_color(phase: str) -> str:
     return colors.get(phase, '#6b7280')
 
 
-def _build_html(fact_store: FactStore, reasoning_store: ReasoningStore, timestamp: str, target_name: str = None) -> str:
+def _build_html(
+    fact_store: FactStore,
+    reasoning_store: ReasoningStore,
+    timestamp: str,
+    target_name: str = None,
+    company_profile: CompanyProfile = None
+) -> str:
     """Build the complete HTML document."""
 
     # Use target name or default
     company_name = target_name or "Target Company"
+
+    # Use default mid-market profile if none provided
+    if company_profile is None:
+        company_profile = CompanyProfile()
 
     # Calculate summary stats
     total_facts = len(fact_store.facts)
@@ -64,24 +105,32 @@ def _build_html(fact_store: FactStore, reasoning_store: ReasoningStore, timestam
     total_risks = len(reasoning_store.risks)
     total_work_items = len(reasoning_store.work_items)
 
-    # Calculate cost summary by phase (handle any phase values dynamically)
-    cost_by_phase = {'Day_1': {'low': 0, 'high': 0, 'count': 0},
-                     'Day_100': {'low': 0, 'high': 0, 'count': 0},
-                     'Post_100': {'low': 0, 'high': 0, 'count': 0}}
+    # ==========================================================================
+    # DETERMINISTIC COST CALCULATION (via consistency_engine)
+    # ==========================================================================
+    # Convert work items to dict format for consistency engine
+    work_items_for_calc = [
+        {
+            "title": wi.title,
+            "description": wi.description,
+            "phase": wi.phase
+        }
+        for wi in reasoning_store.work_items
+    ]
 
-    for wi in reasoning_store.work_items:
-        phase = wi.phase
-        # Ensure phase exists in cost_by_phase (handles unexpected phases)
-        if phase not in cost_by_phase:
-            cost_by_phase[phase] = {'low': 0, 'high': 0, 'count': 0}
+    # Calculate costs using consistency engine (deterministic)
+    cost_result = calculate_total_costs(work_items_for_calc, company_profile)
+    cost_by_phase = cost_result["by_phase"]
+    total_low = cost_result["total"]["low"]
+    total_high = cost_result["total"]["high"]
+    cost_methodology = cost_result.get("methodology", {})
+    cost_multiplier = cost_result.get("multiplier_applied", 1.0)
 
-        cost_range = COST_RANGE_VALUES.get(wi.cost_estimate, {'low': 0, 'high': 0})
-        cost_by_phase[phase]['low'] += cost_range['low']
-        cost_by_phase[phase]['high'] += cost_range['high']
-        cost_by_phase[phase]['count'] += 1
+    # Get company profile breakdown for display
+    profile_mult, profile_breakdown = company_profile.get_total_multiplier()
 
-    total_low = sum(p['low'] for p in cost_by_phase.values())
-    total_high = sum(p['high'] for p in cost_by_phase.values())
+    # Get database stats for methodology disclosure
+    db_stats = get_database_stats()
 
     # Count risks by severity
     severity_counts = {'critical': 0, 'high': 0, 'medium': 0, 'low': 0}
@@ -92,8 +141,10 @@ def _build_html(fact_store: FactStore, reasoning_store: ReasoningStore, timestam
     # Build risks HTML
     risks_html = _build_risks_section(reasoning_store.risks, fact_store)
 
-    # Build work items HTML
-    work_items_html = _build_work_items_section(reasoning_store.work_items, reasoning_store.risks, fact_store)
+    # Build work items HTML (with deterministic cost calculations)
+    work_items_html = _build_work_items_section(
+        reasoning_store.work_items, reasoning_store.risks, fact_store, company_profile
+    )
 
     # Build facts HTML
     facts_html = _build_facts_section(fact_store.facts)
@@ -421,12 +472,79 @@ def _build_html(fact_store: FactStore, reasoning_store: ReasoningStore, timestam
                 flex-direction: column;
             }}
         }}
+
+        /* Chart styles */
+        .chart-container {{
+            margin: 1.5rem 0;
+            padding: 1rem;
+            background: var(--bg);
+            border-radius: 8px;
+        }}
+
+        .bar-chart {{
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-around;
+            height: 200px;
+            padding: 1rem;
+            gap: 2rem;
+        }}
+
+        .bar-group {{
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex: 1;
+        }}
+
+        .bar {{
+            width: 60px;
+            background: linear-gradient(180deg, var(--primary) 0%, var(--primary-dark) 100%);
+            border-radius: 4px 4px 0 0;
+            position: relative;
+            transition: all 0.3s ease;
+        }}
+
+        .bar:hover {{
+            transform: scaleY(1.02);
+        }}
+
+        .bar-label {{
+            margin-top: 0.5rem;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }}
+
+        .bar-value {{
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.75rem;
+            font-weight: 600;
+            white-space: nowrap;
+        }}
+
+        /* Mermaid diagram styles */
+        .mermaid {{
+            display: flex;
+            justify-content: center;
+            margin: 1rem 0;
+        }}
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({{
+            startOnLoad: true,
+            theme: 'default',
+            flowchart: {{ useMaxWidth: true }}
+        }});
+    </script>
 </head>
 <body>
     <div class="container">
         <h1>IT Due Diligence Report</h1>
-        <p class="subtitle"><strong>{company_name}</strong> &nbsp;|&nbsp; Generated: {datetime.now().strftime("%B %d, %Y at %H:%M")}</p>
+        <p class="subtitle"><strong>{company_name}</strong> &nbsp;|&nbsp; Generated: {datetime.now().strftime("%B %d, %Y at %H:%M")} &nbsp;|&nbsp; Report v{REPORT_VERSION}</p>
 
         <nav class="nav">
             <a href="#summary">Summary</a>
@@ -435,6 +553,20 @@ def _build_html(fact_store: FactStore, reasoning_store: ReasoningStore, timestam
             <a href="#facts">Facts ({total_facts})</a>
             <a href="#gaps">Gaps ({total_gaps})</a>
         </nav>
+
+        <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border: 1px solid #f59e0b; border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; font-size: 0.85rem;">
+            <div style="display: flex; align-items: start; gap: 0.75rem;">
+                <span style="font-size: 1.25rem;">📊</span>
+                <div>
+                    <strong style="color: #92400e;">About This Report</strong>
+                    <p style="margin: 0.5rem 0 0 0; color: #78350f;">
+                        Cost estimates are calculated using a <strong>deterministic methodology</strong> based on {db_stats['total_activities']} researched IT integration activities.
+                        The same inputs will always produce the same outputs. All estimates can be traced back to industry benchmarks and adjusted by company profile factors.
+                        <a href="#summary" style="color: #92400e;">See methodology details below.</a>
+                    </p>
+                </div>
+            </div>
+        </div>
 
         <section id="summary">
             <h2>Executive Summary</h2>
@@ -483,6 +615,31 @@ def _build_html(fact_store: FactStore, reasoning_store: ReasoningStore, timestam
             </table>
 
             <h3 style="margin: 1.5rem 0 1rem;">Cost Estimates by Phase</h3>
+
+            <!-- Visual Cost Chart -->
+            <div class="chart-container">
+                <div class="bar-chart">
+                    <div class="bar-group">
+                        <div class="bar" style="height: {min(150, max(20, cost_by_phase['Day_1']['high'] / max(total_high, 1) * 150))}px;">
+                            <span class="bar-value">${cost_by_phase['Day_1']['high']/1000:.0f}K</span>
+                        </div>
+                        <span class="bar-label">Day 1</span>
+                    </div>
+                    <div class="bar-group">
+                        <div class="bar" style="height: {min(150, max(20, cost_by_phase['Day_100']['high'] / max(total_high, 1) * 150))}px;">
+                            <span class="bar-value">${cost_by_phase['Day_100']['high']/1000:.0f}K</span>
+                        </div>
+                        <span class="bar-label">Day 100</span>
+                    </div>
+                    <div class="bar-group">
+                        <div class="bar" style="height: {min(150, max(20, cost_by_phase['Post_100']['high'] / max(total_high, 1) * 150))}px;">
+                            <span class="bar-value">${cost_by_phase['Post_100']['high']/1000:.0f}K</span>
+                        </div>
+                        <span class="bar-label">Post 100</span>
+                    </div>
+                </div>
+            </div>
+
             <table>
                 <tr>
                     <th>Phase</th>
@@ -510,6 +667,54 @@ def _build_html(fact_store: FactStore, reasoning_store: ReasoningStore, timestam
                     <td class="cost">${total_low:,.0f} - ${total_high:,.0f}</td>
                 </tr>
             </table>
+
+            <div style="margin-top: 1.5rem; padding: 1.25rem; background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 1px solid #7dd3fc; border-radius: 8px; font-size: 0.875rem;">
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.75rem;">
+                    <strong style="color: #0369a1;">Cost Methodology</strong>
+                    <span style="font-size: 0.75rem; color: #0369a1; background: white; padding: 2px 8px; border-radius: 4px;">Database: {db_stats['total_activities']} activities | {db_stats['last_updated']}</span>
+                </div>
+
+                <div style="margin-bottom: 1rem;">
+                    <strong>Formula:</strong> <code style="background: white; padding: 2px 6px; border-radius: 3px;">Base Cost × Size × Industry × Geography × IT Maturity</code>
+                </div>
+
+                <table style="width: 100%; font-size: 0.8rem; margin-bottom: 1rem;">
+                    <tr style="background: rgba(255,255,255,0.5);">
+                        <th style="text-align: left; padding: 6px;">Factor</th>
+                        <th style="text-align: left; padding: 6px;">Value</th>
+                        <th style="text-align: right; padding: 6px;">Multiplier</th>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px;">Company Size</td>
+                        <td style="padding: 6px;">{company_profile.employee_count:,} employees</td>
+                        <td style="text-align: right; padding: 6px; font-weight: 600;">{profile_breakdown['size']['multiplier']}x</td>
+                    </tr>
+                    <tr style="background: rgba(255,255,255,0.3);">
+                        <td style="padding: 6px;">Industry</td>
+                        <td style="padding: 6px;">{company_profile.industry.replace('_', ' ').title()}</td>
+                        <td style="text-align: right; padding: 6px; font-weight: 600;">{profile_breakdown['industry']['multiplier']}x</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px;">Geography</td>
+                        <td style="padding: 6px;">{company_profile.geography.replace('_', ' ').title()}</td>
+                        <td style="text-align: right; padding: 6px; font-weight: 600;">{profile_breakdown['geography']['multiplier']}x</td>
+                    </tr>
+                    <tr style="background: rgba(255,255,255,0.3);">
+                        <td style="padding: 6px;">IT Maturity</td>
+                        <td style="padding: 6px;">{company_profile.it_maturity.replace('_', ' ').title()}</td>
+                        <td style="text-align: right; padding: 6px; font-weight: 600;">{profile_breakdown['it_maturity']['multiplier']}x</td>
+                    </tr>
+                    <tr style="background: #0369a1; color: white;">
+                        <td colspan="2" style="padding: 6px; font-weight: 600;">Total Adjustment</td>
+                        <td style="text-align: right; padding: 6px; font-weight: 700;">{cost_multiplier}x</td>
+                    </tr>
+                </table>
+
+                <div style="font-size: 0.75rem; color: #475569; border-top: 1px solid #7dd3fc; padding-top: 0.75rem;">
+                    <strong>Sources:</strong> Vendor pricing guides, Gartner/Forrester research, M&A integration benchmarks, implementation partner data.<br>
+                    <strong>Note:</strong> These are planning estimates. Actual costs vary by vendor, scope, and deal-specific factors. Validate against your deal context.
+                </div>
+            </div>
         </section>
 
         {risks_html}
@@ -673,10 +878,19 @@ def _build_risks_section(risks: List, fact_store: FactStore) -> str:
     </section>'''
 
 
-def _build_work_items_section(work_items: List, risks: List, fact_store: FactStore) -> str:
-    """Build the work items section HTML."""
+def _build_work_items_section(
+    work_items: List,
+    risks: List,
+    fact_store: FactStore,
+    company_profile: CompanyProfile = None
+) -> str:
+    """Build the work items section HTML with deterministic cost calculations."""
     if not work_items:
         return '<section id="work-items"><h2>Work Items</h2><p>No work items.</p></section>'
+
+    # Use default profile if none provided
+    if company_profile is None:
+        company_profile = CompanyProfile()
 
     # Collect unique values for filters
     domains = sorted(set(wi.domain for wi in work_items))
@@ -713,7 +927,15 @@ def _build_work_items_section(work_items: List, risks: List, fact_store: FactSto
     # Build all items (not grouped by phase for filtering to work)
     items_html = []
     for wi in work_items:
-        cost_range = COST_RANGE_VALUES.get(wi.cost_estimate, {'low': 0, 'high': 0})
+        # AI's vague estimate (for reference)
+        ai_cost_range = COST_RANGE_VALUES.get(wi.cost_estimate, {'low': 0, 'high': 0})
+
+        # Deterministic calculation (used for totals)
+        from tools_v2.consistency_engine import calculate_work_item_cost
+        det_low, det_high = calculate_work_item_cost(
+            wi.title, wi.description, wi.phase, company_profile
+        )
+        category = categorize_work_item(wi.title, wi.description)
 
         # Related facts
         related_facts = ""
@@ -755,8 +977,10 @@ def _build_work_items_section(work_items: List, risks: List, fact_store: FactSto
             <div class="item-description">{wi.description}</div>
             <div class="item-details">
                 <dl>
-                    <dt>Cost Estimate</dt>
-                    <dd class="cost">{wi.cost_estimate.replace("_", " ")} (${cost_range['low']:,.0f} - ${cost_range['high']:,.0f})</dd>
+                    <dt>Cost Estimate (Calculated)</dt>
+                    <dd class="cost"><strong>${det_low:,.0f} - ${det_high:,.0f}</strong> <span style="font-size: 0.8em; color: #666;">({category})</span></dd>
+                    <dt>AI Initial Estimate</dt>
+                    <dd style="color: #888; font-size: 0.9em;">{wi.cost_estimate.replace("_", " ")} (${ai_cost_range['low']:,.0f} - ${ai_cost_range['high']:,.0f})</dd>
                     <dt>Reasoning</dt>
                     <dd>{wi.reasoning}</dd>
                 </dl>

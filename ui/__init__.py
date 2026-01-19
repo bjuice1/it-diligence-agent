@@ -23,9 +23,9 @@ from .verification_view import (
 
 from .org_chart_view import (
     render_org_chart_section,
-    render_org_dropdown,
+    render_org_dropdown_explorer,
     render_org_considerations,
-    render_mermaid
+    render_mermaid_chart
 )
 
 __all__ = [
@@ -44,7 +44,7 @@ __all__ = [
     "render_bulk_verification",
     # Org Chart
     "render_org_chart_section",
-    "render_org_dropdown",
+    "render_org_dropdown_explorer",
     "render_org_considerations",
-    "render_mermaid"
+    "render_mermaid_chart"
 ]

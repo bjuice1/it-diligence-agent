@@ -10,6 +10,73 @@ from .hallucination_guardrails import get_hallucination_guardrails, HALLUCINATIO
 from .gap_over_guess import get_gap_over_guess, GAP_OVER_GUESS
 from .confidence_calibration import get_confidence_calibration, CONFIDENCE_CALIBRATION
 from .entity_distinction import ENTITY_DISTINCTION_PROMPT, ENTITY_DISTINCTION_SHORT
+from .complexity_signals import (
+    COMPLEXITY_SIGNALS,
+    INDUSTRY_SIGNALS,
+    get_complexity_signals_for_domain,
+    get_industry_signals,
+    calculate_ai_weight,
+    get_signal_prompt_injection
+)
+from .mna_framing import (
+    MNA_LENSES,
+    STATEMENT_TYPES,
+    MNA_FRAMING_PROMPT_BLOCK,
+    get_mna_framing_prompt,
+    get_lens_definition,
+    get_all_lens_ids,
+    get_lens_for_deal_type,
+    validate_mna_lens,
+    get_statement_type_guidance
+)
+from .reasoning_quality import get_reasoning_quality_prompt, REASONING_QUALITY_BLOCK
+from .function_story_template import (
+    FunctionStory,
+    FUNCTION_DOMAIN_MAP,
+    STRENGTH_SIGNALS,
+    CONSTRAINT_SIGNALS,
+    DEPENDENCY_MAP,
+    get_functions_for_domain,
+    get_all_functions,
+    get_function_details,
+    get_upstream_dependencies,
+    get_downstream_dependents,
+    detect_strength_signals,
+    detect_constraint_signals,
+    get_story_prompt,
+    get_day1_critical_functions,
+    get_tsa_likely_functions
+)
+from .benchmark_generator import (
+    BenchmarkType,
+    BenchmarkPattern,
+    BENCHMARK_PATTERNS,
+    SAFE_LANGUAGE,
+    UNSAFE_LANGUAGE,
+    generate_benchmarks,
+    validate_benchmark_safety,
+    analyze_team_concentration,
+    analyze_outsourcing,
+    analyze_ratios,
+    analyze_posture,
+    analyze_maturity_signals,
+    get_benchmark_mna_context
+)
+from .function_deep_dive import (
+    MaturityLevel,
+    FunctionReviewCriteria,
+    INFRASTRUCTURE_FUNCTIONS,
+    APPLICATIONS_FUNCTIONS,
+    ORGANIZATION_FUNCTIONS,
+    CYBERSECURITY_FUNCTIONS,
+    IDENTITY_FUNCTIONS,
+    NETWORK_FUNCTIONS,
+    get_function_criteria,
+    get_all_criteria,
+    assess_function_completeness,
+    get_cross_domain_dependencies,
+    get_mna_questions,
+)
 
 
 def get_all_shared_guidance() -> str:
@@ -26,6 +93,7 @@ def get_all_shared_guidance() -> str:
 
 
 __all__ = [
+    # Evidence and anti-hallucination
     'get_evidence_requirements',
     'get_hallucination_guardrails',
     'get_gap_over_guess',
@@ -36,5 +104,69 @@ __all__ = [
     'GAP_OVER_GUESS',
     'CONFIDENCE_CALIBRATION',
     'ENTITY_DISTINCTION_PROMPT',
-    'ENTITY_DISTINCTION_SHORT'
+    'ENTITY_DISTINCTION_SHORT',
+    # Complexity signals
+    'COMPLEXITY_SIGNALS',
+    'INDUSTRY_SIGNALS',
+    'get_complexity_signals_for_domain',
+    'get_industry_signals',
+    'calculate_ai_weight',
+    'get_signal_prompt_injection',
+    # M&A Framing (Phase 1)
+    'MNA_LENSES',
+    'STATEMENT_TYPES',
+    'MNA_FRAMING_PROMPT_BLOCK',
+    'get_mna_framing_prompt',
+    'get_lens_definition',
+    'get_all_lens_ids',
+    'get_lens_for_deal_type',
+    'validate_mna_lens',
+    'get_statement_type_guidance',
+    # Reasoning Quality
+    'get_reasoning_quality_prompt',
+    'REASONING_QUALITY_BLOCK',
+    # Function Story Templates (Phase 3)
+    'FunctionStory',
+    'FUNCTION_DOMAIN_MAP',
+    'STRENGTH_SIGNALS',
+    'CONSTRAINT_SIGNALS',
+    'DEPENDENCY_MAP',
+    'get_functions_for_domain',
+    'get_all_functions',
+    'get_function_details',
+    'get_upstream_dependencies',
+    'get_downstream_dependents',
+    'detect_strength_signals',
+    'detect_constraint_signals',
+    'get_story_prompt',
+    'get_day1_critical_functions',
+    'get_tsa_likely_functions',
+    # Benchmark Generator (Phase 7)
+    'BenchmarkType',
+    'BenchmarkPattern',
+    'BENCHMARK_PATTERNS',
+    'SAFE_LANGUAGE',
+    'UNSAFE_LANGUAGE',
+    'generate_benchmarks',
+    'validate_benchmark_safety',
+    'analyze_team_concentration',
+    'analyze_outsourcing',
+    'analyze_ratios',
+    'analyze_posture',
+    'analyze_maturity_signals',
+    'get_benchmark_mna_context',
+    # Function Deep Dive (Quality Enhancement)
+    'MaturityLevel',
+    'FunctionReviewCriteria',
+    'INFRASTRUCTURE_FUNCTIONS',
+    'APPLICATIONS_FUNCTIONS',
+    'ORGANIZATION_FUNCTIONS',
+    'CYBERSECURITY_FUNCTIONS',
+    'IDENTITY_FUNCTIONS',
+    'NETWORK_FUNCTIONS',
+    'get_function_criteria',
+    'get_all_criteria',
+    'assess_function_completeness',
+    'get_cross_domain_dependencies',
+    'get_mna_questions',
 ]

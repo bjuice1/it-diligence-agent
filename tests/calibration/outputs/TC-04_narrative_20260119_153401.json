@@ -1,0 +1,256 @@
+{
+  "company_name": "Manufacturing Global Inc",
+  "deal_type": "acquisition",
+  "created_at": "2026-01-19T15:34:01.090339",
+  "executive_summary": [
+    "Target employs 45 IT staff across 8 functional teams",
+    "Synergy opportunity: License consolidation and tool rationalization",
+    "Integration complexity appears manageable given cloud-first architecture",
+    "Primary ERP: Unknown (F-APPS-001)",
+    "Key person risk identified in IT leadership (F-ORG-001)",
+    "Security posture requires attention - MFA coverage below target"
+  ],
+  "org_structure_narrative": "The IT organization at Manufacturing Global Inc is structured as a layered team\nwith 45 total headcount. The organization appears balanced\nbased on team composition, with significant\noutsourcing in service delivery functions.\n\nInference: The ratio of 45 IT staff to support the business suggests a lean operating model\nthat may face capacity constraints during integration or separation activities.",
+  "team_stories": [
+    {
+      "function_name": "ERP Team (SAP)",
+      "day_to_day": "The ERP Team (SAP) team handles day-to-day operations with 8 staff",
+      "strengths": [
+        "Established processes for core responsibilities",
+        "Team tenure suggests institutional knowledge"
+      ],
+      "constraints": [],
+      "upstream_dependencies": [
+        "Corporate IT",
+        "Vendors"
+      ],
+      "downstream_dependents": [
+        "Business units",
+        "End users"
+      ],
+      "mna_implication": "Synergy opportunity: Consolidation with buyer team possible"
+    },
+    {
+      "function_name": "ERP Team (Oracle)",
+      "day_to_day": "The ERP Team (Oracle) team handles day-to-day operations with 6 staff",
+      "strengths": [
+        "Established processes for core responsibilities",
+        "Team tenure suggests institutional knowledge"
+      ],
+      "constraints": [],
+      "upstream_dependencies": [
+        "Corporate IT",
+        "Vendors"
+      ],
+      "downstream_dependents": [
+        "Business units",
+        "End users"
+      ],
+      "mna_implication": "Synergy opportunity: Consolidation with buyer team possible"
+    },
+    {
+      "function_name": "Integration/Middleware",
+      "day_to_day": "The Integration/Middleware team handles day-to-day operations with 5 staff",
+      "strengths": [
+        "Established processes for core responsibilities",
+        "Team tenure suggests institutional knowledge"
+      ],
+      "constraints": [],
+      "upstream_dependencies": [
+        "Corporate IT",
+        "Vendors"
+      ],
+      "downstream_dependents": [
+        "Business units",
+        "End users"
+      ],
+      "mna_implication": "Synergy opportunity: Consolidation with buyer team possible"
+    },
+    {
+      "function_name": "Infrastructure",
+      "day_to_day": "The Infrastructure team handles day-to-day operations with 10 staff",
+      "strengths": [
+        "Established processes for core responsibilities",
+        "Team tenure suggests institutional knowledge"
+      ],
+      "constraints": [
+        "Mixed staffing model may complicate transition"
+      ],
+      "upstream_dependencies": [
+        "Corporate IT",
+        "Vendors"
+      ],
+      "downstream_dependents": [
+        "Business units",
+        "End users"
+      ],
+      "mna_implication": "Synergy opportunity: Consolidation with buyer team possible"
+    },
+    {
+      "function_name": "Cybersecurity",
+      "day_to_day": "The Cybersecurity team handles day-to-day operations with 6 staff",
+      "strengths": [
+        "Established processes for core responsibilities",
+        "Team tenure suggests institutional knowledge"
+      ],
+      "constraints": [],
+      "upstream_dependencies": [
+        "Corporate IT",
+        "Vendors"
+      ],
+      "downstream_dependents": [
+        "Business units",
+        "End users"
+      ],
+      "mna_implication": "Synergy opportunity: Consolidation with buyer team possible"
+    },
+    {
+      "function_name": "Service Desk",
+      "day_to_day": "The Service Desk team handles day-to-day operations with 5 staff",
+      "strengths": [
+        "Established processes for core responsibilities",
+        "Team tenure suggests institutional knowledge"
+      ],
+      "constraints": [
+        "High outsourcing (80%) creates vendor dependency (F-ORG-002)"
+      ],
+      "upstream_dependencies": [
+        "Corporate IT",
+        "Vendors"
+      ],
+      "downstream_dependents": [
+        "Business units",
+        "End users"
+      ],
+      "mna_implication": "TSA exposure: Outsourced services may require transition agreement"
+    },
+    {
+      "function_name": "PMO",
+      "day_to_day": "The PMO team handles day-to-day operations with 3 staff",
+      "strengths": [
+        "Established processes for core responsibilities",
+        "Team tenure suggests institutional knowledge"
+      ],
+      "constraints": [],
+      "upstream_dependencies": [
+        "Corporate IT",
+        "Vendors"
+      ],
+      "downstream_dependents": [
+        "Business units",
+        "End users"
+      ],
+      "mna_implication": "Synergy opportunity: Consolidation with buyer team possible"
+    },
+    {
+      "function_name": "Data/Analytics",
+      "day_to_day": "The Data/Analytics team handles day-to-day operations with 2 staff",
+      "strengths": [
+        "Established processes for core responsibilities",
+        "Team tenure suggests institutional knowledge"
+      ],
+      "constraints": [],
+      "upstream_dependencies": [
+        "Corporate IT",
+        "Vendors"
+      ],
+      "downstream_dependents": [
+        "Business units",
+        "End users"
+      ],
+      "mna_implication": "Synergy opportunity: Consolidation with buyer team possible"
+    }
+  ],
+  "mna_lens_section": {
+    "tsa_exposed_functions": [
+      "Service Desk (80% outsourced)"
+    ],
+    "day_1_requirements": [
+      "Ensure ERP access continues without interruption",
+      "Maintain network connectivity to all locations",
+      "Preserve authentication and access management",
+      "Continue security monitoring and incident response capability"
+    ],
+    "separation_considerations": [
+      "Establish standalone identity management (migrate from parent AD)",
+      "Deploy dedicated security tooling (endpoint, SIEM)",
+      "Negotiate TSA for infrastructure services (6-12 month term)",
+      "Build or contract Service Desk capability",
+      "Migrate to dedicated cloud tenant/subscription",
+      "Implement standalone network egress and security"
+    ]
+  },
+  "benchmark_statements": [
+    "Inference: IT headcount of 45 suggests a standard operating model",
+    "Outsourcing concentration in 2 functions indicates reliance on external delivery",
+    "MFA coverage at 72% falls below enterprise security expectations",
+    "Inference: Cloud adoption level suggests traditional infrastructure posture"
+  ],
+  "risks_table": [
+    {
+      "risk": "Key person dependency on CIO/IT leadership",
+      "why_it_matters": "Single point of failure for IT strategy and operations",
+      "likely_impact": "Day-1 continuity risk if key staff depart",
+      "mitigation": "Implement knowledge transfer program and document critical processes",
+      "severity": "high"
+    },
+    {
+      "risk": "Security tooling gaps",
+      "why_it_matters": "Incomplete security controls increase breach risk",
+      "likely_impact": "Potential compliance issues and security incidents",
+      "mitigation": "Deploy PAM solution and consolidate endpoint protection within 90 days",
+      "severity": "medium"
+    },
+    {
+      "risk": "Vendor/outsourcing concentration",
+      "why_it_matters": "Heavy reliance on third parties for critical functions",
+      "likely_impact": "TSA complexity and potential service gaps during transition",
+      "mitigation": "Map all vendor dependencies and negotiate assignment/continuation terms",
+      "severity": "medium"
+    },
+    {
+      "risk": "Technical debt in applications",
+      "why_it_matters": "Aging systems require investment and pose integration challenges",
+      "likely_impact": "Higher integration costs and timeline risk",
+      "mitigation": "Prioritize modernization roadmap aligned with deal thesis",
+      "severity": "medium"
+    },
+    {
+      "risk": "Data separation complexity",
+      "why_it_matters": "Shared systems contain commingled data requiring extraction",
+      "likely_impact": "Extended timeline and cost for clean separation",
+      "mitigation": "Engage data migration specialist and establish extraction plan",
+      "severity": "high"
+    }
+  ],
+  "synergies_table": [
+    {
+      "opportunity": "License consolidation",
+      "why_it_matters": "Duplicate software licenses across buyer and target",
+      "value_mechanism": "cost_elimination",
+      "first_step": "Inventory all software licenses and identify overlaps within 30 days",
+      "estimated_value": "$200K-500K annually"
+    },
+    {
+      "opportunity": "Service desk consolidation",
+      "why_it_matters": "Redundant support organizations can be combined",
+      "value_mechanism": "efficiency_gain",
+      "first_step": "Map service desk volumes and SLAs to plan consolidation",
+      "estimated_value": "$150K-300K annually"
+    },
+    {
+      "opportunity": "Cloud optimization",
+      "why_it_matters": "Combined cloud footprint enables better pricing and architecture",
+      "value_mechanism": "cost_avoidance",
+      "first_step": "Consolidate cloud accounts and negotiate enterprise agreement",
+      "estimated_value": "$100K-250K annually"
+    },
+    {
+      "opportunity": "Security tool rationalization",
+      "why_it_matters": "Multiple overlapping security tools can be standardized",
+      "value_mechanism": "cost_elimination",
+      "first_step": "Assess security stack overlap and select go-forward toolset",
+      "estimated_value": "$75K-150K annually"
+    }
+  ]
+}

@@ -388,6 +388,10 @@ def render_org_chart_section(session_dir: Path):
 
         mermaid_code = render_mermaid_chart(org_structure, dept_filter)
 
+        # Render the actual diagram
+        from ui.components.diagrams import render_mermaid
+        render_mermaid(mermaid_code, height=450)
+
         with st.expander("View Diagram Code"):
             st.code(mermaid_code, language="mermaid")
 

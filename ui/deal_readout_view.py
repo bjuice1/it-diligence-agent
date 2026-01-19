@@ -526,6 +526,12 @@ def render_deal_readout_section(session_dir: Path, company_name: str = "Target C
     costs = report.get("costs", {})
     st.markdown(render_cost_range(costs), unsafe_allow_html=True)
 
+    # Cost breakdown chart
+    from ui.components.diagrams import render_cost_breakdown_chart
+    with st.container():
+        st.markdown("##### Cost by Phase")
+        render_cost_breakdown_chart(costs)
+
     # ==========================================================================
     # SECTION 3: Key Metrics
     # ==========================================================================
@@ -584,6 +590,18 @@ def render_deal_readout_section(session_dir: Path, company_name: str = "Target C
             st.markdown("#### Work Item Details")
             df = pd.DataFrame(breakdown)
             st.dataframe(df, use_container_width=True, hide_index=True)
+
+    # Integration timeline diagram
+    with st.expander("View Integration Timeline"):
+        from ui.components.diagrams import render_timeline_diagram
+        work_items_for_timeline = [
+            {"title": w.title, "phase": w.phase}
+            for w in work_items
+        ] if work_items else []
+        if work_items_for_timeline:
+            render_timeline_diagram(work_items_for_timeline)
+        else:
+            st.info("No work items available for timeline")
 
     # ==========================================================================
     # SECTION 8: Score Breakdown

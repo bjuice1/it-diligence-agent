@@ -55,6 +55,13 @@ try:
 except ImportError:
     INVENTORY_PANEL_AVAILABLE = False
 
+# Import executive narrative view
+try:
+    from ui.narrative_view import render_narrative_section, load_narrative_from_file
+    NARRATIVE_VIEW_AVAILABLE = True
+except ImportError:
+    NARRATIVE_VIEW_AVAILABLE = False
+
 # Set page config first (must be first Streamlit command)
 st.set_page_config(
     page_title="IT Due Diligence Agent",
@@ -436,9 +443,17 @@ def load_documents_with_entity(input_dir: Path) -> str:
     combined_text = []
     parser = PDFParser()
 
+    # DEBUG: Print what we're looking for
+    print(f"\n[DEBUG] Looking for documents in: {input_dir}")
+    print(f"[DEBUG] Directory exists: {input_dir.exists()}")
+    if input_dir.exists():
+        print(f"[DEBUG] Contents: {list(input_dir.iterdir())}")
+
     # Load TARGET documents (required)
     target_dir = input_dir / "target"
+    print(f"[DEBUG] Target dir: {target_dir}, exists: {target_dir.exists()}")
     if target_dir.exists():
+        print(f"[DEBUG] Target dir contents: {list(target_dir.iterdir())}")
         combined_text.append("=" * 80)
         combined_text.append("# ENTITY: TARGET")
         combined_text.append("# All documents below describe the TARGET company (being evaluated)")
@@ -540,6 +555,10 @@ def run_analysis(
 
         document_text = load_documents_with_entity(input_dir)
         results["doc_length"] = len(document_text)
+        print(f"\n[DEBUG] Document text length: {len(document_text)} characters")
+        if len(document_text) < 500:
+            print(f"[DEBUG] WARNING: Very short document text!")
+            print(f"[DEBUG] Content preview: {document_text[:500]}")
 
         # Phase 2: Discovery
         if progress_callback:
@@ -728,7 +747,12 @@ def display_results(results: Dict[str, Any]):
     # Summary metrics
     st.subheader("📊 Analysis Summary")
 
-    col1, col2, col3 = st.columns(3)
+    # Quick data quality check
+    facts_count = results["facts"]["count"]
+    if facts_count == 0:
+        st.error("⚠️ **No facts extracted!** Check document loading - documents may not have been uploaded or parsed correctly.")
+
+    col1, col2, col3, col4 = st.columns(4)
 
     with col1:
         st.metric("Facts Extracted", results["facts"]["count"])
@@ -736,9 +760,13 @@ def display_results(results: Dict[str, Any]):
 
     with col2:
         st.metric("Risks Identified", results["findings"]["risks"])
-        st.caption(f"Work Items: {results['findings']['work_items']}")
+        st.caption(f"Strategic: {results['findings'].get('strategic', 0)}")
 
     with col3:
+        st.metric("Work Items", results["findings"]["work_items"])
+        st.caption(f"Recommendations: {results['findings']['recommendations']}")
+
+    with col4:
         st.metric("VDR Requests", results["vdr"]["total"])
         st.caption(f"Critical: {results['vdr']['critical']}")
 
@@ -757,7 +785,20 @@ def display_results(results: Dict[str, Any]):
 
         st.subheader("🔍 Detailed Findings")
 
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs(["📊 Deal Readout", "Risks", "Work Items", "Recommendations", "Facts", "Granular Inventory", "Verification", "Org Chart", "🖥️ Infra Inventory"])
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12 = st.tabs([
+            "📊 Deal Readout",
+            "⚠️ Risks",
+            "📋 Work Items",
+            "💡 Strategic",
+            "✅ Recommendations",
+            "📁 Facts/Inventory",
+            "🔍 Gaps",
+            "🧪 Granular Inventory",
+            "✓ Verification",
+            "🏢 Org Chart",
+            "🖥️ Infra Inventory",
+            "📄 Executive Narrative"
+        ])
 
         with tab1:
             # Deal Readout - Executive Summary 1-pager
@@ -776,7 +817,10 @@ def display_results(results: Dict[str, Any]):
 
         with tab2:
             if reasoning_store.risks:
-                for risk in reasoning_store.risks:
+                # Group by severity
+                st.write(f"**{len(reasoning_store.risks)} risks identified**")
+
+                for risk in sorted(reasoning_store.risks, key=lambda r: ["critical", "high", "medium", "low"].index(r.severity) if r.severity in ["critical", "high", "medium", "low"] else 99):
                     severity_color = {
                         "critical": "🔴",
                         "high": "🟠",
@@ -784,40 +828,165 @@ def display_results(results: Dict[str, Any]):
                         "low": "🟢"
                     }.get(risk.severity, "⚪")
 
-                    with st.expander(f"{severity_color} {risk.title} ({risk.severity.upper()})"):
+                    integration_badge = "🔗 Integration" if risk.integration_dependent else "⚡ Standalone"
+
+                    with st.expander(f"{severity_color} {risk.title} ({risk.severity.upper()}) - {integration_badge}"):
+                        st.markdown(f"**Description:**")
                         st.write(risk.description)
-                        st.write(f"**Mitigation:** {risk.mitigation}")
-                        st.write(f"**Based on:** {', '.join(risk.based_on_facts)}")
+
+                        # Show reasoning prominently
+                        if hasattr(risk, 'reasoning') and risk.reasoning:
+                            st.markdown("---")
+                            st.markdown("**💭 Analysis Logic:**")
+                            st.info(risk.reasoning)
+
+                        st.markdown("---")
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.markdown(f"**Mitigation:**")
+                            st.write(risk.mitigation)
+                        with col2:
+                            st.markdown(f"**Confidence:** {risk.confidence}")
+                            if hasattr(risk, 'timeline') and risk.timeline:
+                                st.markdown(f"**Timeline:** {risk.timeline}")
+
+                        st.caption(f"📋 Evidence: {', '.join(risk.based_on_facts)}")
             else:
                 st.info("No risks identified")
 
         with tab3:
             if reasoning_store.work_items:
+                st.write(f"**{len(reasoning_store.work_items)} work items** across phases")
+
                 # Group by phase
                 for phase in ["Day_1", "Day_100", "Post_100"]:
                     phase_items = [wi for wi in reasoning_store.work_items if wi.phase == phase]
                     if phase_items:
-                        st.write(f"**{phase.replace('_', ' ')}** ({len(phase_items)} items)")
-                        for wi in phase_items:
-                            with st.expander(f"{wi.title} - {wi.cost_estimate}"):
+                        phase_label = {"Day_1": "🚨 Day 1 (Critical)", "Day_100": "📅 Day 100 (Stabilization)", "Post_100": "🎯 Post-100 (Optimization)"}.get(phase, phase)
+                        st.markdown(f"### {phase_label} ({len(phase_items)} items)")
+
+                        for wi in sorted(phase_items, key=lambda x: ["critical", "high", "medium", "low"].index(x.priority) if x.priority in ["critical", "high", "medium", "low"] else 99):
+                            priority_icon = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}.get(wi.priority, "⚪")
+
+                            with st.expander(f"{priority_icon} {wi.title} | {wi.cost_estimate} | {wi.owner_type}"):
+                                st.markdown(f"**Description:**")
                                 st.write(wi.description)
-                                st.write(f"**Owner:** {wi.owner_type}")
-                                st.write(f"**Priority:** {wi.priority}")
+
+                                # Show reasoning prominently
+                                if hasattr(wi, 'reasoning') and wi.reasoning:
+                                    st.markdown("---")
+                                    st.markdown("**💭 Why This Work Is Needed:**")
+                                    st.info(wi.reasoning)
+
+                                st.markdown("---")
+                                col1, col2, col3 = st.columns(3)
+                                with col1:
+                                    st.markdown(f"**Owner:** {wi.owner_type}")
+                                with col2:
+                                    st.markdown(f"**Priority:** {wi.priority}")
+                                with col3:
+                                    st.markdown(f"**Confidence:** {wi.confidence}")
+
+                                if hasattr(wi, 'dependencies') and wi.dependencies:
+                                    st.markdown(f"**Dependencies:** {', '.join(wi.dependencies)}")
+
+                                st.caption(f"📋 Triggered by: {', '.join(wi.triggered_by)} | Evidence: {', '.join(wi.based_on_facts)}")
             else:
                 st.info("No work items identified")
 
         with tab4:
+            # Strategic Considerations
+            if reasoning_store.strategic_considerations:
+                st.write(f"**{len(reasoning_store.strategic_considerations)} strategic considerations**")
+
+                # Group by lens
+                by_lens = {}
+                for sc in reasoning_store.strategic_considerations:
+                    lens = sc.lens or "other"
+                    if lens not in by_lens:
+                        by_lens[lens] = []
+                    by_lens[lens].append(sc)
+
+                for lens, considerations in by_lens.items():
+                    lens_icon = {
+                        "deal_value": "💰",
+                        "integration_complexity": "🔧",
+                        "operational_risk": "⚠️",
+                        "synergy_opportunity": "🎯",
+                        "buyer_alignment": "🤝",
+                        "tsa": "📄"
+                    }.get(lens, "📋")
+
+                    st.markdown(f"### {lens_icon} {lens.replace('_', ' ').title()} ({len(considerations)})")
+
+                    for sc in considerations:
+                        with st.expander(f"{sc.title}"):
+                            st.markdown(f"**Observation:**")
+                            st.write(sc.description)
+
+                            st.markdown("---")
+                            st.markdown(f"**📊 Deal Implication:**")
+                            st.warning(sc.implication)
+
+                            # Show reasoning prominently
+                            if hasattr(sc, 'reasoning') and sc.reasoning:
+                                st.markdown("---")
+                                st.markdown("**💭 Analysis Logic:**")
+                                st.info(sc.reasoning)
+
+                            st.markdown("---")
+                            st.markdown(f"**Confidence:** {sc.confidence}")
+                            st.caption(f"📋 Evidence: {', '.join(sc.based_on_facts)}")
+            else:
+                st.info("No strategic considerations identified")
+
+        with tab5:
             if reasoning_store.recommendations:
+                st.write(f"**{len(reasoning_store.recommendations)} recommendations**")
+
+                # Group by action type
+                by_action = {}
                 for rec in reasoning_store.recommendations:
-                    with st.expander(f"📋 {rec.title}"):
-                        st.write(rec.description)
-                        st.write(f"**Action:** {rec.action_type}")
-                        st.write(f"**Urgency:** {rec.urgency}")
+                    action = rec.action_type or "other"
+                    if action not in by_action:
+                        by_action[action] = []
+                    by_action[action].append(rec)
+
+                for action_type, recs in by_action.items():
+                    action_icon = {
+                        "negotiate": "🤝",
+                        "budget": "💰",
+                        "investigate": "🔍",
+                        "accept": "✅",
+                        "mitigate": "🛡️"
+                    }.get(action_type, "📋")
+
+                    st.markdown(f"### {action_icon} {action_type.title()} ({len(recs)})")
+
+                    for rec in recs:
+                        urgency_color = {"immediate": "🔴", "pre-close": "🟠", "post-close": "🟢"}.get(rec.urgency, "⚪")
+                        with st.expander(f"{urgency_color} {rec.title} ({rec.urgency})"):
+                            st.markdown(f"**Recommendation:**")
+                            st.write(rec.description)
+
+                            st.markdown("---")
+                            st.markdown(f"**📊 Rationale:**")
+                            st.warning(rec.rationale)
+
+                            # Show reasoning prominently
+                            if hasattr(rec, 'reasoning') and rec.reasoning:
+                                st.markdown("---")
+                                st.markdown("**💭 Reasoning Chain:**")
+                                st.info(rec.reasoning)
+
+                            st.markdown("---")
+                            st.markdown(f"**Confidence:** {rec.confidence}")
+                            st.caption(f"📋 Evidence: {', '.join(rec.based_on_facts)}")
             else:
                 st.info("No recommendations")
 
-        with tab5:
-            # Import fact synthesis function
+        with tab6:
+            # Facts/Inventory - Main inventory view
             from tools_v2.html_report import _synthesize_fact_statement
 
             # Group facts by domain
@@ -827,23 +996,83 @@ def display_results(results: Dict[str, Any]):
                     facts_by_domain[fact.domain] = []
                 facts_by_domain[fact.domain].append(fact)
 
-            st.write(f"**{len(fact_store.facts)} facts** across {len(facts_by_domain)} domains")
+            if fact_store.facts:
+                st.write(f"**{len(fact_store.facts)} facts** across {len(facts_by_domain)} domains")
 
-            for domain, domain_facts in facts_by_domain.items():
-                with st.expander(f"📁 {domain.replace('_', ' ').title()} ({len(domain_facts)} facts)"):
-                    for fact in domain_facts:
-                        # Use synthesized fact statement
-                        fact_statement = _synthesize_fact_statement(fact)
-                        entity_badge = "🎯" if fact.entity == "target" else "🏢"
+                # Domain filter
+                selected_domain = st.selectbox(
+                    "Filter by domain",
+                    ["All"] + list(facts_by_domain.keys()),
+                    key="fact_domain_filter"
+                )
 
-                        st.markdown(f"**{fact.fact_id}** {entity_badge}")
-                        st.markdown(f"> {fact_statement}")
+                domains_to_show = facts_by_domain.keys() if selected_domain == "All" else [selected_domain]
 
-                        if fact.evidence.get("exact_quote"):
-                            st.caption(f"📄 Source: \"{fact.evidence['exact_quote'][:150]}...\"")
-                        st.divider()
+                for domain in domains_to_show:
+                    if domain in facts_by_domain:
+                        domain_facts = facts_by_domain[domain]
+                        with st.expander(f"📁 {domain.replace('_', ' ').title()} ({len(domain_facts)} facts)", expanded=(selected_domain != "All")):
+                            # Group by category
+                            by_category = {}
+                            for fact in domain_facts:
+                                cat = fact.category or "other"
+                                if cat not in by_category:
+                                    by_category[cat] = []
+                                by_category[cat].append(fact)
 
-        with tab6:
+                            for category, cat_facts in sorted(by_category.items()):
+                                st.markdown(f"**{category.replace('_', ' ').title()}** ({len(cat_facts)})")
+                                for fact in cat_facts:
+                                    fact_statement = _synthesize_fact_statement(fact)
+                                    entity_badge = "🎯" if fact.entity == "target" else "🏢"
+                                    status_badge = {"documented": "✅", "partial": "⚠️", "gap": "❌"}.get(fact.status, "")
+
+                                    st.markdown(f"**{fact.fact_id}** {entity_badge} {status_badge} `{fact.item}`")
+                                    st.markdown(f"> {fact_statement}")
+
+                                    # Show details
+                                    if fact.details:
+                                        details_str = ", ".join([f"{k}: {v}" for k, v in fact.details.items() if v and v != "not_stated"])
+                                        if details_str:
+                                            st.caption(f"📋 {details_str}")
+
+                                    if fact.evidence.get("exact_quote"):
+                                        st.caption(f"📄 Source: \"{fact.evidence['exact_quote'][:150]}...\"")
+                                    st.divider()
+            else:
+                st.warning("⚠️ No facts extracted. Check document loading and discovery phase.")
+
+        with tab7:
+            # Gaps - Critical missing information
+            if fact_store.gaps:
+                st.write(f"**{len(fact_store.gaps)} gaps identified**")
+
+                # Group by importance
+                gaps_by_importance = {}
+                for gap in fact_store.gaps:
+                    imp = getattr(gap, 'importance', 'medium') or "medium"
+                    if imp not in gaps_by_importance:
+                        gaps_by_importance[imp] = []
+                    gaps_by_importance[imp].append(gap)
+
+                for importance in ["critical", "high", "medium", "low"]:
+                    if importance in gaps_by_importance:
+                        importance_gaps = gaps_by_importance[importance]
+                        importance_icon = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}.get(importance, "⚪")
+                        st.write(f"**{importance_icon} {importance.upper()}** ({len(importance_gaps)})")
+
+                        for gap in importance_gaps:
+                            with st.expander(f"{gap.gap_id}: {gap.item}"):
+                                st.write(f"**Domain:** {gap.domain}")
+                                st.write(f"**Category:** {gap.category}")
+                                if hasattr(gap, 'why_it_matters'):
+                                    st.write(f"**Why it matters:** {gap.why_it_matters}")
+                                if hasattr(gap, 'follow_up_action'):
+                                    st.write(f"**Follow-up:** {gap.follow_up_action}")
+            else:
+                st.info("No gaps identified")
+
+        with tab8:
             # Granular Inventory - Multi-Pass Extraction Results
             if GRANULAR_FACTS_AVAILABLE:
                 # Get session directory from results
@@ -896,10 +1125,9 @@ def display_results(results: Dict[str, Any]):
             else:
                 st.warning("Granular facts module not available. Check ui/granular_facts_view.py")
 
-        with tab7:
+        with tab9:
             # Verification - Human-in-the-loop fact verification
             if VERIFICATION_AVAILABLE:
-                # Get session directory from results
                 session_dir = None
                 if "session_dir" in results:
                     session_dir = Path(results["session_dir"])
@@ -912,10 +1140,9 @@ def display_results(results: Dict[str, Any]):
             else:
                 st.warning("Verification module not available. Check ui/verification_view.py")
 
-        with tab8:
+        with tab10:
             # Org Chart - Organizational structure visualization
             if ORG_CHART_AVAILABLE:
-                # Get session directory from results
                 session_dir = None
                 if "session_dir" in results:
                     session_dir = Path(results["session_dir"])
@@ -928,7 +1155,7 @@ def display_results(results: Dict[str, Any]):
             else:
                 st.warning("Org Chart module not available. Check ui/org_chart_view.py")
 
-        with tab9:
+        with tab11:
             # Infrastructure Inventory - Coverage Analysis
             if INVENTORY_PANEL_AVAILABLE:
                 session_dir = None
@@ -942,6 +1169,78 @@ def display_results(results: Dict[str, Any]):
                 render_inventory_panel_section(session_dir)
             else:
                 st.warning("Infrastructure Inventory module not available. Check ui/inventory_panel_view.py")
+
+        with tab12:
+            # Executive Narrative - IC-ready storyline
+            if NARRATIVE_VIEW_AVAILABLE:
+                # Check if narrative data exists
+                narrative_data = results.get("narrative")
+
+                if narrative_data:
+                    # Build fact lookup from fact_store for citation tooltips
+                    fact_lookup = {}
+                    if fact_store:
+                        for fact in fact_store.facts:
+                            fact_lookup[fact.fact_id] = {
+                                "description": getattr(fact, 'item', ''),
+                                "details": getattr(fact, 'details', {}),
+                                "status": getattr(fact, 'status', 'documented')
+                            }
+
+                    # Determine deal type
+                    deal_type_str = results.get("deal_type", "acquisition")
+
+                    # Render the narrative
+                    render_narrative_section(
+                        narrative=narrative_data,
+                        deal_type=deal_type_str,
+                        fact_lookup=fact_lookup,
+                        show_exports=True
+                    )
+                else:
+                    # No narrative generated yet - show instructions
+                    st.info("📄 **Executive Narrative** - IC-ready storyline")
+                    st.markdown("""
+                    The Executive Narrative synthesizes findings into a coherent story with:
+
+                    - **Executive Summary** - 6-8 bullet points for the IC
+                    - **Org Structure** - How IT is organized
+                    - **Team Stories** - Function-by-function analysis
+                    - **M&A Lens** - Day-1, TSA, and separation considerations
+                    - **Benchmarks** - Operating posture vs. peers
+                    - **Risks & Synergies** - Actionable tables
+
+                    **To generate a narrative:**
+                    ```python
+                    from agents_v2 import NarrativeSynthesisAgent
+
+                    agent = NarrativeSynthesisAgent()
+                    narrative = agent.synthesize(
+                        domain_findings=findings,
+                        deal_context={"deal_type": "carveout", "target_name": "Acme"}
+                    )
+                    ```
+
+                    Or run the full pipeline which includes narrative synthesis.
+                    """)
+
+                    # Check if session has narrative file
+                    session_dir = None
+                    if "session_dir" in results:
+                        session_dir = Path(results["session_dir"])
+                    elif "output_dir" in results:
+                        session_dir = Path(results["output_dir"])
+
+                    if session_dir:
+                        narrative_file = session_dir / "narrative.json"
+                        if narrative_file.exists():
+                            st.success(f"Found narrative file at: {narrative_file}")
+                            if st.button("Load Narrative"):
+                                loaded_narrative = load_narrative_from_file(narrative_file)
+                                if loaded_narrative:
+                                    render_narrative_section(loaded_narrative)
+            else:
+                st.warning("Executive Narrative module not available. Check ui/narrative_view.py")
 
     # Output files with download buttons
     st.subheader("📄 Output Files")
@@ -1218,17 +1517,41 @@ def main():
         # --------------------------------------------------------------------------
         st.markdown("### 3. Documents")
 
-        # PRIMARY: Target Documents
-        st.markdown("**Target Company Documents**")
-        target_files = st.file_uploader(
-            "Upload IT profiles, assessments, security audits",
-            type=["pdf", "txt", "md"],
-            accept_multiple_files=True,
-            key="target_upload"
+        # Option to use sample documents for testing
+        use_sample_docs = st.checkbox(
+            "🧪 Use sample documents (for testing)",
+            value=False,
+            key="use_sample_docs",
+            help="Load documents from data/input/ directory instead of uploading"
         )
 
-        if target_files:
-            st.success(f"✓ {len(target_files)} document(s) ready")
+        if use_sample_docs:
+            # Check what sample docs are available
+            from config_v2 import INPUT_DIR
+            sample_target_dir = INPUT_DIR
+            if sample_target_dir.exists():
+                sample_files = list(sample_target_dir.glob("*.pdf")) + list(sample_target_dir.glob("*.txt"))
+                if sample_files:
+                    st.success(f"✓ Found {len(sample_files)} sample document(s) in data/input/")
+                    for f in sample_files[:5]:
+                        st.caption(f"  • {f.name}")
+                else:
+                    st.warning("No sample documents found in data/input/")
+            target_files = None  # Will use INPUT_DIR directly
+            buyer_files = None
+            target_notes = ""
+        else:
+            # PRIMARY: Target Documents
+            st.markdown("**Target Company Documents**")
+            target_files = st.file_uploader(
+                "Upload IT profiles, assessments, security audits",
+                type=["pdf", "txt", "md"],
+                accept_multiple_files=True,
+                key="target_upload"
+            )
+
+            if target_files:
+                st.success(f"✓ {len(target_files)} document(s) ready")
 
         # SECONDARY: Notes
         st.markdown("**Quick Notes** (optional)")
@@ -1306,64 +1629,126 @@ def main():
         if run_button and can_run:
             st.divider()
 
-            # Create temp directory for uploaded files
-            with tempfile.TemporaryDirectory() as temp_dir:
-                temp_path = Path(temp_dir)
+            # Check if using sample documents
+            use_sample = st.session_state.get("use_sample_docs", False)
 
-                # Save uploaded files
-                with st.spinner("Preparing documents..."):
-                    saved_files = []
+            if use_sample:
+                # Use sample documents directly from data/input
+                from config_v2 import INPUT_DIR
 
-                    if target_files:
-                        saved_files.extend(save_uploaded_files(target_files, temp_path, entity="target"))
+                st.info(f"📂 Using sample documents from: {INPUT_DIR}")
 
-                    if target_notes and target_notes.strip():
-                        notes_file = save_notes_as_file(target_notes, temp_path, entity="target")
-                        if notes_file:
-                            saved_files.append(notes_file)
+                # For sample docs, we need to restructure - copy to temp with target/ folder
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    temp_path = Path(temp_dir)
+                    target_temp = temp_path / "target"
+                    target_temp.mkdir(parents=True, exist_ok=True)
 
-                    if buyer_files:
-                        saved_files.extend(save_uploaded_files(buyer_files, temp_path, entity="buyer"))
+                    # Copy sample files to target/ subfolder
+                    import shutil
+                    sample_files = list(INPUT_DIR.glob("*.pdf")) + list(INPUT_DIR.glob("*.txt")) + list(INPUT_DIR.glob("*.md"))
+                    for f in sample_files:
+                        shutil.copy(f, target_temp / f.name)
 
-                # Progress tracking
-                progress_bar = st.progress(0)
-                status_text = st.empty()
+                    st.success(f"✓ Loaded {len(sample_files)} sample documents")
 
-                def update_progress(pct, msg):
-                    progress_bar.progress(pct)
-                    status_text.text(msg)
+                    # Progress tracking
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
 
-                # Run analysis
-                with st.spinner("Running analysis..."):
-                    results = run_analysis(
-                        input_dir=temp_path,
-                        target_name=target_name,
-                        deal_type=deal_type,
-                        buyer_name=buyer_name if buyer_name else None,
-                        domains=selected_domains,
-                        progress_callback=update_progress
-                    )
+                    def update_progress(pct, msg):
+                        progress_bar.progress(pct)
+                        status_text.text(msg)
 
-                # Store results
-                st.session_state["results"] = results
-                st.session_state["analysis_complete"] = True
-
-                # Auto-save deal
-                if results["status"] == "complete" and "fact_store" in results and "reasoning_store" in results:
-                    try:
-                        deal_id = save_deal_to_database(
+                    # Run analysis
+                    with st.spinner("Running analysis..."):
+                        results = run_analysis(
+                            input_dir=temp_path,
                             target_name=target_name,
                             deal_type=deal_type,
                             buyer_name=buyer_name if buyer_name else None,
-                            fact_store=results["fact_store"],
-                            reasoning_store=results["reasoning_store"]
+                            domains=selected_domains,
+                            progress_callback=update_progress
                         )
-                        st.session_state["saved_deal_id"] = deal_id
-                        st.success("✅ Deal saved automatically")
-                    except Exception as e:
-                        st.warning(f"Could not save deal: {e}")
 
-                st.rerun()
+                    # Store results
+                    st.session_state["results"] = results
+                    st.session_state["analysis_complete"] = True
+
+                    st.rerun()
+            else:
+                # Create temp directory for uploaded files
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    temp_path = Path(temp_dir)
+
+                    # Save uploaded files
+                    with st.spinner("Preparing documents..."):
+                        saved_files = []
+
+                        # DEBUG: Show what we're working with
+                        st.write(f"**DEBUG:** target_files = {target_files}")
+                        st.write(f"**DEBUG:** target_notes length = {len(target_notes) if target_notes else 0}")
+                        st.write(f"**DEBUG:** buyer_files = {buyer_files}")
+
+                        if target_files:
+                            saved_files.extend(save_uploaded_files(target_files, temp_path, entity="target"))
+                            st.write(f"**DEBUG:** Saved {len(target_files)} target files")
+
+                        if target_notes and target_notes.strip():
+                            notes_file = save_notes_as_file(target_notes, temp_path, entity="target")
+                            if notes_file:
+                                saved_files.append(notes_file)
+                                st.write(f"**DEBUG:** Saved notes file")
+
+                        if buyer_files:
+                            saved_files.extend(save_uploaded_files(buyer_files, temp_path, entity="buyer"))
+                            st.write(f"**DEBUG:** Saved {len(buyer_files)} buyer files")
+
+                        st.write(f"**DEBUG:** Total saved files: {len(saved_files)}")
+
+                        if not saved_files:
+                            st.error("❌ No documents to analyze! Please upload files or use sample documents.")
+                            st.stop()
+
+                    # Progress tracking (inside temp dir context)
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+
+                    def update_progress(pct, msg):
+                        progress_bar.progress(pct)
+                        status_text.text(msg)
+
+                    # Run analysis (inside temp dir context)
+                    with st.spinner("Running analysis..."):
+                        results = run_analysis(
+                            input_dir=temp_path,
+                            target_name=target_name,
+                            deal_type=deal_type,
+                            buyer_name=buyer_name if buyer_name else None,
+                            domains=selected_domains,
+                            progress_callback=update_progress
+                        )
+
+                    # Store results (inside temp dir context)
+                    st.session_state["results"] = results
+                    st.session_state["analysis_complete"] = True
+
+                    # Auto-save deal
+                    if results["status"] == "complete" and "fact_store" in results and "reasoning_store" in results:
+                        try:
+                            deal_id = save_deal_to_database(
+                                target_name=target_name,
+                                deal_type=deal_type,
+                                buyer_name=buyer_name if buyer_name else None,
+                                fact_store=results["fact_store"],
+                                reasoning_store=results["reasoning_store"]
+                            )
+                            st.session_state["saved_deal_id"] = deal_id
+                            st.success("✅ Deal saved automatically")
+                        except Exception as e:
+                            st.warning(f"Could not save deal: {e}")
+
+                    st.rerun()
 
 
 if __name__ == "__main__":

@@ -41,6 +41,21 @@ from tools_v2.synthesis import (
     ConsistencyIssue,
     RelatedFinding
 )
+from tools_v2.evidence_query import (
+    EvidenceType,
+    Evidence,
+    EvidenceStore,
+    EvidenceIndex,
+    QueryBuilder,
+    import_from_fact_store
+)
+from tools_v2.table_generators import (
+    RiskRow,
+    SynergyRow,
+    RiskSeverity,
+    generate_risk_table,
+    generate_synergy_table
+)
 
 __all__ = [
     # Fact Store
@@ -75,5 +90,18 @@ __all__ = [
     'DISCOVERY_TOOLS',
     'REASONING_TOOLS',
     'execute_discovery_tool',
-    'execute_reasoning_tool'
+    'execute_reasoning_tool',
+    # Evidence Query
+    'EvidenceType',
+    'Evidence',
+    'EvidenceStore',
+    'EvidenceIndex',
+    'QueryBuilder',
+    'import_from_fact_store',
+    # Table Generators
+    'RiskRow',
+    'SynergyRow',
+    'RiskSeverity',
+    'generate_risk_table',
+    'generate_synergy_table',
 ]
