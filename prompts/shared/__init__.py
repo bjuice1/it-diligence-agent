@@ -77,6 +77,26 @@ from .function_deep_dive import (
     get_cross_domain_dependencies,
     get_mna_questions,
 )
+from .strategic_cost_assessment import (
+    DealComplexity,
+    CompanyProfile,
+    DealProfile,
+    COST_DRIVER_PATTERNS,
+    DEAL_TYPE_CONSIDERATIONS,
+    calculate_complexity_score,
+    estimate_total_separation_cost,
+    identify_cost_drivers,
+    generate_strategic_assessment,
+    get_strategic_assessment_prompt,
+)
+from .deal_implications import (
+    DealImplication,
+    CARVEOUT_IMPLICATIONS,
+    ACQUISITION_IMPLICATIONS,
+    get_implications_for_deal_type,
+    match_facts_to_implications,
+    get_implication_prompt_injection,
+)
 
 
 def get_all_shared_guidance() -> str:
@@ -169,4 +189,22 @@ __all__ = [
     'assess_function_completeness',
     'get_cross_domain_dependencies',
     'get_mna_questions',
+    # Strategic Cost Assessment
+    'DealComplexity',
+    'CompanyProfile',
+    'DealProfile',
+    'COST_DRIVER_PATTERNS',
+    'DEAL_TYPE_CONSIDERATIONS',
+    'calculate_complexity_score',
+    'estimate_total_separation_cost',
+    'identify_cost_drivers',
+    'generate_strategic_assessment',
+    'get_strategic_assessment_prompt',
+    # Deal Implications
+    'DealImplication',
+    'CARVEOUT_IMPLICATIONS',
+    'ACQUISITION_IMPLICATIONS',
+    'get_implications_for_deal_type',
+    'match_facts_to_implications',
+    'get_implication_prompt_injection',
 ]
