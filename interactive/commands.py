@@ -490,7 +490,7 @@ def cmd_explain(session: Session, args: List[str]) -> str:
     if not args:
         return "Usage: explain <id>\nExample: explain R-001"
 
-    item_id = args[0].upper()
+    item_id = args[0]  # Keep original case for hash-based IDs
     result = session.get_item_by_id(item_id)
 
     if not result:
@@ -820,7 +820,7 @@ def cmd_adjust(session: Session, args: List[str]) -> str:
     if len(args) < 3:
         return "Usage: adjust <id> <field> <value>\nExample: adjust R-001 severity critical"
 
-    item_id = args[0].upper()
+    item_id = args[0]  # Keep original case for hash-based IDs
     field = args[1].lower()
     value = args[2]
 
@@ -1063,7 +1063,7 @@ def cmd_delete(session: Session, args: List[str]) -> str:
     if not args:
         return "Usage: delete <id>\nExample: delete R-001"
 
-    item_id = args[0].upper()
+    item_id = args[0]  # Keep original case for hash-based IDs
     result = session.get_item_by_id(item_id)
 
     if not result:
@@ -1104,7 +1104,7 @@ def cmd_note(session: Session, args: List[str]) -> str:
     if len(args) < 2:
         return "Usage: note <id> \"<text>\"\nExample: note R-001 \"Confirmed with CTO\""
 
-    item_id = args[0].upper()
+    item_id = args[0]  # Keep original case for hash-based IDs
     note_text = " ".join(args[1:]).strip('"\'')
 
     result = session.get_item_by_id(item_id)

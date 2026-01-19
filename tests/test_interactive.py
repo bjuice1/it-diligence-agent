@@ -119,7 +119,7 @@ class TestSession:
         session = Session()
 
         # Add a risk
-        session.reasoning_store.add_risk(
+        risk_id = session.reasoning_store.add_risk(
             domain="infrastructure",
             title="EOL VMware",
             description="VMware 6.7 is end of life",
@@ -132,7 +132,7 @@ class TestSession:
             reasoning="VMware 6.7 EOL was Oct 2022"
         )
 
-        result = session.get_item_by_id("R-001")
+        result = session.get_item_by_id(risk_id)
         assert result is not None
         item_type, item = result
         assert item_type == 'risk'
@@ -142,7 +142,7 @@ class TestSession:
         """Test getting work item by ID."""
         session = Session()
 
-        session.reasoning_store.add_work_item(
+        wi_id = session.reasoning_store.add_work_item(
             domain="infrastructure",
             title="VMware Upgrade",
             description="Upgrade VMware",
@@ -156,7 +156,7 @@ class TestSession:
             cost_estimate="100k_to_500k"
         )
 
-        result = session.get_item_by_id("WI-001")
+        result = session.get_item_by_id(wi_id)
         assert result is not None
         item_type, item = result
         assert item_type == 'work_item'
@@ -166,7 +166,7 @@ class TestSession:
         """Test adjusting risk severity."""
         session = Session()
 
-        session.reasoning_store.add_risk(
+        risk_id = session.reasoning_store.add_risk(
             domain="infrastructure",
             title="Test Risk",
             description="Test",
@@ -179,10 +179,10 @@ class TestSession:
             reasoning=""
         )
 
-        success = session.adjust_risk("R-001", "severity", "critical")
+        success = session.adjust_risk(risk_id, "severity", "critical")
         assert success
 
-        risk = session.get_risk("R-001")
+        risk = session.get_risk(risk_id)
         assert risk.severity == "critical"
 
         # Check modification was recorded
@@ -195,7 +195,7 @@ class TestSession:
         """Test undoing last modification."""
         session = Session()
 
-        session.reasoning_store.add_risk(
+        risk_id = session.reasoning_store.add_risk(
             domain="infrastructure",
             title="Test Risk",
             description="Test",
@@ -209,13 +209,13 @@ class TestSession:
         )
 
         # Make a change
-        session.adjust_risk("R-001", "severity", "critical")
-        assert session.get_risk("R-001").severity == "critical"
+        session.adjust_risk(risk_id, "severity", "critical")
+        assert session.get_risk(risk_id).severity == "critical"
 
         # Undo it
         mod = session.undo_last()
         assert mod is not None
-        assert session.get_risk("R-001").severity == "medium"
+        assert session.get_risk(risk_id).severity == "medium"
 
 
 class TestCommands:
@@ -321,7 +321,7 @@ class TestCommands:
         output = cmd_list(session, ["risks"])
 
         assert "RISKS" in output
-        assert "R-001" in output
+        assert "R-" in output  # Hash-based ID
         assert "EOL Software" in output
         assert "HIGH" in output
 
@@ -345,7 +345,7 @@ class TestCommands:
         output = cmd_list(session, ["work-items"])
 
         assert "WORK ITEMS" in output
-        assert "WI-001" in output
+        assert "WI-" in output  # Hash-based ID
         assert "Upgrade VMware" in output
         assert "Day_100" in output
 
@@ -398,7 +398,7 @@ class TestCommands:
             evidence={"exact_quote": "VMware vSphere 6.7"}
         )
 
-        session.reasoning_store.add_risk(
+        risk_id = session.reasoning_store.add_risk(
             domain="infrastructure",
             title="EOL VMware",
             description="VMware is end of life",
@@ -411,9 +411,9 @@ class TestCommands:
             reasoning="VMware 6.7 EOL Oct 2022"
         )
 
-        output = cmd_explain(session, ["R-001"])
+        output = cmd_explain(session, [risk_id])
 
-        assert "R-001" in output
+        assert risk_id in output
         assert "RISK: EOL VMware" in output
         assert "Severity:" in output and "HIGH" in output
         assert "REASONING" in output
@@ -424,7 +424,7 @@ class TestCommands:
         """Test adjust risk severity."""
         session = Session()
 
-        session.reasoning_store.add_risk(
+        risk_id = session.reasoning_store.add_risk(
             domain="infrastructure",
             title="Test Risk",
             description="Test",
@@ -437,18 +437,18 @@ class TestCommands:
             reasoning=""
         )
 
-        output = cmd_adjust(session, ["R-001", "severity", "critical"])
+        output = cmd_adjust(session, [risk_id, "severity", "critical"])
 
-        assert "R-001 severity" in output
+        assert f"{risk_id} severity" in output
         assert "medium" in output
         assert "critical" in output
-        assert session.get_risk("R-001").severity == "critical"
+        assert session.get_risk(risk_id).severity == "critical"
 
     def test_cmd_adjust_invalid_severity(self):
         """Test adjust with invalid severity."""
         session = Session()
 
-        session.reasoning_store.add_risk(
+        risk_id = session.reasoning_store.add_risk(
             domain="infrastructure",
             title="Test Risk",
             description="Test",
@@ -461,16 +461,16 @@ class TestCommands:
             reasoning=""
         )
 
-        output = cmd_adjust(session, ["R-001", "severity", "invalid"])
+        output = cmd_adjust(session, [risk_id, "severity", "invalid"])
 
         assert "Invalid severity" in output
-        assert session.get_risk("R-001").severity == "medium"  # Unchanged
+        assert session.get_risk(risk_id).severity == "medium"  # Unchanged
 
     def test_cmd_adjust_work_item_phase(self):
         """Test adjust work item phase."""
         session = Session()
 
-        session.reasoning_store.add_work_item(
+        wi_id = session.reasoning_store.add_work_item(
             domain="infrastructure",
             title="Test Work Item",
             description="Test",
@@ -484,18 +484,18 @@ class TestCommands:
             cost_estimate="25k_to_100k"
         )
 
-        output = cmd_adjust(session, ["WI-001", "phase", "Day_1"])
+        output = cmd_adjust(session, [wi_id, "phase", "Day_1"])
 
         assert "phase" in output
         assert "Day_100" in output
         assert "Day_1" in output
-        assert session.get_work_item("WI-001").phase == "Day_1"
+        assert session.get_work_item(wi_id).phase == "Day_1"
 
     def test_cmd_undo(self):
         """Test undo command."""
         session = Session()
 
-        session.reasoning_store.add_risk(
+        risk_id = session.reasoning_store.add_risk(
             domain="infrastructure",
             title="Test Risk",
             description="Test",
@@ -508,11 +508,11 @@ class TestCommands:
             reasoning=""
         )
 
-        cmd_adjust(session, ["R-001", "severity", "high"])
+        cmd_adjust(session, [risk_id, "severity", "high"])
         output = cmd_undo(session, [])
 
         assert "Undone" in output
-        assert session.get_risk("R-001").severity == "medium"
+        assert session.get_risk(risk_id).severity == "medium"
 
     def test_cmd_undo_nothing(self):
         """Test undo when nothing to undo."""
@@ -796,7 +796,7 @@ class TestManualEntryCommands:
         output = cmd_add(session, ["risk", "No SIEM deployed", "high", "No centralized security monitoring"])
 
         assert "Added risk" in output
-        assert "R-001" in output
+        assert "R-" in output  # Hash-based ID
         assert len(session.reasoning_store.risks) == 1
         assert session.reasoning_store.risks[0].title == "No SIEM deployed"
         assert session.reasoning_store.risks[0].severity == "high"
@@ -815,7 +815,7 @@ class TestManualEntryCommands:
         output = cmd_add(session, ["work-item", "Deploy SIEM solution", "Day_100", "100k_to_500k"])
 
         assert "Added work item" in output
-        assert "WI-001" in output
+        assert "WI-" in output  # Hash-based ID
         assert len(session.reasoning_store.work_items) == 1
         assert session.reasoning_store.work_items[0].title == "Deploy SIEM solution"
         assert session.reasoning_store.work_items[0].phase == "Day_100"
@@ -845,7 +845,7 @@ class TestDeleteCommand:
     def test_delete_risk(self):
         """Test deleting a risk."""
         session = Session()
-        session.reasoning_store.add_risk(
+        risk_id = session.reasoning_store.add_risk(
             domain="infrastructure",
             title="Test Risk",
             description="Test",
@@ -859,7 +859,7 @@ class TestDeleteCommand:
         )
 
         assert len(session.reasoning_store.risks) == 1
-        output = cmd_delete(session, ["R-001"])
+        output = cmd_delete(session, [risk_id])
 
         assert "Deleted risk" in output
         assert len(session.reasoning_store.risks) == 0
@@ -867,7 +867,7 @@ class TestDeleteCommand:
     def test_delete_work_item(self):
         """Test deleting a work item."""
         session = Session()
-        session.reasoning_store.add_work_item(
+        wi_id = session.reasoning_store.add_work_item(
             domain="infrastructure",
             title="Test Work Item",
             description="Test",
@@ -882,7 +882,7 @@ class TestDeleteCommand:
         )
 
         assert len(session.reasoning_store.work_items) == 1
-        output = cmd_delete(session, ["WI-001"])
+        output = cmd_delete(session, [wi_id])
 
         assert "Deleted work item" in output
         assert len(session.reasoning_store.work_items) == 0
@@ -919,7 +919,7 @@ class TestNoteCommand:
     def test_note_on_risk(self):
         """Test adding a note to a risk."""
         session = Session()
-        session.reasoning_store.add_risk(
+        risk_id = session.reasoning_store.add_risk(
             domain="infrastructure",
             title="Test Risk",
             description="Test",
@@ -932,16 +932,16 @@ class TestNoteCommand:
             reasoning="Original reasoning"
         )
 
-        output = cmd_note(session, ["R-001", "Discussed with CTO - confirmed critical"])
+        output = cmd_note(session, [risk_id, "Discussed with CTO - confirmed critical"])
 
         assert "Added note" in output
-        risk = session.get_risk("R-001")
+        risk = session.get_risk(risk_id)
         assert "Discussed with CTO" in risk.reasoning
 
     def test_note_on_work_item(self):
         """Test adding a note to a work item."""
         session = Session()
-        session.reasoning_store.add_work_item(
+        wi_id = session.reasoning_store.add_work_item(
             domain="infrastructure",
             title="Test Work Item",
             description="Test",
@@ -955,10 +955,10 @@ class TestNoteCommand:
             cost_estimate="25k_to_100k"
         )
 
-        output = cmd_note(session, ["WI-001", "Buyer to fund this"])
+        output = cmd_note(session, [wi_id, "Buyer to fund this"])
 
         assert "Added note" in output
-        wi = session.get_work_item("WI-001")
+        wi = session.get_work_item(wi_id)
         assert "Buyer to fund" in wi.reasoning
 
     def test_note_nonexistent_item(self):
@@ -1008,7 +1008,7 @@ class TestSearchCommand:
         output = cmd_search(session, ["VMware"])
 
         assert "VMware" in output
-        assert "R-001" in output
+        assert "R-" in output  # Hash-based ID
         assert "risk" in output
 
     def test_search_no_results(self):
@@ -1048,7 +1048,7 @@ class TestHistoryCommand:
     def test_history_with_modifications(self):
         """Test history with modifications."""
         session = Session()
-        session.reasoning_store.add_risk(
+        risk_id = session.reasoning_store.add_risk(
             domain="infrastructure",
             title="Test Risk",
             description="Test",
@@ -1061,7 +1061,7 @@ class TestHistoryCommand:
             reasoning=""
         )
 
-        cmd_adjust(session, ["R-001", "severity", "high"])
+        cmd_adjust(session, [risk_id, "severity", "high"])
 
         output = cmd_history(session, [])
 

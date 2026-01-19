@@ -504,6 +504,7 @@ class TestDiscoveryTools:
                 "domain": "infrastructure",
                 "category": "compute",
                 "item": "VMware",
+                "entity": "target",  # Required field
                 "status": "documented",
                 "evidence": {"exact_quote": "VMware environment"}
             }
@@ -699,7 +700,7 @@ class TestReasoningStore:
             reasoning="Fact F-INFRA-001 shows VMware 6.7 which is EOL"
         )
 
-        assert risk_id == "R-001"
+        assert risk_id.startswith("R-")  # Hash-based ID
         assert len(store.risks) == 1
         assert store.risks[0].title == "EOL VMware Version"
 
@@ -718,7 +719,7 @@ class TestReasoningStore:
             reasoning="Facts show AWS usage, buyer confirmed Azure"
         )
 
-        assert sc_id == "SC-001"
+        assert sc_id.startswith("SC-")  # Hash-based ID
         assert len(store.strategic_considerations) == 1
 
     def test_add_work_item(self):
@@ -739,7 +740,7 @@ class TestReasoningStore:
             cost_estimate="100k_to_500k"
         )
 
-        assert wi_id == "WI-001"
+        assert wi_id.startswith("WI-")  # Hash-based ID
         assert len(store.work_items) == 1
         assert store.work_items[0].phase == "Day_100"
 
@@ -759,7 +760,7 @@ class TestReasoningStore:
             reasoning="EOL systems require immediate attention"
         )
 
-        assert rec_id == "REC-001"
+        assert rec_id.startswith("REC-")  # Hash-based ID
         assert len(store.recommendations) == 1
 
     def test_get_all_findings(self):
@@ -834,7 +835,7 @@ class TestReasoningStore:
         )
 
         reasoning_store = ReasoningStore(fact_store=fact_store)
-        reasoning_store.add_risk(
+        risk_id = reasoning_store.add_risk(
             domain="infrastructure",
             title="EOL VMware",
             description="VMware 6.7 is end of life",
@@ -847,7 +848,7 @@ class TestReasoningStore:
             reasoning="6.7 reached EOL"
         )
 
-        chain = reasoning_store.get_evidence_chain("R-001")
+        chain = reasoning_store.get_evidence_chain(risk_id)
 
         assert chain["finding"]["title"] == "EOL VMware"
         assert chain["finding_type"] == "risk"
@@ -1022,7 +1023,7 @@ class TestReasoningTools:
 
         assert result["status"] == "success"
         assert "risk_id" in result
-        assert result["risk_id"] == "R-001"
+        assert result["risk_id"].startswith("R-")  # Hash-based ID
 
     def test_execute_identify_risk_missing_citations(self):
         """Test identify_risk fails without fact citations."""
@@ -1046,7 +1047,7 @@ class TestReasoningTools:
         )
 
         assert result["status"] == "error"
-        assert "cite at least one fact" in result["message"]
+        assert "based_on_facts" in result["message"]  # Error about missing citations
 
     def test_execute_create_work_item(self):
         """Test executing create_work_item tool."""
@@ -1095,7 +1096,7 @@ class TestReasoningTools:
         )
 
         assert result["status"] == "error"
-        assert "triggered_by required" in result["message"]
+        assert "triggered_by" in result["message"]  # Error about missing triggered_by
 
     def test_execute_complete_reasoning(self):
         """Test executing complete_reasoning tool."""
@@ -1257,7 +1258,7 @@ class TestIntegration:
         # Phase 2: Reasoning
         reasoning_store = ReasoningStore(fact_store=fact_store)
 
-        execute_reasoning_tool(
+        risk_result = execute_reasoning_tool(
             "identify_risk",
             {
                 "domain": "infrastructure",
@@ -1299,7 +1300,8 @@ class TestIntegration:
         assert len(reasoning_store.work_items) == 1
 
         # Verify evidence chain
-        chain = reasoning_store.get_evidence_chain("R-001")
+        risk_id = risk_result["risk_id"]
+        chain = reasoning_store.get_evidence_chain(risk_id)
         assert chain["evidence_chain_complete"] is True
         assert len(chain["cited_facts"]) == 1
         assert chain["cited_facts"][0]["item"] == "VMware Environment"
