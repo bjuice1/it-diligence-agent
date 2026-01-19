@@ -16,6 +16,13 @@ from tools_v2.consistency_engine import (
     get_top_risks,
     calculate_confidence,
     generate_consistency_report,
+    CompanyProfile,
+    get_size_multiplier,
+    get_industry_factor,
+    get_geography_factor,
+    get_maturity_factor,
+    SIZE_MULTIPLIERS,
+    INDUSTRY_FACTORS,
     COST_TABLE,
     SEVERITY_SCORES
 )
@@ -337,3 +344,141 @@ class TestConsistencyReport:
         assert report1["complexity"]["tier"] == report2["complexity"]["tier"]
         assert report1["costs"]["total"] == report2["costs"]["total"]
         assert report1["counts"] == report2["counts"]
+
+
+class TestCompanyProfile:
+    """Test company profile and multiplier calculations."""
+
+    def test_size_multiplier_micro(self):
+        """Micro companies (<50 employees) should get 0.4x multiplier."""
+        mult, label = get_size_multiplier(30)
+        assert mult == 0.4
+        assert "50" in label
+
+    def test_size_multiplier_midmarket(self):
+        """Mid-market companies (250-500) should get 1.0x multiplier."""
+        mult, label = get_size_multiplier(300)
+        assert mult == 1.0
+
+    def test_size_multiplier_enterprise(self):
+        """Enterprise companies (5000+) should get 4.0x multiplier."""
+        mult, label = get_size_multiplier(10000)
+        assert mult == 4.0
+
+    def test_industry_factor_healthcare(self):
+        """Healthcare should get 1.4x factor."""
+        factor, reason = get_industry_factor("healthcare")
+        assert factor == 1.4
+        assert "HIPAA" in reason
+
+    def test_industry_factor_financial(self):
+        """Financial services should get 1.5x factor."""
+        factor, reason = get_industry_factor("financial_services")
+        assert factor == 1.5
+
+    def test_industry_factor_default(self):
+        """Unknown industry should get 1.0x default."""
+        factor, reason = get_industry_factor("unknown_industry")
+        assert factor == 1.0
+
+    def test_geography_global(self):
+        """Global geography should get 1.6x factor."""
+        factor, reason = get_geography_factor("global")
+        assert factor == 1.6
+
+    def test_maturity_minimal(self):
+        """Minimal IT maturity should get 1.6x factor."""
+        factor, reason = get_maturity_factor("minimal")
+        assert factor == 1.6
+
+    def test_company_profile_total_multiplier(self):
+        """Company profile should calculate combined multiplier."""
+        profile = CompanyProfile(
+            employee_count=300,  # 1.0x
+            industry="technology",  # 1.0x
+            geography="single_country",  # 1.0x
+            it_maturity="standard"  # 1.0x
+        )
+        total, breakdown = profile.get_total_multiplier()
+        assert total == 1.0
+
+    def test_company_profile_large_healthcare(self):
+        """Large healthcare company should have high multiplier."""
+        profile = CompanyProfile(
+            employee_count=3000,  # 3.0x
+            industry="healthcare",  # 1.4x
+            geography="multi_region",  # 1.4x
+            it_maturity="basic"  # 1.3x
+        )
+        total, breakdown = profile.get_total_multiplier()
+        # 3.0 * 1.4 * 1.4 * 1.3 = 7.644
+        assert total > 7.0
+        assert "size" in breakdown
+        assert "industry" in breakdown
+
+    def test_cost_with_profile(self):
+        """Costs should scale with company profile."""
+        # Base cost (mid-market)
+        base_low, base_high = calculate_work_item_cost("ERP integration", "", "Day_100")
+
+        # Large enterprise profile
+        large_profile = CompanyProfile(employee_count=6000)  # 4.0x
+        large_low, large_high = calculate_work_item_cost(
+            "ERP integration", "", "Day_100", large_profile
+        )
+
+        # Large should be approximately 4x the base
+        assert large_low > base_low * 3.5
+        assert large_low < base_low * 4.5
+
+    def test_total_costs_with_profile(self):
+        """Total costs should include methodology breakdown."""
+        profile = CompanyProfile(
+            employee_count=1500,
+            industry="financial_services",
+            geography="multi_region"
+        )
+        work_items = [
+            {"title": "SAP migration", "description": "", "phase": "Day_100"},
+            {"title": "SSO setup", "description": "", "phase": "Day_1"},
+        ]
+        result = calculate_total_costs(work_items, profile)
+
+        assert "methodology" in result
+        assert "multiplier_applied" in result
+        assert result["multiplier_applied"] > 1.0  # Should be elevated
+        assert "base_total" in result
+        assert result["total"]["low"] > result["base_total"]["low"]
+
+    def test_report_includes_company_profile(self):
+        """Consistency report should include company profile details."""
+        profile = CompanyProfile(
+            employee_count=500,
+            industry="manufacturing"
+        )
+        report = generate_consistency_report(
+            facts=[{"item": "VMware"}],
+            gaps=[],
+            risks=[{"severity": "medium", "title": "Risk", "description": ""}],
+            work_items=[{"title": "Task", "description": "", "phase": "Day_100"}],
+            company_profile=profile
+        )
+
+        assert "company_profile" in report
+        assert "methodology_summary" in report
+        assert report["company_profile"]["employee_count"] == 500
+        assert report["company_profile"]["industry"] == "manufacturing"
+
+    def test_multipliers_are_deterministic(self):
+        """Same profile should always produce same multiplier."""
+        profile = CompanyProfile(
+            employee_count=750,
+            industry="healthcare",
+            geography="global",
+            it_maturity="basic"
+        )
+
+        mult1, _ = profile.get_total_multiplier()
+        mult2, _ = profile.get_total_multiplier()
+
+        assert mult1 == mult2

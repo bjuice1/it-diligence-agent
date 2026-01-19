@@ -8,6 +8,55 @@ This module ensures consistent outputs by replacing LLM "vibes" with:
 4. Confidence metrics
 
 NO LLM judgment in this module - pure computation.
+
+METHODOLOGY DOCUMENTATION
+=========================
+
+1. COST ESTIMATION METHODOLOGY
+   - Base costs are mid-market benchmarks (100-500 employees)
+   - Source: Industry research, PE deal retrospectives, consulting benchmarks
+   - Costs are adjusted by: Company Size × Industry Factor × Geography Factor
+
+2. COMPANY SIZE MULTIPLIERS (Headcount-based)
+   - <50 employees: 0.4x (simpler IT, fewer systems)
+   - 50-100: 0.6x
+   - 100-250: 0.8x
+   - 250-500: 1.0x (baseline)
+   - 500-1000: 1.5x
+   - 1000-2500: 2.2x
+   - 2500-5000: 3.0x
+   - 5000+: 4.0x (enterprise complexity)
+
+3. INDUSTRY COMPLEXITY FACTORS
+   - Healthcare/Life Sciences: 1.4x (HIPAA, FDA compliance)
+   - Financial Services: 1.5x (SOX, PCI, regulatory)
+   - Manufacturing: 1.2x (OT/IT convergence)
+   - Technology: 1.0x (baseline)
+   - Retail/E-commerce: 1.1x (PCI, multi-channel)
+   - Professional Services: 0.9x (simpler IT footprint)
+
+4. GEOGRAPHY FACTORS
+   - Single country: 1.0x
+   - Multi-country, same region: 1.2x
+   - Multi-region (NA+EU, etc.): 1.4x
+   - Global (3+ regions): 1.6x
+
+5. COMPLEXITY SCORING
+   - Critical risk: 15 points
+   - High risk: 8 points
+   - Medium risk: 3 points
+   - Low risk: 1 point
+   - Critical/High gap: 5 points
+   - Other gap: 2 points
+   - Each work item: 2 points
+
+   Tier Thresholds:
+   - Low: 0-14 points
+   - Mid: 15-34 points
+   - High: 35-59 points
+   - Critical: 60+ points
+
+   Auto-bump flags can elevate tier regardless of score.
 """
 
 import re
@@ -16,9 +65,191 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Optional, Any
 from datetime import datetime
 
+
 # =============================================================================
-# COST LOOKUP TABLE (Deterministic)
+# COMPANY PROFILE ADJUSTMENTS (The Logic Layer)
 # =============================================================================
+
+# Company size multipliers - based on employee headcount
+# Rationale: Larger companies have more systems, more complexity, more stakeholders
+SIZE_MULTIPLIERS = {
+    "micro": {"range": (0, 50), "multiplier": 0.4, "label": "<50 employees"},
+    "small": {"range": (50, 100), "multiplier": 0.6, "label": "50-100 employees"},
+    "small_mid": {"range": (100, 250), "multiplier": 0.8, "label": "100-250 employees"},
+    "mid_market": {"range": (250, 500), "multiplier": 1.0, "label": "250-500 employees (baseline)"},
+    "upper_mid": {"range": (500, 1000), "multiplier": 1.5, "label": "500-1000 employees"},
+    "lower_enterprise": {"range": (1000, 2500), "multiplier": 2.2, "label": "1000-2500 employees"},
+    "enterprise": {"range": (2500, 5000), "multiplier": 3.0, "label": "2500-5000 employees"},
+    "large_enterprise": {"range": (5000, 999999), "multiplier": 4.0, "label": "5000+ employees"}
+}
+
+# Industry complexity factors
+# Rationale: Regulated industries have compliance overhead; tech-heavy industries have more systems
+INDUSTRY_FACTORS = {
+    "healthcare": {"factor": 1.4, "reason": "HIPAA compliance, clinical systems integration"},
+    "life_sciences": {"factor": 1.4, "reason": "FDA 21 CFR Part 11, GxP validation"},
+    "financial_services": {"factor": 1.5, "reason": "SOX, PCI-DSS, regulatory reporting"},
+    "banking": {"factor": 1.5, "reason": "Core banking systems, regulatory requirements"},
+    "insurance": {"factor": 1.3, "reason": "Policy admin systems, state regulations"},
+    "manufacturing": {"factor": 1.2, "reason": "OT/IT convergence, MES/ERP integration"},
+    "technology": {"factor": 1.0, "reason": "Baseline - modern systems assumed"},
+    "software": {"factor": 1.0, "reason": "Baseline - cloud-native assumed"},
+    "retail": {"factor": 1.1, "reason": "PCI compliance, omnichannel systems"},
+    "ecommerce": {"factor": 1.1, "reason": "Payment systems, platform integration"},
+    "professional_services": {"factor": 0.9, "reason": "Simpler IT footprint"},
+    "media": {"factor": 1.0, "reason": "Content systems, standard IT"},
+    "energy": {"factor": 1.3, "reason": "SCADA/OT systems, safety requirements"},
+    "logistics": {"factor": 1.1, "reason": "WMS/TMS systems, tracking integration"},
+    "education": {"factor": 0.9, "reason": "Generally simpler IT requirements"},
+    "government": {"factor": 1.4, "reason": "FedRAMP, security clearances"},
+    "default": {"factor": 1.0, "reason": "Standard complexity assumed"}
+}
+
+# Geography factors
+# Rationale: More regions = more complexity (data residency, compliance, connectivity)
+GEOGRAPHY_FACTORS = {
+    "single_country": {"factor": 1.0, "reason": "Single jurisdiction, unified compliance"},
+    "multi_country_same_region": {"factor": 1.2, "reason": "Regional compliance (e.g., GDPR)"},
+    "multi_region": {"factor": 1.4, "reason": "Multiple regulatory frameworks"},
+    "global": {"factor": 1.6, "reason": "Complex data residency, 24/7 operations"},
+    "default": {"factor": 1.0, "reason": "Assumed single country"}
+}
+
+# IT Maturity adjustments
+# Rationale: Less mature IT = more work required
+IT_MATURITY_FACTORS = {
+    "advanced": {"factor": 0.8, "reason": "Modern systems, good documentation"},
+    "standard": {"factor": 1.0, "reason": "Typical mid-market IT"},
+    "basic": {"factor": 1.3, "reason": "Legacy systems, technical debt"},
+    "minimal": {"factor": 1.6, "reason": "Significant modernization needed"},
+    "default": {"factor": 1.0, "reason": "Standard maturity assumed"}
+}
+
+
+def get_size_multiplier(employee_count: int) -> Tuple[float, str]:
+    """
+    Get the cost multiplier based on company size.
+
+    Args:
+        employee_count: Number of employees
+
+    Returns:
+        (multiplier, explanation)
+    """
+    for size_key, config in SIZE_MULTIPLIERS.items():
+        low, high = config["range"]
+        if low <= employee_count < high:
+            return config["multiplier"], config["label"]
+
+    # Default to mid-market if not found
+    return 1.0, "250-500 employees (baseline)"
+
+
+def get_industry_factor(industry: str) -> Tuple[float, str]:
+    """
+    Get the complexity factor for an industry.
+
+    Args:
+        industry: Industry name (lowercase, underscores)
+
+    Returns:
+        (factor, reason)
+    """
+    industry_key = industry.lower().replace(" ", "_").replace("-", "_")
+    config = INDUSTRY_FACTORS.get(industry_key, INDUSTRY_FACTORS["default"])
+    return config["factor"], config["reason"]
+
+
+def get_geography_factor(geography: str) -> Tuple[float, str]:
+    """
+    Get the complexity factor for geographic spread.
+
+    Args:
+        geography: One of single_country, multi_country_same_region, multi_region, global
+
+    Returns:
+        (factor, reason)
+    """
+    geo_key = geography.lower().replace(" ", "_").replace("-", "_")
+    config = GEOGRAPHY_FACTORS.get(geo_key, GEOGRAPHY_FACTORS["default"])
+    return config["factor"], config["reason"]
+
+
+def get_maturity_factor(maturity: str) -> Tuple[float, str]:
+    """
+    Get the adjustment factor for IT maturity level.
+
+    Args:
+        maturity: One of advanced, standard, basic, minimal
+
+    Returns:
+        (factor, reason)
+    """
+    maturity_key = maturity.lower().replace(" ", "_")
+    config = IT_MATURITY_FACTORS.get(maturity_key, IT_MATURITY_FACTORS["default"])
+    return config["factor"], config["reason"]
+
+
+@dataclass
+class CompanyProfile:
+    """
+    Company profile for cost adjustment calculations.
+    All factors have sensible defaults for mid-market deals.
+    """
+    employee_count: int = 300  # Default mid-market
+    industry: str = "technology"  # Default baseline industry
+    geography: str = "single_country"  # Default single country
+    it_maturity: str = "standard"  # Default standard maturity
+    annual_revenue: float = 50_000_000  # $50M default (not used in v1, placeholder)
+
+    def get_total_multiplier(self) -> Tuple[float, Dict[str, Any]]:
+        """
+        Calculate the total cost multiplier with full breakdown.
+
+        Returns:
+            (total_multiplier, breakdown_dict)
+        """
+        size_mult, size_reason = get_size_multiplier(self.employee_count)
+        industry_mult, industry_reason = get_industry_factor(self.industry)
+        geo_mult, geo_reason = get_geography_factor(self.geography)
+        maturity_mult, maturity_reason = get_maturity_factor(self.it_maturity)
+
+        total = size_mult * industry_mult * geo_mult * maturity_mult
+
+        breakdown = {
+            "size": {
+                "multiplier": size_mult,
+                "reason": size_reason,
+                "input": f"{self.employee_count} employees"
+            },
+            "industry": {
+                "multiplier": industry_mult,
+                "reason": industry_reason,
+                "input": self.industry
+            },
+            "geography": {
+                "multiplier": geo_mult,
+                "reason": geo_reason,
+                "input": self.geography
+            },
+            "it_maturity": {
+                "multiplier": maturity_mult,
+                "reason": maturity_reason,
+                "input": self.it_maturity
+            },
+            "total_multiplier": round(total, 2),
+            "formula": f"{size_mult} × {industry_mult} × {geo_mult} × {maturity_mult} = {round(total, 2)}"
+        }
+
+        return round(total, 2), breakdown
+
+
+# =============================================================================
+# BASE COST LOOKUP TABLE (Mid-market benchmarks)
+# =============================================================================
+
+# These are BASE costs for a 250-500 employee, single-country, standard-maturity company
+# Actual costs = Base cost × Total multiplier
 
 COST_TABLE = {
     # Category -> Phase -> (low, high) in dollars
@@ -158,49 +389,83 @@ def categorize_work_item(title: str, description: str = "") -> str:
 # DETERMINISTIC COST CALCULATION
 # =============================================================================
 
-def calculate_work_item_cost(title: str, description: str, phase: str) -> Tuple[int, int]:
+def normalize_phase(phase: str) -> str:
+    """Normalize phase string to standard format."""
+    phase_map = {
+        "day_1": "Day_1", "day1": "Day_1", "day 1": "Day_1",
+        "day_100": "Day_100", "day100": "Day_100", "day 100": "Day_100",
+        "post_100": "Post_100", "post100": "Post_100", "post-100": "Post_100", "post 100": "Post_100"
+    }
+    return phase_map.get(phase.lower().replace(" ", "_"), "Day_100")
+
+
+def calculate_work_item_cost(
+    title: str,
+    description: str,
+    phase: str,
+    company_profile: CompanyProfile = None
+) -> Tuple[int, int]:
     """
     Calculate cost for a single work item.
 
+    Args:
+        title: Work item title
+        description: Work item description
+        phase: Integration phase (Day_1, Day_100, Post_100)
+        company_profile: Optional company profile for cost adjustment
+
     Returns:
-        (low, high) cost in dollars
+        (low, high) cost in dollars, adjusted for company profile
     """
     category = categorize_work_item(title, description)
     costs = COST_TABLE.get(category, COST_TABLE["default"])
+    normalized_phase = normalize_phase(phase)
 
-    # Normalize phase
-    phase_map = {
-        "day_1": "Day_1",
-        "day_100": "Day_100",
-        "day100": "Day_100",
-        "post_100": "Post_100",
-        "post100": "Post_100",
-        "post-100": "Post_100"
-    }
-    normalized_phase = phase_map.get(phase.lower().replace(" ", "_"), phase)
+    base_low, base_high = costs.get(normalized_phase, costs.get("Day_100", (50_000, 200_000)))
 
-    phase_costs = costs.get(normalized_phase, costs.get("Day_100", (50_000, 200_000)))
-    return phase_costs
+    # Apply company profile multiplier if provided
+    if company_profile:
+        multiplier, _ = company_profile.get_total_multiplier()
+        adjusted_low = int(base_low * multiplier)
+        adjusted_high = int(base_high * multiplier)
+        return adjusted_low, adjusted_high
+
+    return base_low, base_high
 
 
-def calculate_total_costs(work_items: List[Dict]) -> Dict[str, Any]:
+def calculate_total_costs(
+    work_items: List[Dict],
+    company_profile: CompanyProfile = None
+) -> Dict[str, Any]:
     """
-    Calculate total costs across all work items.
+    Calculate total costs across all work items with full methodology breakdown.
 
     Args:
         work_items: List of work item dicts with 'title', 'description', 'phase'
+        company_profile: Optional company profile for cost adjustment
 
     Returns:
         {
             "by_phase": {"Day_1": {"low": X, "high": Y}, ...},
             "total": {"low": X, "high": Y},
-            "breakdown": [{"title": ..., "category": ..., "cost": ...}]
+            "breakdown": [{"title": ..., "category": ..., "cost": ...}],
+            "methodology": {...}  # Full explanation of how costs were calculated
         }
     """
+    # Get multiplier info
+    if company_profile:
+        total_multiplier, multiplier_breakdown = company_profile.get_total_multiplier()
+    else:
+        total_multiplier = 1.0
+        multiplier_breakdown = {
+            "note": "No company profile provided - using mid-market baseline",
+            "total_multiplier": 1.0
+        }
+
     totals = {
-        "Day_1": {"low": 0, "high": 0, "count": 0},
-        "Day_100": {"low": 0, "high": 0, "count": 0},
-        "Post_100": {"low": 0, "high": 0, "count": 0}
+        "Day_1": {"low": 0, "high": 0, "count": 0, "base_low": 0, "base_high": 0},
+        "Day_100": {"low": 0, "high": 0, "count": 0, "base_low": 0, "base_high": 0},
+        "Post_100": {"low": 0, "high": 0, "count": 0, "base_low": 0, "base_high": 0}
     }
     breakdown = []
 
@@ -208,44 +473,81 @@ def calculate_total_costs(work_items: List[Dict]) -> Dict[str, Any]:
         title = wi.get("title", "")
         description = wi.get("description", "")
         phase = wi.get("phase", "Day_100")
+        normalized_phase = normalize_phase(phase)
 
-        # Normalize phase
-        phase_map = {
-            "day_1": "Day_1", "day1": "Day_1",
-            "day_100": "Day_100", "day100": "Day_100",
-            "post_100": "Post_100", "post100": "Post_100", "post-100": "Post_100"
-        }
-        normalized_phase = phase_map.get(phase.lower().replace(" ", "_"), "Day_100")
-
-        low, high = calculate_work_item_cost(title, description, normalized_phase)
+        # Get base cost (without multiplier)
         category = categorize_work_item(title, description)
+        base_costs = COST_TABLE.get(category, COST_TABLE["default"])
+        base_low, base_high = base_costs.get(normalized_phase, (50_000, 200_000))
 
-        totals[normalized_phase]["low"] += low
-        totals[normalized_phase]["high"] += high
+        # Get adjusted cost (with multiplier)
+        adjusted_low, adjusted_high = calculate_work_item_cost(
+            title, description, normalized_phase, company_profile
+        )
+
+        # Track both base and adjusted
+        totals[normalized_phase]["base_low"] += base_low
+        totals[normalized_phase]["base_high"] += base_high
+        totals[normalized_phase]["low"] += adjusted_low
+        totals[normalized_phase]["high"] += adjusted_high
         totals[normalized_phase]["count"] += 1
 
         breakdown.append({
             "title": title,
             "phase": normalized_phase,
             "category": category,
-            "cost_low": low,
-            "cost_high": high
+            "base_cost_low": base_low,
+            "base_cost_high": base_high,
+            "adjusted_cost_low": adjusted_low,
+            "adjusted_cost_high": adjusted_high,
+            "multiplier_applied": total_multiplier
         })
 
-    grand_total = {
+    # Calculate totals
+    base_total = {
+        "low": sum(t["base_low"] for t in totals.values()),
+        "high": sum(t["base_high"] for t in totals.values())
+    }
+    adjusted_total = {
         "low": sum(t["low"] for t in totals.values()),
         "high": sum(t["high"] for t in totals.values())
     }
 
+    # Build methodology explanation
+    methodology = {
+        "approach": "Deterministic cost calculation using category-based lookup tables",
+        "base_costs": "Mid-market benchmarks (250-500 employees, single country, standard IT maturity)",
+        "adjustments_applied": multiplier_breakdown,
+        "formula": f"Final Cost = Base Cost × {total_multiplier}",
+        "base_total": f"${base_total['low']:,} - ${base_total['high']:,}",
+        "adjusted_total": f"${adjusted_total['low']:,} - ${adjusted_total['high']:,}",
+        "categories_used": list(set(item["category"] for item in breakdown)),
+        "work_item_count": len(work_items),
+        "sources": [
+            "Industry research and benchmarks",
+            "PE deal retrospectives",
+            "IT integration consulting data"
+        ],
+        "notes": [
+            "Costs are estimates and should be validated with target-specific data",
+            "Actual costs may vary ±30% based on target IT complexity",
+            "Excludes internal labor costs unless explicitly stated"
+        ]
+    }
+
     return {
         "by_phase": totals,
-        "total": grand_total,
+        "total": adjusted_total,
+        "base_total": base_total,
         "breakdown": breakdown,
+        "methodology": methodology,
+        "multiplier_applied": total_multiplier,
         "formatted": {
             "Day_1": f"${totals['Day_1']['low']:,} - ${totals['Day_1']['high']:,}",
             "Day_100": f"${totals['Day_100']['low']:,} - ${totals['Day_100']['high']:,}",
             "Post_100": f"${totals['Post_100']['low']:,} - ${totals['Post_100']['high']:,}",
-            "Total": f"${grand_total['low']:,} - ${grand_total['high']:,}"
+            "Total": f"${adjusted_total['low']:,} - ${adjusted_total['high']:,}",
+            "Base_Total": f"${base_total['low']:,} - ${base_total['high']:,} (before adjustments)"
         }
     }
 
@@ -557,12 +859,24 @@ def generate_consistency_report(
     risks: List[Dict],
     work_items: List[Dict],
     verified_fact_ids: List[str] = None,
-    source_documents: List[str] = None
+    source_documents: List[str] = None,
+    company_profile: CompanyProfile = None,
+    all_texts: List[str] = None
 ) -> Dict[str, Any]:
     """
-    Generate a complete consistency report.
+    Generate a complete consistency report with full methodology documentation.
 
     This is the main entry point that calculates ALL deterministic metrics.
+
+    Args:
+        facts: List of fact dicts
+        gaps: List of gap dicts
+        risks: List of risk dicts
+        work_items: List of work item dicts
+        verified_fact_ids: List of verified fact IDs
+        source_documents: List of source document names
+        company_profile: Optional CompanyProfile for cost adjustments
+        all_texts: Optional list of all text for flag checking
 
     Returns:
         {
@@ -571,11 +885,17 @@ def generate_consistency_report(
             "top_risks": [...],
             "confidence": {...},
             "counts": {...},
+            "company_profile": {...},
+            "methodology_summary": "...",
             "generated_at": "..."
         }
     """
     verified_fact_ids = verified_fact_ids or []
     source_documents = source_documents or []
+
+    # Use default mid-market profile if none provided
+    if company_profile is None:
+        company_profile = CompanyProfile()  # Defaults to mid-market
 
     # Counts (deterministic)
     counts = {
@@ -587,24 +907,25 @@ def generate_consistency_report(
         "source_documents": len(source_documents)
     }
 
-    # Build texts for flag checking
-    all_texts = []
-    for f in facts:
-        all_texts.append(f.get("item", ""))
-    for g in gaps:
-        all_texts.append(g.get("description", ""))
-    for r in risks:
-        all_texts.append(r.get("title", ""))
-        all_texts.append(r.get("description", ""))
-    for w in work_items:
-        all_texts.append(w.get("title", ""))
-        all_texts.append(w.get("description", ""))
+    # Build texts for flag checking if not provided
+    if all_texts is None:
+        all_texts = []
+        for f in facts:
+            all_texts.append(f.get("item", ""))
+        for g in gaps:
+            all_texts.append(g.get("description", ""))
+        for r in risks:
+            all_texts.append(r.get("title", ""))
+            all_texts.append(r.get("description", ""))
+        for w in work_items:
+            all_texts.append(w.get("title", ""))
+            all_texts.append(w.get("description", ""))
 
     # Calculate complexity
     complexity = calculate_complexity_score(risks, gaps, work_items, all_texts)
 
-    # Calculate costs
-    costs = calculate_total_costs(work_items)
+    # Calculate costs with company profile adjustment
+    costs = calculate_total_costs(work_items, company_profile)
 
     # Get top risks
     top_risks = get_top_risks(risks, n=5, verified_fact_ids=verified_fact_ids)
@@ -617,11 +938,42 @@ def generate_consistency_report(
         source_count=len(source_documents)
     )
 
+    # Get company profile breakdown
+    total_multiplier, profile_breakdown = company_profile.get_total_multiplier()
+
+    # Build methodology summary
+    methodology_summary = f"""
+COST METHODOLOGY:
+- Base costs: Mid-market benchmarks (250-500 employees)
+- Company size: {company_profile.employee_count} employees → {profile_breakdown['size']['multiplier']}x
+- Industry: {company_profile.industry} → {profile_breakdown['industry']['multiplier']}x
+- Geography: {company_profile.geography} → {profile_breakdown['geography']['multiplier']}x
+- IT Maturity: {company_profile.it_maturity} → {profile_breakdown['it_maturity']['multiplier']}x
+- Total multiplier: {total_multiplier}x
+
+COMPLEXITY METHODOLOGY:
+- Score: {complexity['score']} points
+- Tier: {complexity['tier'].upper()}
+- Critical risks: {complexity['breakdown']['critical_risks']} (15 pts each)
+- High risks: {complexity['breakdown']['high_risks']} (8 pts each)
+- Flags triggered: {len(complexity['flags_triggered'])}
+
+CONFIDENCE: {confidence['label']} ({confidence['percentage']})
+    """.strip()
+
     return {
         "complexity": complexity,
         "costs": costs,
         "top_risks": top_risks,
         "confidence": confidence,
         "counts": counts,
+        "company_profile": {
+            "employee_count": company_profile.employee_count,
+            "industry": company_profile.industry,
+            "geography": company_profile.geography,
+            "it_maturity": company_profile.it_maturity,
+            "multiplier_breakdown": profile_breakdown
+        },
+        "methodology_summary": methodology_summary,
         "generated_at": datetime.now().isoformat()
     }

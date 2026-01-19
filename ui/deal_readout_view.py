@@ -32,7 +32,12 @@ try:
         calculate_total_costs,
         get_top_risks,
         calculate_confidence,
-        check_complexity_flags
+        check_complexity_flags,
+        CompanyProfile,
+        SIZE_MULTIPLIERS,
+        INDUSTRY_FACTORS,
+        GEOGRAPHY_FACTORS,
+        IT_MATURITY_FACTORS
     )
 except ImportError as e:
     st.error(f"Import error: {e}")
@@ -317,12 +322,131 @@ def load_deal_data(session_dir: Path) -> Dict[str, Any]:
     }
 
 
+def render_company_profile_inputs() -> CompanyProfile:
+    """Render sidebar inputs for company profile and return the profile."""
+    st.sidebar.markdown("### 🏢 Company Profile")
+    st.sidebar.markdown("*Adjust to calibrate cost estimates*")
+
+    # Employee count slider
+    employee_count = st.sidebar.slider(
+        "Employee Count",
+        min_value=10,
+        max_value=10000,
+        value=300,
+        step=10,
+        help="Number of employees at the target company"
+    )
+
+    # Industry dropdown
+    industries = list(INDUSTRY_FACTORS.keys())
+    industries.remove("default")
+    industry = st.sidebar.selectbox(
+        "Industry",
+        options=industries,
+        index=industries.index("technology") if "technology" in industries else 0,
+        format_func=lambda x: x.replace("_", " ").title()
+    )
+
+    # Geography dropdown
+    geography_options = list(GEOGRAPHY_FACTORS.keys())
+    geography_options.remove("default")
+    geography = st.sidebar.selectbox(
+        "Geographic Footprint",
+        options=geography_options,
+        index=0,
+        format_func=lambda x: x.replace("_", " ").title()
+    )
+
+    # IT Maturity dropdown
+    maturity_options = list(IT_MATURITY_FACTORS.keys())
+    maturity_options.remove("default")
+    it_maturity = st.sidebar.selectbox(
+        "IT Maturity Level",
+        options=maturity_options,
+        index=maturity_options.index("standard") if "standard" in maturity_options else 0,
+        format_func=lambda x: x.replace("_", " ").title()
+    )
+
+    # Create and show profile
+    profile = CompanyProfile(
+        employee_count=employee_count,
+        industry=industry,
+        geography=geography,
+        it_maturity=it_maturity
+    )
+
+    # Show multiplier calculation
+    total_mult, breakdown = profile.get_total_multiplier()
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("**Cost Multiplier Breakdown:**")
+    st.sidebar.markdown(f"- Size: {breakdown['size']['multiplier']}x")
+    st.sidebar.markdown(f"- Industry: {breakdown['industry']['multiplier']}x")
+    st.sidebar.markdown(f"- Geography: {breakdown['geography']['multiplier']}x")
+    st.sidebar.markdown(f"- IT Maturity: {breakdown['it_maturity']['multiplier']}x")
+    st.sidebar.markdown(f"**Total: {total_mult}x**")
+
+    return profile
+
+
+def render_methodology_section(report: Dict) -> None:
+    """Render the methodology explanation section."""
+    st.markdown("### 📐 Methodology")
+
+    methodology = report.get("costs", {}).get("methodology", {})
+    profile = report.get("company_profile", {})
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("**Cost Calculation Logic:**")
+        st.markdown(f"""
+        1. **Base Costs**: Mid-market benchmarks (250-500 employees)
+        2. **Category Mapping**: Work items → cost categories via keywords
+        3. **Multipliers Applied**:
+           - Company Size: {profile.get('multiplier_breakdown', {}).get('size', {}).get('multiplier', 1.0)}x
+           - Industry: {profile.get('multiplier_breakdown', {}).get('industry', {}).get('multiplier', 1.0)}x
+           - Geography: {profile.get('multiplier_breakdown', {}).get('geography', {}).get('multiplier', 1.0)}x
+           - IT Maturity: {profile.get('multiplier_breakdown', {}).get('it_maturity', {}).get('multiplier', 1.0)}x
+        4. **Final Cost** = Base × Total Multiplier
+        """)
+
+    with col2:
+        st.markdown("**Complexity Scoring Logic:**")
+        complexity = report.get("complexity", {})
+        breakdown = complexity.get("breakdown", {})
+        st.markdown(f"""
+        - Critical Risks: {breakdown.get('critical_risks', 0)} × 15 pts
+        - High Risks: {breakdown.get('high_risks', 0)} × 8 pts
+        - Medium Risks: {breakdown.get('medium_risks', 0)} × 3 pts
+        - Gaps (High): {breakdown.get('critical_gaps', 0)} × 5 pts
+        - Work Items: {breakdown.get('work_item_count', 0)} × 2 pts
+        - **Base Score**: {breakdown.get('base_score', 0)}
+        - **Flags Triggered**: {len(complexity.get('flags_triggered', []))}
+        """)
+
+    # Show sources and notes
+    with st.expander("📚 Data Sources & Notes"):
+        sources = methodology.get("sources", [])
+        notes = methodology.get("notes", [])
+
+        st.markdown("**Sources:**")
+        for source in sources:
+            st.markdown(f"- {source}")
+
+        st.markdown("**Notes:**")
+        for note in notes:
+            st.markdown(f"- {note}")
+
+
 def render_deal_readout_section(session_dir: Path, company_name: str = "Target Company"):
     """
     Main entry point for the Deal Readout view.
     """
-    st.header("Deal Readout")
+    st.header("📊 Deal Readout")
     st.markdown(f"*Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}*")
+
+    # Render company profile inputs in sidebar
+    company_profile = render_company_profile_inputs()
 
     # Load data
     data = load_deal_data(session_dir)
@@ -336,38 +460,43 @@ def render_deal_readout_section(session_dir: Path, company_name: str = "Target C
     if not facts and not risks and not work_items:
         st.info("No analysis data found. Run an analysis first to see the deal readout.")
 
-        # Show sample readout
+        # Show sample readout with the company profile
         st.markdown("---")
         st.markdown("### Sample Deal Readout")
-        st.markdown("*Below is what a deal readout looks like with data:*")
+        st.markdown("*Below is a sample using your company profile settings:*")
 
-        # Sample data
-        sample_complexity = {"tier": "high", "score": 35, "flags_triggered": []}
-        sample_costs = {
-            "total": {"low": 2_500_000, "high": 6_000_000},
-            "by_phase": {
-                "Day_1": {"low": 500_000, "high": 1_000_000, "count": 8},
-                "Day_100": {"low": 1_500_000, "high": 3_500_000, "count": 12},
-                "Post_100": {"low": 500_000, "high": 1_500_000, "count": 6}
-            }
-        }
-        sample_confidence = {
-            "score": 0.65,
-            "label": "Medium",
-            "factors": {
-                "verified_facts": "42/65",
-                "source_count": 4,
-                "gap_count": 8
-            }
-        }
+        # Generate sample report with actual company profile
+        sample_work_items = [
+            {"title": "ERP integration", "description": "", "phase": "Day_100"},
+            {"title": "SSO implementation", "description": "", "phase": "Day_1"},
+            {"title": "Infrastructure migration", "description": "", "phase": "Day_100"},
+        ]
+        sample_risks = [
+            {"severity": "high", "title": "Legacy ERP Risk", "description": ""},
+            {"severity": "medium", "title": "Security Gap", "description": ""},
+        ]
 
-        # Display sample
-        st.markdown(render_complexity_badge("high", 35), unsafe_allow_html=True)
-        st.markdown(render_cost_range(sample_costs), unsafe_allow_html=True)
-        st.markdown(render_confidence_meter(sample_confidence), unsafe_allow_html=True)
+        sample_report = generate_consistency_report(
+            facts=[{"item": "Sample"}],
+            gaps=[{"description": "Sample gap", "importance": "high"}],
+            risks=sample_risks,
+            work_items=sample_work_items,
+            company_profile=company_profile
+        )
+
+        # Display sample with actual calculations
+        st.markdown(render_complexity_badge(
+            sample_report["complexity"]["tier"],
+            sample_report["complexity"]["score"]
+        ), unsafe_allow_html=True)
+        st.markdown(render_cost_range(sample_report["costs"]), unsafe_allow_html=True)
+        st.markdown(render_confidence_meter(sample_report["confidence"]), unsafe_allow_html=True)
+
+        # Show methodology
+        render_methodology_section(sample_report)
         return
 
-    # Generate consistency report
+    # Generate consistency report with company profile
     verified_fact_ids = [f["item"] for f in facts if f.get("verified")]
 
     report = generate_consistency_report(
@@ -376,6 +505,7 @@ def render_deal_readout_section(session_dir: Path, company_name: str = "Target C
         risks=risks,
         work_items=work_items,
         verified_fact_ids=verified_fact_ids,
+        company_profile=company_profile,
         all_texts=[r.get("description", "") for r in risks] + [g.get("description", "") for g in gaps]
     )
 
@@ -462,6 +592,13 @@ def render_deal_readout_section(session_dir: Path, company_name: str = "Target C
     with st.expander("View Complexity Score Breakdown"):
         breakdown = complexity.get("breakdown", {})
         st.json(breakdown)
+
+    # ==========================================================================
+    # SECTION 9: Methodology
+    # ==========================================================================
+
+    st.markdown("---")
+    render_methodology_section(report)
 
 
 # =============================================================================
