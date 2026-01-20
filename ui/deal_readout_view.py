@@ -322,120 +322,43 @@ def load_deal_data(session_dir: Path) -> Dict[str, Any]:
     }
 
 
-def render_company_profile_inputs() -> CompanyProfile:
-    """Render sidebar inputs for company profile and return the profile."""
-    st.sidebar.markdown("### 🏢 Company Profile")
-    st.sidebar.markdown("*Adjust to calibrate cost estimates*")
-
-    # Employee count slider
-    employee_count = st.sidebar.slider(
-        "Employee Count",
-        min_value=10,
-        max_value=10000,
-        value=300,
-        step=10,
-        help="Number of employees at the target company"
+def get_default_company_profile() -> CompanyProfile:
+    """Return a default mid-market company profile for cost calculations."""
+    # Using sensible defaults - cost adjustments will be refined in future versions
+    return CompanyProfile(
+        employee_count=300,
+        industry="technology",
+        geography="single_country",
+        it_maturity="standard"
     )
-
-    # Industry dropdown
-    industries = list(INDUSTRY_FACTORS.keys())
-    industries.remove("default")
-    industry = st.sidebar.selectbox(
-        "Industry",
-        options=industries,
-        index=industries.index("technology") if "technology" in industries else 0,
-        format_func=lambda x: x.replace("_", " ").title()
-    )
-
-    # Geography dropdown
-    geography_options = list(GEOGRAPHY_FACTORS.keys())
-    geography_options.remove("default")
-    geography = st.sidebar.selectbox(
-        "Geographic Footprint",
-        options=geography_options,
-        index=0,
-        format_func=lambda x: x.replace("_", " ").title()
-    )
-
-    # IT Maturity dropdown
-    maturity_options = list(IT_MATURITY_FACTORS.keys())
-    maturity_options.remove("default")
-    it_maturity = st.sidebar.selectbox(
-        "IT Maturity Level",
-        options=maturity_options,
-        index=maturity_options.index("standard") if "standard" in maturity_options else 0,
-        format_func=lambda x: x.replace("_", " ").title()
-    )
-
-    # Create and show profile
-    profile = CompanyProfile(
-        employee_count=employee_count,
-        industry=industry,
-        geography=geography,
-        it_maturity=it_maturity
-    )
-
-    # Show multiplier calculation
-    total_mult, breakdown = profile.get_total_multiplier()
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("**Cost Multiplier Breakdown:**")
-    st.sidebar.markdown(f"- Size: {breakdown['size']['multiplier']}x")
-    st.sidebar.markdown(f"- Industry: {breakdown['industry']['multiplier']}x")
-    st.sidebar.markdown(f"- Geography: {breakdown['geography']['multiplier']}x")
-    st.sidebar.markdown(f"- IT Maturity: {breakdown['it_maturity']['multiplier']}x")
-    st.sidebar.markdown(f"**Total: {total_mult}x**")
-
-    return profile
 
 
 def render_methodology_section(report: Dict) -> None:
     """Render the methodology explanation section."""
     st.markdown("### 📐 Methodology")
 
-    methodology = report.get("costs", {}).get("methodology", {})
-    profile = report.get("company_profile", {})
+    complexity = report.get("complexity", {})
+    breakdown = complexity.get("breakdown", {})
 
     col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown("**Cost Calculation Logic:**")
-        st.markdown(f"""
-        1. **Base Costs**: Mid-market benchmarks (250-500 employees)
-        2. **Category Mapping**: Work items → cost categories via keywords
-        3. **Multipliers Applied**:
-           - Company Size: {profile.get('multiplier_breakdown', {}).get('size', {}).get('multiplier', 1.0)}x
-           - Industry: {profile.get('multiplier_breakdown', {}).get('industry', {}).get('multiplier', 1.0)}x
-           - Geography: {profile.get('multiplier_breakdown', {}).get('geography', {}).get('multiplier', 1.0)}x
-           - IT Maturity: {profile.get('multiplier_breakdown', {}).get('it_maturity', {}).get('multiplier', 1.0)}x
-        4. **Final Cost** = Base × Total Multiplier
+        st.markdown("**Cost Calculation:**")
+        st.markdown("""
+        - Base costs derived from mid-market benchmarks
+        - Work items categorized by type (infrastructure, identity, applications, etc.)
+        - Ranges reflect implementation variability
         """)
 
     with col2:
-        st.markdown("**Complexity Scoring Logic:**")
-        complexity = report.get("complexity", {})
-        breakdown = complexity.get("breakdown", {})
+        st.markdown("**Complexity Scoring:**")
         st.markdown(f"""
         - Critical Risks: {breakdown.get('critical_risks', 0)} × 15 pts
         - High Risks: {breakdown.get('high_risks', 0)} × 8 pts
         - Medium Risks: {breakdown.get('medium_risks', 0)} × 3 pts
-        - Gaps (High): {breakdown.get('critical_gaps', 0)} × 5 pts
-        - Work Items: {breakdown.get('work_item_count', 0)} × 2 pts
-        - **Base Score**: {breakdown.get('base_score', 0)}
-        - **Flags Triggered**: {len(complexity.get('flags_triggered', []))}
+        - Information Gaps: {breakdown.get('critical_gaps', 0) + breakdown.get('other_gaps', 0)} items
+        - Work Items: {breakdown.get('work_item_count', 0)} items
         """)
-
-    # Show sources and notes
-    with st.expander("📚 Data Sources & Notes"):
-        sources = methodology.get("sources", [])
-        notes = methodology.get("notes", [])
-
-        st.markdown("**Sources:**")
-        for source in sources:
-            st.markdown(f"- {source}")
-
-        st.markdown("**Notes:**")
-        for note in notes:
-            st.markdown(f"- {note}")
 
 
 def render_deal_readout_section(session_dir: Path, company_name: str = "Target Company"):
@@ -445,8 +368,8 @@ def render_deal_readout_section(session_dir: Path, company_name: str = "Target C
     st.header("📊 Deal Readout")
     st.markdown(f"*Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}*")
 
-    # Render company profile inputs in sidebar
-    company_profile = render_company_profile_inputs()
+    # Use default company profile (sidebar controls removed for now)
+    company_profile = get_default_company_profile()
 
     # Load data
     data = load_deal_data(session_dir)
