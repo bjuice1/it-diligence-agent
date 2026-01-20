@@ -39,8 +39,17 @@ try:
         GEOGRAPHY_FACTORS,
         IT_MATURITY_FACTORS
     )
+    from tools_v2.risk_triage import (
+        triage_all_risks,
+        risk_to_open_question,
+        risk_to_activity,
+        get_triage_summary,
+        FindingCategory
+    )
+    TRIAGE_AVAILABLE = True
 except ImportError as e:
     st.error(f"Import error: {e}")
+    TRIAGE_AVAILABLE = False
 
 
 # =============================================================================
@@ -214,6 +223,91 @@ def render_top_risks_table(risks: List[Dict]) -> None:
 
             if risk.get("mitigation"):
                 st.markdown(f"**Mitigation:** {risk['mitigation']}")
+
+
+def render_triaged_findings(risks: List[Dict]) -> None:
+    """
+    Render findings in triaged categories:
+    - Risks (true red flags)
+    - Open Questions (info gaps)
+    - Integration Activities (actions needed)
+    """
+    if not TRIAGE_AVAILABLE:
+        # Fall back to old view
+        render_top_risks_table(risks)
+        return
+
+    if not risks:
+        st.info("No findings to display.")
+        return
+
+    # Convert dict risks to objects for triage (create simple namespace)
+    class RiskObj:
+        def __init__(self, d):
+            self.finding_id = d.get("finding_id", d.get("risk_id", "R-XXX"))
+            self.title = d.get("title", "Untitled")
+            self.description = d.get("description", "")
+            self.severity = d.get("severity", "medium")
+            self.domain = d.get("domain", "general")
+            self.mitigation = d.get("mitigation", "")
+            self.based_on_facts = d.get("based_on_facts", [])
+
+    risk_objects = [RiskObj(r) for r in risks]
+
+    # Triage the risks
+    triage_results = triage_all_risks(risk_objects)
+
+    # Create three columns for the three categories
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.markdown("### 🔴 Risks")
+        st.caption(f"{len(triage_results['risks'])} items")
+        if triage_results['risks']:
+            for risk in triage_results['risks']:
+                icon = SEVERITY_ICONS.get(risk.severity, "⚪")
+                with st.expander(f"{icon} {risk.title}"):
+                    st.markdown(risk.description)
+                    st.caption(f"Severity: {risk.severity.upper()}")
+                    if risk.mitigation:
+                        st.markdown(f"**Mitigation:** {risk.mitigation}")
+        else:
+            st.success("No critical risks identified")
+
+    with col2:
+        st.markdown("### ❓ Open Questions")
+        st.caption(f"{len(triage_results['open_questions'])} items")
+        if triage_results['open_questions']:
+            for item in triage_results['open_questions']:
+                with st.expander(f"📋 {item.title}"):
+                    st.markdown(item.description)
+                    st.caption(f"Domain: {item.domain}")
+                    st.markdown("**Action:** Request clarification from target")
+        else:
+            st.success("No open questions")
+
+    with col3:
+        st.markdown("### 🔧 Integration Activities")
+        st.caption(f"{len(triage_results['integration_activities'])} items")
+        if triage_results['integration_activities']:
+            for item in triage_results['integration_activities']:
+                with st.expander(f"→ {item.title}"):
+                    st.markdown(item.description)
+                    st.caption(f"Domain: {item.domain}")
+                    if item.mitigation:
+                        st.markdown(f"**Notes:** {item.mitigation}")
+        else:
+            st.info("No additional activities identified")
+
+    # Show triage summary in expander
+    with st.expander("📊 Triage Summary"):
+        summary = get_triage_summary(triage_results)
+        st.markdown(f"""
+        - **Total findings processed:** {summary['total_input']}
+        - **Kept as Risks:** {summary['risks_kept']}
+        - **Moved to Open Questions:** {summary['moved_to_questions']}
+        - **Moved to Integration Activities:** {summary['moved_to_activities']}
+        """)
 
 
 def render_flags_section(flags: List[Dict]) -> None:
@@ -480,11 +574,11 @@ def render_deal_readout_section(session_dir: Path, company_name: str = "Target C
     st.markdown("---")
 
     # ==========================================================================
-    # SECTION 4: Top Risks
+    # SECTION 4: Findings (Triaged)
     # ==========================================================================
 
     top_risks = report.get("top_risks", [])
-    render_top_risks_table(top_risks)
+    render_triaged_findings(top_risks)
 
     # ==========================================================================
     # SECTION 5: Flags Triggered
