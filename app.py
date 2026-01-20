@@ -359,7 +359,7 @@ def inject_custom_css():
 
 # Import project modules
 try:
-    from config_v2 import ANTHROPIC_API_KEY, OUTPUT_DIR, FACTS_DIR, FINDINGS_DIR
+    from config_v2 import ANTHROPIC_API_KEY, OUTPUT_DIR, FACTS_DIR, FINDINGS_DIR, ensure_directories
     from tools_v2.fact_store import FactStore
     from tools_v2.reasoning_tools import ReasoningStore
     from tools_v2.session import DDSession, DealType, DEAL_TYPE_CONFIG
@@ -567,6 +567,9 @@ def run_analysis(
     from tools_v2.session import DealContext
     from tools_v2.html_report import generate_html_report
     from tools_v2.presentation import generate_presentation
+
+    # Ensure output directories exist before writing files
+    ensure_directories()
 
     results = {
         "status": "running",
@@ -1394,19 +1397,8 @@ def main():
         st.info("Set ANTHROPIC_API_KEY in your environment or Streamlit secrets")
         return
 
-    # API connection test (only show if not already tested)
-    if "api_tested" not in st.session_state:
-        with st.spinner("Testing API connection..."):
-            success, message = test_api_connection()
-            st.session_state["api_tested"] = success
-            st.session_state["api_message"] = message
-
-        if not success:
-            st.error(f"❌ API Connection Failed: {message}")
-            if st.button("Retry API Test"):
-                del st.session_state["api_tested"]
-                st.rerun()
-            return
+    # Note: Removed automatic API connection test on page load to improve performance.
+    # API connection will be validated when user runs analysis.
 
     # Default values
     all_domains = ["infrastructure", "network", "cybersecurity", "applications", "identity_access", "organization"]

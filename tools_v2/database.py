@@ -21,8 +21,11 @@ from tools_v2.reasoning_tools import ReasoningStore
 DEFAULT_DB_PATH = Path(__file__).parent.parent / "data" / "diligence.db"
 
 
-def get_connection(db_path: Path = None) -> sqlite3.Connection:
-    """Get a database connection."""
+_db_initialized = False
+
+def get_connection(db_path: Path = None, _skip_init: bool = False) -> sqlite3.Connection:
+    """Get a database connection (initializes database on first use)."""
+    global _db_initialized
     if db_path is None:
         db_path = DEFAULT_DB_PATH
 
@@ -30,15 +33,18 @@ def get_connection(db_path: Path = None) -> sqlite3.Connection:
 
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row  # Enable dict-like access
+
+    # Initialize schema on first connection (avoid recursion with _skip_init)
+    if not _skip_init and not _db_initialized:
+        _db_initialized = True
+        _init_schema(conn)
+
     return conn
 
 
-def init_database(db_path: Path = None):
-    """Initialize the database schema."""
-    conn = get_connection(db_path)
+def _init_schema(conn: sqlite3.Connection):
+    """Initialize database schema (internal use)."""
     cursor = conn.cursor()
-
-    # Create tables
     cursor.executescript('''
         -- Deals table
         CREATE TABLE IF NOT EXISTS deals (
@@ -49,22 +55,17 @@ def init_database(db_path: Path = None):
             deal_type TEXT NOT NULL,
             status TEXT DEFAULT 'active',
             phase TEXT DEFAULT 'discovery',
-
-            -- Summary stats (denormalized for fast display)
             fact_count INTEGER DEFAULT 0,
             gap_count INTEGER DEFAULT 0,
             risk_count INTEGER DEFAULT 0,
             work_item_count INTEGER DEFAULT 0,
             total_cost_low INTEGER DEFAULT 0,
             total_cost_high INTEGER DEFAULT 0,
-
-            -- Metadata
             settings TEXT DEFAULT '{}',
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
 
-        -- Documents table
         CREATE TABLE IF NOT EXISTS documents (
             id TEXT PRIMARY KEY,
             deal_id TEXT NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
@@ -77,7 +78,6 @@ def init_database(db_path: Path = None):
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
 
-        -- Facts table
         CREATE TABLE IF NOT EXISTS facts (
             id TEXT PRIMARY KEY,
             deal_id TEXT NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
@@ -94,7 +94,6 @@ def init_database(db_path: Path = None):
             UNIQUE(deal_id, fact_id)
         );
 
-        -- Gaps table (matches Gap dataclass: gap_id, domain, category, description, importance)
         CREATE TABLE IF NOT EXISTS gaps (
             id TEXT PRIMARY KEY,
             deal_id TEXT NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
@@ -107,7 +106,6 @@ def init_database(db_path: Path = None):
             UNIQUE(deal_id, gap_id)
         );
 
-        -- Risks table
         CREATE TABLE IF NOT EXISTS risks (
             id TEXT PRIMARY KEY,
             deal_id TEXT NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
@@ -127,7 +125,6 @@ def init_database(db_path: Path = None):
             UNIQUE(deal_id, risk_id)
         );
 
-        -- Work Items table
         CREATE TABLE IF NOT EXISTS work_items (
             id TEXT PRIMARY KEY,
             deal_id TEXT NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
@@ -151,7 +148,6 @@ def init_database(db_path: Path = None):
             UNIQUE(deal_id, work_item_id)
         );
 
-        -- Strategic Considerations table
         CREATE TABLE IF NOT EXISTS strategic_considerations (
             id TEXT PRIMARY KEY,
             deal_id TEXT NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
@@ -167,7 +163,6 @@ def init_database(db_path: Path = None):
             UNIQUE(deal_id, consideration_id)
         );
 
-        -- Recommendations table
         CREATE TABLE IF NOT EXISTS recommendations (
             id TEXT PRIMARY KEY,
             deal_id TEXT NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
@@ -183,7 +178,6 @@ def init_database(db_path: Path = None):
             UNIQUE(deal_id, recommendation_id)
         );
 
-        -- Analysis Runs table
         CREATE TABLE IF NOT EXISTS analysis_runs (
             id TEXT PRIMARY KEY,
             deal_id TEXT NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
@@ -201,7 +195,6 @@ def init_database(db_path: Path = None):
             error_message TEXT
         );
 
-        -- Indexes
         CREATE INDEX IF NOT EXISTS idx_facts_deal ON facts(deal_id);
         CREATE INDEX IF NOT EXISTS idx_facts_domain ON facts(deal_id, domain);
         CREATE INDEX IF NOT EXISTS idx_gaps_deal ON gaps(deal_id);
@@ -209,8 +202,14 @@ def init_database(db_path: Path = None):
         CREATE INDEX IF NOT EXISTS idx_work_items_deal ON work_items(deal_id);
         CREATE INDEX IF NOT EXISTS idx_deals_status ON deals(status);
     ''')
-
     conn.commit()
+
+
+def init_database(db_path: Path = None):
+    """Initialize the database schema (triggers lazy init via get_connection)."""
+    global _db_initialized
+    _db_initialized = False  # Force re-init
+    conn = get_connection(db_path)
     conn.close()
     print(f"Database initialized at: {db_path or DEFAULT_DB_PATH}")
 
@@ -705,7 +704,3 @@ def get_deal_summary(deal_id: str, db_path: Path = None) -> Dict:
         'work_items_by_phase': wi_by_phase,
         'facts_by_domain': facts_by_domain
     }
-
-
-# Initialize database on module import
-init_database()

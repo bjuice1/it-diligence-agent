@@ -61,11 +61,13 @@ OUTPUT_DIR = BASE_DIR / "output"  # Note: different from v1's data/output
 FACTS_DIR = OUTPUT_DIR / "facts"
 FINDINGS_DIR = OUTPUT_DIR / "findings"
 
-# Ensure directories exist
-INPUT_DIR.mkdir(parents=True, exist_ok=True)
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-FACTS_DIR.mkdir(parents=True, exist_ok=True)
-FINDINGS_DIR.mkdir(parents=True, exist_ok=True)
+
+def ensure_directories():
+    """Create required directories (called lazily when needed)."""
+    INPUT_DIR.mkdir(parents=True, exist_ok=True)
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    FACTS_DIR.mkdir(parents=True, exist_ok=True)
+    FINDINGS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # =============================================================================
