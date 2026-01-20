@@ -1111,13 +1111,12 @@ def display_results(results: Dict[str, Any]):
                         st.write(f"**{importance_icon} {importance.upper()}** ({len(importance_gaps)})")
 
                         for gap in importance_gaps:
-                            with st.expander(f"{gap.gap_id}: {gap.item}"):
+                            with st.expander(f"{gap.gap_id}: {gap.description[:50]}{'...' if len(gap.description) > 50 else ''}"):
                                 st.write(f"**Domain:** {gap.domain}")
                                 st.write(f"**Category:** {gap.category}")
-                                if hasattr(gap, 'why_it_matters'):
-                                    st.write(f"**Why it matters:** {gap.why_it_matters}")
-                                if hasattr(gap, 'follow_up_action'):
-                                    st.write(f"**Follow-up:** {gap.follow_up_action}")
+                                st.write(f"**Description:** {gap.description}")
+                                if hasattr(gap, 'importance'):
+                                    st.write(f"**Importance:** {gap.importance}")
             else:
                 st.info("No gaps identified")
 
