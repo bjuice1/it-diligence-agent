@@ -7,6 +7,15 @@ Discovery-Reasoning split architecture tools:
 - Discovery Tools: Fact extraction (create_inventory_entry, flag_gap)
 - Reasoning Tools: Analysis with fact citations
 - Coverage: Coverage checklists and quality scoring
+
+Three-Stage Reasoning Architecture:
+- Stage 1: LLM interprets facts and identifies considerations
+- Stage 2: Rule-base matches activities and calculates costs
+- Stage 3: LLM validates the analysis
+
+Main Entry Points:
+- analyze_deal(): Run analysis on a deal
+- create_analysis_session(): Create refinement session for iterative analysis
 """
 
 from tools_v2.fact_store import FactStore, Fact, Gap
@@ -57,6 +66,33 @@ from tools_v2.table_generators import (
     generate_synergy_table
 )
 
+# Three-Stage Reasoning Architecture
+from tools_v2.analysis_pipeline import (
+    analyze_deal,
+    create_analysis_session,
+    AnalysisMode,
+    AnalysisResult,
+)
+from tools_v2.three_stage_reasoning import (
+    run_three_stage_analysis,
+    ThreeStageOutput,
+    IdentifiedConsideration,
+    MatchedActivity,
+    ValidationResult,
+    stage1_identify_considerations,
+    stage2_match_activities,
+    stage3_validate,
+)
+from tools_v2.three_stage_refinement import (
+    ThreeStageRefinementSession,
+    create_refinement_session,
+)
+from tools_v2.reasoning_orchestrator import (
+    ReasoningOrchestrator,
+    OrchestratorConfig,
+    quick_analyze,
+)
+
 __all__ = [
     # Fact Store
     'FactStore',
@@ -104,4 +140,25 @@ __all__ = [
     'RiskSeverity',
     'generate_risk_table',
     'generate_synergy_table',
+    # Analysis Pipeline (Three-Stage Reasoning)
+    'analyze_deal',
+    'create_analysis_session',
+    'AnalysisMode',
+    'AnalysisResult',
+    # Three-Stage Reasoning
+    'run_three_stage_analysis',
+    'ThreeStageOutput',
+    'IdentifiedConsideration',
+    'MatchedActivity',
+    'ValidationResult',
+    'stage1_identify_considerations',
+    'stage2_match_activities',
+    'stage3_validate',
+    # Refinement Session
+    'ThreeStageRefinementSession',
+    'create_refinement_session',
+    # Orchestrator
+    'ReasoningOrchestrator',
+    'OrchestratorConfig',
+    'quick_analyze',
 ]
