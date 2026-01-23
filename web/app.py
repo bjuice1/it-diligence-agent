@@ -73,11 +73,14 @@ def get_session():
             )
             if analysis_session:
                 return analysis_session
+        elif not task:
+            # Clear stale task_id if task no longer exists
+            flask_session.pop('current_task_id', None)
 
     # Try to load from most recent files as fallback
-    from config_v2 import FACTS_DIR, FINDINGS_DIR
-    facts_files = sorted(FACTS_DIR.glob("facts_*.json"), reverse=True)
-    findings_files = sorted(FINDINGS_DIR.glob("findings_*.json"), reverse=True)
+    from config_v2 import OUTPUT_DIR
+    facts_files = sorted(OUTPUT_DIR.glob("facts_*.json"), reverse=True)
+    findings_files = sorted(OUTPUT_DIR.glob("findings_*.json"), reverse=True)
 
     if facts_files:
         analysis_session = Session.load_from_files(
