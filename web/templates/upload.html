@@ -71,10 +71,8 @@
                     <div class="field-group">
                         <label for="deal_type">Deal Type</label>
                         <select name="deal_type" id="deal_type">
-                            <option value="acquisition">Acquisition</option>
-                            <option value="carveout">Carve-out</option>
-                            <option value="divestiture">Divestiture</option>
-                            <option value="merger">Merger</option>
+                            <option value="bolt_on">Acquisition (Bolt-on)</option>
+                            <option value="carve_out">Carve-out / Divestiture</option>
                         </select>
                     </div>
                     <div class="field-group">
@@ -85,12 +83,27 @@
                         <label for="industry">Industry</label>
                         <select name="industry" id="industry">
                             <option value="">Select industry...</option>
-                            <option value="manufacturing">Manufacturing</option>
-                            <option value="healthcare">Healthcare</option>
                             <option value="financial_services">Financial Services</option>
-                            <option value="technology">Technology</option>
+                            <option value="healthcare">Healthcare</option>
+                            <option value="manufacturing">Manufacturing</option>
                             <option value="retail">Retail</option>
+                            <option value="insurance">Insurance</option>
+                            <option value="aviation_mro">Aviation / Aerospace MRO</option>
+                            <option value="defense_contractor">Defense Contractor</option>
+                            <option value="life_sciences">Life Sciences / Pharmaceutical</option>
+                            <option value="logistics">Logistics / Distribution</option>
+                            <option value="energy_utilities">Energy / Utilities</option>
+                            <option value="construction">Construction / Engineering</option>
+                            <option value="food_beverage">Food & Beverage Manufacturing</option>
                             <option value="professional_services">Professional Services</option>
+                            <option value="education">Education</option>
+                            <option value="hospitality">Hospitality</option>
+                        </select>
+                    </div>
+                    <div class="field-group" id="sub-industry-group" style="display: none;">
+                        <label for="sub_industry">Sub-Industry</label>
+                        <select name="sub_industry" id="sub_industry">
+                            <option value="">Select sub-industry...</option>
                         </select>
                     </div>
                     <div class="field-group">
@@ -113,11 +126,6 @@
     <div class="recent-section">
         <h4>Quick Actions</h4>
         <div class="quick-actions-grid">
-            <a href="{{ url_for('organization_overview') }}" class="quick-action-card">
-                <span class="qa-icon">&#128101;</span>
-                <span class="qa-label">Organization Analysis</span>
-                <span class="qa-desc">Census, benchmarks, MSP</span>
-            </a>
             <a href="{{ url_for('dashboard') }}" class="quick-action-card">
                 <span class="qa-icon">&#128200;</span>
                 <span class="qa-label">View Dashboard</span>
@@ -562,6 +570,72 @@ document.getElementById('upload-form').addEventListener('submit', function(e) {
     files.forEach(file => {
         formData.append('documents', file);
     });
+});
+
+// Industry / Sub-Industry handling
+const industrySelect = document.getElementById('industry');
+const subIndustryGroup = document.getElementById('sub-industry-group');
+const subIndustrySelect = document.getElementById('sub_industry');
+
+// Sub-industry options by industry
+const subIndustries = {
+    'financial_services': [
+        ['commercial_banking', 'Commercial Banking'],
+        ['mortgage_lending', 'Mortgage Lending'],
+        ['wealth_management', 'Wealth Management'],
+        ['broker_dealer', 'Broker-Dealer'],
+        ['credit_union', 'Credit Union'],
+        ['fintech', 'Fintech'],
+    ],
+    'healthcare': [
+        ['hospital_system', 'Hospital System'],
+        ['physician_practice', 'Physician Practice'],
+        ['specialty_clinic', 'Specialty Clinic'],
+        ['behavioral_health', 'Behavioral Health'],
+        ['post_acute', 'Post-Acute Care'],
+        ['healthcare_it', 'Healthcare IT/Services'],
+    ],
+    'manufacturing': [
+        ['discrete', 'Discrete Manufacturing'],
+        ['process', 'Process Manufacturing'],
+        ['job_shop', 'Job Shop'],
+        ['oem', 'OEM'],
+        ['contract_manufacturing', 'Contract Manufacturing'],
+    ],
+    'retail': [
+        ['brick_mortar', 'Brick & Mortar'],
+        ['ecommerce', 'E-Commerce'],
+        ['omnichannel', 'Omnichannel'],
+        ['grocery', 'Grocery'],
+        ['specialty_retail', 'Specialty Retail'],
+    ],
+    'insurance': [
+        ['property_casualty', 'Property & Casualty'],
+        ['life_annuity', 'Life & Annuity'],
+        ['health_insurance', 'Health Insurance'],
+        ['reinsurance', 'Reinsurance'],
+        ['insurtech', 'Insurtech'],
+    ]
+};
+
+industrySelect.addEventListener('change', function() {
+    const industry = this.value;
+    const subs = subIndustries[industry];
+
+    if (subs && subs.length > 0) {
+        // Clear and populate sub-industry dropdown
+        subIndustrySelect.innerHTML = '<option value="">Select sub-industry...</option>';
+        subs.forEach(([value, label]) => {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = label;
+            subIndustrySelect.appendChild(option);
+        });
+        subIndustryGroup.style.display = 'block';
+    } else {
+        subIndustryGroup.style.display = 'none';
+        subIndustrySelect.value = '';
+    }
 });
 </script>
 

@@ -547,12 +547,21 @@
                                 s.classList.add('complete');
                             });
                             document.getElementById('progress-bar').style.width = '100%';
-                            document.getElementById('phase-text').textContent = 'Analysis complete! Redirecting...';
 
-                            // Redirect after brief delay
-                            setTimeout(() => {
-                                window.location.href = '/dashboard';
-                            }, 1500);
+                            // Use redirect URL if provided, otherwise default to dashboard
+                            const redirectUrl = data.redirect || '/dashboard';
+
+                            // If redirecting to existing results, show appropriate message
+                            if (data.status === 'redirecting') {
+                                document.getElementById('phase-text').textContent = 'Loading existing results...';
+                                window.location.href = redirectUrl;
+                            } else {
+                                document.getElementById('phase-text').textContent = 'Analysis complete! Redirecting...';
+                                // Redirect after brief delay
+                                setTimeout(() => {
+                                    window.location.href = redirectUrl;
+                                }, 1500);
+                            }
                         } else {
                             // Show error
                             showError(data.error || data.message || 'Analysis failed');

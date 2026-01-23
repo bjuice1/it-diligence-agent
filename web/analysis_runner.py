@@ -111,16 +111,28 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable) -> Dict[str, A
     # Create session
     session = Session()
 
-    # Add deal context
-    deal_context = task.deal_context
-    if deal_context:
-        context_text = f"Deal Type: {deal_context.get('deal_type', 'acquisition')}\n"
-        context_text += f"Target: {deal_context.get('target_name', 'Target Company')}\n"
-        if deal_context.get('industry'):
-            context_text += f"Industry: {deal_context['industry']}\n"
-        if deal_context.get('employee_count'):
-            context_text += f"Employees: {deal_context['employee_count']}\n"
-        session.add_deal_context(context_text)
+    # Add deal context - properly populate the dict for reasoning agents
+    deal_context = task.deal_context or {}
+    session.deal_context = {
+        'deal_type': deal_context.get('deal_type', 'bolt_on'),
+        'target_name': deal_context.get('target_name', 'Target Company'),
+        'industry': deal_context.get('industry', ''),
+        'sub_industry': deal_context.get('sub_industry', ''),
+        'employee_count': deal_context.get('employee_count', ''),
+    }
+
+    # Build DealContext object for rich prompt context
+    from tools_v2.session import DealContext as DealContextClass
+    dc = DealContextClass(
+        target_name=deal_context.get('target_name', 'Target Company'),
+        deal_type=deal_context.get('deal_type', 'bolt_on'),
+        industry=deal_context.get('industry') or None,
+        sub_industry=deal_context.get('sub_industry') or None,
+        industry_confirmed=True,  # User selected it
+    )
+    # Add the formatted prompt context for reasoning agents
+    # This includes both deal_type and industry context in text form
+    session.deal_context['_prompt_context'] = dc.to_prompt_context()
 
     # Phase 1: Parse documents
     progress_callback({
@@ -203,11 +215,33 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable) -> Dict[str, A
     except Exception as e:
         logger.error(f"Error in synthesis: {e}")
 
+    # Generate open questions based on industry and gaps
+    open_questions = []
+    try:
+        from tools_v2.open_questions import generate_open_questions_for_deal
+        open_questions = generate_open_questions_for_deal(
+            industry=deal_context.get('industry'),
+            sub_industry=deal_context.get('sub_industry'),
+            deal_type=deal_context.get('deal_type', 'bolt_on'),
+            gaps=list(session.fact_store.gaps)
+        )
+        logger.info(f"Generated {len(open_questions)} open questions for deal team")
+    except Exception as e:
+        logger.error(f"Error generating open questions: {e}")
+
     # Phase 5: Finalize and save
     progress_callback({"phase": AnalysisPhase.FINALIZING})
 
     # Save results - session.save_to_files returns dict with actual saved paths
     saved_files = session.save_to_files(OUTPUT_DIR, timestamp)
+
+    # Save open questions separately
+    if open_questions:
+        import json
+        questions_file = OUTPUT_DIR / f"open_questions_{timestamp}.json"
+        with open(questions_file, 'w') as f:
+            json.dump(open_questions, f, indent=2)
+        saved_files['open_questions'] = questions_file
 
     # Get the actual saved file paths from the saved_files dict
     facts_file = saved_files.get('facts')
@@ -217,6 +251,7 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable) -> Dict[str, A
     result = {
         "facts_file": str(facts_file) if facts_file else None,
         "findings_file": str(findings_file) if findings_file else None,
+        "open_questions_file": str(saved_files.get('open_questions')) if saved_files.get('open_questions') else None,
         "result_path": str(OUTPUT_DIR),
         "timestamp": timestamp,
         "summary": {
@@ -224,6 +259,7 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable) -> Dict[str, A
             "gaps_count": len(session.fact_store.gaps),
             "risks_count": len(session.reasoning_store.risks),
             "work_items_count": len(session.reasoning_store.work_items),
+            "open_questions_count": len(open_questions),
         }
     }
 

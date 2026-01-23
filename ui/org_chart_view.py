@@ -337,9 +337,17 @@ def render_org_considerations(reasoning_store: ReasoningStore):
                 st.markdown(f"**Owner:** {wi.owner_type} | **Cost:** {wi.cost_estimate}")
 
 
-def render_org_chart_section(session_dir: Path):
+def render_org_chart_section(session_dir: Path = None, facts_file: str = None, findings_file: str = None,
+                             fact_store_obj=None, reasoning_store_obj=None):
     """
     Main entry point for the org chart UI.
+
+    Args:
+        session_dir: Optional session directory (legacy parameter)
+        facts_file: Direct path to facts JSON file (preferred)
+        findings_file: Direct path to findings JSON file (preferred)
+        fact_store_obj: Direct FactStore object (most reliable - avoids file loading)
+        reasoning_store_obj: Direct ReasoningStore object
     """
     st.header("🏢 Organization Structure")
 
@@ -348,21 +356,47 @@ def render_org_chart_section(session_dir: Path):
     reasoning_store = None
     org_structure = None
 
-    facts_path = session_dir / "facts.json"
-    findings_path = session_dir / "findings.json"
+    # PRIORITY 1: Use directly passed objects (most reliable)
+    if fact_store_obj is not None:
+        fact_store = fact_store_obj
+        org_facts = [f for f in fact_store.facts if f.domain == "organization"]
+        if org_facts:
+            st.success(f"✅ Loaded {len(org_facts)} organization facts from analysis")
+        org_structure = extract_org_from_facts(fact_store)
+    else:
+        # PRIORITY 2: Load from file path
+        facts_path = None
+        if facts_file:
+            facts_path = Path(facts_file)
+        elif session_dir:
+            # Legacy: look for facts.json in session dir
+            facts_path = session_dir / "facts.json"
 
-    if facts_path.exists():
-        try:
-            fact_store = FactStore.load(str(facts_path))
-            org_structure = extract_org_from_facts(fact_store)
-        except Exception as e:
-            st.warning(f"Could not load facts: {e}")
+        if facts_path and facts_path.exists():
+            try:
+                fact_store = FactStore.load(str(facts_path))
+                org_facts = [f for f in fact_store.facts if f.domain == "organization"]
+                if org_facts:
+                    st.success(f"✅ Loaded {len(org_facts)} organization facts")
+                org_structure = extract_org_from_facts(fact_store)
+            except Exception as e:
+                st.warning(f"Could not load facts: {e}")
 
-    if findings_path.exists():
-        try:
-            reasoning_store = ReasoningStore.load(str(findings_path))
-        except Exception:
-            pass
+    # Use directly passed reasoning store or load from file
+    if reasoning_store_obj is not None:
+        reasoning_store = reasoning_store_obj
+    else:
+        findings_path = None
+        if findings_file:
+            findings_path = Path(findings_file)
+        elif session_dir:
+            findings_path = session_dir / "findings.json"
+
+        if findings_path and findings_path.exists():
+            try:
+                reasoning_store = ReasoningStore.load(str(findings_path))
+            except Exception:
+                pass
 
     # Use sample data if no real org data
     if not org_structure:

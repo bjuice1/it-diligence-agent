@@ -1188,15 +1188,20 @@ def display_results(results: Dict[str, Any]):
         with tab10:
             # Org Chart - Organizational structure visualization
             if ORG_CHART_AVAILABLE:
-                session_dir = None
-                if "session_dir" in results:
-                    session_dir = Path(results["session_dir"])
-                elif "output_dir" in results:
-                    session_dir = Path(results["output_dir"])
-                else:
-                    session_dir = Path(st.session_state.get("output_dir", "sessions/current"))
+                # Pass fact_store and reasoning_store directly (most reliable - avoids file loading issues)
+                org_fact_store = results.get("fact_store")
+                org_reasoning_store = results.get("reasoning_store")
 
-                render_org_chart_section(session_dir)
+                # Also pass file paths as fallback
+                facts_file = results.get("facts_file")
+                findings_file = results.get("findings_file")
+
+                render_org_chart_section(
+                    fact_store_obj=org_fact_store,
+                    reasoning_store_obj=org_reasoning_store,
+                    facts_file=facts_file,
+                    findings_file=findings_file
+                )
             else:
                 st.warning("Org Chart module not available. Check ui/org_chart_view.py")
 

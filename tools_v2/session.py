@@ -157,13 +157,161 @@ class SessionRun:
     metrics: Dict[str, Any] = field(default_factory=dict)
 
 
+# Industry hierarchy - maps industry to sub-industries
+INDUSTRY_HIERARCHY = {
+    "financial_services": {
+        "display_name": "Financial Services",
+        "sub_industries": [
+            ("commercial_banking", "Commercial Banking"),
+            ("mortgage_lending", "Mortgage Lending"),
+            ("wealth_management", "Wealth Management"),
+            ("broker_dealer", "Broker-Dealer"),
+            ("credit_union", "Credit Union"),
+            ("fintech", "Fintech"),
+            ("insurance_services", "Insurance Services"),
+        ]
+    },
+    "healthcare": {
+        "display_name": "Healthcare",
+        "sub_industries": [
+            ("hospital_system", "Hospital System"),
+            ("physician_practice", "Physician Practice"),
+            ("specialty_clinic", "Specialty Clinic"),
+            ("behavioral_health", "Behavioral Health"),
+            ("post_acute", "Post-Acute Care"),
+            ("healthcare_it", "Healthcare IT/Services"),
+        ]
+    },
+    "manufacturing": {
+        "display_name": "Manufacturing",
+        "sub_industries": [
+            ("discrete", "Discrete Manufacturing"),
+            ("process", "Process Manufacturing"),
+            ("job_shop", "Job Shop"),
+            ("oem", "OEM"),
+            ("contract_manufacturing", "Contract Manufacturing"),
+        ]
+    },
+    "retail": {
+        "display_name": "Retail",
+        "sub_industries": [
+            ("brick_mortar", "Brick & Mortar"),
+            ("ecommerce", "E-Commerce"),
+            ("omnichannel", "Omnichannel"),
+            ("grocery", "Grocery"),
+            ("specialty_retail", "Specialty Retail"),
+        ]
+    },
+    "insurance": {
+        "display_name": "Insurance",
+        "sub_industries": [
+            ("property_casualty", "Property & Casualty"),
+            ("life_annuity", "Life & Annuity"),
+            ("health_insurance", "Health Insurance"),
+            ("reinsurance", "Reinsurance"),
+            ("insurtech", "Insurtech"),
+        ]
+    },
+    # Other industries without sub-industries yet
+    "aviation_mro": {"display_name": "Aviation / Aerospace MRO", "sub_industries": []},
+    "defense_contractor": {"display_name": "Defense Contractor", "sub_industries": []},
+    "life_sciences": {"display_name": "Life Sciences / Pharmaceutical", "sub_industries": []},
+    "logistics": {"display_name": "Logistics / Distribution", "sub_industries": []},
+    "energy_utilities": {"display_name": "Energy / Utilities", "sub_industries": []},
+    "construction": {"display_name": "Construction / Engineering", "sub_industries": []},
+    "food_beverage": {"display_name": "Food & Beverage Manufacturing", "sub_industries": []},
+    "professional_services": {"display_name": "Professional Services", "sub_industries": []},
+    "education": {"display_name": "Education", "sub_industries": []},
+    "hospitality": {"display_name": "Hospitality", "sub_industries": []},
+}
+
+
+@dataclass
+class IndustryContext:
+    """Rich industry context for analysis framing."""
+    industry: str
+    industry_display: str
+    sub_industry: Optional[str] = None
+    sub_industry_display: Optional[str] = None
+    secondary_industries: List[str] = field(default_factory=list)
+    regulatory_frameworks: List[str] = field(default_factory=list)
+    key_systems: List[str] = field(default_factory=list)
+    risk_elevations: List[str] = field(default_factory=list)
+    diligence_questions: List[str] = field(default_factory=list)
+    red_flags: List[str] = field(default_factory=list)
+
+    def to_prompt_context(self) -> str:
+        """Format industry context for prompt injection."""
+        lines = [
+            f"## INDUSTRY CONTEXT: {self.industry_display.upper()}",
+            "",
+        ]
+
+        if self.sub_industry_display:
+            lines.append(f"**Sub-Industry:** {self.sub_industry_display}")
+            lines.append("")
+
+        if self.secondary_industries:
+            lines.append(f"**Also relevant:** {', '.join(self.secondary_industries)}")
+            lines.append("")
+
+        if self.regulatory_frameworks:
+            lines.extend([
+                "### Regulatory Framework",
+                "This industry operates under these regulatory requirements:",
+            ])
+            for reg in self.regulatory_frameworks:
+                lines.append(f"- {reg}")
+            lines.append("")
+
+        if self.key_systems:
+            lines.extend([
+                "### Industry-Critical Systems",
+                "For this industry, pay special attention to:",
+            ])
+            for system in self.key_systems:
+                lines.append(f"- {system}")
+            lines.append("")
+
+        if self.risk_elevations:
+            lines.extend([
+                "### Elevated Risk Categories",
+                "In this industry, these risk categories carry extra weight:",
+            ])
+            for risk in self.risk_elevations:
+                lines.append(f"- {risk}")
+            lines.append("")
+
+        if self.diligence_questions:
+            lines.extend([
+                "### Industry-Specific Questions to Answer",
+                "The deal team needs answers to these industry-specific questions:",
+            ])
+            for q in self.diligence_questions[:10]:  # Top 10
+                lines.append(f"- {q}")
+            lines.append("")
+
+        if self.red_flags:
+            lines.extend([
+                "### Red Flags for This Industry",
+                "Watch for these industry-specific warning signs:",
+            ])
+            for flag in self.red_flags[:8]:  # Top 8
+                lines.append(f"- {flag}")
+
+        return "\n".join(lines)
+
+
 @dataclass
 class DealContext:
     """Deal context that shapes analysis."""
     target_name: str
     buyer_name: Optional[str] = None
     deal_type: str = "bolt_on"  # carve_out or bolt_on
-    industry: Optional[str] = None  # e.g., healthcare, aviation_mro, defense_contractor
+    industry: Optional[str] = None  # e.g., healthcare, financial_services
+    sub_industry: Optional[str] = None  # e.g., commercial_banking, hospital_system
+    secondary_industries: List[str] = field(default_factory=list)  # For ambiguous companies
+    industry_confirmed: bool = False  # True if user confirmed, False if auto-detected
     deal_size: Optional[str] = None  # small, medium, large, mega
     integration_approach: Optional[str] = None
     timeline_pressure: Optional[str] = None  # normal, accelerated, urgent
@@ -171,12 +319,7 @@ class DealContext:
     notes: Optional[str] = None
 
     # Valid industry keys for reference
-    VALID_INDUSTRIES = [
-        "healthcare", "financial_services", "manufacturing", "aviation_mro",
-        "defense_contractor", "life_sciences", "retail", "logistics",
-        "energy_utilities", "insurance", "construction", "food_beverage",
-        "professional_services", "education", "hospitality"
-    ]
+    VALID_INDUSTRIES = list(INDUSTRY_HIERARCHY.keys())
 
     def detect_industry_from_text(self, text: str) -> Optional[str]:
         """
@@ -199,21 +342,109 @@ class DealContext:
             logger.warning("Industry detection module not available")
         return None
 
-    def set_industry(self, industry: str) -> bool:
+    def set_industry(self, industry: str, sub_industry: Optional[str] = None, confirmed: bool = True) -> bool:
         """
         Set industry with validation.
 
         Args:
             industry: Industry key to set
+            sub_industry: Optional sub-industry key
+            confirmed: Whether user confirmed this selection
 
         Returns:
             True if valid and set, False otherwise
         """
         if industry.lower() in self.VALID_INDUSTRIES:
             self.industry = industry.lower()
+            self.industry_confirmed = confirmed
+            if sub_industry:
+                self.sub_industry = sub_industry.lower()
             return True
         logger.warning(f"Invalid industry '{industry}'. Valid options: {self.VALID_INDUSTRIES}")
         return False
+
+    def get_industry_context(self) -> Optional[IndustryContext]:
+        """
+        Build rich industry context from industry configuration.
+
+        Returns:
+            IndustryContext with regulatory frameworks, key systems, questions, etc.
+        """
+        if not self.industry:
+            return None
+
+        try:
+            from prompts.shared.industry_application_considerations import (
+                INDUSTRY_APPLICATION_CONSIDERATIONS,
+                get_industry_considerations
+            )
+
+            config = get_industry_considerations(self.industry)
+            if not config:
+                return None
+
+            hierarchy = INDUSTRY_HIERARCHY.get(self.industry, {})
+
+            # Get sub-industry display name
+            sub_display = None
+            if self.sub_industry and hierarchy.get("sub_industries"):
+                for key, display in hierarchy["sub_industries"]:
+                    if key == self.sub_industry:
+                        sub_display = display
+                        break
+
+            # Extract key information from industry config
+            diligence = config.get("diligence_considerations", {})
+
+            return IndustryContext(
+                industry=self.industry,
+                industry_display=config.get("display_name", self.industry.replace("_", " ").title()),
+                sub_industry=self.sub_industry,
+                sub_industry_display=sub_display,
+                secondary_industries=self.secondary_industries,
+                regulatory_frameworks=config.get("compliance_drivers", []),
+                key_systems=[app["name"] for app in config.get("expected_applications", {}).values()][:6],
+                risk_elevations=self._get_elevated_risks_for_industry(),
+                diligence_questions=diligence.get("key_questions", []),
+                red_flags=diligence.get("red_flags", []),
+            )
+        except ImportError:
+            logger.warning("Industry considerations module not available")
+            return None
+
+    def _get_elevated_risks_for_industry(self) -> List[str]:
+        """Get risk categories that should be elevated for this industry."""
+        elevations = {
+            "financial_services": [
+                "Regulatory compliance (SOX, GLBA, BSA/AML)",
+                "IT controls and segregation of duties",
+                "Data security and privacy",
+                "Audit trail integrity",
+                "Change management controls",
+            ],
+            "healthcare": [
+                "HIPAA compliance and PHI protection",
+                "Clinical system availability",
+                "Patient safety systems",
+                "BAA coverage for vendors",
+                "Audit logging for PHI access",
+            ],
+            "manufacturing": [
+                "OT/SCADA security",
+                "Quality system integrity",
+                "Supply chain continuity",
+                "Safety system availability",
+                "Production system uptime",
+            ],
+            "defense_contractor": [
+                "CMMC/NIST 800-171 compliance",
+                "CUI protection",
+                "Cleared environment security",
+                "ITAR/export control",
+                "Supply chain security",
+            ],
+        }
+        return elevations.get(self.industry, [])
 
     def get_analysis_config(self) -> Dict[str, Any]:
         """Get deal-type specific analysis configuration."""
@@ -232,6 +463,18 @@ class DealContext:
         config = self.get_analysis_config()
         deal_type_display = self.deal_type.replace('_', ' ').title()
 
+        # Get industry display name from hierarchy
+        industry_display = None
+        sub_industry_display = None
+        if self.industry:
+            hierarchy = INDUSTRY_HIERARCHY.get(self.industry, {})
+            industry_display = hierarchy.get("display_name", self.industry.replace("_", " ").title())
+            if self.sub_industry and hierarchy.get("sub_industries"):
+                for key, display in hierarchy["sub_industries"]:
+                    if key == self.sub_industry:
+                        sub_industry_display = display
+                        break
+
         lines = [
             "## DEAL CONTEXT",
             "",
@@ -243,8 +486,11 @@ class DealContext:
 
         lines.append(f"**Deal Type:** {deal_type_display}")
 
-        if self.industry:
-            lines.append(f"**Industry:** {self.industry}")
+        if industry_display:
+            industry_str = industry_display
+            if sub_industry_display:
+                industry_str += f" ({sub_industry_display})"
+            lines.append(f"**Industry:** {industry_str}")
 
         lines.extend([
             "",
@@ -291,6 +537,16 @@ class DealContext:
 
         if self.notes:
             lines.extend(["", "### Additional Deal Notes", self.notes])
+
+        # Add industry-specific context if available
+        industry_context = self.get_industry_context()
+        if industry_context:
+            lines.extend([
+                "",
+                "---",
+                "",
+                industry_context.to_prompt_context()
+            ])
 
         return "\n".join(lines)
 
