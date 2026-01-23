@@ -1475,6 +1475,71 @@ def main():
             else:
                 st.caption("No saved deals")
 
+        st.divider()
+
+        # Load Latest Analysis Section
+        with st.expander("📊 Load Latest Analysis", expanded=False):
+            st.caption("Load results from Flask web app analysis")
+
+            # Find latest analysis files
+            output_dir = Path("output")
+            if output_dir.exists():
+                facts_files = sorted(output_dir.glob("facts_*.json"), reverse=True)
+                findings_files = sorted(output_dir.glob("findings_*.json"), reverse=True)
+
+                if facts_files:
+                    latest_facts = facts_files[0]
+                    latest_findings = findings_files[0] if findings_files else None
+
+                    # Extract timestamp from filename
+                    timestamp = latest_facts.stem.replace("facts_", "")
+                    st.caption(f"Latest: {timestamp[:8]}")
+
+                    if st.button("Load Latest", key="load_latest_btn", use_container_width=True):
+                        try:
+                            from tools_v2.fact_store import FactStore
+                            from interactive.session import Session
+
+                            # Load using Session.load_from_files
+                            session = Session.load_from_files(
+                                facts_file=latest_facts,
+                                findings_file=latest_findings
+                            )
+
+                            fact_store = session.fact_store
+                            reasoning_store = session.reasoning_store
+                            domains = list(set(f.domain for f in fact_store.facts))
+
+                            st.session_state["results"] = {
+                                "status": "complete",
+                                "facts": {
+                                    "count": len(fact_store.facts),
+                                    "gaps": len(fact_store.gaps),
+                                    "by_domain": {d: len([f for f in fact_store.facts if f.domain == d]) for d in domains}
+                                },
+                                "findings": {
+                                    "risks": len(reasoning_store.risks),
+                                    "work_items": len(reasoning_store.work_items),
+                                    "recommendations": len(reasoning_store.recommendations),
+                                    "strategic": len(reasoning_store.strategic_considerations)
+                                },
+                                "coverage": {"overall_percent": 0, "grade": "N/A"},
+                                "vdr": {"total": 0, "critical": 0},
+                                "fact_store": fact_store,
+                                "reasoning_store": reasoning_store,
+                                "loaded_deal_id": f"analysis_{timestamp}",
+                                "loaded_deal_name": f"Analysis {timestamp}"
+                            }
+                            st.session_state["analysis_complete"] = True
+                            st.success("Loaded!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error loading: {e}")
+                else:
+                    st.caption("No analysis files found")
+            else:
+                st.caption("Output directory not found")
+
     # ==========================================================================
     # MAIN CONTENT - Single page with all sections
     # ==========================================================================
