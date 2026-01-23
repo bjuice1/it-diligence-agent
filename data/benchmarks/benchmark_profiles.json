@@ -1,0 +1,228 @@
+{
+  "profiles": [
+    {
+      "profile_id": "smb_general",
+      "profile_name": "SMB General",
+      "description": "Small business under $25M revenue, any industry",
+      "revenue_range_min": 0,
+      "revenue_range_max": 25000000,
+      "employee_range_min": 0,
+      "employee_range_max": 100,
+      "industries": ["general"],
+      "expected_staffing": {
+        "leadership": {"min": 1, "typical": 1, "max": 2},
+        "infrastructure": {"min": 1, "typical": 2, "max": 4},
+        "applications": {"min": 0, "typical": 1, "max": 2},
+        "security": {"min": 0, "typical": 0, "max": 1},
+        "service_desk": {"min": 1, "typical": 1, "max": 2},
+        "data": {"min": 0, "typical": 0, "max": 1},
+        "project_management": {"min": 0, "typical": 0, "max": 1}
+      },
+      "expected_roles": [
+        {"role_title": "IT Manager/Director", "category": "leadership", "importance": "critical", "typical_count": 1, "alternatives": ["IT Director", "Director of IT", "IT Manager", "Technology Manager"]},
+        {"role_title": "Systems Administrator", "category": "infrastructure", "importance": "high", "typical_count": 1, "alternatives": ["Sys Admin", "System Administrator", "IT Administrator"]},
+        {"role_title": "Help Desk Technician", "category": "service_desk", "importance": "high", "typical_count": 1, "alternatives": ["Help Desk", "IT Support", "Desktop Support", "Support Technician"]}
+      ],
+      "it_to_employee_ratio": {"min": 0.02, "typical": 0.04, "max": 0.08},
+      "notes": "Small organizations often rely heavily on MSPs or have IT generalists covering multiple functions"
+    },
+    {
+      "profile_id": "smb_manufacturing",
+      "profile_name": "SMB Manufacturing",
+      "description": "Small manufacturing company under $50M revenue",
+      "revenue_range_min": 0,
+      "revenue_range_max": 50000000,
+      "employee_range_min": 50,
+      "employee_range_max": 250,
+      "industries": ["manufacturing", "industrial", "distribution"],
+      "expected_staffing": {
+        "leadership": {"min": 1, "typical": 1, "max": 2},
+        "infrastructure": {"min": 2, "typical": 4, "max": 6},
+        "applications": {"min": 1, "typical": 2, "max": 4},
+        "security": {"min": 0, "typical": 1, "max": 2},
+        "service_desk": {"min": 1, "typical": 2, "max": 3},
+        "data": {"min": 0, "typical": 1, "max": 2},
+        "project_management": {"min": 0, "typical": 0, "max": 1}
+      },
+      "expected_roles": [
+        {"role_title": "IT Director", "category": "leadership", "importance": "critical", "typical_count": 1, "alternatives": ["IT Manager", "Director of IT", "VP IT"]},
+        {"role_title": "Network Administrator", "category": "infrastructure", "importance": "high", "typical_count": 1, "alternatives": ["Network Admin", "Network Engineer"]},
+        {"role_title": "Systems Administrator", "category": "infrastructure", "importance": "high", "typical_count": 1, "alternatives": ["Sys Admin", "Server Admin"]},
+        {"role_title": "ERP Administrator", "category": "applications", "importance": "critical", "typical_count": 1, "alternatives": ["ERP Analyst", "ERP Support", "SAP Admin", "Oracle Admin"]},
+        {"role_title": "Help Desk Technician", "category": "service_desk", "importance": "high", "typical_count": 1, "alternatives": ["IT Support", "Desktop Support"]}
+      ],
+      "it_to_employee_ratio": {"min": 0.02, "typical": 0.035, "max": 0.05},
+      "notes": "Manufacturing requires strong ERP/MES support and often has plant floor IT needs"
+    },
+    {
+      "profile_id": "midmarket_manufacturing",
+      "profile_name": "Mid-Market Manufacturing",
+      "description": "Manufacturing company $50M-$250M revenue",
+      "revenue_range_min": 50000000,
+      "revenue_range_max": 250000000,
+      "employee_range_min": 200,
+      "employee_range_max": 1500,
+      "industries": ["manufacturing", "industrial", "distribution", "consumer_goods"],
+      "expected_staffing": {
+        "leadership": {"min": 2, "typical": 3, "max": 5},
+        "infrastructure": {"min": 5, "typical": 10, "max": 16},
+        "applications": {"min": 3, "typical": 6, "max": 12},
+        "security": {"min": 1, "typical": 2, "max": 4},
+        "service_desk": {"min": 3, "typical": 5, "max": 10},
+        "data": {"min": 1, "typical": 2, "max": 4},
+        "project_management": {"min": 0, "typical": 1, "max": 3}
+      },
+      "expected_roles": [
+        {"role_title": "CIO/VP IT", "category": "leadership", "importance": "critical", "typical_count": 1, "alternatives": ["CIO", "VP of IT", "VP Information Technology", "Chief Information Officer"]},
+        {"role_title": "IT Director", "category": "leadership", "importance": "high", "typical_count": 1, "alternatives": ["Director of IT", "IT Manager"]},
+        {"role_title": "Infrastructure Manager", "category": "leadership", "importance": "high", "typical_count": 1, "alternatives": ["IT Infrastructure Manager", "Systems Manager"]},
+        {"role_title": "Network Engineer", "category": "infrastructure", "importance": "critical", "typical_count": 2, "alternatives": ["Sr Network Engineer", "Network Administrator"]},
+        {"role_title": "Systems Administrator", "category": "infrastructure", "importance": "high", "typical_count": 3, "alternatives": ["Sr Systems Administrator", "Server Administrator"]},
+        {"role_title": "DBA", "category": "data", "importance": "high", "typical_count": 1, "alternatives": ["Database Administrator", "Database Analyst", "Sr DBA"]},
+        {"role_title": "ERP Administrator", "category": "applications", "importance": "critical", "typical_count": 2, "alternatives": ["ERP Analyst", "SAP Basis", "Oracle Apps DBA"]},
+        {"role_title": "Application Developer", "category": "applications", "importance": "medium", "typical_count": 2, "alternatives": ["Developer", "Programmer", "Software Developer"]},
+        {"role_title": "Security Analyst", "category": "security", "importance": "high", "typical_count": 1, "alternatives": ["Information Security Analyst", "Cybersecurity Analyst", "IT Security Analyst"]},
+        {"role_title": "Help Desk Lead", "category": "service_desk", "importance": "high", "typical_count": 1, "alternatives": ["Service Desk Lead", "Help Desk Manager", "Support Team Lead"]},
+        {"role_title": "Help Desk Technician", "category": "service_desk", "importance": "medium", "typical_count": 3, "alternatives": ["IT Support Technician", "Desktop Support"]}
+      ],
+      "it_to_employee_ratio": {"min": 0.02, "typical": 0.035, "max": 0.05},
+      "notes": "Multi-site operations typical. OT/IT convergence increasing. ERP is business-critical."
+    },
+    {
+      "profile_id": "midmarket_professional_services",
+      "profile_name": "Mid-Market Professional Services",
+      "description": "Professional services firm $25M-$200M revenue",
+      "revenue_range_min": 25000000,
+      "revenue_range_max": 200000000,
+      "employee_range_min": 100,
+      "employee_range_max": 800,
+      "industries": ["professional_services", "consulting", "legal", "accounting", "engineering_services"],
+      "expected_staffing": {
+        "leadership": {"min": 1, "typical": 2, "max": 4},
+        "infrastructure": {"min": 3, "typical": 5, "max": 10},
+        "applications": {"min": 3, "typical": 6, "max": 12},
+        "security": {"min": 1, "typical": 2, "max": 4},
+        "service_desk": {"min": 2, "typical": 4, "max": 8},
+        "data": {"min": 1, "typical": 2, "max": 4},
+        "project_management": {"min": 0, "typical": 1, "max": 2}
+      },
+      "expected_roles": [
+        {"role_title": "CIO/IT Director", "category": "leadership", "importance": "critical", "typical_count": 1, "alternatives": ["CIO", "VP IT", "IT Director", "Director of Technology"]},
+        {"role_title": "Applications Manager", "category": "leadership", "importance": "high", "typical_count": 1, "alternatives": ["Application Development Manager", "Software Development Manager"]},
+        {"role_title": "Cloud Engineer", "category": "infrastructure", "importance": "high", "typical_count": 1, "alternatives": ["Cloud Architect", "Azure Engineer", "AWS Engineer"]},
+        {"role_title": "Network Administrator", "category": "infrastructure", "importance": "high", "typical_count": 1, "alternatives": ["Network Engineer"]},
+        {"role_title": "Business Analyst", "category": "applications", "importance": "high", "typical_count": 2, "alternatives": ["Systems Analyst", "IT Business Analyst"]},
+        {"role_title": "Developer", "category": "applications", "importance": "medium", "typical_count": 2, "alternatives": ["Software Developer", "Programmer", "Application Developer"]},
+        {"role_title": "Security Analyst", "category": "security", "importance": "high", "typical_count": 1, "alternatives": ["Information Security Analyst", "Cybersecurity Analyst"]},
+        {"role_title": "Help Desk Technician", "category": "service_desk", "importance": "high", "typical_count": 2, "alternatives": ["IT Support", "Desktop Support"]}
+      ],
+      "it_to_employee_ratio": {"min": 0.03, "typical": 0.05, "max": 0.08},
+      "notes": "Higher IT ratio due to knowledge-worker workforce. Cloud-first tendency. Custom apps common."
+    },
+    {
+      "profile_id": "midmarket_healthcare",
+      "profile_name": "Mid-Market Healthcare",
+      "description": "Healthcare organization $50M-$500M revenue",
+      "revenue_range_min": 50000000,
+      "revenue_range_max": 500000000,
+      "employee_range_min": 300,
+      "employee_range_max": 3000,
+      "industries": ["healthcare", "medical", "hospital", "health_system", "physician_practice"],
+      "expected_staffing": {
+        "leadership": {"min": 2, "typical": 4, "max": 6},
+        "infrastructure": {"min": 6, "typical": 12, "max": 22},
+        "applications": {"min": 5, "typical": 12, "max": 20},
+        "security": {"min": 2, "typical": 4, "max": 8},
+        "service_desk": {"min": 4, "typical": 10, "max": 18},
+        "data": {"min": 2, "typical": 4, "max": 8},
+        "project_management": {"min": 1, "typical": 2, "max": 4}
+      },
+      "expected_roles": [
+        {"role_title": "CIO", "category": "leadership", "importance": "critical", "typical_count": 1, "alternatives": ["Chief Information Officer", "VP IT"]},
+        {"role_title": "CISO", "category": "leadership", "importance": "critical", "typical_count": 1, "alternatives": ["Chief Information Security Officer", "VP Security", "Director of Security"]},
+        {"role_title": "IT Director", "category": "leadership", "importance": "high", "typical_count": 2, "alternatives": ["Director of IT Operations", "Director of Clinical Systems"]},
+        {"role_title": "Clinical Applications Analyst", "category": "applications", "importance": "critical", "typical_count": 4, "alternatives": ["Clinical Systems Analyst", "EHR Analyst", "Epic Analyst", "Cerner Analyst"]},
+        {"role_title": "EHR Administrator", "category": "applications", "importance": "critical", "typical_count": 2, "alternatives": ["Epic Administrator", "Cerner Admin", "EMR Administrator"]},
+        {"role_title": "Network Engineer", "category": "infrastructure", "importance": "critical", "typical_count": 2, "alternatives": ["Sr Network Engineer", "Network Administrator"]},
+        {"role_title": "Systems Administrator", "category": "infrastructure", "importance": "high", "typical_count": 4, "alternatives": ["Server Administrator", "Sr Systems Admin"]},
+        {"role_title": "Security Analyst", "category": "security", "importance": "critical", "typical_count": 2, "alternatives": ["Information Security Analyst", "HIPAA Security Analyst"]},
+        {"role_title": "Compliance Analyst", "category": "security", "importance": "high", "typical_count": 1, "alternatives": ["HIPAA Compliance", "IT Compliance Analyst"]},
+        {"role_title": "Data Analyst", "category": "data", "importance": "high", "typical_count": 2, "alternatives": ["Healthcare Data Analyst", "Clinical Data Analyst", "BI Analyst"]},
+        {"role_title": "Help Desk Lead", "category": "service_desk", "importance": "high", "typical_count": 1, "alternatives": ["Service Desk Manager", "IT Support Manager"]},
+        {"role_title": "Help Desk Technician", "category": "service_desk", "importance": "medium", "typical_count": 6, "alternatives": ["IT Support", "Desktop Support"]}
+      ],
+      "it_to_employee_ratio": {"min": 0.025, "typical": 0.04, "max": 0.055},
+      "notes": "HIPAA compliance critical. 24/7 operations. Clinical systems are life-safety. High security requirements."
+    },
+    {
+      "profile_id": "midmarket_financial_services",
+      "profile_name": "Mid-Market Financial Services",
+      "description": "Financial services firm $50M-$300M revenue",
+      "revenue_range_min": 50000000,
+      "revenue_range_max": 300000000,
+      "employee_range_min": 150,
+      "employee_range_max": 1000,
+      "industries": ["financial_services", "banking", "insurance", "investment", "fintech"],
+      "expected_staffing": {
+        "leadership": {"min": 2, "typical": 3, "max": 5},
+        "infrastructure": {"min": 4, "typical": 8, "max": 14},
+        "applications": {"min": 4, "typical": 8, "max": 15},
+        "security": {"min": 2, "typical": 4, "max": 8},
+        "service_desk": {"min": 2, "typical": 5, "max": 10},
+        "data": {"min": 2, "typical": 4, "max": 8},
+        "project_management": {"min": 1, "typical": 2, "max": 4}
+      },
+      "expected_roles": [
+        {"role_title": "CIO", "category": "leadership", "importance": "critical", "typical_count": 1, "alternatives": ["Chief Information Officer", "VP IT", "CTO"]},
+        {"role_title": "CISO", "category": "leadership", "importance": "critical", "typical_count": 1, "alternatives": ["Chief Information Security Officer", "VP Security"]},
+        {"role_title": "IT Director", "category": "leadership", "importance": "high", "typical_count": 1, "alternatives": ["Director of IT"]},
+        {"role_title": "Security Engineer", "category": "security", "importance": "critical", "typical_count": 2, "alternatives": ["Sr Security Engineer", "Cybersecurity Engineer"]},
+        {"role_title": "Security Analyst", "category": "security", "importance": "high", "typical_count": 2, "alternatives": ["Information Security Analyst", "SOC Analyst"]},
+        {"role_title": "Network Engineer", "category": "infrastructure", "importance": "high", "typical_count": 2, "alternatives": ["Sr Network Engineer"]},
+        {"role_title": "Systems Administrator", "category": "infrastructure", "importance": "high", "typical_count": 3, "alternatives": ["Server Administrator"]},
+        {"role_title": "DBA", "category": "data", "importance": "critical", "typical_count": 2, "alternatives": ["Database Administrator", "Sr DBA"]},
+        {"role_title": "Data Engineer", "category": "data", "importance": "high", "typical_count": 1, "alternatives": ["ETL Developer", "Data Integration Specialist"]},
+        {"role_title": "Application Developer", "category": "applications", "importance": "high", "typical_count": 3, "alternatives": ["Software Developer", "Programmer"]},
+        {"role_title": "Business Analyst", "category": "applications", "importance": "high", "typical_count": 2, "alternatives": ["Systems Analyst"]}
+      ],
+      "it_to_employee_ratio": {"min": 0.03, "typical": 0.05, "max": 0.07},
+      "notes": "Heavy regulatory requirements (SOX, PCI, state regulations). Strong security posture required. Data integrity critical."
+    },
+    {
+      "profile_id": "enterprise_general",
+      "profile_name": "Enterprise General",
+      "description": "Large enterprise $250M+ revenue",
+      "revenue_range_min": 250000000,
+      "revenue_range_max": 10000000000,
+      "employee_range_min": 1000,
+      "employee_range_max": 50000,
+      "industries": ["general"],
+      "expected_staffing": {
+        "leadership": {"min": 5, "typical": 10, "max": 20},
+        "infrastructure": {"min": 15, "typical": 35, "max": 80},
+        "applications": {"min": 12, "typical": 30, "max": 60},
+        "security": {"min": 6, "typical": 15, "max": 30},
+        "service_desk": {"min": 10, "typical": 25, "max": 50},
+        "data": {"min": 4, "typical": 10, "max": 20},
+        "project_management": {"min": 3, "typical": 8, "max": 15}
+      },
+      "expected_roles": [
+        {"role_title": "CIO", "category": "leadership", "importance": "critical", "typical_count": 1, "alternatives": ["Chief Information Officer"]},
+        {"role_title": "CISO", "category": "leadership", "importance": "critical", "typical_count": 1, "alternatives": ["Chief Information Security Officer"]},
+        {"role_title": "CTO", "category": "leadership", "importance": "high", "typical_count": 1, "alternatives": ["Chief Technology Officer"]},
+        {"role_title": "VP Infrastructure", "category": "leadership", "importance": "high", "typical_count": 1, "alternatives": ["VP of Infrastructure", "VP IT Operations"]},
+        {"role_title": "VP Applications", "category": "leadership", "importance": "high", "typical_count": 1, "alternatives": ["VP of Application Development", "VP Software Engineering"]},
+        {"role_title": "Enterprise Architect", "category": "leadership", "importance": "high", "typical_count": 2, "alternatives": ["Chief Architect", "Solution Architect"]},
+        {"role_title": "IT Director", "category": "leadership", "importance": "high", "typical_count": 4, "alternatives": ["Director of IT"]}
+      ],
+      "it_to_employee_ratio": {"min": 0.025, "typical": 0.04, "max": 0.06},
+      "notes": "Complex multi-division structure. Typically has shared services. M&A activity common."
+    }
+  ],
+  "metadata": {
+    "version": "1.0",
+    "last_updated": "2026-01-22",
+    "source": "IT DD benchmark framework - test data",
+    "notes": "These are illustrative benchmarks for testing. Replace with actual benchmark data for production use."
+  }
+}

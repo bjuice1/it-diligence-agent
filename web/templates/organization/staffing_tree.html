@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}IT Staffing - Organization{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/organization.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>IT Staffing by Function</h1>
+    <p class="subtitle">Census data with role-level drill-down</p>
+</div>
+
+<div class="staffing-container">
+    <!-- Summary Stats -->
+    <div class="summary-stats">
+        <div class="stat-card">
+            <span class="stat-value">{{ total_headcount }}</span>
+            <span class="stat-label">Total Headcount</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">${{ "{:,.0f}".format(total_compensation) }}</span>
+            <span class="stat-label">Total Compensation</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">{{ fte_count }}</span>
+            <span class="stat-label">FTEs</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">{{ contractor_count }}</span>
+            <span class="stat-label">Contractors</span>
+        </div>
+        <div class="stat-card {{ 'highlight' if key_person_count > 0 else '' }}">
+            <span class="stat-value">{{ key_person_count }}</span>
+            <span class="stat-label">Key Persons</span>
+        </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="tree-controls">
+        <button class="btn btn-sm" onclick="expandAll()">Expand All</button>
+        <button class="btn btn-sm" onclick="collapseAll()">Collapse All</button>
+        <select id="entity-filter" onchange="filterByEntity(this.value)">
+            <option value="all">All Entities</option>
+            <option value="target" selected>Target Only</option>
+            <option value="buyer">Buyer Only</option>
+        </select>
+        <label class="checkbox-label">
+            <input type="checkbox" id="show-key-persons" onchange="toggleKeyPersonHighlight(this.checked)" checked>
+            Highlight Key Persons
+        </label>
+    </div>
+
+    <!-- Staffing Tree -->
+    <div class="staffing-tree" id="staffing-tree">
+        {% for cat_name, category in categories.items() %}
+        <div class="tree-category" data-category="{{ cat_name }}">
+            <div class="category-header" onclick="toggleCategory('{{ cat_name }}')">
+                <span class="expand-icon">&#9654;</span>
+                <span class="category-name">{{ category.display_name }}</span>
+                <span class="category-count">({{ category.total_headcount }})</span>
+                <span class="category-comp">${{ "{:,.0f}".format(category.total_compensation) }}</span>
+            </div>
+            <div class="category-content" id="content-{{ cat_name }}">
+                {% for role in category.roles %}
+                <div class="tree-role" data-role="{{ role.role_title }}">
+                    <div class="role-header" onclick="toggleRole('{{ cat_name }}', '{{ loop.index }}')">
+                        <span class="expand-icon">&#9654;</span>
+                        <span class="role-title">{{ role.role_title }}</span>
+                        {% if role.headcount > 1 %}
+                        <span class="role-count">({{ role.headcount }})</span>
+                        {% endif %}
+                        <span class="role-comp">${{ "{:,.0f}".format(role.avg_compensation) }} avg</span>
+                    </div>
+                    <div class="role-content" id="content-{{ cat_name }}-{{ loop.index }}">
+                        {% for person in role.members %}
+                        <div class="tree-person {% if person.is_key_person %}key-person{% endif %}"
+                             data-entity="{{ person.entity }}">
+                            <span class="person-name">
+                                {{ person.name }}
+                                {% if person.is_key_person %}
+                                <span class="key-badge" title="{{ person.key_person_reason }}">&#9888;</span>
+                                {% endif %}
+                            </span>
+                            <span class="person-comp">${{ "{:,.0f}".format(person.base_compensation) }}</span>
+                            <span class="person-tenure">
+                                {% if person.tenure_years %}{{ "%.1f"|format(person.tenure_years) }} yrs{% else %}-{% endif %}
+                            </span>
+                            <span class="person-type {{ person.employment_type.value }}">
+                                {{ person.employment_type.value|upper }}
+                            </span>
+                            <span class="person-location">{{ person.location }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/staffing_tree.js') }}"></script>
+{% endblock %}

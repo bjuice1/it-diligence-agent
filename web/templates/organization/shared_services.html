@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}Shared Services Analysis - Organization{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/organization.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Shared Services Analysis</h1>
+    <p class="subtitle">Hidden headcount needs from parent company dependencies</p>
+</div>
+
+<div class="shared-services-container">
+    <!-- Alert if significant hidden headcount -->
+    {% if summary.hidden_headcount_need > 2 %}
+    <div class="ss-alert">
+        <strong>Significant Hidden Headcount Identified</strong>
+        <p>{{ "%.1f"|format(summary.hidden_headcount_need) }} FTE equivalent of IT services are currently provided by the parent company
+        and will not transfer with the transaction. These services will need to be replaced or transitioned.</p>
+    </div>
+    {% endif %}
+
+    <!-- Summary Stats -->
+    <div class="summary-stats">
+        <div class="stat-card">
+            <span class="stat-value">{{ summary.total_dependencies }}</span>
+            <span class="stat-label">Shared Services</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">{{ "%.1f"|format(summary.transferring_fte) }}</span>
+            <span class="stat-label">Transferring FTE</span>
+        </div>
+        <div class="stat-card {{ 'highlight' if summary.non_transferring_fte > 0 else '' }}">
+            <span class="stat-value">{{ "%.1f"|format(summary.non_transferring_fte) }}</span>
+            <span class="stat-label">Not Transferring FTE</span>
+        </div>
+        <div class="stat-card {{ 'highlight' if summary.hidden_headcount_need > 0 else '' }}">
+            <span class="stat-value">{{ "%.1f"|format(summary.hidden_headcount_need) }}</span>
+            <span class="stat-label">Hidden FTE Need</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">${{ "{:,.0f}".format(summary.hidden_cost_annual) }}</span>
+            <span class="stat-label">Replacement Cost</span>
+        </div>
+    </div>
+
+    <!-- Dependencies Table -->
+    <h3>Shared Service Dependencies</h3>
+    <table class="ss-table">
+        <thead>
+            <tr>
+                <th>Service</th>
+                <th>Provider</th>
+                <th>FTE Eq.</th>
+                <th>Criticality</th>
+                <th>Transferring?</th>
+                <th>TSA?</th>
+                <th>Replacement Cost</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for dep in dependencies %}
+            <tr class="{{ 'not-transferring' if not dep.will_transfer else '' }}">
+                <td>{{ dep.service_name }}</td>
+                <td>{{ dep.provider }}</td>
+                <td>{{ "%.1f"|format(dep.fte_equivalent) }}</td>
+                <td>
+                    <span class="criticality-badge {{ dep.criticality }}">{{ dep.criticality|title }}</span>
+                </td>
+                <td>
+                    {% if dep.will_transfer %}
+                    <span class="transfer-yes">Yes</span>
+                    {% else %}
+                    <span class="transfer-no">No</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if dep.tsa_candidate %}
+                    <span class="tsa-yes">Candidate</span>
+                    {% else %}
+                    <span class="tsa-no">-</span>
+                    {% endif %}
+                </td>
+                <td>${{ "{:,.0f}".format(dep.replacement_cost_annual) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="2"><strong>TOTAL</strong></td>
+                <td><strong>{{ "%.1f"|format(summary.total_fte_equivalent) }}</strong></td>
+                <td colspan="3"></td>
+                <td><strong>${{ "{:,.0f}".format(summary.hidden_cost_annual) }}</strong></td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <!-- TSA Recommendations -->
+    {% if tsa_recommendations %}
+    <h3>TSA Recommendations</h3>
+    <div class="tsa-recommendations">
+        {% for tsa in tsa_recommendations %}
+        <div class="tsa-card">
+            <div class="tsa-header">
+                <span class="tsa-service">{{ tsa.service }}</span>
+                <span class="tsa-provider">{{ tsa.provider }}</span>
+            </div>
+            <div class="tsa-details">
+                <p><strong>Duration:</strong> {{ tsa.duration_months }} months</p>
+                <p><strong>Monthly Cost:</strong> ${{ "{:,.0f}".format(tsa.estimated_monthly_cost) }}</p>
+                <p><strong>Total Cost:</strong> ${{ "{:,.0f}".format(tsa.total_cost) }}</p>
+                <p><strong>Exit Criteria:</strong> {{ tsa.exit_criteria }}</p>
+                <p><strong>Replacement Plan:</strong> {{ tsa.replacement_plan }}</p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Staffing Needs -->
+    {% if staffing_needs %}
+    <h3>Staffing Needs (Post-Close)</h3>
+    <div class="staffing-needs">
+        {% for need in staffing_needs %}
+        <div class="need-card urgency-{{ need.urgency }}">
+            <div class="need-header">
+                <span class="need-role">{{ need.role }}</span>
+                <span class="urgency-badge {{ need.urgency }}">{{ need.urgency|replace('_', ' ')|title }}</span>
+            </div>
+            <div class="need-details">
+                <p><strong>Category:</strong> {{ need.category.value|replace('_', ' ')|title }}</p>
+                <p><strong>FTE Count:</strong> {{ need.fte_count }}</p>
+                <p><strong>Est. Salary:</strong> ${{ "{:,.0f}".format(need.estimated_salary) }}</p>
+                <p><strong>Source:</strong> {{ need.source|replace('_', ' ')|title }}</p>
+                <p class="need-justification">{{ need.reason }}</p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if not dependencies %}
+    <div class="no-data">
+        <p>No shared service dependencies identified.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

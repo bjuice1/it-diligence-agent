@@ -1,0 +1,127 @@
+{
+  "compensation_benchmarks": {
+    "leadership": {
+      "CIO": {"p25": 180000, "p50": 250000, "p75": 350000, "description": "Chief Information Officer"},
+      "CISO": {"p25": 165000, "p50": 220000, "p75": 300000, "description": "Chief Information Security Officer"},
+      "CTO": {"p25": 175000, "p50": 240000, "p75": 330000, "description": "Chief Technology Officer"},
+      "VP IT": {"p25": 150000, "p50": 195000, "p75": 260000, "description": "Vice President of IT"},
+      "VP Infrastructure": {"p25": 145000, "p50": 185000, "p75": 245000, "description": "VP of Infrastructure/Operations"},
+      "VP Applications": {"p25": 150000, "p50": 190000, "p75": 250000, "description": "VP of Applications/Development"},
+      "IT Director": {"p25": 125000, "p50": 160000, "p75": 200000, "description": "Director level IT leadership"},
+      "IT Manager": {"p25": 95000, "p50": 120000, "p75": 150000, "description": "IT Manager"},
+      "Enterprise Architect": {"p25": 140000, "p50": 175000, "p75": 220000, "description": "Enterprise/Solution Architect"}
+    },
+    "infrastructure": {
+      "Infrastructure Manager": {"p25": 110000, "p50": 135000, "p75": 165000, "description": "Infrastructure team manager"},
+      "Sr Network Engineer": {"p25": 100000, "p50": 125000, "p75": 150000, "description": "Senior network engineer"},
+      "Network Engineer": {"p25": 80000, "p50": 100000, "p75": 120000, "description": "Network engineer"},
+      "Network Administrator": {"p25": 65000, "p50": 82000, "p75": 100000, "description": "Network administrator"},
+      "Sr Systems Administrator": {"p25": 95000, "p50": 115000, "p75": 138000, "description": "Senior systems/server admin"},
+      "Systems Administrator": {"p25": 70000, "p50": 88000, "p75": 108000, "description": "Systems/server administrator"},
+      "Cloud Engineer": {"p25": 105000, "p50": 130000, "p75": 160000, "description": "Cloud/AWS/Azure engineer"},
+      "Cloud Architect": {"p25": 130000, "p50": 160000, "p75": 195000, "description": "Cloud solutions architect"},
+      "DevOps Engineer": {"p25": 105000, "p50": 135000, "p75": 170000, "description": "DevOps/SRE engineer"},
+      "Storage Engineer": {"p25": 90000, "p50": 115000, "p75": 140000, "description": "Storage/SAN specialist"},
+      "Virtualization Engineer": {"p25": 90000, "p50": 112000, "p75": 135000, "description": "VMware/Hyper-V specialist"}
+    },
+    "applications": {
+      "Applications Manager": {"p25": 115000, "p50": 145000, "p75": 180000, "description": "Applications team manager"},
+      "ERP Administrator": {"p25": 85000, "p50": 110000, "p75": 140000, "description": "ERP system administrator"},
+      "ERP Developer": {"p25": 95000, "p50": 120000, "p75": 150000, "description": "ERP developer/analyst"},
+      "Sr Developer": {"p25": 115000, "p50": 145000, "p75": 180000, "description": "Senior software developer"},
+      "Developer": {"p25": 80000, "p50": 105000, "p75": 135000, "description": "Software developer/programmer"},
+      "Jr Developer": {"p25": 55000, "p50": 72000, "p75": 90000, "description": "Junior developer"},
+      "Business Analyst": {"p25": 70000, "p50": 90000, "p75": 115000, "description": "IT business analyst"},
+      "Sr Business Analyst": {"p25": 90000, "p50": 115000, "p75": 140000, "description": "Senior business analyst"},
+      "QA Engineer": {"p25": 70000, "p50": 90000, "p75": 115000, "description": "Quality assurance engineer"},
+      "Clinical Applications Analyst": {"p25": 75000, "p50": 95000, "p75": 120000, "description": "Healthcare clinical systems analyst"},
+      "EHR Administrator": {"p25": 80000, "p50": 105000, "p75": 135000, "description": "EHR/EMR administrator (Epic, Cerner)"}
+    },
+    "security": {
+      "Security Manager": {"p25": 125000, "p50": 155000, "p75": 190000, "description": "Security team manager"},
+      "Sr Security Engineer": {"p25": 120000, "p50": 150000, "p75": 185000, "description": "Senior security engineer"},
+      "Security Engineer": {"p25": 100000, "p50": 130000, "p75": 160000, "description": "Security engineer"},
+      "Sr Security Analyst": {"p25": 100000, "p50": 125000, "p75": 155000, "description": "Senior security analyst"},
+      "Security Analyst": {"p25": 75000, "p50": 98000, "p75": 125000, "description": "Security analyst"},
+      "SOC Analyst": {"p25": 65000, "p50": 85000, "p75": 110000, "description": "Security operations center analyst"},
+      "Compliance Analyst": {"p25": 70000, "p50": 90000, "p75": 115000, "description": "IT/Security compliance analyst"},
+      "Penetration Tester": {"p25": 95000, "p50": 125000, "p75": 160000, "description": "Penetration tester/ethical hacker"},
+      "Security Architect": {"p25": 140000, "p50": 175000, "p75": 215000, "description": "Security architect"}
+    },
+    "service_desk": {
+      "Service Desk Manager": {"p25": 70000, "p50": 90000, "p75": 115000, "description": "Service desk/help desk manager"},
+      "Help Desk Lead": {"p25": 55000, "p50": 70000, "p75": 88000, "description": "Help desk team lead"},
+      "Sr Help Desk Technician": {"p25": 50000, "p50": 62000, "p75": 78000, "description": "Senior help desk technician"},
+      "Help Desk Technician": {"p25": 40000, "p50": 52000, "p75": 65000, "description": "Help desk technician"},
+      "Desktop Support": {"p25": 45000, "p50": 58000, "p75": 72000, "description": "Desktop support technician"},
+      "IT Support Specialist": {"p25": 48000, "p50": 60000, "p75": 75000, "description": "IT support specialist"}
+    },
+    "data": {
+      "Data Manager": {"p25": 115000, "p50": 145000, "p75": 180000, "description": "Data/BI team manager"},
+      "Sr DBA": {"p25": 110000, "p50": 138000, "p75": 170000, "description": "Senior database administrator"},
+      "DBA": {"p25": 85000, "p50": 110000, "p75": 138000, "description": "Database administrator"},
+      "Data Architect": {"p25": 130000, "p50": 165000, "p75": 200000, "description": "Data architect"},
+      "Data Engineer": {"p25": 105000, "p50": 135000, "p75": 170000, "description": "Data engineer/ETL developer"},
+      "Sr Data Analyst": {"p25": 85000, "p50": 108000, "p75": 135000, "description": "Senior data/BI analyst"},
+      "Data Analyst": {"p25": 65000, "p50": 85000, "p75": 108000, "description": "Data/BI analyst"},
+      "Data Scientist": {"p25": 110000, "p50": 145000, "p75": 185000, "description": "Data scientist"}
+    },
+    "project_management": {
+      "IT PMO Director": {"p25": 130000, "p50": 165000, "p75": 205000, "description": "IT PMO director"},
+      "Sr Project Manager": {"p25": 105000, "p50": 130000, "p75": 160000, "description": "Senior IT project manager"},
+      "Project Manager": {"p25": 85000, "p50": 108000, "p75": 135000, "description": "IT project manager"},
+      "Scrum Master": {"p25": 90000, "p50": 115000, "p75": 145000, "description": "Scrum master/agile coach"},
+      "Program Manager": {"p25": 120000, "p50": 150000, "p75": 185000, "description": "IT program manager"}
+    }
+  },
+  "location_adjustments": {
+    "tier_1_metro": {
+      "multiplier": 1.25,
+      "examples": ["San Francisco", "New York City", "Seattle", "Boston"],
+      "description": "Highest cost tech markets"
+    },
+    "tier_2_metro": {
+      "multiplier": 1.10,
+      "examples": ["Los Angeles", "Chicago", "Washington DC", "Denver", "Austin"],
+      "description": "High cost markets"
+    },
+    "average": {
+      "multiplier": 1.00,
+      "examples": ["Atlanta", "Dallas", "Phoenix", "Minneapolis"],
+      "description": "Average cost markets - baseline"
+    },
+    "tier_3_metro": {
+      "multiplier": 0.90,
+      "examples": ["Indianapolis", "Columbus", "Kansas City", "Nashville"],
+      "description": "Below average cost markets"
+    },
+    "rural": {
+      "multiplier": 0.80,
+      "examples": ["Rural areas", "Small towns"],
+      "description": "Low cost areas"
+    },
+    "offshore_nearshore": {
+      "multiplier": 0.45,
+      "examples": ["India", "Philippines", "Eastern Europe", "Latin America"],
+      "description": "Offshore/nearshore locations"
+    }
+  },
+  "industry_adjustments": {
+    "financial_services": {"multiplier": 1.15, "description": "Premium for regulatory/compliance skills"},
+    "healthcare": {"multiplier": 1.10, "description": "Premium for HIPAA/clinical systems experience"},
+    "technology": {"multiplier": 1.20, "description": "Premium in tech industry"},
+    "government": {"multiplier": 0.90, "description": "Below market but better benefits"},
+    "nonprofit": {"multiplier": 0.85, "description": "Below market compensation typical"},
+    "manufacturing": {"multiplier": 1.00, "description": "Average market rates"},
+    "retail": {"multiplier": 0.95, "description": "Slightly below average"},
+    "general": {"multiplier": 1.00, "description": "Baseline rates"}
+  },
+  "metadata": {
+    "version": "1.0",
+    "last_updated": "2026-01-22",
+    "currency": "USD",
+    "basis": "Annual base salary",
+    "source": "IT DD benchmark framework - test data based on industry surveys",
+    "notes": "P25/P50/P75 represent 25th, 50th (median), and 75th percentile. Adjust using location and industry multipliers."
+  }
+}

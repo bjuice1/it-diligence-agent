@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}MSP Analysis - Organization{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/organization.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>MSP / Outsourcing Analysis</h1>
+    <p class="subtitle">Understanding outsourced IT services and dependencies</p>
+</div>
+
+<div class="msp-container">
+    <!-- Summary Stats -->
+    <div class="summary-stats">
+        <div class="stat-card">
+            <span class="stat-value">{{ msp_summary.total_msp_count }}</span>
+            <span class="stat-label">MSP Vendors</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">{{ "%.1f"|format(msp_summary.total_fte_equivalent) }}</span>
+            <span class="stat-label">FTE Equivalent</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">${{ "{:,.0f}".format(msp_summary.total_annual_cost) }}</span>
+            <span class="stat-label">Annual Cost</span>
+        </div>
+        <div class="stat-card {{ 'highlight' if msp_summary.high_risk_count > 0 else '' }}">
+            <span class="stat-value">{{ msp_summary.high_risk_count }}</span>
+            <span class="stat-label">High Risk</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">${{ "{:,.0f}".format(msp_summary.total_replacement_cost) }}</span>
+            <span class="stat-label">Replacement Cost</span>
+        </div>
+    </div>
+
+    <!-- MSP Cards -->
+    {% for msp in msp_relationships %}
+    <div class="msp-card {{ msp.dependency_level.value }}" data-msp="{{ msp.id }}">
+        <div class="msp-card-header" onclick="toggleMSP('{{ msp.id }}')">
+            <span class="expand-icon">&#9654;</span>
+            <span class="msp-name">{{ msp.vendor_name }}</span>
+            <span class="msp-fte">{{ "%.1f"|format(msp.total_fte_equivalent) }} FTE eq.</span>
+            <span class="msp-cost">${{ "{:,.0f}".format(msp.contract_value_annual) }}/yr</span>
+            <span class="dependency-badge {{ msp.dependency_level.value }}">{{ msp.dependency_level.value|title }}</span>
+        </div>
+        <div class="msp-card-content">
+            <div class="msp-contract-info">
+                {% if msp.contract_expiry %}
+                <span><strong>Expires:</strong> {{ msp.contract_expiry }}</span>
+                {% endif %}
+                <span><strong>Notice Period:</strong> {{ msp.notice_period_days }} days</span>
+                <span><strong>Risk Level:</strong>
+                    <span class="criticality-badge {{ msp.risk_level }}">{{ msp.risk_level|upper }}</span>
+                </span>
+            </div>
+
+            <table class="services-table">
+                <thead>
+                    <tr>
+                        <th>Service</th>
+                        <th>FTE Eq.</th>
+                        <th>Coverage</th>
+                        <th>Criticality</th>
+                        <th>Internal Backup?</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for svc in msp.services %}
+                    <tr>
+                        <td>{{ svc.service_name }}</td>
+                        <td>{{ "%.1f"|format(svc.fte_equivalent) }}</td>
+                        <td>{{ svc.coverage }}</td>
+                        <td><span class="criticality-badge {{ svc.criticality }}">{{ svc.criticality|title }}</span></td>
+                        <td>
+                            {% if svc.internal_backup %}
+                            <span class="backup-yes">Yes</span>
+                            {% else %}
+                            <span class="backup-no">No</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <div class="msp-risk-section">
+                <h4>Exit Impact</h4>
+                <p>If this MSP relationship ends:</p>
+                <ul>
+                    <li><strong>Replacement FTE needed:</strong> {{ "%.1f"|format(msp.total_fte_equivalent) }}</li>
+                    <li><strong>Estimated replacement cost:</strong> ${{ "{:,.0f}".format(msp.replacement_cost_estimate) }}/yr</li>
+                    <li><strong>Services without backup:</strong> {{ msp.services_without_backup|length }}</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+
+    {% if not msp_relationships %}
+    <div class="no-data">
+        <p>No MSP relationships identified.</p>
+    </div>
+    {% endif %}
+</div>
+
+<script src="{{ url_for('static', filename='js/staffing_tree.js') }}"></script>
+{% endblock %}

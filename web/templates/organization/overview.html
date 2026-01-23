@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}Organization Analysis{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/organization.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Organization & Staffing Analysis</h1>
+    <p class="subtitle">IT staffing assessment with benchmark comparison and dependency analysis</p>
+</div>
+
+<div class="org-overview">
+    <!-- Quick Stats Row -->
+    <div class="summary-stats">
+        <div class="stat-card">
+            <span class="stat-value">{{ store.get_target_headcount() }}</span>
+            <span class="stat-label">Total IT Staff</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">${{ "{:,.0f}".format(store.total_compensation) }}</span>
+            <span class="stat-label">Total Comp</span>
+        </div>
+        <div class="stat-card {{ 'highlight' if store.get_key_persons()|length > 0 else '' }}">
+            <span class="stat-value">{{ store.get_key_persons()|length }}</span>
+            <span class="stat-label">Key Persons</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">{{ msp_summary.total_msp_count }}</span>
+            <span class="stat-label">MSP Vendors</span>
+        </div>
+        <div class="stat-card {{ 'highlight' if ss_summary.hidden_headcount_need > 0 else '' }}">
+            <span class="stat-value">{{ "%.1f"|format(ss_summary.hidden_headcount_need) }}</span>
+            <span class="stat-label">Hidden FTE</span>
+        </div>
+    </div>
+
+    <!-- Navigation Cards -->
+    <div class="nav-cards">
+        <a href="{{ url_for('organization_staffing') }}" class="nav-card">
+            <div class="nav-card-icon">&#128101;</div>
+            <div class="nav-card-content">
+                <h3>Staffing Census</h3>
+                <p>Role-by-role breakdown with compensation and tenure data</p>
+                <span class="nav-card-stat">{{ store.get_target_headcount() }} staff | {{ store.total_internal_fte }} FTE, {{ store.total_contractor }} contractors</span>
+            </div>
+        </a>
+
+        <a href="{{ url_for('organization_benchmark') }}" class="nav-card">
+            <div class="nav-card-icon">&#128202;</div>
+            <div class="nav-card-content">
+                <h3>Benchmark Comparison</h3>
+                <p>Compare staffing against industry benchmarks</p>
+                <span class="nav-card-stat status-{{ comparison.overall_status }}">
+                    Status: {{ comparison.overall_status|title }}
+                </span>
+            </div>
+        </a>
+
+        <a href="{{ url_for('organization_msp') }}" class="nav-card">
+            <div class="nav-card-icon">&#128279;</div>
+            <div class="nav-card-content">
+                <h3>MSP Dependencies</h3>
+                <p>Outsourced services, FTE equivalents, and exit risk</p>
+                <span class="nav-card-stat">{{ msp_summary.total_msp_count }} vendors | {{ "%.1f"|format(msp_summary.total_fte_equivalent) }} FTE eq.</span>
+            </div>
+        </a>
+
+        <a href="{{ url_for('organization_shared_services') }}" class="nav-card">
+            <div class="nav-card-icon">&#127970;</div>
+            <div class="nav-card-content">
+                <h3>Shared Services</h3>
+                <p>Hidden headcount from parent company dependencies</p>
+                <span class="nav-card-stat {{ 'highlight' if ss_summary.non_transferring_fte > 0 else '' }}">
+                    {{ "%.1f"|format(ss_summary.non_transferring_fte) }} not transferring FTE | {{ "%.1f"|format(ss_summary.hidden_headcount_need) }} hidden FTE need
+                </span>
+            </div>
+        </a>
+    </div>
+
+    <!-- Key Findings Summary -->
+    {% if comparison.key_findings %}
+    <div class="findings-section">
+        <h3>Key Findings</h3>
+        <ul class="findings-list">
+            {% for finding in comparison.key_findings %}
+            <li>{{ finding }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <!-- Quick Actions -->
+    <div class="quick-actions">
+        <h3>Run New Analysis</h3>
+        <form action="{{ url_for('run_organization_analysis') }}" method="post" enctype="multipart/form-data" class="analysis-form">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="company_name">Company Name</label>
+                    <input type="text" id="company_name" name="company_name" value="Target Company">
+                </div>
+                <div class="form-group">
+                    <label for="employee_count">Employee Count</label>
+                    <input type="number" id="employee_count" name="employee_count" value="200">
+                </div>
+                <div class="form-group">
+                    <label for="revenue">Revenue ($)</label>
+                    <input type="number" id="revenue" name="revenue" value="50000000">
+                </div>
+                <div class="form-group">
+                    <label for="industry">Industry</label>
+                    <select id="industry" name="industry">
+                        <option value="manufacturing">Manufacturing</option>
+                        <option value="professional_services">Professional Services</option>
+                        <option value="healthcare">Healthcare</option>
+                        <option value="financial_services">Financial Services</option>
+                        <option value="technology">Technology</option>
+                        <option value="retail">Retail</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group file-group">
+                    <label for="census_file">Census File (CSV/Excel)</label>
+                    <input type="file" id="census_file" name="census_file" accept=".csv,.xlsx,.xls">
+                </div>
+                <div class="form-group">
+                    <button type="submit" class="btn btn-primary">Run Analysis</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

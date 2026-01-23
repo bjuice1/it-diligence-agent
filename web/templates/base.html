@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}IT Due Diligence{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='tokens.css') }}">
+    {% block head %}{% endblock %}
     <style>
         /* =================================================================
            BASE STYLES
@@ -764,6 +765,7 @@
             <a href="{{ url_for('work_items') }}" class="nav-link {{ 'active' if request.endpoint in ['work_items', 'work_item_detail'] }}" {% if request.endpoint in ['work_items', 'work_item_detail'] %}aria-current="page"{% endif %}>Work Items</a>
             <a href="{{ url_for('facts') }}" class="nav-link {{ 'active' if request.endpoint in ['facts', 'fact_detail'] }}" {% if request.endpoint in ['facts', 'fact_detail'] %}aria-current="page"{% endif %}>Facts</a>
             <a href="{{ url_for('gaps') }}" class="nav-link {{ 'active' if request.endpoint == 'gaps' }}" {% if request.endpoint == 'gaps' %}aria-current="page"{% endif %}>Gaps</a>
+            <a href="{{ url_for('organization_overview') }}" class="nav-link {{ 'active' if 'organization' in request.endpoint }}" {% if 'organization' in request.endpoint %}aria-current="page"{% endif %}>Organization</a>
         </div>
         <div class="nav-search">
             <span class="nav-search-icon" aria-hidden="true">

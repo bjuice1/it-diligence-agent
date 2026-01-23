@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Benchmark Comparison - Organization{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/organization.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Staffing vs Benchmark</h1>
+    <p class="subtitle">Comparing actual staffing to industry benchmarks</p>
+</div>
+
+<div class="benchmark-container">
+    <!-- Profile Info -->
+    <div class="profile-info">
+        <strong>Benchmark Profile:</strong> {{ comparison.benchmark_profile_name }}
+        <span class="comparison-date">| Compared: {{ comparison.comparison_date[:10] }}</span>
+    </div>
+
+    <!-- Overall Status -->
+    <div class="overall-status status-{{ comparison.overall_status }}">
+        <span class="status-label">Overall Status:</span>
+        <span class="status-value">{{ comparison.overall_status|title }}</span>
+        <span class="status-detail">
+            {{ comparison.total_actual }} actual vs {{ comparison.total_expected_min }}-{{ comparison.total_expected_max }} expected
+        </span>
+    </div>
+
+    <!-- Category Comparison Table -->
+    <h3>Staffing by Category</h3>
+    <table class="comparison-table">
+        <thead>
+            <tr>
+                <th>Function</th>
+                <th>Actual</th>
+                <th>Expected Range</th>
+                <th>Variance</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for comp in comparison.category_comparisons %}
+            <tr class="{{ comp.status }}">
+                <td>{{ comp.category_display }}</td>
+                <td>{{ comp.actual_count }}</td>
+                <td>{{ comp.benchmark_min }} - {{ comp.benchmark_max }}</td>
+                <td>{% if comp.variance > 0 %}+{% endif %}{{ comp.variance }}</td>
+                <td>
+                    <span class="status-badge {{ comp.status }}">
+                        {% if comp.status == 'in_range' %}In Range
+                        {% elif comp.status == 'understaffed' %}Understaffed
+                        {% else %}Overstaffed{% endif %}
+                    </span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td><strong>TOTAL</strong></td>
+                <td><strong>{{ comparison.total_actual }}</strong></td>
+                <td><strong>{{ comparison.total_expected_min }} - {{ comparison.total_expected_max }}</strong></td>
+                <td></td>
+                <td></td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <!-- Ratio Analysis -->
+    {% if comparison.ratio_comparisons %}
+    <h3>Key Ratios</h3>
+    <div class="ratio-cards">
+        {% for ratio in comparison.ratio_comparisons %}
+        <div class="stat-card {{ 'highlight' if ratio.status != 'in_range' else '' }}">
+            <span class="stat-value">{{ "%.1f%%"|format(ratio.actual_value * 100) }}</span>
+            <span class="stat-label">{{ ratio.ratio_name }}</span>
+            <span class="stat-benchmark">Benchmark: {{ "%.1f%%"|format(ratio.benchmark_typical * 100) }}</span>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Missing Roles -->
+    {% if comparison.missing_roles %}
+    <h3>Missing/Gap Roles</h3>
+    <div class="missing-roles-list">
+        {% for role in comparison.missing_roles %}
+        <div class="missing-role-card {{ role.importance }}">
+            <div class="role-header">
+                <span class="role-name">{{ role.role_title }}</span>
+                <span class="importance-badge {{ role.importance }}">{{ role.importance|upper }}</span>
+            </div>
+            <p class="role-impact">{{ role.impact }}</p>
+            <p class="role-coverage"><strong>Current coverage:</strong> {{ role.current_coverage }}</p>
+            <p class="role-recommendation"><strong>Recommendation:</strong> {{ role.recommendation }}</p>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="no-gaps">
+        <p>No critical role gaps identified against benchmark.</p>
+    </div>
+    {% endif %}
+
+    <!-- Key Findings -->
+    {% if comparison.key_findings %}
+    <h3>Key Findings</h3>
+    <ul class="findings-list">
+        {% for finding in comparison.key_findings %}
+        <li>{{ finding }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <!-- Recommendations -->
+    {% if comparison.recommendations %}
+    <h3>Recommendations</h3>
+    <ul class="recommendations-list">
+        {% for rec in comparison.recommendations %}
+        <li>{{ rec }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+</div>
+{% endblock %}
