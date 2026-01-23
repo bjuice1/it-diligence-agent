@@ -1165,11 +1165,18 @@ def _synthesize_fact_statement(fact) -> str:
         # Include any meaningful details
         for key in ['vendor', 'platform', 'product']:
             val = details.get(key, '')
+            # Ensure val is a string before calling .lower()
+            if isinstance(val, list):
+                val = ', '.join(str(v) for v in val) if val else ''
+            val = str(val) if val else ''
             if val and val.lower() not in item.lower() and val.lower() != 'not_stated':
                 item = f"{val} {item}"
                 break
 
         version = details.get('version', '')
+        if isinstance(version, list):
+            version = ', '.join(str(v) for v in version) if version else ''
+        version = str(version) if version else ''
         if version and version.lower() not in ('evergreen', 'not_stated', 'n/a'):
             parts.append(f"version {version}")
 
