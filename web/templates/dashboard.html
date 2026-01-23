@@ -12,23 +12,23 @@
 <div class="metrics-row">
     <div class="metric-card">
         <span class="metric-label">Facts Discovered</span>
-        <span class="metric-value">{{ summary.total_facts }}</span>
-        <span class="metric-subtext">Across {{ summary.domains|length if summary.domains else 6 }} domains</span>
+        <span class="metric-value">{{ summary.facts }}</span>
+        <span class="metric-subtext">Across {{ summary.domains_with_facts|length if summary.domains_with_facts else 0 }} domains</span>
     </div>
-    <div class="metric-card {{ 'metric-warning' if summary.total_gaps > 10 else '' }}">
+    <div class="metric-card {{ 'metric-warning' if summary.gaps > 10 else '' }}">
         <span class="metric-label">Information Gaps</span>
-        <span class="metric-value">{{ summary.total_gaps }}</span>
+        <span class="metric-value">{{ summary.gaps }}</span>
         <span class="metric-subtext">Requiring VDR requests</span>
     </div>
-    <div class="metric-card {{ 'metric-warning' if summary.critical_risks > 0 else '' }}">
+    <div class="metric-card {{ 'metric-warning' if summary.risk_summary.critical|default(0) > 0 else '' }}">
         <span class="metric-label">Risks Identified</span>
-        <span class="metric-value">{{ summary.total_risks }}</span>
-        <span class="metric-subtext">{{ summary.critical_risks|default(0) }} critical, {{ summary.high_risks|default(0) }} high</span>
+        <span class="metric-value">{{ summary.risks }}</span>
+        <span class="metric-subtext">{{ summary.risk_summary.critical|default(0) }} critical, {{ summary.risk_summary.high|default(0) }} high</span>
     </div>
     <div class="metric-card">
         <span class="metric-label">Work Items</span>
-        <span class="metric-value">{{ summary.total_work_items }}</span>
-        <span class="metric-subtext">{{ summary.day1_items|default(0) }} for Day 1</span>
+        <span class="metric-value">{{ summary.work_items }}</span>
+        <span class="metric-subtext">{{ summary.cost_summary.Day_1.count|default(0) if summary.cost_summary else 0 }} for Day 1</span>
     </div>
 </div>
 
@@ -184,7 +184,7 @@
             <line x1="12" y1="8" x2="12" y2="12"></line>
             <line x1="12" y1="16" x2="12.01" y2="16"></line>
         </svg>
-        Review Gaps ({{ summary.total_gaps }})
+        Review Gaps ({{ summary.gaps }})
     </a>
 </div>
 {% endblock %}
