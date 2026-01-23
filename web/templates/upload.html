@@ -1,0 +1,455 @@
+{% extends "base.html" %}
+{% block title %}Upload Documents - IT Due Diligence{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Upload Documents for Analysis</h1>
+    <p>Upload VDR documents, census data, and other materials for AI-powered analysis</p>
+</div>
+
+<div class="upload-container">
+    <!-- Main Upload Area -->
+    <div class="upload-section">
+        <form action="{{ url_for('process_upload') }}" method="post" enctype="multipart/form-data" id="upload-form">
+            <div class="upload-dropzone" id="dropzone">
+                <div class="dropzone-content">
+                    <div class="dropzone-icon">&#128194;</div>
+                    <h3>Drag & Drop Files Here</h3>
+                    <p>or click to browse</p>
+                    <input type="file" name="documents" id="file-input" multiple accept=".pdf,.xlsx,.xls,.csv,.docx,.doc,.pptx,.ppt,.txt,.json">
+                    <div class="file-types">Supported: PDF, Excel, CSV, Word, PowerPoint, Text, JSON</div>
+                </div>
+            </div>
+
+            <!-- Selected Files List -->
+            <div class="selected-files" id="selected-files" style="display: none;">
+                <h4>Selected Files</h4>
+                <ul id="file-list"></ul>
+            </div>
+
+            <!-- Analysis Options -->
+            <div class="analysis-options">
+                <h4>Analysis Options</h4>
+                <div class="options-grid">
+                    <label class="option-card">
+                        <input type="checkbox" name="domains" value="applications" checked>
+                        <span class="option-icon">&#128187;</span>
+                        <span class="option-label">Applications</span>
+                    </label>
+                    <label class="option-card">
+                        <input type="checkbox" name="domains" value="infrastructure" checked>
+                        <span class="option-icon">&#127760;</span>
+                        <span class="option-label">Infrastructure</span>
+                    </label>
+                    <label class="option-card">
+                        <input type="checkbox" name="domains" value="cybersecurity" checked>
+                        <span class="option-icon">&#128274;</span>
+                        <span class="option-label">Cybersecurity</span>
+                    </label>
+                    <label class="option-card">
+                        <input type="checkbox" name="domains" value="network" checked>
+                        <span class="option-icon">&#128225;</span>
+                        <span class="option-label">Network</span>
+                    </label>
+                    <label class="option-card">
+                        <input type="checkbox" name="domains" value="identity" checked>
+                        <span class="option-icon">&#128100;</span>
+                        <span class="option-label">Identity & Access</span>
+                    </label>
+                    <label class="option-card">
+                        <input type="checkbox" name="domains" value="organization" checked>
+                        <span class="option-icon">&#128101;</span>
+                        <span class="option-label">Organization</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Deal Context -->
+            <div class="deal-context">
+                <h4>Deal Context (Optional)</h4>
+                <div class="context-fields">
+                    <div class="field-group">
+                        <label for="deal_type">Deal Type</label>
+                        <select name="deal_type" id="deal_type">
+                            <option value="acquisition">Acquisition</option>
+                            <option value="carveout">Carve-out</option>
+                            <option value="divestiture">Divestiture</option>
+                            <option value="merger">Merger</option>
+                        </select>
+                    </div>
+                    <div class="field-group">
+                        <label for="target_name">Target Company</label>
+                        <input type="text" name="target_name" id="target_name" placeholder="Company name">
+                    </div>
+                    <div class="field-group">
+                        <label for="industry">Industry</label>
+                        <select name="industry" id="industry">
+                            <option value="">Select industry...</option>
+                            <option value="manufacturing">Manufacturing</option>
+                            <option value="healthcare">Healthcare</option>
+                            <option value="financial_services">Financial Services</option>
+                            <option value="technology">Technology</option>
+                            <option value="retail">Retail</option>
+                            <option value="professional_services">Professional Services</option>
+                        </select>
+                    </div>
+                    <div class="field-group">
+                        <label for="employee_count">Employee Count</label>
+                        <input type="number" name="employee_count" id="employee_count" placeholder="e.g., 500">
+                    </div>
+                </div>
+            </div>
+
+            <div class="submit-section">
+                <button type="submit" class="btn btn-primary btn-lg" id="submit-btn" disabled>
+                    <span>&#9654;</span> Start Analysis
+                </button>
+                <p class="submit-note">Analysis typically takes 2-5 minutes depending on document volume</p>
+            </div>
+        </form>
+    </div>
+
+    <!-- Recent Analyses -->
+    <div class="recent-section">
+        <h4>Quick Actions</h4>
+        <div class="quick-actions-grid">
+            <a href="{{ url_for('organization_overview') }}" class="quick-action-card">
+                <span class="qa-icon">&#128101;</span>
+                <span class="qa-label">Organization Analysis</span>
+                <span class="qa-desc">Census, benchmarks, MSP</span>
+            </a>
+            <a href="{{ url_for('dashboard') }}" class="quick-action-card">
+                <span class="qa-icon">&#128200;</span>
+                <span class="qa-label">View Dashboard</span>
+                <span class="qa-desc">Current analysis results</span>
+            </a>
+            <a href="{{ url_for('risks') }}" class="quick-action-card">
+                <span class="qa-icon">&#9888;</span>
+                <span class="qa-label">Review Risks</span>
+                <span class="qa-desc">Identified issues</span>
+            </a>
+        </div>
+    </div>
+</div>
+
+<style>
+.upload-container {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.upload-section {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 12px;
+    padding: 30px;
+    margin-bottom: 30px;
+}
+
+.upload-dropzone {
+    border: 2px dashed var(--border-default);
+    border-radius: 12px;
+    padding: 60px 30px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    background: var(--bg-surface-sunken);
+}
+
+.upload-dropzone:hover,
+.upload-dropzone.dragover {
+    border-color: var(--accent);
+    background: var(--accent-subtle);
+}
+
+.dropzone-icon {
+    font-size: 4em;
+    margin-bottom: 15px;
+    opacity: 0.6;
+}
+
+.dropzone-content h3 {
+    margin-bottom: 5px;
+    color: var(--text-primary);
+}
+
+.dropzone-content p {
+    color: var(--text-muted);
+    margin-bottom: 15px;
+}
+
+#file-input {
+    display: none;
+}
+
+.file-types {
+    font-size: 0.85em;
+    color: var(--text-muted);
+    margin-top: 15px;
+}
+
+.selected-files {
+    margin-top: 20px;
+    padding: 15px;
+    background: var(--bg-surface-sunken);
+    border-radius: 8px;
+}
+
+.selected-files h4 {
+    margin-bottom: 10px;
+    font-size: 0.9em;
+    color: var(--text-muted);
+}
+
+#file-list {
+    list-style: none;
+    padding: 0;
+}
+
+#file-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: var(--bg-surface);
+    border-radius: 6px;
+    margin-bottom: 5px;
+    font-size: 0.9em;
+}
+
+.file-remove {
+    color: var(--critical);
+    cursor: pointer;
+    padding: 2px 8px;
+}
+
+.analysis-options {
+    margin-top: 30px;
+}
+
+.analysis-options h4 {
+    margin-bottom: 15px;
+    font-size: 1em;
+}
+
+.options-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+}
+
+.option-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 15px;
+    border: 1px solid var(--border-default);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+}
+
+.option-card:hover {
+    border-color: var(--accent);
+}
+
+.option-card input {
+    display: none;
+}
+
+.option-card input:checked + .option-icon {
+    color: var(--accent);
+}
+
+.option-card input:checked ~ .option-label {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.option-card:has(input:checked) {
+    border-color: var(--accent);
+    background: var(--accent-subtle);
+}
+
+.option-icon {
+    font-size: 1.5em;
+    margin-bottom: 5px;
+}
+
+.option-label {
+    font-size: 0.85em;
+}
+
+.deal-context {
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-default);
+}
+
+.deal-context h4 {
+    margin-bottom: 15px;
+}
+
+.context-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+}
+
+.field-group label {
+    display: block;
+    font-size: 0.85em;
+    color: var(--text-muted);
+    margin-bottom: 5px;
+}
+
+.field-group input,
+.field-group select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border-default);
+    border-radius: 6px;
+    font-size: 0.95em;
+    background: var(--bg-surface);
+}
+
+.submit-section {
+    margin-top: 30px;
+    text-align: center;
+}
+
+.btn-lg {
+    padding: 15px 40px;
+    font-size: 1.1em;
+}
+
+.submit-note {
+    margin-top: 10px;
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+
+.recent-section h4 {
+    margin-bottom: 15px;
+}
+
+.quick-actions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+}
+
+.quick-action-card {
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 8px;
+    text-decoration: none;
+    color: inherit;
+    transition: all 0.2s;
+}
+
+.quick-action-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+}
+
+.qa-icon {
+    font-size: 1.5em;
+    margin-bottom: 8px;
+}
+
+.qa-label {
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.qa-desc {
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+</style>
+
+<script>
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('file-input');
+const fileList = document.getElementById('file-list');
+const selectedFiles = document.getElementById('selected-files');
+const submitBtn = document.getElementById('submit-btn');
+let files = [];
+
+// Click to upload
+dropzone.addEventListener('click', () => fileInput.click());
+
+// Drag and drop
+dropzone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropzone.classList.add('dragover');
+});
+
+dropzone.addEventListener('dragleave', () => {
+    dropzone.classList.remove('dragover');
+});
+
+dropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropzone.classList.remove('dragover');
+    handleFiles(e.dataTransfer.files);
+});
+
+// File input change
+fileInput.addEventListener('change', (e) => {
+    handleFiles(e.target.files);
+});
+
+function handleFiles(newFiles) {
+    for (let file of newFiles) {
+        if (!files.some(f => f.name === file.name)) {
+            files.push(file);
+        }
+    }
+    updateFileList();
+}
+
+function updateFileList() {
+    if (files.length > 0) {
+        selectedFiles.style.display = 'block';
+        fileList.innerHTML = files.map((file, i) => `
+            <li>
+                <span>${file.name} (${formatSize(file.size)})</span>
+                <span class="file-remove" onclick="removeFile(${i})">✕</span>
+            </li>
+        `).join('');
+        submitBtn.disabled = false;
+    } else {
+        selectedFiles.style.display = 'none';
+        submitBtn.disabled = true;
+    }
+}
+
+function removeFile(index) {
+    files.splice(index, 1);
+    updateFileList();
+}
+
+function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+// Form submit - add files to FormData
+document.getElementById('upload-form').addEventListener('submit', function(e) {
+    const formData = new FormData(this);
+
+    // Clear existing files and add our tracked files
+    formData.delete('documents');
+    files.forEach(file => {
+        formData.append('documents', file);
+    });
+});
+</script>
+{% endblock %}

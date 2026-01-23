@@ -50,6 +50,63 @@ def get_session():
 
 
 @app.route('/')
+def welcome():
+    """Welcome/landing page."""
+    return render_template('welcome.html')
+
+
+@app.route('/upload')
+def upload_documents():
+    """Document upload page."""
+    return render_template('upload.html')
+
+
+@app.route('/upload/process', methods=['POST'])
+def process_upload():
+    """Process uploaded documents and run analysis."""
+    from pathlib import Path
+    from config_v2 import DATA_DIR
+
+    # Create upload directory
+    upload_dir = DATA_DIR / 'uploads'
+    upload_dir.mkdir(exist_ok=True)
+
+    # Save uploaded files
+    uploaded_files = request.files.getlist('documents')
+    saved_files = []
+
+    for file in uploaded_files:
+        if file.filename:
+            filepath = upload_dir / file.filename
+            file.save(str(filepath))
+            saved_files.append(filepath)
+
+    # Get deal context
+    deal_type = request.form.get('deal_type', 'acquisition')
+    target_name = request.form.get('target_name', 'Target Company')
+    industry = request.form.get('industry', '')
+    employee_count = request.form.get('employee_count', '')
+
+    # Get selected domains
+    domains = request.form.getlist('domains')
+
+    # Store deal context in session
+    s = get_session()
+    context_text = f"Deal Type: {deal_type}\nTarget: {target_name}"
+    if industry:
+        context_text += f"\nIndustry: {industry}"
+    if employee_count:
+        context_text += f"\nEmployee Count: {employee_count}"
+    s.add_deal_context(context_text)
+
+    flash(f'Uploaded {len(saved_files)} files. Analysis started.', 'success')
+
+    # TODO: Trigger actual analysis pipeline here
+    # For now, redirect to dashboard
+    return redirect(url_for('dashboard'))
+
+
+@app.route('/dashboard')
 def dashboard():
     """Main dashboard view."""
     s = get_session()

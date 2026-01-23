@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IT Due Diligence Agent</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            color: white;
+        }
+
+        .welcome-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        .hero {
+            text-align: center;
+            padding: 60px 20px;
+        }
+
+        .logo {
+            width: 120px;
+            height: 120px;
+            background: linear-gradient(135deg, #e94560, #533483);
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 30px;
+            font-size: 3em;
+            box-shadow: 0 20px 60px rgba(233, 69, 96, 0.3);
+        }
+
+        h1 {
+            font-size: 3em;
+            font-weight: 700;
+            margin-bottom: 15px;
+            background: linear-gradient(135deg, #fff, #a0a0a0);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .tagline {
+            font-size: 1.3em;
+            color: #888;
+            margin-bottom: 40px;
+        }
+
+        .cta-buttons {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 15px 35px;
+            border-radius: 10px;
+            font-size: 1.1em;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #e94560, #533483);
+            color: white;
+            box-shadow: 0 10px 30px rgba(233, 69, 96, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 40px rgba(233, 69, 96, 0.4);
+        }
+
+        .btn-secondary {
+            background: rgba(255,255,255,0.1);
+            color: white;
+            border: 2px solid rgba(255,255,255,0.2);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255,255,255,0.15);
+            border-color: rgba(255,255,255,0.3);
+        }
+
+        /* Feature Cards */
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+            margin-top: 60px;
+        }
+
+        .feature-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 30px;
+            transition: all 0.3s;
+        }
+
+        .feature-card:hover {
+            background: rgba(255,255,255,0.08);
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+
+        .feature-icon {
+            font-size: 2.5em;
+            margin-bottom: 15px;
+        }
+
+        .feature-card h3 {
+            font-size: 1.3em;
+            margin-bottom: 10px;
+        }
+
+        .feature-card p {
+            color: #888;
+            line-height: 1.6;
+        }
+
+        /* Stats Bar */
+        .stats-bar {
+            display: flex;
+            justify-content: center;
+            gap: 50px;
+            margin-top: 60px;
+            padding: 30px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 16px;
+            flex-wrap: wrap;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2.5em;
+            font-weight: 700;
+            background: linear-gradient(135deg, #e94560, #533483);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+
+        /* Workflow Section */
+        .workflow {
+            margin-top: 60px;
+            text-align: center;
+        }
+
+        .workflow h2 {
+            font-size: 2em;
+            margin-bottom: 40px;
+        }
+
+        .workflow-steps {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+
+        .workflow-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .step-number {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #e94560, #533483);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5em;
+            font-weight: 700;
+        }
+
+        .step-label {
+            color: #aaa;
+        }
+
+        .step-arrow {
+            color: #444;
+            font-size: 1.5em;
+            align-self: center;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            margin-top: 80px;
+            padding: 30px;
+            color: #555;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="welcome-container">
+        <div class="hero">
+            <div class="logo">DD</div>
+            <h1>IT Due Diligence Agent</h1>
+            <p class="tagline">AI-powered analysis for M&A technology assessments</p>
+            <div class="cta-buttons">
+                <a href="{{ url_for('upload_documents') }}" class="btn btn-primary">
+                    <span>&#128194;</span> Upload Documents
+                </a>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">
+                    <span>&#128200;</span> View Dashboard
+                </a>
+            </div>
+        </div>
+
+        <div class="features">
+            <div class="feature-card">
+                <div class="feature-icon">&#128187;</div>
+                <h3>Applications Analysis</h3>
+                <p>Inventory applications, assess licenses, identify integration complexity and technical debt across the portfolio.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#127760;</div>
+                <h3>Infrastructure Review</h3>
+                <p>Evaluate cloud vs on-prem, capacity planning, EOL equipment, and infrastructure dependencies.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#128274;</div>
+                <h3>Security Assessment</h3>
+                <p>Analyze security controls, vulnerability status, compliance gaps, and incident history.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#128101;</div>
+                <h3>Organization Analysis</h3>
+                <p>Census staffing data, benchmark comparisons, MSP dependencies, and hidden headcount needs.</p>
+            </div>
+        </div>
+
+        <div class="stats-bar">
+            <div class="stat">
+                <div class="stat-value">6</div>
+                <div class="stat-label">Analysis Domains</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">100+</div>
+                <div class="stat-label">Risk Patterns</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">AI</div>
+                <div class="stat-label">Powered Insights</div>
+            </div>
+        </div>
+
+        <div class="workflow">
+            <h2>How It Works</h2>
+            <div class="workflow-steps">
+                <div class="workflow-step">
+                    <div class="step-number">1</div>
+                    <div class="step-label">Upload VDR Documents</div>
+                </div>
+                <div class="step-arrow">&#8594;</div>
+                <div class="workflow-step">
+                    <div class="step-number">2</div>
+                    <div class="step-label">AI Extracts Facts</div>
+                </div>
+                <div class="step-arrow">&#8594;</div>
+                <div class="workflow-step">
+                    <div class="step-number">3</div>
+                    <div class="step-label">Identify Risks & Gaps</div>
+                </div>
+                <div class="step-arrow">&#8594;</div>
+                <div class="workflow-step">
+                    <div class="step-number">4</div>
+                    <div class="step-label">Generate Work Items</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>IT Due Diligence Agent &copy; 2024 | Built for M&A Technology Assessments</p>
+        </div>
+    </div>
+</body>
+</html>
