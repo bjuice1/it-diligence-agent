@@ -45,7 +45,7 @@ class CoordinatorAgent(BaseAgent):
         rather than analyzing documents directly.
         """
         print(f"\n{'='*60}")
-        print(f"🎯 Starting COORDINATOR Synthesis")
+        print("🎯 Starting COORDINATOR Synthesis")
         print(f"{'='*60}")
         
         # Build synthesis message with all domain findings

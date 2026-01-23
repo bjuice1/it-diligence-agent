@@ -17,7 +17,7 @@ Systems serve as parent entities for granular facts extracted in Pass 2.
 import json
 import hashlib
 from dataclasses import dataclass, field, asdict
-from typing import List, Dict, Any, Optional, Set
+from typing import List, Dict, Any, Optional
 from datetime import datetime
 from pathlib import Path
 import logging

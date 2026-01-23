@@ -12,7 +12,7 @@ ARCHITECTURE:
 This ensures consistency: same JSON input → same output, every time.
 """
 
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 from dataclasses import dataclass
 from datetime import datetime
 import json

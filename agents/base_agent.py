@@ -12,7 +12,7 @@ import logging
 from pathlib import Path
 from datetime import datetime
 from time import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from difflib import SequenceMatcher
 
 # Try to import tenacity for retry logic, but make it optional
@@ -171,7 +171,7 @@ class BaseAgent(ABC):
             
             if not self.analysis_complete:
                 print(f"\n⚠ Max iterations ({self.max_iterations}) reached without completion")
-                self.logger.warning(f"Max iterations reached without completion")
+                self.logger.warning("Max iterations reached without completion")
             
             # Calculate execution time
             if self.start_time:
@@ -337,7 +337,7 @@ class BaseAgent(ABC):
         parts.append("## Documents to Analyze")
         parts.append(document_text)
         parts.append("")
-        parts.append(f"## Your Task")
+        parts.append("## Your Task")
         parts.append(f"Analyze the above documents through the {self.domain} lens.")
         parts.append("Use the provided tools to record all findings systematically.")
 

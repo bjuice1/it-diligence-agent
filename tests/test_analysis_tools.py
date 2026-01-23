@@ -9,7 +9,6 @@ Tests the tools module's ability to:
 Run with: pytest tests/test_analysis_tools.py -v
 """
 
-import pytest
 import sys
 import json
 import tempfile

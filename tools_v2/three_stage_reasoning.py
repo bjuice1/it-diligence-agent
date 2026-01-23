@@ -19,7 +19,7 @@ Cost per full analysis: ~$0.30-0.50
 import json
 import logging
 from typing import Dict, List, Optional, Any, Tuple
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -1171,7 +1171,7 @@ Format as JSON:
             try:
                 result = json.loads(json_match.group())
                 results[domain] = result
-            except:
+            except json.JSONDecodeError:
                 results[domain] = {"status": "parse_error", "raw": response_text}
         else:
             results[domain] = {"status": "parse_error", "raw": response_text}
@@ -1304,8 +1304,8 @@ def run_three_stage_analysis(
     total_impl_high = impl_high + license_high + operational_high
 
     # Total cost including run-rate
-    total_low = total_impl_low + runrate_low
-    total_high = total_impl_high + runrate_high
+    _ = total_impl_low + runrate_low
+    _ = total_impl_high + runrate_high
 
     # Timeline (implementation activities only)
     timeline_low = min((a.timeline_months[0] for a in impl_activities), default=0)
@@ -1460,7 +1460,7 @@ def format_three_stage_output(output: ThreeStageOutput) -> str:
     lines.append("COST SUMMARY")
     lines.append("=" * 70)
 
-    lines.append(f"\nImplementation (One-Time):")
+    lines.append("\nImplementation (One-Time):")
     lines.append(f"  Total: ${output.total_cost_range[0]:,.0f} - ${output.total_cost_range[1]:,.0f}")
 
     if output.implementation_cost_range:
@@ -1469,7 +1469,7 @@ def format_three_stage_output(output: ThreeStageOutput) -> str:
         lines.append(f"    - Licensing: ${output.license_cost_range[0]:,.0f} - ${output.license_cost_range[1]:,.0f}")
 
     if output.operational_runrate_range and output.operational_runrate_range[1] > 0:
-        lines.append(f"\nOperational Run-Rate (Annual):")
+        lines.append("\nOperational Run-Rate (Annual):")
         lines.append(f"  ${output.operational_runrate_range[0]:,.0f} - ${output.operational_runrate_range[1]:,.0f}/year")
 
     lines.append(f"\nTimeline: {output.total_timeline_months[0]}-{output.total_timeline_months[1]} months")

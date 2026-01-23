@@ -7,8 +7,8 @@ Checks completeness, M&A framing, evidence discipline, actionability, and tone.
 Output: ReviewResult with pass/fail, scores, issues, and improvement suggestions
 """
 
-from typing import Dict, List, Any, Optional
-from dataclasses import dataclass, field, asdict
+from typing import Dict, List
+from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime
 

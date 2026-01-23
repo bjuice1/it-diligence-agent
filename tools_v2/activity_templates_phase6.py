@@ -21,7 +21,7 @@ Each activity template includes standard fields plus:
 - day1_critical: Whether required for Day 1 operations
 """
 
-from typing import Dict, List, Any
+from typing import Dict, List
 
 # Import shared modifiers from Phase 1
 from tools_v2.activity_templates_v2 import COMPLEXITY_MULTIPLIERS, INDUSTRY_MODIFIERS

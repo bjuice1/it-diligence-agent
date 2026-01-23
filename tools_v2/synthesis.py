@@ -9,8 +9,8 @@ Performs cross-domain analysis to:
 5. Generate executive summary data
 """
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Any, Optional, Set, Tuple
+from dataclasses import dataclass
+from typing import Dict, List, Any, Set
 from datetime import datetime
 from tools_v2.fact_store import FactStore
 from tools_v2.reasoning_tools import ReasoningStore, COST_RANGE_VALUES

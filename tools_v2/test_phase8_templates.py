@@ -25,7 +25,6 @@ from tools_v2.activity_templates_phase8 import (
     calculate_phase8_activity_cost,
     get_regulatory_requirements,
 )
-from tools_v2.activity_templates_v2 import COMPLEXITY_MULTIPLIERS, INDUSTRY_MODIFIERS
 
 
 def test_template_structure():
@@ -336,7 +335,7 @@ def test_regulatory_drivers():
         print(f"\n  Missing key regulations: {missing}")
         return False
 
-    print(f"\n  All key regulations covered")
+    print("\n  All key regulations covered")
     return True
 
 
@@ -349,31 +348,24 @@ def test_combined_all_phases():
     try:
         from tools_v2.activity_templates_v2 import (
             get_phase1_templates,
-            calculate_activity_cost,
         )
         from tools_v2.activity_templates_phase2 import (
             get_phase2_templates,
-            calculate_phase2_activity_cost,
         )
         from tools_v2.activity_templates_phase3 import (
             get_phase3_templates,
-            calculate_phase3_activity_cost,
         )
         from tools_v2.activity_templates_phase4 import (
             get_phase4_templates,
-            calculate_phase4_activity_cost,
         )
         from tools_v2.activity_templates_phase5 import (
             get_phase5_templates,
-            calculate_phase5_activity_cost,
         )
         from tools_v2.activity_templates_phase6 import (
             get_phase6_templates,
-            calculate_phase6_activity_cost,
         )
         from tools_v2.activity_templates_phase7 import (
             get_phase7_templates,
-            calculate_phase7_activity_cost,
         )
 
         print("\n  Scenario: 1,500 user IT Separation (Financial Services)")
@@ -396,7 +388,7 @@ def test_combined_all_phases():
                     p8_high += h
                     p8_count += 1
 
-        print(f"\n  PHASE 8 COMPLIANCE COSTS:")
+        print("\n  PHASE 8 COMPLIANCE COSTS:")
         print(f"    Total: ${p8_low:,.0f} - ${p8_high:,.0f}")
         print(f"    Activities: {p8_count}")
 

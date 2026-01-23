@@ -12,7 +12,7 @@ Features:
 """
 
 import logging
-from typing import Dict, List, Any, Optional
+from typing import Dict, Any, Optional
 from datetime import datetime
 from pathlib import Path
 
@@ -175,7 +175,7 @@ def _auto_size_columns(ws, min_width=10, max_width=50):
             try:
                 if cell.value:
                     max_length = max(max_length, len(str(cell.value)))
-            except:
+            except Exception:
                 pass
         ws.column_dimensions[column_letter].width = min(max(max_length + 2, min_width), max_width)
 

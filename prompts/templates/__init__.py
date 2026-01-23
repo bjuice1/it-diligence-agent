@@ -10,8 +10,8 @@ Each template extends the base narrative structure with deal-type-specific
 sections, emphasis, and output formats.
 """
 
-from typing import Dict, Any, List, Optional
-from dataclasses import dataclass, field
+from typing import Dict, Any, List
+from dataclasses import dataclass
 from enum import Enum
 
 from .acquisition_narrative_template import (

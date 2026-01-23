@@ -15,7 +15,6 @@ from typing import Dict, List, Optional, Any
 from abc import ABC, abstractmethod
 import json
 import logging
-from datetime import datetime
 from time import time
 from dataclasses import dataclass
 
@@ -211,7 +210,7 @@ class BaseDiscoveryAgent(ABC):
             self.metrics.facts_extracted = domain_facts["fact_count"]
             self.metrics.gaps_flagged = domain_facts["gap_count"]
 
-            print(f"\nDiscovery Results:")
+            print("\nDiscovery Results:")
             print(f"  Facts extracted: {self.metrics.facts_extracted}")
             print(f"  Gaps identified: {self.metrics.gaps_flagged}")
             print(f"  API calls: {self.metrics.api_calls}")
@@ -351,7 +350,7 @@ class BaseDiscoveryAgent(ABC):
                 self.metrics.errors += 1
                 self.logger.error(f"Circuit breaker open: {e}")
                 raise
-            except anthropic.RateLimitError as e:
+            except anthropic.RateLimitError:
                 if attempt < max_retries - 1:
                     wait_time = API_RETRY_BACKOFF_BASE ** attempt
                     self.logger.warning(f"Rate limit hit, waiting {wait_time}s...")

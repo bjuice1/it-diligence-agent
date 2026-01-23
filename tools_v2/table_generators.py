@@ -9,10 +9,9 @@ Output formats match executive narrative requirements:
 - Synergy Table: opportunity, why_it_matters, value_mechanism, first_step
 """
 
-from typing import Dict, List, Any, Optional, Tuple
-from dataclasses import dataclass, field, asdict
+from typing import Dict, List, Optional
+from dataclasses import dataclass
 from enum import Enum
-from datetime import datetime
 import re
 
 

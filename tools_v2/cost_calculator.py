@@ -7,7 +7,7 @@ All cost rollups MUST use this module to ensure consistency.
 CRITICAL: Costs are ONLY computed from work items, never from ad-hoc prose.
 """
 
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 from dataclasses import dataclass
 import logging
 

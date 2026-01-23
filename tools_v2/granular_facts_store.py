@@ -16,7 +16,7 @@ These facts link back to parent systems and forward to source evidence.
 import json
 import hashlib
 from dataclasses import dataclass, field, asdict
-from typing import List, Dict, Any, Optional, Iterator
+from typing import List, Dict, Any, Optional
 from datetime import datetime
 from pathlib import Path
 import logging

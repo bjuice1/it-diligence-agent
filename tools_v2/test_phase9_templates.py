@@ -25,7 +25,6 @@ from tools_v2.activity_templates_phase9 import (
     calculate_phase9_activity_cost,
     estimate_contract_transition_costs,
 )
-from tools_v2.activity_templates_v2 import COMPLEXITY_MULTIPLIERS, INDUSTRY_MODIFIERS
 
 
 def test_template_structure():

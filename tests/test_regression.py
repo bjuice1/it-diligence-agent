@@ -13,7 +13,6 @@ To update the golden baseline (after intentional changes):
 """
 
 import json
-import os
 import sys
 from pathlib import Path
 from typing import Dict, Any, List, Optional

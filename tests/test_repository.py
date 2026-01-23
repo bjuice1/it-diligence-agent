@@ -15,15 +15,14 @@ import sys
 import tempfile
 import os
 from pathlib import Path
-from datetime import datetime
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from storage import Database, Repository
 from storage.models import (
-    Document, AnalysisRun, Risk, Gap, Assumption,
-    WorkItem, Recommendation, Question,
+    Document, AnalysisRun, Risk, Gap,
+    WorkItem, Question,
     generate_id, now_iso
 )
 from tools.analysis_tools import AnalysisStore

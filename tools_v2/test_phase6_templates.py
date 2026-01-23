@@ -25,7 +25,6 @@ from tools_v2.activity_templates_phase6 import (
     get_phase6_activity_by_id,
     calculate_phase6_activity_cost,
 )
-from tools_v2.activity_templates_v2 import COMPLEXITY_MULTIPLIERS, INDUSTRY_MODIFIERS
 
 
 def test_template_structure():
@@ -289,7 +288,7 @@ def test_day1_critical_activities():
     has_network = any('INT-030' in id or 'D1-010' in id for id in critical_ids)  # Connectivity
     has_access = any('D1-020' in id for id in critical_ids)  # Access provisioning
 
-    print(f"\n  Critical area coverage:")
+    print("\n  Critical area coverage:")
     print(f"    Identity (INT-011): {'Yes' if has_identity else 'No'}")
     print(f"    Email (INT-021): {'Yes' if has_email else 'No'}")
     print(f"    Network (INT-030/D1-010): {'Yes' if has_network else 'No'}")
@@ -316,7 +315,7 @@ def test_synergy_tracking():
                     synergy_types[synergy_type] = []
                 synergy_types[synergy_type].append(activity)
 
-    print(f"\n  Activities by synergy type:")
+    print("\n  Activities by synergy type:")
     for stype, activities in synergy_types.items():
         if activities:
             print(f"    {stype}: {len(activities)} activities")
@@ -444,7 +443,7 @@ def test_combined_all_phases():
 
         print(f"\n  COMBINED TOTAL: ${combined_low:,.0f} - ${combined_high:,.0f}")
 
-        print(f"\n  Activity counts:")
+        print("\n  Activity counts:")
         for name, _, _, count in phases:
             print(f"    {name}: {count} activities")
         print(f"    Total: {total_activities} activities")

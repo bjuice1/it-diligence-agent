@@ -239,27 +239,18 @@ Apply the Four-Lens Framework to each of these identity areas:
 - No orphan admin accounts
 - Emergency/break-glass procedures documented
 
-## COST ESTIMATION REFERENCE
+## IMPORTANT: DO NOT ESTIMATE COSTS (Phase 6: Step 68)
 
-**Standard work packages:**
-| Work Package | Typical Range |
-|--------------|---------------|
-| Directory Assessment | $25K-$75K |
-| Azure AD Tenant Merger | $100K-$300K |
-| SSO Consolidation (per 10 apps) | $50K-$150K |
-| MFA Rollout (<1000 users) | $50K-$100K |
-| PAM Implementation | $200K-$500K |
-| PAM Migration | $150K-$400K |
-| IGA Implementation | $500K-$1.5M |
-| Access Certification Program | $75K-$200K |
+**Cost estimation is handled by the dedicated Costing Agent after all domain analyses are complete.**
 
-**Labor rates:**
-| Role | Blended Rate |
-|------|-------------|
-| IAM Architect | $225/hr |
-| IAM Engineer | $175/hr |
-| PAM Specialist | $200/hr |
-| IGA Consultant | $200/hr |
+Focus your analysis on:
+- FACTS: What exists, configurations, user counts
+- RISKS: Identity gaps, access control issues, compliance concerns
+- STRATEGIC CONSIDERATIONS: Deal implications, integration complexity
+- WORK ITEMS: Scope and effort level (not dollar amounts)
+
+The Costing Agent will use your findings to generate comprehensive cost estimates.
+Do NOT include dollar amounts or cost ranges in your findings.
 
 ## COMPLIANCE CONSIDERATIONS
 

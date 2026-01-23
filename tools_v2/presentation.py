@@ -21,8 +21,7 @@ from datetime import datetime
 from dataclasses import dataclass
 from tools_v2.fact_store import FactStore
 from tools_v2.reasoning_tools import ReasoningStore, COST_RANGE_VALUES
-from tools_v2.narrative_tools import NarrativeStore, DomainNarrative, CostNarrative
-from tools_v2.html_report import _synthesize_fact_statement
+from tools_v2.narrative_tools import NarrativeStore
 from tools_v2.complexity_scorer import calculate_complexity_score, get_complexity_assessment
 from tools_v2.cost_calculator import calculate_costs_from_work_items, format_cost_summary
 
@@ -2550,7 +2549,7 @@ def _build_domain_slides_from_narratives(
                 ]
             else:
                 so_what = f"No findings for {config['title'].lower()} in current analysis scope."
-                narrative_text = f"This domain was not covered in the current analysis or had no material findings."
+                narrative_text = "This domain was not covered in the current analysis or had no material findings."
                 considerations = ["No material findings in current scope"]
 
             slides.append(SlideContent(

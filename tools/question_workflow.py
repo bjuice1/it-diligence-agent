@@ -9,11 +9,10 @@ Handles the complete question tracking lifecycle:
 5. Update gaps/assumptions when questions are answered
 """
 
-import os
 import re
 import json
 import logging
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any
 from datetime import datetime
 from dataclasses import dataclass, asdict
 
@@ -258,7 +257,7 @@ class DocumentQuestionParser:
 
             # End of table detection (new section or blank line after table data)
             if in_table and (line.strip() == '' or line.startswith('#')):
-                if not '|' in line:
+                if '|' not in line:
                     in_table = False
 
         return questions
@@ -392,7 +391,7 @@ def export_questions_to_excel(
     """
     try:
         import openpyxl
-        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.styles import Font, PatternFill, Alignment
     except ImportError:
         # Fallback to CSV if openpyxl not installed
         logger.warning("openpyxl not installed, falling back to CSV export")
@@ -480,7 +479,7 @@ def export_questions_to_excel(
                 try:
                     if cell.value:
                         max_length = max(max_length, len(str(cell.value)))
-                except:
+                except Exception:
                     pass
             ws.column_dimensions[column_letter].width = min(max_length + 2, 60)
 
@@ -843,8 +842,6 @@ class QuestionWorkflow:
 # =============================================================================
 
 if __name__ == "__main__":
-    import sys
-
     logging.basicConfig(level=logging.INFO)
 
     # Test document parsing

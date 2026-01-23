@@ -97,6 +97,15 @@ from .deal_implications import (
     match_facts_to_implications,
     get_implication_prompt_injection,
 )
+from .industry_application_considerations import (
+    INDUSTRY_APPLICATION_CONSIDERATIONS,
+    detect_industry_from_text,
+    get_industry_considerations,
+    get_all_industries,
+    inject_industry_into_discovery_prompt,
+    assess_industry_application_gaps,
+    get_industry_prompt_summary,
+)
 
 
 def get_all_shared_guidance() -> str:
@@ -207,4 +216,12 @@ __all__ = [
     'get_implications_for_deal_type',
     'match_facts_to_implications',
     'get_implication_prompt_injection',
+    # Industry Application Considerations
+    'INDUSTRY_APPLICATION_CONSIDERATIONS',
+    'detect_industry_from_text',
+    'get_industry_considerations',
+    'get_all_industries',
+    'inject_industry_into_discovery_prompt',
+    'assess_industry_application_gaps',
+    'get_industry_prompt_summary',
 ]

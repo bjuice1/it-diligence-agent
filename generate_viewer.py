@@ -12,7 +12,6 @@ Updated for Four-Lens DD Framework:
 """
 
 import json
-import os
 import webbrowser
 from pathlib import Path
 from datetime import datetime
@@ -75,7 +74,7 @@ def generate_viewer(output_dir: str = "data/output", auto_open: bool = True) -> 
             for key in file_mapping.values():
                 if key in combined and combined[key]:
                     data[key] = combined[key]
-        print(f"  ✓ Loaded analysis_output.json")
+        print("  ✓ Loaded analysis_output.json")
 
     # Generate HTML with embedded data
     html = generate_html(data)
@@ -86,8 +85,8 @@ def generate_viewer(output_dir: str = "data/output", auto_open: bool = True) -> 
         f.write(html)
 
     print(f"\n{'='*60}")
-    print(f"📊 ANALYSIS VIEWER READY")
-    print(f"{'='*60}")
+    print("📊 ANALYSIS VIEWER READY")
+    print("=" * 60)
     print(f"\n  File: {viewer_path.absolute()}")
     print(f"\n  Open in browser: file://{viewer_path.absolute()}")
     print(f"\n{'='*60}\n")

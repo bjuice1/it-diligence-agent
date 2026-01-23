@@ -17,16 +17,12 @@ This gives us:
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple, Any
-from enum import Enum
+from typing import Dict, List, Tuple, Any
 import json
 import hashlib
 
 from tools_v2.deterministic_estimator import (
     DeterministicEstimator,
-    COST_LOOKUP,
-    TIMELINE_LOOKUP,
-    Severity
 )
 
 

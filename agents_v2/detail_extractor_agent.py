@@ -19,8 +19,7 @@ Every fact must include:
 """
 
 import json
-from typing import List, Dict, Any, Optional, Callable
-from pathlib import Path
+from typing import List, Dict, Any
 import logging
 
 logger = logging.getLogger(__name__)

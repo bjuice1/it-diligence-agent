@@ -13,9 +13,8 @@ Philosophy:
 - TSA EXIT costs included (buyer's cost to become independent)
 """
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple, Any
-from enum import Enum
+from dataclasses import dataclass
+from typing import Dict, List, Tuple, Any
 import json
 import hashlib
 

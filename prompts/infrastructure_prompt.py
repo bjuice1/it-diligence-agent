@@ -161,26 +161,18 @@ Apply the Four-Lens Framework to each of these infrastructure areas:
 | Azure | Azure | Aligned | Consolidation |
 | On-prem | Cloud-first | Misaligned | Cloud migration |
 
-## COST ESTIMATION REFERENCE
+## IMPORTANT: DO NOT ESTIMATE COSTS (Phase 6: Step 65)
 
-**Standard work packages:**
-| Work Package | Typical Range |
-|--------------|---------------|
-| Discovery & Assessment | $50K-$200K |
-| Server Migration | $2K-$15K per server |
-| Storage Migration | $0.10-$0.50 per GB |
-| Cloud Migration (lift-and-shift) | $5K-$20K per app |
-| Cloud Migration (re-architecture) | $50K-$500K+ per app |
-| DC Exit | $100K-$1M |
-| Tool Consolidation | $50K-$300K |
+**Cost estimation is handled by the dedicated Costing Agent after all domain analyses are complete.**
 
-**Labor rates:**
-| Role | Blended Rate |
-|------|-------------|
-| Project Manager | $175/hr |
-| Solution Architect | $225/hr |
-| Infrastructure Engineer | $150/hr |
-| Cloud Engineer | $175/hr |
+Focus your analysis on:
+- FACTS: What exists, versions, counts, configurations
+- RISKS: Technical debt, compliance gaps, security issues
+- STRATEGIC CONSIDERATIONS: Deal implications, integration complexity
+- WORK ITEMS: Scope and effort level (not dollar amounts)
+
+The Costing Agent will use your findings to generate comprehensive cost estimates.
+Do NOT include dollar amounts or cost ranges in your findings.
 
 ## ANALYSIS EXECUTION ORDER
 

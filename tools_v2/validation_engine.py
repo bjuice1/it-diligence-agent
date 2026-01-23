@@ -14,7 +14,7 @@ Key validations:
 import re
 import json
 from dataclasses import dataclass, field, asdict
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional
 from datetime import datetime
 from pathlib import Path
 import logging
@@ -380,7 +380,7 @@ class ValidationEngine:
 
         all_facts = granular_facts_store.get_all_facts()
         facts_without_evidence = [f for f in all_facts if not f.evidence_quote]
-        facts_without_source = [f for f in all_facts if not f.source_document]
+        _ = [f for f in all_facts if not f.source_document]
         low_confidence = [f for f in all_facts if f.confidence < 0.7]
 
         # Evidence coverage

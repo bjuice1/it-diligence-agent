@@ -9,10 +9,8 @@ Points 24-35, 44 of 115PP:
 """
 
 import sqlite3
-import json
 from pathlib import Path
-from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict
 from contextlib import contextmanager
 
 # Default database location

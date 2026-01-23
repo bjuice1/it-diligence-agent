@@ -6,9 +6,8 @@ Designed for usability with contextual help, shortcuts, and visual feedback.
 """
 
 import shlex
-import sys
 from pathlib import Path
-from typing import Optional, List, Dict
+from typing import Optional, List
 
 from .session import Session
 from .commands import COMMANDS
@@ -249,7 +248,7 @@ class InteractiveCLI:
             output.append(f"  High:     {high:>3}  {'*' * high}")
             output.append(f"  Medium:   {med:>3}  {'*' * med}")
             output.append(f"  Low:      {low:>3}  {'*' * low}")
-            output.append(f"  " + "-" * 20)
+            output.append("  " + "-" * 20)
             output.append(f"  Total:    {total_risks:>3}")
         else:
             output.append("  No risks identified yet")

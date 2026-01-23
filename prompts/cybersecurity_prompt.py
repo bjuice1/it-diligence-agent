@@ -199,30 +199,18 @@ Apply the Four-Lens Framework to each of these security areas:
 | Communication | Documented process | Ad hoc |
 | Legal | Breach counsel identified | No legal prep |
 
-## COST ESTIMATION REFERENCE
+## IMPORTANT: DO NOT ESTIMATE COSTS (Phase 6: Step 66)
 
-**Security work packages:**
-| Work Package | Typical Range |
-|--------------|---------------|
-| Security Assessment | $50K-$150K |
-| Penetration Testing | $25K-$75K |
-| IAM Integration/Migration | $75K-$300K |
-| MFA Rollout | $50K-$150K |
-| EDR Deployment | $50K-$200K |
-| SIEM Implementation | $100K-$400K |
-| Compliance Remediation | $100K-$500K+ |
-| Security Awareness Training | $25K-$75K |
-| Incident Response Retainer | $50K-$150K/year |
-| PAM Implementation | $75K-$200K |
+**Cost estimation is handled by the dedicated Costing Agent after all domain analyses are complete.**
 
-**Labor rates:**
-| Role | Blended Rate |
-|------|-------------|
-| Security Architect | $225/hr |
-| Security Engineer | $185/hr |
-| Compliance Specialist | $175/hr |
-| IAM Specialist | $175/hr |
-| Penetration Tester | $200/hr |
+Focus your analysis on:
+- FACTS: What exists, versions, counts, configurations
+- RISKS: Security gaps, compliance issues, vulnerabilities
+- STRATEGIC CONSIDERATIONS: Deal implications, integration complexity
+- WORK ITEMS: Scope and effort level (not dollar amounts)
+
+The Costing Agent will use your findings to generate comprehensive cost estimates.
+Do NOT include dollar amounts or cost ranges in your findings.
 
 ## MANDATORY NON-INTEGRATION RISK EVALUATION
 

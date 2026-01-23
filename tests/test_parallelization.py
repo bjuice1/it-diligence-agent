@@ -16,8 +16,6 @@ import sys
 import time
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from unittest.mock import Mock, patch, MagicMock
-from dataclasses import dataclass
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -174,7 +172,7 @@ class TestAnalysisStoreMerge:
         original_current_state_count = len(populated_store.current_state)
         original_risks_count = len(populated_store.risks)
 
-        counts = populated_store.merge_from(second_store)
+        _ = populated_store.merge_from(second_store)
 
         # Should have items from both
         assert len(populated_store.current_state) == original_current_state_count + 1

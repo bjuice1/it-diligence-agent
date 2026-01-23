@@ -387,30 +387,18 @@ For each function, document:
 | Day 100 | Stabilization, quick wins, knowledge transfer kickoff |
 | Post-100 | Full integration, synergy capture, org consolidation |
 
-## COST ESTIMATION REFERENCE
+## IMPORTANT: DO NOT ESTIMATE COSTS (Phase 6: Step 69)
 
-**Organization-related work packages:**
-| Work Package | Typical Range |
-|--------------|---------------|
-| Organizational Assessment | $25K-$75K |
-| Retention Program Design | $15K-$50K |
-| Stay Bonus Pool | 3-6 months salary for key people |
-| Severance Planning | Per local requirements |
-| Training Program | $2K-$10K per person |
-| Recruiting (per hire) | 20-25% of salary |
-| Knowledge Transfer Program | $50K-$150K |
-| TSA Staffing (per FTE/month) | 1.5-2x loaded cost |
-| Offshore Transition Management | $25K-$100K |
-| Shadow IT Rationalization | $50K-$150K |
+**Cost estimation is handled by the dedicated Costing Agent after all domain analyses are complete.**
 
-**Labor rates:**
-| Role | Blended Rate |
-|------|-------------|
-| HR/OD Consultant | $200/hr |
-| Change Management | $175/hr |
-| Training Developer | $125/hr |
-| Technical Writer | $100/hr |
-| Organizational Design | $225/hr |
+Focus your analysis on:
+- FACTS: Team structure, headcount, skills, key personnel
+- RISKS: Key person dependencies, skill gaps, retention concerns
+- STRATEGIC CONSIDERATIONS: Deal implications, TSA needs
+- WORK ITEMS: Scope and effort level (not dollar amounts)
+
+The Costing Agent will use your findings to generate comprehensive cost estimates.
+Do NOT include dollar amounts or cost ranges in your findings.
 
 ## ANALYSIS EXECUTION ORDER
 

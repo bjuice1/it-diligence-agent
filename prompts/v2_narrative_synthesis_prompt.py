@@ -13,7 +13,7 @@ Output Structure:
 6. Risks and Synergies Tables
 """
 
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 
@@ -79,7 +79,7 @@ class ExecutiveNarrative:
             md += "\n**Where they're likely constrained**:\n"
             for c in story.get('constraints', []):
                 md += f"- {c}\n"
-            md += f"\n**Key dependencies & handoffs**:\n"
+            md += "\n**Key dependencies & handoffs**:\n"
             md += f"- *Upstream*: {', '.join(story.get('upstream_dependencies', []))}\n"
             md += f"- *Downstream*: {', '.join(story.get('downstream_dependents', []))}\n"
             md += f"\n**M&A Implication**: {story.get('mna_implication', '')}\n\n"

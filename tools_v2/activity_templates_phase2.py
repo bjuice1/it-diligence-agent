@@ -25,7 +25,7 @@ Cost Anchor Sources:
 - Industry benchmarks
 """
 
-from typing import Dict, List, Any
+from typing import Dict, List
 
 # Import shared modifiers from Phase 1
 from tools_v2.activity_templates_v2 import COMPLEXITY_MULTIPLIERS, INDUSTRY_MODIFIERS

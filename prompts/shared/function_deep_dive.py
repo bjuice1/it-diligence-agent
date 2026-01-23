@@ -10,7 +10,7 @@ with evidence, or explicitly flag gaps.
 """
 
 from typing import Dict, List, Any, Optional
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 
 

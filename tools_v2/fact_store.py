@@ -33,7 +33,6 @@ def _generate_timestamp() -> str:
     if not re.match(iso_pattern, timestamp):
         raise ValueError(f"Generated timestamp has invalid format: {timestamp}")
     return timestamp
-import json
 import logging
 import threading
 

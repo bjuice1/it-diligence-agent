@@ -14,7 +14,7 @@ Answer: YES, because quantification is deterministic.
 """
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional
 from enum import Enum
 import hashlib
 import json
@@ -82,9 +82,9 @@ class SeverityMatrix:
         """
         # Day-1 critical items are always at least HIGH
         if is_day1_critical:
-            base_severity = Severity.HIGH
+            _ = Severity.HIGH
         else:
-            base_severity = Severity.LOW
+            _ = Severity.LOW
 
         # Check cost impact band
         for band_name, (low, high) in SeverityMatrix.IMPACT_BANDS.items():

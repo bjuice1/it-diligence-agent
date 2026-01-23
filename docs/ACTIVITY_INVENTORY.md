@@ -1,7 +1,7 @@
 # IT Due Diligence Activity Inventory
 
-**Total Activities: 564**
-**Phases Complete: 9 of 10**
+**Total Activities: 502**
+**Phases Complete: 8 (One-Time Costs Only)**
 **Last Updated: January 2026**
 
 ---
@@ -16,11 +16,9 @@
 | 4 | Data & Migration | 61 | $4.6M - $13.3M |
 | 5 | Licensing | 53 | $2.8M - $8.9M |
 | 6 | Integration (Buyer) | 50 | $2.2M - $6.4M |
-| 7 | Operational Run-Rate | 62 | $5.1M - $20.2M (Annual) |
-| 8 | Compliance & Regulatory | 57 | $3.0M - $9.7M |
-| 9 | Vendor & Contract | 50 | $4.0M - $13.7M |
-| **Total One-Time** | | **502** | **$31.6M - $99.2M** |
-| **Total Annual** | | **62** | **$5.1M - $20.2M** |
+| 7 | Compliance & Regulatory | 57 | $3.0M - $9.7M |
+| 8 | Vendor & Contract | 50 | $4.0M - $13.7M |
+| **Total** | | **502** | **$31.6M - $99.2M** |
 
 ---
 
@@ -568,99 +566,7 @@
 
 ---
 
-## Phase 7: Operational Run-Rate (62 Activities)
-
-**Note:** Phase 7 costs are ANNUAL/RECURRING, not one-time separation costs.
-
-### Infrastructure Operations Workstream (13 Activities)
-
-| ID | Activity | So What | Cost Model | TSA |
-|----|----------|---------|------------|-----|
-| OPS-INF-001 | Cloud infrastructure (IaaS) | Annual cloud VM and storage costs. Largest recurring infrastructure line item for cloud-first orgs. | Per VM: $600-$1,800/yr | No |
-| OPS-INF-002 | Cloud platform services (PaaS) | Annual managed platform services (databases, containers, serverless). Growing cost category. | Base: $50K-$200K/yr | No |
-| OPS-INF-003 | On-premises datacenter | Annual facility, power, and equipment costs. Significant fixed cost base for on-prem shops. | Per rack: $15K-$50K/yr | No |
-| OPS-INF-010 | Colocation services | Annual colocation facility costs. Alternative to owned datacenters with shared facility model. | Per cabinet: $12K-$36K/yr | No |
-| OPS-INF-011 | Disaster recovery infrastructure | Annual DR environment costs. Required for business continuity but often underestimated. | Base + per VM: $200-$600/yr | No |
-| OPS-INF-012 | Backup infrastructure | Annual backup storage and software costs. Data growth drives increasing backup costs. | Per TB: $300-$1,200/yr | No |
-| OPS-INF-020 | Network operations (WAN) | Annual WAN circuit and management costs. Connects distributed sites to datacenter/cloud. | Per site: $8K-$24K/yr | No |
-| OPS-INF-021 | Network operations (LAN) | Annual LAN operations and equipment costs. Local network at each physical site. | Per site: $5K-$15K/yr | No |
-| OPS-INF-022 | Internet connectivity | Annual internet bandwidth costs. Critical for cloud and SaaS connectivity. | Per Mbps: $50-$200/yr | No |
-| OPS-INF-023 | SD-WAN services | Annual SD-WAN service subscription. Modern alternative to traditional MPLS networks. | Per site: $6K-$18K/yr | No |
-| OPS-INF-030 | Infrastructure monitoring | Annual monitoring platform costs. Visibility into infrastructure health and performance. | Base + per device: $20-$80/yr | No |
-| OPS-INF-031 | Log management and SIEM | Annual log aggregation and security monitoring. Required for security and compliance. | Per GB/day: $5K-$15K/yr | No |
-
-### Application Support Workstream (13 Activities)
-
-| ID | Activity | So What | Cost Model | TSA |
-|----|----------|---------|------------|-----|
-| OPS-APP-001 | SaaS application management | Annual SaaS admin and configuration costs. Management overhead for cloud applications. | Per app: $2K-$8K/yr | No |
-| OPS-APP-002 | Custom application support | Annual custom app maintenance and enhancement. Proprietary apps require dedicated support. | Per app: $15K-$60K/yr | No |
-| OPS-APP-003 | ERP operations (SAP) | Annual SAP Basis and functional support. SAP requires specialized expensive resources. | Base: $200K-$800K/yr | No |
-| OPS-APP-004 | ERP operations (Oracle) | Annual Oracle ERP operations support. Similar to SAP in complexity and cost. | Base: $150K-$600K/yr | No |
-| OPS-APP-010 | Web application hosting | Annual web app hosting and CDN costs. Customer-facing apps need reliable hosting. | Per app: $8K-$24K/yr | No |
-| OPS-APP-011 | API management | Annual API gateway and management costs. APIs require security and lifecycle management. | Base: $30K-$100K/yr | No |
-| OPS-APP-012 | Mobile application support | Annual mobile app maintenance and updates. Mobile apps need continuous updates for OS changes. | Per app: $15K-$50K/yr | No |
-| OPS-APP-020 | Database administration | Annual DBA services and management. Databases need ongoing performance tuning and maintenance. | Per database: $5K-$20K/yr | No |
-| OPS-APP-021 | Database licensing (Oracle) | Annual Oracle database license support. 22% of license cost—significant ongoing expense. | Per processor: $25K-$100K/yr | No |
-| OPS-APP-022 | Database licensing (SQL Server) | Annual SQL Server license and support. More predictable than Oracle but still material. | Per core: $3K-$15K/yr | No |
-| OPS-APP-040 | Application monitoring (APM) | Annual APM platform costs. Deep visibility into application performance and errors. | Base + per app: $1K-$4K/yr | No |
-| OPS-APP-041 | Synthetic monitoring | Annual synthetic monitoring checks. Proactive detection before users report problems. | Per check: $500-$2K/yr | No |
-| OPS-APP-042 | Real user monitoring | Annual RUM tracking costs. Actual user experience data for performance optimization. | Per user session: $0.50-$2/yr | No |
-
-### IT Staffing Workstream (14 Activities)
-
-| ID | Activity | So What | Cost Model | TSA |
-|----|----------|---------|------------|-----|
-| OPS-STF-001 | CIO/IT leadership | Annual IT executive leadership costs. CIO provides strategic direction and governance. | Base: $300K-$600K/yr | No |
-| OPS-STF-002 | IT management layer | Annual IT management team costs. Managers coordinate teams and drive execution. | Per manager: $150K-$250K/yr | No |
-| OPS-STF-003 | Enterprise architecture | Annual enterprise architect costs. Strategic technology planning and standards. | Per architect: $175K-$300K/yr | No |
-| OPS-STF-010 | Infrastructure engineers | Annual infrastructure team costs. Maintains servers, storage, and cloud environments. | Per FTE: $120K-$180K/yr | No |
-| OPS-STF-011 | Network engineers | Annual network team costs. Maintains WAN, LAN, and connectivity. | Per FTE: $110K-$170K/yr | No |
-| OPS-STF-012 | Security engineers | Annual security team costs. Manages security tools and responds to threats. | Per FTE: $130K-$200K/yr | No |
-| OPS-STF-020 | Application developers | Annual development team costs. Builds and maintains applications. | Per FTE: $120K-$200K/yr | No |
-| OPS-STF-021 | Application support analysts | Annual app support team costs. Handles incidents and user support for applications. | Per FTE: $80K-$130K/yr | No |
-| OPS-STF-022 | QA/Testing engineers | Annual QA team costs. Ensures application quality through testing. | Per FTE: $90K-$150K/yr | No |
-| OPS-STF-030 | Help desk staff (L1) | Annual L1 help desk costs. First-line user support for common issues. | Per FTE: $50K-$80K/yr | No |
-| OPS-STF-031 | Desktop support (L2) | Annual desktop support costs. Hands-on device support and troubleshooting. | Per FTE: $65K-$100K/yr | No |
-| OPS-STF-032 | IT service desk manager | Annual service desk management. Oversees help desk operations and SLAs. | Per FTE: $100K-$150K/yr | No |
-| OPS-STF-050 | IT project managers | Annual IT PM costs. Manages IT projects and initiatives. | Per FTE: $110K-$170K/yr | No |
-| OPS-STF-051 | IT business analysts | Annual BA costs. Translates business requirements to technical specs. | Per FTE: $90K-$140K/yr | No |
-
-### Managed Services Workstream (10 Activities)
-
-| ID | Activity | So What | Cost Model | TSA |
-|----|----------|---------|------------|-----|
-| OPS-MSP-001 | Full IT managed services | Annual fully outsourced IT costs. Alternative to internal IT staff for smaller orgs. | Per user: $150-$400/mo | No |
-| OPS-MSP-002 | Infrastructure managed services | Annual infrastructure MSP costs. Outsourced server and cloud management. | Per device: $50-$150/mo | No |
-| OPS-MSP-003 | Application managed services | Annual application MSP costs. Outsourced app support and maintenance. | Per app: $2K-$10K/mo | No |
-| OPS-MSP-010 | Managed detection and response (MDR) | Annual MDR service costs. Outsourced threat detection and response capabilities. | Per endpoint: $15-$50/mo | No |
-| OPS-MSP-011 | Managed SOC services | Annual outsourced SOC costs. 24x7 security monitoring without internal team. | Base: $10K-$40K/mo | No |
-| OPS-MSP-012 | Managed firewall services | Annual managed firewall costs. Outsourced firewall management and monitoring. | Per device: $200-$600/mo | No |
-| OPS-MSP-020 | Help desk outsourcing | Annual outsourced help desk costs. Alternative to internal L1 support staff. | Per user: $8-$25/mo | No |
-| OPS-MSP-021 | Desktop management outsourcing | Annual outsourced desktop management. Remote device management and support. | Per device: $20-$50/mo | No |
-| OPS-MSP-030 | NOC services | Annual network operations center costs. 24x7 network monitoring and response. | Base: $15K-$50K/mo | No |
-| OPS-MSP-031 | 24x7 on-call support | Annual after-hours support costs. Coverage outside business hours for emergencies. | Base: $8K-$25K/mo | No |
-
-### Support Contracts Workstream (12 Activities)
-
-| ID | Activity | So What | Cost Model | TSA |
-|----|----------|---------|------------|-----|
-| OPS-SUP-001 | Microsoft Premier/Unified Support | Annual Microsoft support contract. Access to Microsoft engineers for escalations. | Per user: $20-$60/yr | No |
-| OPS-SUP-002 | Oracle support (SW) | Annual Oracle software support. Required for patches and Oracle support access. | 22% of license: Per license | No |
-| OPS-SUP-003 | SAP Enterprise Support | Annual SAP support contract. Required for SAP updates and support access. | 22% of license: Per license | No |
-| OPS-SUP-010 | Cisco SmartNet | Annual Cisco support contract. Hardware replacement and software updates. | Per device: $300-$2K/yr | No |
-| OPS-SUP-011 | VMware SnS | Annual VMware support subscription. Required for updates and VMware support. | Per socket: $800-$3K/yr | No |
-| OPS-SUP-012 | Dell ProSupport | Annual Dell hardware support. Break-fix and parts replacement coverage. | Per device: $200-$800/yr | No |
-| OPS-SUP-013 | HPE support | Annual HPE hardware support. Similar to Dell for HP equipment. | Per device: $300-$1.2K/yr | No |
-| OPS-SUP-020 | Software assurance (SA) | Annual Microsoft SA enrollment. Version upgrade rights and benefits. | 25% of license: Per license | No |
-| OPS-SUP-021 | Third-party software maintenance | Annual vendor software maintenance. Updates and vendor support access. | 18-22% of license: Per license | No |
-| OPS-SUP-022 | Open source support (RHEL, etc.) | Annual enterprise Linux support. Commercial support for open-source platforms. | Per server: $1K-$3K/yr | No |
-| OPS-SUP-030 | Telecom carrier support | Annual telecom carrier support contracts. SLA-backed circuit support. | Per circuit: $500-$2K/yr | No |
-| OPS-SUP-031 | ISP and connectivity support | Annual ISP support contracts. Internet connectivity SLA and support. | Base: $5K-$20K/yr | No |
-
----
-
-## Phase 8: Compliance & Regulatory (57 Activities)
+## Phase 7: Compliance & Regulatory (57 Activities)
 
 ### Data Privacy Workstream (13 Activities)
 
@@ -746,7 +652,7 @@
 
 ---
 
-## Phase 9: Vendor & Contract (50 Activities)
+## Phase 8: Vendor & Contract (50 Activities)
 
 ### Contract Analysis Workstream (9 Activities)
 

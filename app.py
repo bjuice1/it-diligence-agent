@@ -12,7 +12,6 @@ import os
 import sys
 import json
 import tempfile
-import shutil
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, Any
@@ -362,9 +361,9 @@ try:
     from config_v2 import ANTHROPIC_API_KEY, OUTPUT_DIR, FACTS_DIR, FINDINGS_DIR, ensure_directories
     from tools_v2.fact_store import FactStore
     from tools_v2.reasoning_tools import ReasoningStore
-    from tools_v2.session import DDSession, DealType, DEAL_TYPE_CONFIG
+    from tools_v2.session import DealType, DEAL_TYPE_CONFIG
     from tools_v2.database import (
-        init_database, create_deal, get_deal, list_deals, delete_deal,
+        create_deal, list_deals, delete_deal,
         save_deal_complete, load_fact_store, load_reasoning_store, get_deal_summary
     )
     CONFIG_LOADED = True
@@ -401,7 +400,7 @@ def test_api_connection() -> tuple[bool, str]:
         if not api_key:
             try:
                 api_key = st.secrets.get('ANTHROPIC_API_KEY')
-            except:
+            except Exception:
                 pass
 
         if not api_key:
@@ -409,7 +408,7 @@ def test_api_connection() -> tuple[bool, str]:
 
         client = anthropic.Anthropic(api_key=api_key)
         # Quick test call
-        response = client.messages.create(
+        client.messages.create(
             model="claude-3-5-haiku-20241022",
             max_tokens=10,
             messages=[{"role": "user", "content": "Say OK"}]
@@ -495,7 +494,7 @@ def load_documents_with_entity(input_dir: Path) -> str:
             try:
                 parsed = parser.parse_file(pdf_file)
                 combined_text.append(f"\n# Document: {pdf_file.name}")
-                combined_text.append(f"# Entity: TARGET")
+                combined_text.append("# Entity: TARGET")
                 combined_text.append(parsed.raw_text)
                 combined_text.append("\n" + "-" * 40 + "\n")
             except Exception as e:
@@ -507,7 +506,7 @@ def load_documents_with_entity(input_dir: Path) -> str:
                 with open(txt_file, "r", encoding='utf-8') as f:
                     content = f.read()
                 combined_text.append(f"\n# Document: {txt_file.name}")
-                combined_text.append(f"# Entity: TARGET")
+                combined_text.append("# Entity: TARGET")
                 combined_text.append(content)
                 combined_text.append("\n" + "-" * 40 + "\n")
             except Exception as e:
@@ -526,7 +525,7 @@ def load_documents_with_entity(input_dir: Path) -> str:
             try:
                 parsed = parser.parse_file(pdf_file)
                 combined_text.append(f"\n# Document: {pdf_file.name}")
-                combined_text.append(f"# Entity: BUYER")
+                combined_text.append("# Entity: BUYER")
                 combined_text.append(parsed.raw_text)
                 combined_text.append("\n" + "-" * 40 + "\n")
             except Exception as e:
@@ -538,7 +537,7 @@ def load_documents_with_entity(input_dir: Path) -> str:
                 with open(txt_file, "r", encoding='utf-8') as f:
                     content = f.read()
                 combined_text.append(f"\n# Document: {txt_file.name}")
-                combined_text.append(f"# Entity: BUYER")
+                combined_text.append("# Entity: BUYER")
                 combined_text.append(content)
                 combined_text.append("\n" + "-" * 40 + "\n")
             except Exception as e:
@@ -560,9 +559,7 @@ def run_analysis(
         run_parallel_discovery,
         run_parallel_reasoning,
         merge_reasoning_stores,
-        run_coverage_analysis,
         run_vdr_generation,
-        run_synthesis,
     )
     from tools_v2.session import DealContext
     from tools_v2.html_report import generate_html_report
@@ -591,7 +588,7 @@ def run_analysis(
         results["doc_length"] = len(document_text)
         print(f"\n[DEBUG] Document text length: {len(document_text)} characters")
         if len(document_text) < 500:
-            print(f"[DEBUG] WARNING: Very short document text!")
+            print("[DEBUG] WARNING: Very short document text!")
             print(f"[DEBUG] Content preview: {document_text[:500]}")
             results["errors"].append(f"Document text very short ({len(document_text)} chars) - check document loading")
 
@@ -880,7 +877,7 @@ def display_results(results: Dict[str, Any]):
                     integration_badge = "🔗 Integration" if risk.integration_dependent else "⚡ Standalone"
 
                     with st.expander(f"{severity_color} {risk.title} ({risk.severity.upper()}) - {integration_badge}"):
-                        st.markdown(f"**Description:**")
+                        st.markdown("**Description:**")
                         st.write(risk.description)
 
                         # Show reasoning prominently
@@ -892,7 +889,7 @@ def display_results(results: Dict[str, Any]):
                         st.markdown("---")
                         col1, col2 = st.columns(2)
                         with col1:
-                            st.markdown(f"**Mitigation:**")
+                            st.markdown("**Mitigation:**")
                             st.write(risk.mitigation)
                         with col2:
                             st.markdown(f"**Confidence:** {risk.confidence}")
@@ -918,7 +915,7 @@ def display_results(results: Dict[str, Any]):
                             priority_icon = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}.get(wi.priority, "⚪")
 
                             with st.expander(f"{priority_icon} {wi.title} | {wi.cost_estimate} | {wi.owner_type}"):
-                                st.markdown(f"**Description:**")
+                                st.markdown("**Description:**")
                                 st.write(wi.description)
 
                                 # Show reasoning prominently
@@ -970,11 +967,11 @@ def display_results(results: Dict[str, Any]):
 
                     for sc in considerations:
                         with st.expander(f"{sc.title}"):
-                            st.markdown(f"**Observation:**")
+                            st.markdown("**Observation:**")
                             st.write(sc.description)
 
                             st.markdown("---")
-                            st.markdown(f"**📊 Deal Implication:**")
+                            st.markdown("**📊 Deal Implication:**")
                             st.warning(sc.implication)
 
                             # Show reasoning prominently
@@ -1015,11 +1012,11 @@ def display_results(results: Dict[str, Any]):
                     for rec in recs:
                         urgency_color = {"immediate": "🔴", "pre-close": "🟠", "post-close": "🟢"}.get(rec.urgency, "⚪")
                         with st.expander(f"{urgency_color} {rec.title} ({rec.urgency})"):
-                            st.markdown(f"**Recommendation:**")
+                            st.markdown("**Recommendation:**")
                             st.write(rec.description)
 
                             st.markdown("---")
-                            st.markdown(f"**📊 Rationale:**")
+                            st.markdown("**📊 Rationale:**")
                             st.warning(rec.rationale)
 
                             # Show reasoning prominently

@@ -17,11 +17,8 @@ from tools_v2.activity_templates_v2 import (
     IDENTITY_TEMPLATES,
     EMAIL_TEMPLATES,
     INFRASTRUCTURE_TEMPLATES,
-    COMPLEXITY_MULTIPLIERS,
-    INDUSTRY_MODIFIERS,
     get_phase1_templates,
     get_activity_by_id,
-    get_activities_by_phase,
     calculate_activity_cost,
 )
 
@@ -167,7 +164,7 @@ def test_complexity_modifiers():
             activity, user_count=1000, complexity=complexity, industry=industry
         )
 
-        actual_mult = low / (base_low / 1.0)  # Approximate
+        _ = low / (base_low / 1.0)  # Approximate
         print(f"    {complexity}/{industry}: ${low:,.0f}-${high:,.0f}")
 
     return True

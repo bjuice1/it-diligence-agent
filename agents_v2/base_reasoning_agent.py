@@ -17,7 +17,6 @@ from typing import Dict, List, Optional, Any
 from abc import ABC, abstractmethod
 import json
 import logging
-from datetime import datetime
 from time import time
 from dataclasses import dataclass
 
@@ -250,7 +249,7 @@ class BaseReasoningAgent(ABC):
             citation_coverage = (self.metrics.facts_cited / domain_facts['fact_count'] * 100
                                if domain_facts['fact_count'] > 0 else 0)
 
-            print(f"\nReasoning Results:")
+            print("\nReasoning Results:")
             print(f"  Risks: {self.metrics.risks_identified}")
             print(f"  Strategic considerations: {findings['summary']['strategic_considerations']}")
             print(f"  Work items: {self.metrics.work_items_created}")
@@ -379,7 +378,7 @@ class BaseReasoningAgent(ABC):
                 self.metrics.errors += 1
                 self.logger.error(f"Circuit breaker open: {e}")
                 raise
-            except anthropic.RateLimitError as e:
+            except anthropic.RateLimitError:
                 if attempt < max_retries - 1:
                     wait_time = API_RETRY_BACKOFF_BASE ** attempt
                     self.logger.warning(f"Rate limit hit, waiting {wait_time}s...")

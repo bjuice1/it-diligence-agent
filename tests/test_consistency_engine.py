@@ -5,7 +5,6 @@ These tests verify that the rule-based scoring and deterministic
 calculations produce stable, predictable outputs.
 """
 
-import pytest
 from tools_v2.consistency_engine import (
     categorize_work_item,
     calculate_work_item_cost,
@@ -21,10 +20,7 @@ from tools_v2.consistency_engine import (
     get_industry_factor,
     get_geography_factor,
     get_maturity_factor,
-    SIZE_MULTIPLIERS,
-    INDUSTRY_FACTORS,
     COST_TABLE,
-    SEVERITY_SCORES
 )
 
 
@@ -75,7 +71,7 @@ class TestCostCalculation:
         """Different phase formats should normalize correctly."""
         cost1 = calculate_work_item_cost("Task", "", "Day_1")
         cost2 = calculate_work_item_cost("Task", "", "day_1")
-        cost3 = calculate_work_item_cost("Task", "", "day1")
+        _ = calculate_work_item_cost("Task", "", "day1")
         # All should produce same result
         assert cost1 == cost2
 

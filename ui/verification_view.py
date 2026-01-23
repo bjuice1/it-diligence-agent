@@ -13,8 +13,6 @@ Components:
 import streamlit as st
 import pandas as pd
 from pathlib import Path
-from typing import Optional, Dict, Any, List
-from datetime import datetime
 
 # Import our modules
 import sys
@@ -153,7 +151,7 @@ def render_verification_queue(fact_store: FactStore, session_dir: Path):
                             facts_path = session_dir / "facts.json"
                             if facts_path.exists():
                                 fact_store.save(str(facts_path))
-                            st.success(f"Verified!")
+                            st.success("Verified!")
                             st.rerun()
                 else:
                     st.caption("Enter name to verify")

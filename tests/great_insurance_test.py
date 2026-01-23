@@ -16,7 +16,6 @@ from tools_v2.evidence_query import EvidenceStore, Evidence, EvidenceType, Query
 from prompts.shared.function_deep_dive import (
     get_function_criteria,
     get_all_criteria,
-    assess_function_completeness
 )
 
 
@@ -239,7 +238,7 @@ def populate_evidence_store() -> EvidenceStore:
         evidence_type=EvidenceType.FACT,
         domain="infrastructure",
         function="Data Center",
-        content=f"4 data centers: 2 colocation (Dallas, Seattle), 2 owned (Phoenix, Atlanta)",
+        content="4 data centers: 2 colocation (Dallas, Seattle), 2 owned (Phoenix, Atlanta)",
         details={"dc_count": 4, "colo": 2, "owned": 2},
         tags=["dc", "hosting"],
     ))
@@ -426,8 +425,8 @@ def generate_executive_summary(store: EvidenceStore) -> List[str]:
     bullets = []
 
     # Org shape
-    org_facts = store.query_by_domain("organization")
-    bullets.append(f"Great Insurance operates with 141 IT staff (13% outsourced) across 7 teams, supporting 2,296 employees (F-ORG-001)")
+    _ = store.query_by_domain("organization")
+    bullets.append("Great Insurance operates with 141 IT staff (13% outsourced) across 7 teams, supporting 2,296 employees (F-ORG-001)")
 
     # Key risks
     risks = store.query_by_type(EvidenceType.RISK)

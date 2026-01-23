@@ -21,7 +21,6 @@ from tools_v2.activity_templates_phase2 import (
     get_phase2_activity_by_id,
     calculate_phase2_activity_cost,
 )
-from tools_v2.activity_templates_v2 import COMPLEXITY_MULTIPLIERS, INDUSTRY_MODIFIERS
 
 
 def test_template_structure():
@@ -335,7 +334,7 @@ def test_combined_scenario():
             for acts in cat.values()
         )
 
-        print(f"\n  Activity counts:")
+        print("\n  Activity counts:")
         print(f"    Phase 1: {p1_count} activities")
         print(f"    Phase 2: {p2_count} activities")
         print(f"    Total: {p1_count + p2_count} activities")

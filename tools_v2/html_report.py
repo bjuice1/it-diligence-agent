@@ -11,14 +11,13 @@ COST CALCULATION:
 """
 
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import List
 from datetime import datetime
 from tools_v2.fact_store import FactStore
 from tools_v2.reasoning_tools import ReasoningStore
 from tools_v2.reasoning_tools import COST_RANGE_VALUES
 from tools_v2.consistency_engine import (
     calculate_total_costs,
-    calculate_complexity_score,
     CompanyProfile,
     categorize_work_item
 )
@@ -123,7 +122,7 @@ def _build_html(
     cost_by_phase = cost_result["by_phase"]
     total_low = cost_result["total"]["low"]
     total_high = cost_result["total"]["high"]
-    cost_methodology = cost_result.get("methodology", {})
+    _ = cost_result.get("methodology", {})
     cost_multiplier = cost_result.get("multiplier_applied", 1.0)
 
     # Get company profile breakdown for display
@@ -896,7 +895,7 @@ def _build_work_items_section(
     domains = sorted(set(wi.domain for wi in work_items))
     phases = ['Day_1', 'Day_100', 'Post_100']
     owners = sorted(set(wi.owner_type for wi in work_items))
-    cost_estimates = sorted(set(wi.cost_estimate for wi in work_items))
+    _ = sorted(set(wi.cost_estimate for wi in work_items))
 
     # Build filter dropdowns
     domain_options = '<option value="">All Domains</option>' + ''.join(
@@ -1008,7 +1007,7 @@ def _synthesize_fact_statement(fact) -> str:
     item = fact.item
     details = fact.details or {}
     category = fact.category
-    domain = fact.domain
+    _ = fact.domain
 
     # Helper to format currency
     def format_currency(val):
@@ -1019,7 +1018,7 @@ def _synthesize_fact_statement(fact) -> str:
             # Try to parse
             try:
                 val = float(val.replace(',', '').replace('$', ''))
-            except:
+            except (ValueError, AttributeError):
                 return val
         if isinstance(val, (int, float)):
             if val >= 1_000_000:

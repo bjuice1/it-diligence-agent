@@ -11,15 +11,12 @@ This phase provides:
 This is the capstone module that ties all phases together.
 """
 
-from typing import Dict, List, Tuple, Any, Optional
-import json
+from typing import Dict, List, Any, Optional
 
 # Import all phase modules
 from tools_v2.activity_templates_v2 import (
     get_phase1_templates,
     calculate_activity_cost,
-    COMPLEXITY_MULTIPLIERS,
-    INDUSTRY_MODIFIERS,
 )
 from tools_v2.activity_templates_phase2 import (
     get_phase2_templates,
@@ -41,20 +38,14 @@ from tools_v2.activity_templates_phase6 import (
     get_phase6_templates,
     calculate_phase6_activity_cost,
 )
-from tools_v2.activity_templates_phase7 import (
-    get_phase7_templates,
-    calculate_phase7_activity_cost,
-    calculate_it_staffing_needs,
-)
+# Phase 7 (Operational Run-Rate) removed - focusing on one-time costs only
 from tools_v2.activity_templates_phase8 import (
     get_phase8_templates,
     calculate_phase8_activity_cost,
-    get_regulatory_requirements,
 )
 from tools_v2.activity_templates_phase9 import (
     get_phase9_templates,
     calculate_phase9_activity_cost,
-    estimate_contract_transition_costs,
 )
 
 
@@ -76,9 +67,8 @@ def get_all_templates() -> Dict[str, Dict]:
         "phase4_end_user": get_phase4_templates(),
         "phase5_security": get_phase5_templates(),
         "phase6_data": get_phase6_templates(),
-        "phase7_operations": get_phase7_templates(),
-        "phase8_compliance": get_phase8_templates(),
-        "phase9_vendor": get_phase9_templates(),
+        "phase7_compliance": get_phase8_templates(),
+        "phase8_vendor": get_phase9_templates(),
     }
 
 
@@ -150,6 +140,7 @@ def get_activity_count_by_phase() -> Dict[str, int]:
 # =============================================================================
 
 # Deal type profiles with typical activity scopes
+# All costs are ONE-TIME separation/transaction costs only
 DEAL_PROFILES = {
     "carveout_small": {
         "description": "Small carveout (< 500 users)",
@@ -163,8 +154,7 @@ DEAL_PROFILES = {
         "complexity": "simple",
         "phases_included": ["phase1_foundation", "phase2_applications", "phase3_infrastructure",
                           "phase4_end_user", "phase5_security", "phase6_data",
-                          "phase8_compliance", "phase9_vendor"],
-        "annual_ops_needed": True,
+                          "phase7_compliance", "phase8_vendor"],
     },
     "carveout_medium": {
         "description": "Medium carveout (500-2,000 users)",
@@ -178,8 +168,7 @@ DEAL_PROFILES = {
         "complexity": "moderate",
         "phases_included": ["phase1_foundation", "phase2_applications", "phase3_infrastructure",
                           "phase4_end_user", "phase5_security", "phase6_data",
-                          "phase8_compliance", "phase9_vendor"],
-        "annual_ops_needed": True,
+                          "phase7_compliance", "phase8_vendor"],
     },
     "carveout_large": {
         "description": "Large carveout (2,000-10,000 users)",
@@ -193,8 +182,7 @@ DEAL_PROFILES = {
         "complexity": "complex",
         "phases_included": ["phase1_foundation", "phase2_applications", "phase3_infrastructure",
                           "phase4_end_user", "phase5_security", "phase6_data",
-                          "phase8_compliance", "phase9_vendor"],
-        "annual_ops_needed": True,
+                          "phase7_compliance", "phase8_vendor"],
     },
     "carveout_enterprise": {
         "description": "Enterprise carveout (10,000+ users)",
@@ -208,8 +196,7 @@ DEAL_PROFILES = {
         "complexity": "highly_complex",
         "phases_included": ["phase1_foundation", "phase2_applications", "phase3_infrastructure",
                           "phase4_end_user", "phase5_security", "phase6_data",
-                          "phase8_compliance", "phase9_vendor"],
-        "annual_ops_needed": True,
+                          "phase7_compliance", "phase8_vendor"],
     },
     "bolt_on_small": {
         "description": "Small bolt-on acquisition",
@@ -222,8 +209,7 @@ DEAL_PROFILES = {
         "contract_count": 15,
         "complexity": "simple",
         "phases_included": ["phase1_foundation", "phase2_applications", "phase3_infrastructure",
-                          "phase4_end_user", "phase5_security", "phase6_data", "phase9_vendor"],
-        "annual_ops_needed": False,  # Usually absorb into acquirer ops
+                          "phase4_end_user", "phase5_security", "phase6_data", "phase8_vendor"],
     },
     "bolt_on_medium": {
         "description": "Medium bolt-on acquisition",
@@ -237,8 +223,7 @@ DEAL_PROFILES = {
         "complexity": "moderate",
         "phases_included": ["phase1_foundation", "phase2_applications", "phase3_infrastructure",
                           "phase4_end_user", "phase5_security", "phase6_data",
-                          "phase8_compliance", "phase9_vendor"],
-        "annual_ops_needed": False,
+                          "phase7_compliance", "phase8_vendor"],
     },
     "standalone": {
         "description": "Standalone company acquisition",
@@ -252,8 +237,7 @@ DEAL_PROFILES = {
         "complexity": "moderate",
         "phases_included": ["phase1_foundation", "phase2_applications", "phase3_infrastructure",
                           "phase4_end_user", "phase5_security", "phase6_data",
-                          "phase7_operations", "phase8_compliance", "phase9_vendor"],
-        "annual_ops_needed": True,  # Keep ops as-is
+                          "phase7_compliance", "phase8_vendor"],
     },
     "integration_full": {
         "description": "Full integration into acquirer",
@@ -266,8 +250,8 @@ DEAL_PROFILES = {
         "contract_count": 120,
         "complexity": "complex",
         "phases_included": ["phase1_foundation", "phase2_applications", "phase3_infrastructure",
-                          "phase4_end_user", "phase5_security", "phase6_data", "phase9_vendor"],
-        "annual_ops_needed": False,  # Will use acquirer ops
+                          "phase4_end_user", "phase5_security", "phase6_data",
+                          "phase7_compliance", "phase8_vendor"],
     },
 }
 
@@ -276,19 +260,17 @@ def estimate_deal_costs(
     deal_type: str = "carveout_medium",
     industry: str = "standard",
     custom_params: Dict = None,
-    include_annual_ops: bool = None,
 ) -> Dict[str, Any]:
     """
-    Estimate total IT M&A costs for a deal scenario.
+    Estimate total IT M&A one-time costs for a deal scenario.
 
     Args:
         deal_type: One of DEAL_PROFILES keys
         industry: Industry for cost modifiers
         custom_params: Override default parameters
-        include_annual_ops: Override whether to include Phase 7 annual ops
 
     Returns:
-        Dict with cost breakdown by phase and total
+        Dict with cost breakdown by phase and total (all one-time costs)
     """
     if deal_type not in DEAL_PROFILES:
         raise ValueError(f"Unknown deal type: {deal_type}. Valid: {list(DEAL_PROFILES.keys())}")
@@ -296,12 +278,6 @@ def estimate_deal_costs(
     profile = DEAL_PROFILES[deal_type].copy()
     if custom_params:
         profile.update(custom_params)
-
-    # Determine if annual ops should be included
-    if include_annual_ops is not None:
-        include_ops = include_annual_ops
-    else:
-        include_ops = profile.get("annual_ops_needed", True)
 
     # Build base parameters for cost calculation
     base_params = {
@@ -325,9 +301,8 @@ def estimate_deal_costs(
         "phase4_end_user": ["user_count", "database_count", "site_count", "complexity", "industry"],
         "phase5_security": ["user_count", "database_count", "vm_count", "app_count", "complexity", "industry"],
         "phase6_data": ["user_count", "site_count", "vm_count", "app_count", "complexity", "industry"],
-        "phase7_operations": ["user_count", "vm_count", "database_count", "app_count", "site_count", "complexity", "industry"],
-        "phase8_compliance": ["user_count", "vendor_count", "site_count", "complexity", "industry"],
-        "phase9_vendor": ["contract_count", "vendor_count", "complexity", "industry"],
+        "phase7_compliance": ["user_count", "vendor_count", "site_count", "complexity", "industry"],
+        "phase8_vendor": ["contract_count", "vendor_count", "complexity", "industry"],
     }
 
     # Map phases to their calculation functions
@@ -338,9 +313,8 @@ def estimate_deal_costs(
         "phase4_end_user": (get_phase4_templates, calculate_phase4_activity_cost),
         "phase5_security": (get_phase5_templates, calculate_phase5_activity_cost),
         "phase6_data": (get_phase6_templates, calculate_phase6_activity_cost),
-        "phase7_operations": (get_phase7_templates, calculate_phase7_activity_cost),
-        "phase8_compliance": (get_phase8_templates, calculate_phase8_activity_cost),
-        "phase9_vendor": (get_phase9_templates, calculate_phase9_activity_cost),
+        "phase7_compliance": (get_phase8_templates, calculate_phase8_activity_cost),
+        "phase8_vendor": (get_phase9_templates, calculate_phase9_activity_cost),
     }
 
     # Store all params for reference but use phase-specific when calculating
@@ -352,16 +326,11 @@ def estimate_deal_costs(
         "parameters": params,
         "phases": {},
         "one_time_costs": {"low": 0, "high": 0},
-        "annual_costs": {"low": 0, "high": 0},
         "total_costs": {"low": 0, "high": 0},
     }
 
     # Calculate costs for each included phase
     phases_to_include = profile.get("phases_included", list(phase_calculators.keys()))
-
-    # Skip Phase 7 if not including annual ops
-    if not include_ops and "phase7_operations" in phases_to_include:
-        phases_to_include = [p for p in phases_to_include if p != "phase7_operations"]
 
     for phase_name in phases_to_include:
         if phase_name not in phase_calculators:
@@ -392,16 +361,12 @@ def estimate_deal_costs(
             "activities": activity_count,
         }
 
-        # Phase 7 is annual, others are one-time
-        if phase_name == "phase7_operations":
-            results["annual_costs"]["low"] += phase_low
-            results["annual_costs"]["high"] += phase_high
-        else:
-            results["one_time_costs"]["low"] += phase_low
-            results["one_time_costs"]["high"] += phase_high
+        # All costs are one-time
+        results["one_time_costs"]["low"] += phase_low
+        results["one_time_costs"]["high"] += phase_high
 
-    results["total_costs"]["low"] = results["one_time_costs"]["low"] + results["annual_costs"]["low"]
-    results["total_costs"]["high"] = results["one_time_costs"]["high"] + results["annual_costs"]["high"]
+    results["total_costs"]["low"] = results["one_time_costs"]["low"]
+    results["total_costs"]["high"] = results["one_time_costs"]["high"]
 
     return results
 
@@ -648,7 +613,7 @@ def generate_executive_summary(
     industry: str = "standard",
 ) -> str:
     """
-    Generate executive summary of IT M&A costs.
+    Generate executive summary of IT M&A one-time costs.
 
     Args:
         deal_type: Deal scenario
@@ -678,11 +643,8 @@ def generate_executive_summary(
         f"  Vendors: {estimate['parameters']['vendor_count']}",
         f"  Contracts: {estimate['parameters']['contract_count']}",
         "",
-        "COST SUMMARY:",
-        f"  One-Time Costs: ${estimate['one_time_costs']['low']:,.0f} - ${estimate['one_time_costs']['high']:,.0f}",
-        f"  Annual Run-Rate: ${estimate['annual_costs']['low']:,.0f} - ${estimate['annual_costs']['high']:,.0f}",
-        "",
-        f"  TOTAL (Year 1): ${estimate['total_costs']['low']:,.0f} - ${estimate['total_costs']['high']:,.0f}",
+        "COST SUMMARY (One-Time):",
+        f"  TOTAL: ${estimate['total_costs']['low']:,.0f} - ${estimate['total_costs']['high']:,.0f}",
         "",
         "PHASE BREAKDOWN:",
     ]
@@ -700,19 +662,18 @@ def generate_executive_summary(
 
 
 def get_phase_summary() -> Dict[str, Dict]:
-    """Get summary of all phases."""
+    """Get summary of all phases (one-time costs only)."""
     counts = get_activity_count_by_phase()
 
     phase_info = {
-        "phase1_foundation": "Discovery & Planning",
-        "phase2_applications": "Application Portfolio",
-        "phase3_infrastructure": "Infrastructure & Network",
-        "phase4_end_user": "End User Computing",
-        "phase5_security": "Security & Identity",
-        "phase6_data": "Data & Integration",
-        "phase7_operations": "Operational Run-Rate (Annual)",
-        "phase8_compliance": "Compliance & Regulatory",
-        "phase9_vendor": "Vendor & Contract",
+        "phase1_foundation": "Core Infrastructure",
+        "phase2_applications": "Network & Security",
+        "phase3_infrastructure": "Applications",
+        "phase4_end_user": "Data & Migration",
+        "phase5_security": "Licensing",
+        "phase6_data": "Integration (Buyer)",
+        "phase7_compliance": "Compliance & Regulatory",
+        "phase8_vendor": "Vendor & Contract",
     }
 
     summary = {}

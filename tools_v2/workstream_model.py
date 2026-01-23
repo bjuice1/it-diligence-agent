@@ -17,7 +17,7 @@ Each workstream is self-contained:
 - Timeline
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple, Any
 from enum import Enum
 import json

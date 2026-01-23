@@ -15,8 +15,7 @@ Uses the consistency_engine for deterministic calculations.
 import streamlit as st
 import pandas as pd
 from pathlib import Path
-from typing import Dict, Any, List, Optional
-import json
+from typing import Dict, Any, List
 from datetime import datetime
 
 # Import our modules
@@ -28,23 +27,11 @@ try:
     from tools_v2.reasoning_tools import ReasoningStore
     from tools_v2.consistency_engine import (
         generate_consistency_report,
-        calculate_complexity_score,
-        calculate_total_costs,
-        get_top_risks,
-        calculate_confidence,
-        check_complexity_flags,
-        CompanyProfile,
-        SIZE_MULTIPLIERS,
-        INDUSTRY_FACTORS,
-        GEOGRAPHY_FACTORS,
-        IT_MATURITY_FACTORS
+        CompanyProfile
     )
     from tools_v2.risk_triage import (
         triage_all_risks,
-        risk_to_open_question,
-        risk_to_activity,
-        get_triage_summary,
-        FindingCategory
+        get_triage_summary
     )
     TRIAGE_AVAILABLE = True
 except ImportError as e:

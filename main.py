@@ -36,7 +36,7 @@ logging.basicConfig(
 sys.path.insert(0, str(Path(__file__).parent))
 
 from config import INPUT_DIR, OUTPUT_DIR, ANTHROPIC_API_KEY
-from ingestion.pdf_parser import parse_pdfs, PDFParser
+from ingestion.pdf_parser import parse_pdfs
 from tools.analysis_tools import AnalysisStore
 from agents import (
     InfrastructureAgent,
@@ -53,17 +53,15 @@ from storage import Database, Repository, Document, AnalysisRun
 from storage.models import generate_id, now_iso
 
 # Cost refinement module
-from agents.cost_refinement_agent import refine_all_work_items, CostRefinementAgent
+from agents.cost_refinement_agent import refine_all_work_items
 
 # Review agent module
-from agents.review_agent import ReviewAgent, review_findings
+from agents.review_agent import ReviewAgent
 
 # Question workflow module
 from tools.question_workflow import (
     QuestionWorkflow,
-    DocumentQuestionParser,
     export_questions_to_excel,
-    import_answers_from_excel
 )
 
 # Excel export module
@@ -588,7 +586,7 @@ Existing findings summary (first 10 of each type):
         successful_agents = 0
         for result in agent_results:
             if result['success'] and result['store']:
-                merge_counts = store.merge_from(result['store'])
+                store.merge_from(result['store'])
                 store.add_reasoning_chain(result['domain'], result['reasoning_chain'])
                 successful_agents += 1
 
@@ -623,7 +621,7 @@ Existing findings summary (first 10 of each type):
 
                 # Log review summary
                 summary = review_results.get('summary', {})
-                print(f"\n📊 Findings Review Summary:")
+                print("\n📊 Findings Review Summary:")
                 print(f"   • Findings reviewed: {summary.get('total_reviewed', 0)}")
                 print(f"   • Validated: {summary.get('validated', 0)}")
                 print(f"   • Flagged for attention: {summary.get('flagged', 0)}")
@@ -651,7 +649,7 @@ Existing findings summary (first 10 of each type):
                 q_summary = review_results.get('question_summary', {})
                 metrics = review_results.get('metrics', {})
                 if q_summary or metrics.get('questions_reviewed', 0) > 0:
-                    print(f"\n❓ Question Workflow Summary:")
+                    print("\n❓ Question Workflow Summary:")
                     print(f"   • Open questions checked: {metrics.get('questions_reviewed', 0)}")
                     print(f"   • Questions closed (answered): {metrics.get('questions_closed', 0)}")
                     print(f"   • New questions created: {metrics.get('questions_created', 0)}")
@@ -773,7 +771,7 @@ Existing findings summary (first 10 of each type):
                     context=refinement_context
                 )
 
-                print(f"\n✓ Cost refinement complete:")
+                print("\n✓ Cost refinement complete:")
                 print(f"   • Processed: {cost_store.work_items_processed}")
                 print(f"   • Succeeded: {cost_store.work_items_succeeded}")
                 print(f"   • Failed: {cost_store.work_items_failed}")
@@ -804,7 +802,7 @@ Existing findings summary (first 10 of each type):
     print("\n💾 Persisting to database...")
     try:
         db_counts = store.save_to_database()
-        print(f"✓ Database save complete")
+        print("✓ Database save complete")
 
         # Mark run as completed
         repository.complete_run(run_id, summary={
@@ -835,7 +833,7 @@ Existing findings summary (first 10 of each type):
     print(f"Document ID: {document_id}")
     print(f"Outputs saved to: {output_subdir}")
 
-    print(f"\n📊 Total findings (in-memory):")
+    print("\n📊 Total findings (in-memory):")
     print(f"  • Current State: {len(final_output.get('current_state', []))}")
     print(f"  • Assumptions: {len(final_output['assumptions'])}")
     print(f"  • Gaps: {len(final_output['gaps'])}")
@@ -845,7 +843,7 @@ Existing findings summary (first 10 of each type):
     print(f"  • Work Items: {len(final_output['work_items'])}")
     print(f"  • Recommendations: {len(final_output['recommendations'])}")
 
-    print(f"\n💾 Persisted to database:")
+    print("\n💾 Persisted to database:")
     for entity_type, count in db_counts.items():
         if count > 0:
             print(f"  • {entity_type.replace('_', ' ').title()}: {count}")
@@ -1165,7 +1163,7 @@ Question Workflow:
             summary = repository.get_run_summary(new_run_id)
             counts = summary.get('counts', {})
             print(f"  Copied: {counts.get('risks', 0)} risks, {counts.get('gaps', 0)} gaps, {counts.get('work_items', 0)} work items")
-            print(f"\nTo continue analysis on this branch:")
+            print("\nTo continue analysis on this branch:")
             print(f"  python main.py --incremental --run-id {new_run_id}")
         except Exception as e:
             print(f"❌ Error branching session: {e}")
@@ -1300,7 +1298,7 @@ Question Workflow:
             print(f"\n✓ Questions exported to: {result_path}")
             print(f"  Open questions: {len([q for q in questions if q.get('status') not in ['answered', 'closed']])}")
             print(f"  Answered questions: {len([q for q in questions if q.get('status') in ['answered', 'closed']])}")
-            print(f"\nTo import answers:")
+            print("\nTo import answers:")
             print(f"  python main.py --import-answers {result_path} --import-run-id {run_id}")
 
         except Exception as e:
@@ -1336,7 +1334,7 @@ Question Workflow:
         workflow = QuestionWorkflow(repository)
         results = workflow.import_answers(file_path, run_id)
 
-        print(f"\n✓ Import complete:")
+        print("\n✓ Import complete:")
         print(f"  Questions found: {results['questions_found']}")
         print(f"  Answers imported: {results['answers_imported']}")
         if results['errors']:
@@ -1398,7 +1396,7 @@ Question Workflow:
             result = export_findings_to_excel(run_id, repository, output_path)
 
             print(f"\n✓ Findings exported to: {result['output_path']}")
-            print(f"\n📋 Export Summary:")
+            print("\n📋 Export Summary:")
             for sheet, count in result['counts'].items():
                 if count > 0:
                     print(f"  • {sheet}: {count}")

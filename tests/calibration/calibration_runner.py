@@ -15,8 +15,7 @@ import json
 import sys
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, List, Any, Optional
-from dataclasses import asdict
+from typing import Dict, Any
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -99,7 +98,7 @@ that may face capacity constraints during integration or separation activities.
             story["constraints"].append("Mixed staffing model may complicate transition")
 
         # Add shared service constraint for carveouts
-        if team.get("shared_with_parent") or team.get("dedicated") == False:
+        if team.get("shared_with_parent") or team.get("dedicated") is False:
             story["constraints"].append("Shared with parent - separation required")
             story["mna_implication"] = "Day-1 risk: Function depends on parent shared services"
 
@@ -373,15 +372,12 @@ def run_calibration(
 
     # Check against minimum scores
     print("\nMinimum Score Check:")
-    all_pass = True
     for dim, min_score in test_case.minimum_scores.items():
         actual = result.dimension_scores.get(dim)
         if actual:
             passed = actual.score >= min_score
             status = "✅" if passed else "❌"
             print(f"  {status} {dim}: {actual.score:.1f} >= {min_score} required")
-            if not passed:
-                all_pass = False
 
     # Save outputs
     if save_output:

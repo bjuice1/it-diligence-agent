@@ -28,10 +28,9 @@ Usage:
 
 import json
 import hashlib
-import shutil
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, List, Optional, Set, Any
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field, asdict
 from enum import Enum
 import logging
@@ -164,12 +163,57 @@ class DealContext:
     target_name: str
     buyer_name: Optional[str] = None
     deal_type: str = "bolt_on"  # carve_out or bolt_on
-    industry: Optional[str] = None
+    industry: Optional[str] = None  # e.g., healthcare, aviation_mro, defense_contractor
     deal_size: Optional[str] = None  # small, medium, large, mega
     integration_approach: Optional[str] = None
     timeline_pressure: Optional[str] = None  # normal, accelerated, urgent
     custom_focus_areas: List[str] = field(default_factory=list)
     notes: Optional[str] = None
+
+    # Valid industry keys for reference
+    VALID_INDUSTRIES = [
+        "healthcare", "financial_services", "manufacturing", "aviation_mro",
+        "defense_contractor", "life_sciences", "retail", "logistics",
+        "energy_utilities", "insurance", "construction", "food_beverage",
+        "professional_services", "education", "hospitality"
+    ]
+
+    def detect_industry_from_text(self, text: str) -> Optional[str]:
+        """
+        Auto-detect industry from document text using industry triggers.
+
+        Args:
+            text: Document text to analyze
+
+        Returns:
+            Detected industry key or None
+        """
+        try:
+            from prompts.shared.industry_application_considerations import detect_industry_from_text
+            matches = detect_industry_from_text(text)
+            if matches and matches[0][1] >= 3:  # Require at least 3 trigger matches
+                detected = matches[0][0]
+                logger.info(f"Auto-detected industry: {detected} ({matches[0][1]} matches)")
+                return detected
+        except ImportError:
+            logger.warning("Industry detection module not available")
+        return None
+
+    def set_industry(self, industry: str) -> bool:
+        """
+        Set industry with validation.
+
+        Args:
+            industry: Industry key to set
+
+        Returns:
+            True if valid and set, False otherwise
+        """
+        if industry.lower() in self.VALID_INDUSTRIES:
+            self.industry = industry.lower()
+            return True
+        logger.warning(f"Invalid industry '{industry}'. Valid options: {self.VALID_INDUSTRIES}")
+        return False
 
     def get_analysis_config(self) -> Dict[str, Any]:
         """Get deal-type specific analysis configuration."""
@@ -189,8 +233,8 @@ class DealContext:
         deal_type_display = self.deal_type.replace('_', ' ').title()
 
         lines = [
-            f"## DEAL CONTEXT",
-            f"",
+            "## DEAL CONTEXT",
+            "",
             f"**Target:** {self.target_name}",
         ]
 
@@ -203,11 +247,11 @@ class DealContext:
             lines.append(f"**Industry:** {self.industry}")
 
         lines.extend([
-            f"",
-            f"### What This Means",
-            f"{config.get('description', '')}",
-            f"",
-            f"### Analysis Focus Areas",
+            "",
+            "### What This Means",
+            config.get('description', ''),
+            "",
+            "### Analysis Focus Areas",
             f"Given this is a {deal_type_display.lower()} transaction, prioritize these areas:",
         ])
 
@@ -215,38 +259,38 @@ class DealContext:
             lines.append(f"- {area.replace('_', ' ').title()}")
 
         lines.extend([
-            f"",
-            f"### Key Questions to Answer",
+            "",
+            "### Key Questions to Answer",
         ])
 
         for q in config["key_questions"]:
             lines.append(f"- {q}")
 
         lines.extend([
-            f"",
-            f"### Risk Lens",
+            "",
+            "### Risk Lens",
             f"Primary question: {config['risk_lens']}",
-            f"",
-            f"### Cost Lens",
-            f"{config['cost_lens']}",
-            f"",
-            f"### Day 1 Priority",
-            f"{config.get('day1_priority', 'Business continuity')}",
+            "",
+            "### Cost Lens",
+            config['cost_lens'],
+            "",
+            "### Day 1 Priority",
+            config.get('day1_priority', 'Business continuity'),
         ])
 
         # Add typical issues to watch for
         typical_issues = config.get('typical_issues', [])
         if typical_issues:
             lines.extend([
-                f"",
+                "",
                 f"### Common Issues for {deal_type_display} Deals",
-                f"Watch for these typical challenges:",
+                "Watch for these typical challenges:",
             ])
             for issue in typical_issues:
                 lines.append(f"- {issue}")
 
         if self.notes:
-            lines.extend([f"", f"### Additional Deal Notes", self.notes])
+            lines.extend(["", "### Additional Deal Notes", self.notes])
 
         return "\n".join(lines)
 
@@ -467,6 +511,7 @@ class DDSession:
                         "session_id": state["session_id"],
                         "target_name": state["deal_context"]["target_name"],
                         "deal_type": state["deal_context"]["deal_type"],
+                        "industry": state["deal_context"].get("industry"),
                         "created_at": state["created_at"],
                         "updated_at": state["updated_at"],
                         "current_phase": state.get("current_phase", "unknown"),
@@ -652,6 +697,42 @@ class DDSession:
         for key, value in kwargs.items():
             if hasattr(self.state.deal_context, key):
                 setattr(self.state.deal_context, key, value)
+
+    def set_industry(self, industry: str) -> bool:
+        """
+        Set the industry for this session.
+
+        Args:
+            industry: Industry key (e.g., 'aviation_mro', 'healthcare')
+
+        Returns:
+            True if valid and set, False if invalid
+        """
+        if self.state.deal_context.set_industry(industry):
+            logger.info(f"Industry set to: {industry}")
+            return True
+        return False
+
+    def detect_industry(self, document_text: str, auto_set: bool = False) -> Optional[str]:
+        """
+        Detect industry from document text.
+
+        Args:
+            document_text: Text to analyze for industry signals
+            auto_set: If True and industry detected, automatically set it
+
+        Returns:
+            Detected industry key or None
+        """
+        detected = self.state.deal_context.detect_industry_from_text(document_text)
+        if detected and auto_set:
+            self.state.deal_context.industry = detected
+            logger.info(f"Industry auto-set to: {detected}")
+        return detected
+
+    def get_industry(self) -> Optional[str]:
+        """Get the current industry setting."""
+        return self.state.deal_context.industry
 
     def get_run_history(self) -> List[SessionRun]:
         """Get history of all runs."""

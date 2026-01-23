@@ -12,7 +12,7 @@ Primary M&A Lenses: tsa_exposure, separation_complexity
 Key Question: "How do we stand alone?"
 """
 
-from typing import Dict, List, Any
+from typing import Dict, List
 
 
 # =============================================================================

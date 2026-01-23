@@ -13,7 +13,7 @@ consistency across the extraction pipeline.
 import json
 import time
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional
 from datetime import datetime
 from dataclasses import dataclass, field
 import logging
@@ -23,7 +23,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from tools_v2.system_registry import SystemRegistry, System
-from tools_v2.granular_facts_store import GranularFactsStore, GranularFact
+from tools_v2.granular_facts_store import GranularFactsStore
 from tools_v2.validation_engine import ValidationEngine, ValidationReport
 from tools_v2.excel_exporter import export_to_excel, export_to_csv
 
@@ -499,7 +499,7 @@ class MultiPassOrchestrator:
                 value = match.replace(',', '')
                 try:
                     value = float(value) if '.' in str(value) else int(value)
-                except:
+                except (ValueError, TypeError):
                     pass
 
                 fact_id = self.granular_facts_store.add_fact(

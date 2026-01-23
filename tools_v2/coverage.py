@@ -5,7 +5,7 @@ Defines expected items per domain/category and functions to calculate
 coverage quality based on FactStore contents.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, List, Any, Optional
 from tools_v2.fact_store import FactStore
 

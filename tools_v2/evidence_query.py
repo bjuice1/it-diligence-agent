@@ -11,7 +11,7 @@ This layer enables:
 4. Supporting interactive exploration
 """
 
-from typing import Dict, List, Any, Optional, Set, Tuple
+from typing import Dict, List, Any, Optional, Set
 from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime

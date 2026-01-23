@@ -5,7 +5,7 @@ Provides structured output schemas for the 4-stage cost refinement process.
 Each stage has specific tools for capturing its output in a consistent format.
 """
 
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Optional
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 import json

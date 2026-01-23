@@ -10,8 +10,8 @@ This module defines the complete framework for understanding:
 This is the "knowledge base" that powers intelligent recommendations.
 """
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple, Any
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple
 from enum import Enum
 
 
@@ -925,7 +925,7 @@ def generate_deal_summary(deal_type: DealType) -> str:
     lines = [
         f"# {deal_info.get('name', deal_type.value)} - IT Considerations",
         "",
-        f"## Overview",
+        "## Overview",
         deal_info.get('description', ''),
         "",
         f"**Key Characteristic**: {deal_info.get('key_characteristic', '')}",

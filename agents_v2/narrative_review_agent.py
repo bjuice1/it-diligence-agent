@@ -12,7 +12,6 @@ import anthropic
 from typing import Dict, List, Optional, Any
 import json
 import logging
-from datetime import datetime
 from time import time
 
 from prompts.v2_narrative_review_prompt import (
@@ -20,14 +19,9 @@ from prompts.v2_narrative_review_prompt import (
     ReviewIssue,
     SectionScore,
     IssueSeverity,
-    NARRATIVE_REVIEW_CRITERIA,
-    NARRATIVE_REVIEW_PROMPT,
     get_review_prompt,
     run_local_review,
-    check_completeness,
-    check_evidence_discipline,
-    check_tone,
-    check_actionability
+    check_completeness
 )
 
 # Import rate limiter if available

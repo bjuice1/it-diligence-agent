@@ -4,7 +4,13 @@ Applications Discovery Agent Prompt (v2 - Two-Phase Architecture)
 Phase 1: Discovery
 Mission: Extract and inventory the application portfolio. No analysis yet.
 Output: Standardized inventory that maps to Excel template.
+
+Industry-Aware Discovery:
+When an industry is detected, this prompt is enriched with industry-specific
+application considerations via inject_industry_into_discovery_prompt().
 """
+
+from typing import Optional
 
 APPLICATIONS_DISCOVERY_PROMPT = """You are an application portfolio inventory specialist. Your job is to EXTRACT and CATEGORIZE the application landscape from the documentation - nothing more.
 
@@ -212,3 +218,72 @@ APPLICATIONS_INVENTORY_SCHEMA = {
     "deployment_values": ["saas", "on_prem", "cloud", "hybrid"],
     "customization_values": ["standard", "configured", "heavily_customized", "not_stated"]
 }
+
+
+# =============================================================================
+# INDUSTRY-AWARE PROMPT GENERATION
+# =============================================================================
+
+def get_applications_discovery_prompt(industry: Optional[str] = None) -> str:
+    """
+    Get the applications discovery prompt, optionally enriched with industry context.
+
+    Args:
+        industry: Optional industry key (e.g., "healthcare", "manufacturing", "aviation_mro")
+                  If provided, the prompt is enriched with industry-specific application
+                  types and questions.
+
+    Returns:
+        The discovery prompt, possibly enriched with industry context.
+
+    Usage:
+        # Basic (no industry context)
+        prompt = get_applications_discovery_prompt()
+
+        # With industry context
+        prompt = get_applications_discovery_prompt(industry="aviation_mro")
+    """
+    if not industry:
+        return APPLICATIONS_DISCOVERY_PROMPT
+
+    # Import here to avoid circular imports
+    from prompts.shared.industry_application_considerations import (
+        inject_industry_into_discovery_prompt,
+        get_industry_considerations
+    )
+
+    # Check if industry is valid
+    if not get_industry_considerations(industry):
+        return APPLICATIONS_DISCOVERY_PROMPT
+
+    return inject_industry_into_discovery_prompt(
+        base_prompt=APPLICATIONS_DISCOVERY_PROMPT,
+        industry=industry,
+        include_relevance=True,
+        include_expected_apps=True,
+        include_management=True
+    )
+
+
+def get_industry_gap_assessment(discovered_apps: list, industry: str) -> list:
+    """
+    Assess discovered applications against industry expectations.
+
+    Args:
+        discovered_apps: List of discovered application inventory entries
+        industry: Industry key
+
+    Returns:
+        List of gap assessments with risk ratings
+
+    Usage:
+        gaps = get_industry_gap_assessment(inventory, "defense_contractor")
+        for gap in gaps:
+            if gap['status'] == 'not_found' and gap['gap_risk'] == 'critical':
+                print(f"CRITICAL GAP: {gap['expected_application']}")
+    """
+    from prompts.shared.industry_application_considerations import (
+        assess_industry_application_gaps
+    )
+
+    return assess_industry_application_gaps(discovered_apps, industry)

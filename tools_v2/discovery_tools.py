@@ -397,14 +397,10 @@ def _execute_create_inventory_entry(
         # Note: This requires source document text, which may not always be available
         # during discovery. Validation can be done later during review phase.
         if ENABLE_FACT_VALIDATION and exact_quote:
-            try:
-                from tools_v2.evidence_validator import validate_evidence_quote
-                # For now, we don't have source document text in discovery phase
-                # This validation would need to be done post-discovery with document text
-                # Just log that validation would be beneficial
-                logger.debug(f"Evidence quote provided: {exact_quote[:50]}... (validation deferred)")
-            except ImportError:
-                pass  # Validator not available
+            # For now, we don't have source document text in discovery phase
+            # This validation would need to be done post-discovery with document text
+            # Just log that validation would be beneficial
+            logger.debug(f"Evidence quote provided: {exact_quote[:50]}... (validation deferred)")
 
         # Sanitize inputs before storing
         try:
@@ -515,7 +511,7 @@ def _execute_complete_discovery(
         domain = input_data.get("domain")
         categories_covered = input_data.get("categories_covered", [])
         categories_missing = input_data.get("categories_missing", [])
-        summary = input_data.get("summary", "")
+        _ = input_data.get("summary", "")
 
         if not domain:
             return {

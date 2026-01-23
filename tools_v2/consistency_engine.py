@@ -60,9 +60,8 @@ METHODOLOGY DOCUMENTATION
 """
 
 import re
-import hashlib
-from dataclasses import dataclass, field
-from typing import Dict, List, Tuple, Optional, Any
+from dataclasses import dataclass
+from typing import Dict, List, Tuple, Any
 from datetime import datetime
 
 

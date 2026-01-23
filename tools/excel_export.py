@@ -10,9 +10,8 @@ Features:
 - Sortable/filterable columns
 """
 
-import os
 import logging
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 from datetime import datetime
 from pathlib import Path
 
@@ -278,7 +277,7 @@ def _auto_size_columns(ws, min_width=10, max_width=60):
                     cell_length = len(str(cell.value))
                     if cell_length > max_length:
                         max_length = cell_length
-            except:
+            except Exception:
                 pass
 
         adjusted_width = min(max(max_length + 2, min_width), max_width)
@@ -403,7 +402,7 @@ def _create_risks_sheet(wb, risks: List[Dict], styles: Dict, include_evidence: b
             try:
                 import json
                 deal_impact = json.loads(deal_impact)
-            except:
+            except (json.JSONDecodeError, TypeError):
                 pass
         if isinstance(deal_impact, list):
             deal_impact = ', '.join(deal_impact)
@@ -419,7 +418,7 @@ def _create_risks_sheet(wb, risks: List[Dict], styles: Dict, include_evidence: b
                 try:
                     import json
                     evidence = json.loads(evidence)
-                except:
+                except (json.JSONDecodeError, TypeError):
                     evidence = {}
 
             ws.cell(row=row_num, column=11, value=evidence.get('exact_quote', '') if evidence else '')
@@ -510,7 +509,7 @@ def _create_work_items_sheet(wb, work_items: List[Dict], styles: Dict):
                 try:
                     import json
                     val = json.loads(val)
-                except:
+                except (json.JSONDecodeError, TypeError):
                     pass
             if isinstance(val, list):
                 return ', '.join(str(v) for v in val)
@@ -558,7 +557,7 @@ def _create_recommendations_sheet(wb, recommendations: List[Dict], styles: Dict)
             try:
                 import json
                 driven_by = json.loads(driven_by)
-            except:
+            except (json.JSONDecodeError, TypeError):
                 pass
         if isinstance(driven_by, list):
             driven_by = ', '.join(driven_by)
@@ -600,7 +599,7 @@ def _create_current_state_sheet(wb, items: List[Dict], styles: Dict):
             try:
                 import json
                 chars = json.loads(chars)
-            except:
+            except (json.JSONDecodeError, TypeError):
                 pass
         if isinstance(chars, list):
             chars = ', '.join(chars)
@@ -643,6 +642,410 @@ def _create_assumptions_sheet(wb, assumptions: List[Dict], styles: Dict):
 
     ws.freeze_panes = 'A2'
     ws.auto_filter.ref = ws.dimensions
+    _auto_size_columns(ws)
+
+
+# =============================================================================
+# APPLICATION-SPECIFIC EXPORT FUNCTIONS (Phase 4-6 Enhancement)
+# =============================================================================
+# These functions export directly from AnalysisStore for team review.
+
+def export_applications_to_excel(
+    analysis_store: Any,
+    output_path: str,
+    include_buyer_comparison: bool = True
+) -> Dict[str, Any]:
+    """
+    Export application inventory and related analysis to Excel.
+
+    Phase 4-6 Enhancement: Dedicated export for application analysis.
+
+    Creates worksheets for:
+    - Applications: Full application inventory
+    - Capability Coverage: Business capability analysis
+    - Buyer Overlaps: Target vs Buyer comparison (if include_buyer_comparison=True)
+    - Completeness: Data completeness metrics
+
+    Args:
+        analysis_store: AnalysisStore instance with populated data
+        output_path: Path to save Excel file
+        include_buyer_comparison: Whether to include buyer comparison tabs
+
+    Returns:
+        Dict with output_path, sheet counts, and completeness metrics
+    """
+    if not OPENPYXL_AVAILABLE:
+        logger.error("openpyxl not installed. Install with: pip install openpyxl")
+        raise ImportError("openpyxl required for Excel export. Run: pip install openpyxl")
+
+    wb = openpyxl.Workbook()
+    styles = _get_styles()
+
+    # Create Applications sheet
+    apps_count = _create_applications_sheet(wb, analysis_store, styles)
+
+    # Create Capability Coverage sheet
+    cap_count = _create_capability_coverage_sheet(wb, analysis_store, styles)
+
+    # Create Buyer Overlaps sheet (if requested and data exists)
+    overlap_count = 0
+    buyer_count = 0
+    if include_buyer_comparison:
+        buyer_count = _create_buyer_applications_sheet(wb, analysis_store, styles)
+        overlap_count = _create_overlaps_sheet(wb, analysis_store, styles)
+
+    # Create Completeness Metrics sheet
+    _create_completeness_sheet(wb, analysis_store, styles)
+
+    # Remove default empty sheet if it exists
+    if 'Sheet' in wb.sheetnames:
+        del wb['Sheet']
+
+    # Save
+    wb.save(output_path)
+    logger.info(f"Exported applications to {output_path}")
+
+    # Get completeness metrics
+    metrics = analysis_store.get_application_completeness_metrics()
+
+    return {
+        'output_path': output_path,
+        'counts': {
+            'Applications': apps_count,
+            'Capability Areas': cap_count,
+            'Buyer Applications': buyer_count,
+            'Overlaps': overlap_count
+        },
+        'completeness_score': metrics.get('completeness_score', 0),
+        'total_applications': apps_count
+    }
+
+
+def _create_applications_sheet(wb, analysis_store: Any, styles: Dict) -> int:
+    """Create the Applications inventory worksheet."""
+    ws = wb.active
+    ws.title = "Applications"
+
+    apps = analysis_store.get_application_inventory()
+
+    if not apps:
+        ws['A1'] = "No applications recorded"
+        return 0
+
+    # Headers
+    headers = [
+        "ID", "Application Name", "Vendor", "Category", "Hosting Model",
+        "Criticality", "Version", "Support Status", "User Count",
+        "License Type", "Customization Level", "Integration Count",
+        "Capability Areas", "Discovery Source", "Evidence Quote",
+        "Fields Not Documented"
+    ]
+
+    for col, header in enumerate(headers, 1):
+        ws.cell(row=1, column=col, value=header)
+
+    _apply_header_style(ws, 1, styles, len(headers))
+
+    # Data rows
+    for row_num, app in enumerate(apps, 2):
+        ws.cell(row=row_num, column=1, value=app.get('id', ''))
+        ws.cell(row=row_num, column=2, value=app.get('application_name', ''))
+        ws.cell(row=row_num, column=3, value=app.get('vendor', ''))
+        ws.cell(row=row_num, column=4, value=app.get('application_category', ''))
+        ws.cell(row=row_num, column=5, value=app.get('hosting_model', ''))
+
+        # Criticality with formatting
+        crit_cell = ws.cell(row=row_num, column=6, value=app.get('business_criticality', ''))
+        _apply_severity_formatting(crit_cell, app.get('business_criticality'), styles)
+
+        ws.cell(row=row_num, column=7, value=app.get('version', ''))
+        ws.cell(row=row_num, column=8, value=app.get('support_status', ''))
+        ws.cell(row=row_num, column=9, value=app.get('user_count', ''))
+        ws.cell(row=row_num, column=10, value=app.get('license_type', ''))
+        ws.cell(row=row_num, column=11, value=app.get('customization_level', ''))
+        ws.cell(row=row_num, column=12, value=app.get('integration_count', ''))
+
+        # Capability areas as comma-separated
+        cap_areas = app.get('capability_areas_covered', [])
+        ws.cell(row=row_num, column=13, value=', '.join(cap_areas) if cap_areas else '')
+
+        ws.cell(row=row_num, column=14, value=app.get('discovery_source', ''))
+
+        # Evidence quote
+        evidence = app.get('source_evidence', {})
+        ws.cell(row=row_num, column=15, value=evidence.get('exact_quote', ''))
+
+        # Fields not documented
+        missing = app.get('fields_not_documented', [])
+        ws.cell(row=row_num, column=16, value=', '.join(missing) if missing else '')
+
+        for col in range(1, len(headers) + 1):
+            ws.cell(row=row_num, column=col).alignment = styles['data_alignment']
+            ws.cell(row=row_num, column=col).border = styles['border']
+
+    ws.freeze_panes = 'B2'
+    ws.auto_filter.ref = ws.dimensions
+    _auto_size_columns(ws)
+
+    return len(apps)
+
+
+def _create_capability_coverage_sheet(wb, analysis_store: Any, styles: Dict) -> int:
+    """Create the Capability Coverage worksheet."""
+    ws = wb.create_sheet("Capability Coverage")
+
+    coverage = analysis_store.capability_coverage
+
+    if not coverage:
+        ws['A1'] = "No capability coverage recorded"
+        return 0
+
+    # Headers
+    headers = [
+        "ID", "Capability Area", "Coverage Status", "Business Relevance",
+        "Relevance Reasoning", "Apps Found", "Expected But Missing",
+        "Gap Severity", "Maturity", "Follow-up Questions Count",
+        "Confidence"
+    ]
+
+    for col, header in enumerate(headers, 1):
+        ws.cell(row=1, column=col, value=header)
+
+    _apply_header_style(ws, 1, styles, len(headers))
+
+    # Data rows
+    for row_num, cap in enumerate(coverage, 2):
+        ws.cell(row=row_num, column=1, value=cap.get('id', ''))
+        ws.cell(row=row_num, column=2, value=cap.get('capability_area', ''))
+
+        # Coverage status
+        status_cell = ws.cell(row=row_num, column=3, value=cap.get('coverage_status', ''))
+        if cap.get('coverage_status') == 'Not_Found':
+            status_cell.fill = styles['high_fill']
+        elif cap.get('coverage_status') == 'Partially_Documented':
+            status_cell.fill = styles['medium_fill']
+
+        ws.cell(row=row_num, column=4, value=cap.get('business_relevance', ''))
+        ws.cell(row=row_num, column=5, value=cap.get('relevance_reasoning', ''))
+
+        # Apps found as comma-separated names
+        apps_found = cap.get('applications_found', [])
+        app_names = [a.get('app_name', '') for a in apps_found if isinstance(a, dict)]
+        ws.cell(row=row_num, column=6, value=', '.join(app_names) if app_names else '')
+
+        # Expected but missing
+        missing = cap.get('expected_but_missing', [])
+        ws.cell(row=row_num, column=7, value=', '.join(missing) if missing else '')
+
+        # Gap severity with formatting
+        gap_cell = ws.cell(row=row_num, column=8, value=cap.get('gap_severity', ''))
+        _apply_severity_formatting(gap_cell, cap.get('gap_severity'), styles)
+
+        ws.cell(row=row_num, column=9, value=cap.get('capability_maturity', ''))
+
+        # Follow-up questions count
+        questions = cap.get('follow_up_questions', [])
+        ws.cell(row=row_num, column=10, value=len(questions))
+
+        ws.cell(row=row_num, column=11, value=cap.get('confidence_level', ''))
+
+        for col in range(1, len(headers) + 1):
+            ws.cell(row=row_num, column=col).alignment = styles['data_alignment']
+            ws.cell(row=row_num, column=col).border = styles['border']
+
+    ws.freeze_panes = 'B2'
+    ws.auto_filter.ref = ws.dimensions
+    _auto_size_columns(ws)
+
+    return len(coverage)
+
+
+def _create_buyer_applications_sheet(wb, analysis_store: Any, styles: Dict) -> int:
+    """Create the Buyer Applications worksheet."""
+    ws = wb.create_sheet("Buyer Applications")
+
+    buyer_apps = analysis_store.get_buyer_applications()
+
+    if not buyer_apps:
+        ws['A1'] = "No buyer applications recorded"
+        return 0
+
+    # Headers
+    headers = [
+        "ID", "Application Name", "Vendor", "Category",
+        "Capability Areas", "Information Source", "Notes"
+    ]
+
+    for col, header in enumerate(headers, 1):
+        ws.cell(row=1, column=col, value=header)
+
+    _apply_header_style(ws, 1, styles, len(headers))
+
+    # Data rows
+    for row_num, app in enumerate(buyer_apps, 2):
+        ws.cell(row=row_num, column=1, value=app.get('id', ''))
+        ws.cell(row=row_num, column=2, value=app.get('application_name', ''))
+        ws.cell(row=row_num, column=3, value=app.get('vendor', ''))
+        ws.cell(row=row_num, column=4, value=app.get('application_category', ''))
+
+        # Capability areas as comma-separated
+        cap_areas = app.get('capability_areas_covered', [])
+        ws.cell(row=row_num, column=5, value=', '.join(cap_areas) if cap_areas else '')
+
+        ws.cell(row=row_num, column=6, value=app.get('information_source', ''))
+        ws.cell(row=row_num, column=7, value=app.get('notes', ''))
+
+        for col in range(1, len(headers) + 1):
+            ws.cell(row=row_num, column=col).alignment = styles['data_alignment']
+            ws.cell(row=row_num, column=col).border = styles['border']
+
+    ws.freeze_panes = 'B2'
+    ws.auto_filter.ref = ws.dimensions
+    _auto_size_columns(ws)
+
+    return len(buyer_apps)
+
+
+def _create_overlaps_sheet(wb, analysis_store: Any, styles: Dict) -> int:
+    """Create the Application Overlaps worksheet."""
+    ws = wb.create_sheet("Overlaps")
+
+    overlaps = analysis_store.get_application_overlaps()
+
+    if not overlaps:
+        ws['A1'] = "No overlaps analyzed"
+        return 0
+
+    # Headers
+    headers = [
+        "ID", "Target App", "Target Category", "Buyer App",
+        "Overlap Type", "Considerations", "Follow-up Questions",
+        "Notes"
+    ]
+
+    for col, header in enumerate(headers, 1):
+        ws.cell(row=1, column=col, value=header)
+
+    _apply_header_style(ws, 1, styles, len(headers))
+
+    # Data rows
+    for row_num, ovl in enumerate(overlaps, 2):
+        ws.cell(row=row_num, column=1, value=ovl.get('id', ''))
+        ws.cell(row=row_num, column=2, value=ovl.get('target_app_name', ''))
+        ws.cell(row=row_num, column=3, value=ovl.get('target_app_category', ''))
+        ws.cell(row=row_num, column=4, value=ovl.get('buyer_app_name', '') or 'N/A')
+
+        # Overlap type with color coding
+        ovl_type = ovl.get('overlap_type', '')
+        type_cell = ws.cell(row=row_num, column=5, value=ovl_type)
+        if ovl_type == 'Same_Product':
+            type_cell.fill = PatternFill(start_color="90EE90", end_color="90EE90", fill_type="solid")
+        elif ovl_type == 'Same_Category_Different_Vendor':
+            type_cell.fill = PatternFill(start_color="FFD700", end_color="FFD700", fill_type="solid")
+        elif ovl_type == 'Target_Only':
+            type_cell.fill = PatternFill(start_color="ADD8E6", end_color="ADD8E6", fill_type="solid")
+
+        ws.cell(row=row_num, column=6, value=ovl.get('considerations', ''))
+
+        # Follow-up questions as bullet list
+        questions = ovl.get('follow_up_questions', [])
+        q_text = '\n'.join([f"• {q.get('question', '')}" for q in questions]) if questions else ''
+        ws.cell(row=row_num, column=7, value=q_text)
+
+        ws.cell(row=row_num, column=8, value=ovl.get('notes', ''))
+
+        for col in range(1, len(headers) + 1):
+            ws.cell(row=row_num, column=col).alignment = styles['data_alignment']
+            ws.cell(row=row_num, column=col).border = styles['border']
+
+    ws.freeze_panes = 'B2'
+    ws.auto_filter.ref = ws.dimensions
+    _auto_size_columns(ws)
+
+    return len(overlaps)
+
+
+def _create_completeness_sheet(wb, analysis_store: Any, styles: Dict):
+    """Create the Completeness Metrics worksheet."""
+    ws = wb.create_sheet("Completeness")
+
+    # Get metrics
+    metrics = analysis_store.get_application_completeness_metrics()
+    cap_summary = analysis_store.get_capability_summary()
+
+    # Title
+    ws['A1'] = "Application Analysis Completeness Report"
+    ws['A1'].font = Font(bold=True, size=14)
+    ws.merge_cells('A1:D1')
+
+    ws['A2'] = f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+
+    # Overall metrics
+    ws['A4'] = "Overall Metrics"
+    ws['A4'].font = Font(bold=True, size=12)
+
+    ws['A5'] = "Total Applications:"
+    ws['B5'] = metrics.get('total_applications', 0)
+
+    ws['A6'] = "Completeness Score:"
+    score = metrics.get('completeness_score', 0)
+    ws['B6'] = f"{score}%"
+    if score >= 70:
+        ws['B6'].fill = PatternFill(start_color="90EE90", end_color="90EE90", fill_type="solid")
+    elif score >= 40:
+        ws['B6'].fill = PatternFill(start_color="FFD700", end_color="FFD700", fill_type="solid")
+    else:
+        ws['B6'].fill = PatternFill(start_color="FF6B6B", end_color="FF6B6B", fill_type="solid")
+
+    ws['A7'] = "Apps with Missing Fields:"
+    ws['B7'] = metrics.get('apps_with_missing_fields', 0)
+
+    # Capability coverage
+    ws['A9'] = "Capability Coverage"
+    ws['A9'].font = Font(bold=True, size=12)
+
+    ws['A10'] = "Total Capability Areas:"
+    ws['B10'] = cap_summary.get('total_capability_areas', 0)
+
+    ws['A11'] = "Areas Assessed:"
+    ws['B11'] = cap_summary.get('areas_assessed', 0)
+
+    ws['A12'] = "Coverage Percentage:"
+    ws['B12'] = f"{cap_summary.get('completeness_percentage', 0)}%"
+
+    ws['A13'] = "Critical Gaps:"
+    critical_gaps = cap_summary.get('critical_gaps', [])
+    ws['B13'] = ', '.join(critical_gaps) if critical_gaps else 'None'
+
+    # Unknown value counts
+    ws['A15'] = "Unknown Value Counts"
+    ws['A15'].font = Font(bold=True, size=12)
+
+    row = 16
+    unknown_counts = metrics.get('unknown_value_counts', {})
+    for field, count in unknown_counts.items():
+        ws.cell(row=row, column=1, value=field)
+        ws.cell(row=row, column=2, value=count)
+        if count > 0:
+            ws.cell(row=row, column=2).fill = PatternFill(start_color="FFD700", end_color="FFD700", fill_type="solid")
+        row += 1
+
+    # Not assessed areas
+    row += 1
+    ws.cell(row=row, column=1, value="Areas Not Assessed")
+    ws.cell(row=row, column=1).font = Font(bold=True, size=12)
+    row += 1
+
+    not_assessed = cap_summary.get('areas_not_assessed', [])
+    if not_assessed:
+        for area in not_assessed:
+            ws.cell(row=row, column=1, value=area)
+            ws.cell(row=row, column=1).fill = PatternFill(start_color="FF6B6B", end_color="FF6B6B", fill_type="solid")
+            row += 1
+    else:
+        ws.cell(row=row, column=1, value="All areas assessed")
+        ws.cell(row=row, column=1).fill = PatternFill(start_color="90EE90", end_color="90EE90", fill_type="solid")
+
     _auto_size_columns(ws)
 
 

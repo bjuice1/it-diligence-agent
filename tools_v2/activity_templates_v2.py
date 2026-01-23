@@ -27,7 +27,7 @@ Cost Anchor Sources:
 - Industry benchmarks
 """
 
-from typing import Dict, List, Any
+from typing import Dict, List
 
 # =============================================================================
 # COMPLEXITY MODIFIERS

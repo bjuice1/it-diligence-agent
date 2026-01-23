@@ -11,10 +11,8 @@ Run with: pytest tests/test_v2_tools.py -v
 
 import pytest
 import sys
-import json
 import tempfile
 from pathlib import Path
-from datetime import datetime
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -24,16 +22,12 @@ from tools_v2.discovery_tools import (
     DISCOVERY_TOOLS,
     execute_discovery_tool,
     validate_discovery_input,
-    ALL_DOMAINS
 )
 from tools_v2.reasoning_tools import (
     REASONING_TOOLS,
     execute_reasoning_tool,
     ReasoningStore,
     Risk,
-    StrategicConsideration,
-    WorkItem,
-    Recommendation
 )
 
 
@@ -390,11 +384,11 @@ class TestFactStore:
             domain="infrastructure", category="compute", item="VMware",
             details={}, status="documented", evidence={"exact_quote": "q"}, entity="target"
         )
-        id2 = store.add_fact(
+        _ = store.add_fact(
             domain="infrastructure", category="storage", item="NetApp",
             details={}, status="documented", evidence={"exact_quote": "q"}, entity="target"
         )
-        id3 = store.add_fact(
+        _ = store.add_fact(
             domain="network", category="firewall", item="Palo Alto",
             details={}, status="documented", evidence={"exact_quote": "q"}, entity="target"
         )

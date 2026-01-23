@@ -1774,18 +1774,18 @@ if __name__ == "__main__":
 
     # Print database summary
     stats = get_database_stats()
-    print(f"IT Integration Cost Database")
-    print(f"=" * 50)
+    print("IT Integration Cost Database")
+    print("=" * 50)
     print(f"Total Activities: {stats['total_activities']}")
     print(f"Last Updated: {stats['last_updated']}")
-    print(f"\nActivities by Category:")
+    print("\nActivities by Category:")
     for cat, count in sorted(stats['activities_by_category'].items()):
         print(f"  {cat}: {count}")
 
     # Export to CSV if requested
     if len(sys.argv) > 1 and sys.argv[1] == "--export":
-        print(f"\nExporting to CSV...")
+        print("\nExporting to CSV...")
         export_to_csv("docs/cost_database_detailed.csv")
         export_summary_csv("docs/cost_database_summary.csv")
-        print(f"  Created: docs/cost_database_detailed.csv")
-        print(f"  Created: docs/cost_database_summary.csv")
+        print("  Created: docs/cost_database_detailed.csv")
+        print("  Created: docs/cost_database_summary.csv")

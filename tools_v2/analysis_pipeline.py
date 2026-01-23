@@ -25,7 +25,7 @@ Usage:
 
 import logging
 from enum import Enum
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -340,10 +340,10 @@ def _format_fast_output(
 
     lines = []
     lines.append("=" * 70)
-    lines.append(f"IT DUE DILIGENCE ANALYSIS (Fast Mode)")
+    lines.append("IT DUE DILIGENCE ANALYSIS (Fast Mode)")
     lines.append("=" * 70)
     lines.append(f"Deal Type: {deal_type}")
-    lines.append(f"Note: Validation skipped in fast mode")
+    lines.append("Note: Validation skipped in fast mode")
 
     lines.append(f"\n{'='*70}")
     lines.append("KEY CONSIDERATIONS")

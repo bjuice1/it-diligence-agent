@@ -16,7 +16,6 @@ from typing import Dict, List, Optional, Any
 from abc import ABC, abstractmethod
 import json
 import logging
-from datetime import datetime
 from time import time
 from dataclasses import dataclass
 
@@ -315,7 +314,7 @@ The output will be shown to investment committee. Make it count."""
                 work_items_text += f"  Owner: {w.owner_type} | Priority: {w.priority}\n"
 
         # Cost summary
-        cost_text = f"\n## DOMAIN COST SUMMARY\n"
+        cost_text = "\n## DOMAIN COST SUMMARY\n"
         cost_text += f"Total estimated cost for {self.domain_title}: "
         cost_text += f"${domain_data['cost_low']:,.0f} - ${domain_data['cost_high']:,.0f}\n"
 

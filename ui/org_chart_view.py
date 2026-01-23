@@ -12,8 +12,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
 from pathlib import Path
-from typing import Optional, Dict, Any, List
-from dataclasses import dataclass, field
+from typing import Dict, Any
 
 # Import our modules
 import sys
@@ -118,7 +117,7 @@ def extract_org_from_facts(fact_store: FactStore) -> Dict[str, Any]:
             if isinstance(headcount, str):
                 try:
                     headcount = int(headcount)
-                except:
+                except (ValueError, TypeError):
                     headcount = 1
 
         org_structure[category]["roles"].append({
@@ -362,7 +361,7 @@ def render_org_chart_section(session_dir: Path):
     if findings_path.exists():
         try:
             reasoning_store = ReasoningStore.load(str(findings_path))
-        except Exception as e:
+        except Exception:
             pass
 
     # Use sample data if no real org data

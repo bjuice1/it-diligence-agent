@@ -4,7 +4,7 @@ Command implementations for interactive CLI.
 Each command is a function that takes (session, args) and returns output text.
 """
 
-from typing import List, Optional, Callable, Dict
+from typing import List, Callable, Dict
 from pathlib import Path
 from datetime import datetime
 
@@ -299,7 +299,7 @@ def cmd_status(session: Session, args: List[str]) -> str:
     if summary['domains_with_facts']:
         output.append(f"\nDomains: {', '.join(summary['domains_with_facts'])}")
 
-    output.append(f"\nRisks by Severity:")
+    output.append("\nRisks by Severity:")
     risk_sum = summary['risk_summary']
     output.append(f"  Critical: {risk_sum['critical']}")
     output.append(f"  High:     {risk_sum['high']}")
@@ -307,7 +307,7 @@ def cmd_status(session: Session, args: List[str]) -> str:
     output.append(f"  Low:      {risk_sum['low']}")
 
     cost_sum = summary['cost_summary']
-    output.append(f"\nCost by Phase:")
+    output.append("\nCost by Phase:")
     for phase in ['Day_1', 'Day_100', 'Post_100']:
         if cost_sum[phase]['count'] > 0:
             low = cost_sum[phase]['low']
@@ -319,7 +319,7 @@ def cmd_status(session: Session, args: List[str]) -> str:
         output.append(f"  ⚠ {summary['unsaved_changes']} unsaved changes")
 
     if summary['has_deal_context']:
-        output.append(f"\nDeal context: Set")
+        output.append("\nDeal context: Set")
 
     return "\n".join(output)
 
@@ -507,7 +507,7 @@ def cmd_explain(session: Session, args: List[str]) -> str:
     if item_type == 'risk':
         output.append("")
         output.append(f"  RISK: {item.title}")
-        output.append(f"  " + "-" * 50)
+        output.append("  " + "-" * 50)
         output.append("")
         output.append(f"  Severity:    {item.severity.upper()}")
         output.append(f"  Domain:      {item.domain}")
@@ -581,7 +581,7 @@ def cmd_explain(session: Session, args: List[str]) -> str:
     elif item_type == 'work_item':
         output.append("")
         output.append(f"  WORK ITEM: {item.title}")
-        output.append(f"  " + "-" * 50)
+        output.append("  " + "-" * 50)
         output.append("")
         output.append(f"  Phase:       {item.phase}")
         output.append(f"  Priority:    {item.priority}")
@@ -646,7 +646,7 @@ def cmd_explain(session: Session, args: List[str]) -> str:
     elif item_type == 'fact':
         output.append("")
         output.append(f"  FACT: {item.item}")
-        output.append(f"  " + "-" * 50)
+        output.append("  " + "-" * 50)
         output.append("")
         output.append(f"  Domain:      {item.domain}")
         output.append(f"  Category:    {item.category}")
@@ -664,7 +664,7 @@ def cmd_explain(session: Session, args: List[str]) -> str:
             output.append("  EVIDENCE")
             output.append("  " + "-" * 50)
             if item.evidence.get('exact_quote'):
-                output.append(f"  Quote:")
+                output.append("  Quote:")
                 quote_lines = _wrap_text(item.evidence['exact_quote'], 52)
                 for line in quote_lines:
                     output.append(f"    \"{line}\"")
@@ -697,7 +697,7 @@ def cmd_explain(session: Session, args: List[str]) -> str:
     elif item_type == 'gap':
         output.append("")
         output.append(f"  GAP: {item.description}")
-        output.append(f"  " + "-" * 50)
+        output.append("  " + "-" * 50)
         output.append("")
         output.append(f"  Domain:      {item.domain}")
         output.append(f"  Category:    {item.category}")
@@ -710,7 +710,7 @@ def cmd_explain(session: Session, args: List[str]) -> str:
     elif item_type == 'strategic_consideration':
         output.append("")
         output.append(f"  STRATEGIC: {item.title}")
-        output.append(f"  " + "-" * 50)
+        output.append("  " + "-" * 50)
         output.append("")
         output.append(f"  Domain:      {item.domain}")
         output.append(f"  Lens:        {item.lens}")
@@ -732,7 +732,7 @@ def cmd_explain(session: Session, args: List[str]) -> str:
     elif item_type == 'recommendation':
         output.append("")
         output.append(f"  RECOMMENDATION: {item.title}")
-        output.append(f"  " + "-" * 50)
+        output.append("  " + "-" * 50)
         output.append("")
         output.append(f"  Domain:      {item.domain}")
         output.append(f"  Action Type: {item.action_type}")
@@ -1034,11 +1034,11 @@ def cmd_show(session: Session, args: List[str]) -> str:
 def cmd_export(session: Session, args: List[str]) -> str:
     """Export session to files."""
     # Parse format option
-    format_type = 'json'
+    _ = 'json'
     i = 0
     while i < len(args):
         if args[i] == '--format' and i + 1 < len(args):
-            format_type = args[i + 1].lower()
+            _ = args[i + 1].lower()
             i += 2
         else:
             i += 1
@@ -1278,7 +1278,7 @@ def cmd_rerun_confirm(session: Session, domain: str) -> str:
     # This would integrate with the actual reasoning agents
     # For now, return a placeholder that explains what would happen
 
-    return f"""
+    return """
 Re-run functionality is ready but requires integration with main_v2.py.
 
 To re-run analysis with new context:

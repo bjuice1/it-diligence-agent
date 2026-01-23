@@ -36,10 +36,8 @@ Usage:
 
 import argparse
 import sys
-import json
 from pathlib import Path
 from datetime import datetime
-from typing import List, Optional
 
 from config_v2 import (
     ANTHROPIC_API_KEY,
@@ -51,14 +49,11 @@ from config_v2 import (
     REASONING_MAX_ITERATIONS,
     OUTPUT_DIR,
     DOMAINS,
-    MAX_PARALLEL_AGENTS,
 )
-from tools_v2.session import DDSession, DealType, DEAL_TYPE_CONFIG
-from tools_v2.fact_store import FactStore
+from tools_v2.session import DDSession
 from tools_v2.reasoning_tools import ReasoningStore
 from agents_v2.discovery import DISCOVERY_AGENTS
 from agents_v2.reasoning import REASONING_AGENTS
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 
 
@@ -84,8 +79,10 @@ def cmd_create(args):
         print(f"Deal Type: {args.deal_type}")
         if args.buyer:
             print(f"Buyer: {args.buyer}")
+        if args.industry:
+            print(f"Industry: {args.industry}")
         print(f"Session Dir: {session.session_dir}")
-        print(f"\nNext steps:")
+        print("\nNext steps:")
         print(f"  1. Add documents: python session_cli.py add {args.session_id} <path>")
         print(f"  2. Run discovery: python session_cli.py discover {args.session_id}")
         print(f"  3. Run reasoning: python session_cli.py reason {args.session_id}")
@@ -112,6 +109,8 @@ def cmd_list(args):
         print(f"\n  {s['session_id']}")
         print(f"    Target: {s['target_name']}")
         print(f"    Type: {s['deal_type']}")
+        if s.get('industry'):
+            print(f"    Industry: {s['industry']}")
         print(f"    Phase: {s['current_phase']}")
         print(f"    Docs: {s['document_count']} | Runs: {s['run_count']}")
         print(f"    Updated: {s['updated_at'][:19]}")
@@ -131,7 +130,7 @@ def cmd_status(args):
 
     # Deal context
     ctx = session.state.deal_context
-    print(f"\nDeal Context:")
+    print("\nDeal Context:")
     print(f"  Target: {ctx.target_name}")
     print(f"  Type: {ctx.deal_type}")
     if ctx.buyer_name:
@@ -140,7 +139,7 @@ def cmd_status(args):
         print(f"  Industry: {ctx.industry}")
 
     # Current state
-    print(f"\nCurrent State:")
+    print("\nCurrent State:")
     print(f"  Phase: {session.state.current_phase}")
     print(f"  Documents: {len(session.state.processed_documents)}")
     print(f"  Facts: {len(session.fact_store.facts)}")
@@ -159,14 +158,14 @@ def cmd_status(args):
 
     # Change summary
     changes = session.get_change_summary()
-    print(f"\nNeeds Processing:")
+    print("\nNeeds Processing:")
     print(f"  Discovery: {'Yes' if changes['needs_discovery'] else 'No'}")
     print(f"  Reasoning: {'Yes' if changes['needs_reasoning'] else 'No'}")
 
     # Recent runs
     runs = session.get_run_history()[-3:]
     if runs:
-        print(f"\nRecent Runs:")
+        print("\nRecent Runs:")
         for r in reversed(runs):
             status_icon = "✓" if r.status == "completed" else "✗" if r.status == "failed" else "..."
             print(f"  [{status_icon}] {r.run_id} - {r.phase}")
@@ -206,20 +205,20 @@ def cmd_add(args):
     # Add documents (checks for new/changed)
     result = session.add_documents(documents, entity=args.entity)
 
-    print(f"\nResults:")
+    print("\nResults:")
     print(f"  New: {len(result['new'])}")
     print(f"  Changed: {len(result['changed'])}")
     print(f"  Unchanged: {len(result['unchanged'])}")
 
     if result['new']:
-        print(f"\nNew documents:")
+        print("\nNew documents:")
         for f in result['new'][:10]:
             print(f"    + {f}")
         if len(result['new']) > 10:
             print(f"    ... and {len(result['new']) - 10} more")
 
     if result['changed']:
-        print(f"\nChanged documents:")
+        print("\nChanged documents:")
         for f in result['changed']:
             print(f"    ~ {f}")
 
@@ -242,7 +241,7 @@ def cmd_discover(args):
 
     pending = session.get_pending_documents()
     if not pending:
-        print(f"\nNo pending documents to process.")
+        print("\nNo pending documents to process.")
         print(f"Add documents with: python session_cli.py add {args.session_id} <path>")
         return
 
@@ -273,7 +272,7 @@ def cmd_discover(args):
     print(f"\nLoaded {len(combined_text):,} characters")
 
     # Start run
-    run = session.start_run("discovery", args.domains)
+    _ = session.start_run("discovery", args.domains)
 
     try:
         # For each document being processed, we'll track facts
@@ -290,13 +289,22 @@ def cmd_discover(args):
             print(f"{'='*40}")
 
             agent_class = DISCOVERY_AGENTS[domain]
-            agent = agent_class(
-                fact_store=session.fact_store,
-                api_key=ANTHROPIC_API_KEY,
-                model=DISCOVERY_MODEL,
-                max_tokens=DISCOVERY_MAX_TOKENS,
-                max_iterations=DISCOVERY_MAX_ITERATIONS
-            )
+
+            # Build agent kwargs - base parameters for all agents
+            agent_kwargs = {
+                "fact_store": session.fact_store,
+                "api_key": ANTHROPIC_API_KEY,
+                "model": DISCOVERY_MODEL,
+                "max_tokens": DISCOVERY_MAX_TOKENS,
+                "max_iterations": DISCOVERY_MAX_ITERATIONS
+            }
+
+            # For applications domain, pass industry for industry-aware discovery
+            if domain == "applications" and session.state.deal_context.industry:
+                agent_kwargs["industry"] = session.state.deal_context.industry
+                print(f"  Industry-aware discovery: {session.state.deal_context.industry}")
+
+            agent = agent_class(**agent_kwargs)
 
             # Run discovery
             result = agent.discover(combined_text)
@@ -316,7 +324,7 @@ def cmd_discover(args):
         session.save()
 
         print(f"\n{'='*60}")
-        print(f"DISCOVERY COMPLETE")
+        print("DISCOVERY COMPLETE")
         print(f"{'='*60}")
         print(f"Facts added: {facts_added}")
         print(f"Total facts: {len(session.fact_store.facts)}")
@@ -339,7 +347,7 @@ def cmd_reason(args):
         sys.exit(1)
 
     if len(session.fact_store.facts) == 0:
-        print(f"\nNo facts to reason about.")
+        print("\nNo facts to reason about.")
         print(f"Run discovery first: python session_cli.py discover {args.session_id}")
         return
 
@@ -356,12 +364,12 @@ def cmd_reason(args):
 
     # Get deal context for prompts
     deal_context = session.get_deal_context_dict()
-    deal_context_prompt = session.get_deal_context_for_prompts()
+    _ = session.get_deal_context_for_prompts()
 
     print(f"\nDeal Type: {deal_context['deal_type']}")
 
     # Start run
-    run = session.start_run("reasoning", args.domains)
+    _ = session.start_run("reasoning", args.domains)
 
     # Clear existing reasoning (we re-run on full fact set)
     session.reasoning_store = ReasoningStore(fact_store=session.fact_store)
@@ -438,7 +446,7 @@ def cmd_reason(args):
         session.save()
 
         print(f"\n{'='*60}")
-        print(f"REASONING COMPLETE")
+        print("REASONING COMPLETE")
         print(f"{'='*60}")
         print(f"Total risks: {len(session.reasoning_store.risks)}")
         print(f"Total work items: {len(session.reasoning_store.work_items)}")
@@ -468,7 +476,7 @@ def cmd_export(args):
 
     outputs = session.export_outputs(output_dir)
 
-    print(f"\nExported files:")
+    print("\nExported files:")
     for name, path in outputs.items():
         print(f"  {name}: {path}")
 
@@ -479,7 +487,7 @@ def cmd_export(args):
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-        print(f"\nGenerating reports...")
+        print("\nGenerating reports...")
 
         html_file = generate_html_report(
             fact_store=session.fact_store,
@@ -550,7 +558,7 @@ def main():
     create_parser.add_argument("--industry", "-i", help="Industry vertical")
 
     # List command
-    list_parser = subparsers.add_parser("list", help="List all sessions")
+    _ = subparsers.add_parser("list", help="List all sessions")
 
     # Status command
     status_parser = subparsers.add_parser("status", help="Show session status")

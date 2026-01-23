@@ -17,7 +17,7 @@ Cost Model:
 
 import logging
 from typing import Dict, List, Optional, Any, Tuple
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 from datetime import datetime
 import json
 import hashlib
@@ -34,11 +34,9 @@ from tools_v2.three_stage_reasoning import (
     format_three_stage_output,
 )
 from tools_v2.refinement_engine import (
-    RefinementSession,
     RefinementInput,
     RefinementType,
     RefinementResult,
-    AnalysisSnapshot,
 )
 
 logger = logging.getLogger(__name__)
@@ -249,7 +247,7 @@ class ThreeStageRefinementSession:
         self.tsa_services = tsa_services
 
         # Take snapshot
-        self._take_snapshot(f"refinement-fast")
+        self._take_snapshot("refinement-fast")
 
         return self._build_current_result(validated=False)
 

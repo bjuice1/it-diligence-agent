@@ -13,7 +13,7 @@ All statements use:
 Output: 4-6 benchmark statements per narrative
 """
 
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
 

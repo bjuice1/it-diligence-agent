@@ -9,15 +9,12 @@ Output: ExecutiveNarrative with all 6 sections
 """
 
 import anthropic
-from typing import Dict, List, Optional, Any
-import json
+from typing import Dict, List, Any
 import logging
-from datetime import datetime
 from time import time
 
 from prompts.v2_narrative_synthesis_prompt import (
     ExecutiveNarrative,
-    NARRATIVE_SYNTHESIS_PROMPT,
     get_synthesis_prompt,
     get_deal_type_emphasis,
     validate_narrative,
@@ -29,9 +26,7 @@ try:
     from prompts.templates import (
         DealType,
         get_template_for_deal_type,
-        get_executive_summary_framing,
-        validate_narrative_for_deal_type,
-        DEAL_TYPE_CONFIGS
+        validate_narrative_for_deal_type
     )
     TEMPLATES_AVAILABLE = True
 except ImportError:
@@ -40,16 +35,10 @@ except ImportError:
 
 # Import rate limiter if available
 try:
-    from config_v2 import (
-        estimate_cost,
-        API_RATE_LIMIT_SEMAPHORE_SIZE,
-        API_RATE_LIMIT_PER_MINUTE
-    )
-    from tools_v2.rate_limiter import APIRateLimiter
+    from config_v2 import estimate_cost
 except ImportError:
     def estimate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
         return 0.0
-    APIRateLimiter = None
 
 
 logger = logging.getLogger(__name__)

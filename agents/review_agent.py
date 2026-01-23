@@ -171,11 +171,11 @@ The goal is ensuring humans receive well-validated findings, not perfect finding
             self.metrics.api_calls += 1
 
             # Parse review response
-            review_output = self._parse_review_response(response.content[0].text, findings)
+            self._parse_review_response(response.content[0].text, findings)
 
         except Exception as e:
             logger.error(f"Review agent error: {e}")
-            review_output = self._create_fallback_review(findings)
+            self._create_fallback_review(findings)
 
         # QUESTION WORKFLOW INTEGRATION
         question_results = {}

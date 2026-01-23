@@ -12,7 +12,7 @@ import streamlit as st
 import re
 import json
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Optional
 from datetime import datetime
 import io
 
@@ -333,7 +333,7 @@ def export_to_markdown(narrative: Dict) -> str:
         md += "\n**Where they're likely constrained**:\n"
         for c in story.get('constraints', []):
             md += f"- {c}\n"
-        md += f"\n**Key dependencies**:\n"
+        md += "\n**Key dependencies**:\n"
         md += f"- *Upstream*: {', '.join(story.get('upstream_dependencies', []))}\n"
         md += f"- *Downstream*: {', '.join(story.get('downstream_dependents', []))}\n"
         md += f"\n**M&A Implication**: {story.get('mna_implication', '')}\n\n"
@@ -392,7 +392,6 @@ def export_to_word(narrative: Dict) -> Optional[bytes]:
     """
     try:
         from docx import Document
-        from docx.shared import Inches, Pt
         from docx.enum.text import WD_ALIGN_PARAGRAPH
     except ImportError:
         return None
@@ -400,7 +399,7 @@ def export_to_word(narrative: Dict) -> Optional[bytes]:
     doc = Document()
 
     # Title
-    title = doc.add_heading(f"IT Operating Model Narrative", 0)
+    title = doc.add_heading("IT Operating Model Narrative", 0)
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     subtitle = doc.add_paragraph(f"{narrative.get('company_name', 'Target Company')}")

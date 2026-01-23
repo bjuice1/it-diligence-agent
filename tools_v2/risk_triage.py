@@ -9,7 +9,6 @@ Post-processes risks from ReasoningStore to categorize them into:
 This keeps the reasoning prompt simple while ensuring clean output categorization.
 """
 
-from dataclasses import dataclass
 from typing import List, Dict, Tuple
 from enum import Enum
 

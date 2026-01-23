@@ -5,7 +5,6 @@ Run with: streamlit run ui/streamlit_app.py
 """
 
 import streamlit as st
-import json
 from pathlib import Path
 import sys
 
@@ -15,13 +14,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from tools_v2.fact_store import FactStore
 from tools_v2.reasoning_integration import (
     run_reasoning_analysis,
-    get_quick_summary,
     compare_scenarios,
     export_to_json,
     export_to_csv,
     VALID_DEAL_TYPES,
 )
-from tools_v2.database import list_deals, get_deal, load_fact_store
+from tools_v2.database import list_deals, load_fact_store
 
 # Page config
 st.set_page_config(

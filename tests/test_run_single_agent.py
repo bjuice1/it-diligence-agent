@@ -10,7 +10,6 @@ Run with: pytest tests/test_run_single_agent.py -v
 import pytest
 import sys
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
 from dataclasses import dataclass
 
 # Add project root to path

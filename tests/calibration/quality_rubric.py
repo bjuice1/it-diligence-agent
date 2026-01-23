@@ -6,7 +6,7 @@ Each dimension is scored 1-5, with weighted aggregation.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional
 from enum import Enum
 import re
 
@@ -166,7 +166,7 @@ def score_evidence_discipline(narrative: Dict) -> DimensionScore:
 
     # Check for inference labels
     inference_count = narrative_text.lower().count("inference:")
-    pattern_count = narrative_text.lower().count("pattern:")
+    _ = narrative_text.lower().count("pattern:")
 
     # Look for likely inferences that aren't labeled
     inference_words = ["likely", "probably", "suggests", "indicates", "appears", "seems"]
@@ -654,9 +654,9 @@ def _count_expected_teams(inventory: Dict) -> int:
 def format_rubric_result(result: RubricResult) -> str:
     """Format rubric result for display."""
     lines = []
-    lines.append(f"=" * 60)
+    lines.append("=" * 60)
     lines.append(f"CALIBRATION RESULT: {result.test_case_id}")
-    lines.append(f"=" * 60)
+    lines.append("=" * 60)
     lines.append("")
     lines.append(f"OVERALL SCORE: {result.overall_score}/100 {'✅ PASS' if result.passing else '❌ FAIL'}")
     lines.append("")

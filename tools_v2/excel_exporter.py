@@ -12,9 +12,8 @@ Exports:
 """
 
 import csv
-import json
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Dict, Optional
 from datetime import datetime
 import logging
 
@@ -24,8 +23,6 @@ logger = logging.getLogger(__name__)
 try:
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-    from openpyxl.utils.dataframe import dataframe_to_rows
-    from openpyxl.chart import BarChart, Reference
     OPENPYXL_AVAILABLE = True
 except ImportError:
     OPENPYXL_AVAILABLE = False
@@ -509,7 +506,7 @@ class ExcelExporter:
                 try:
                     if cell.value:
                         max_length = max(max_length, len(str(cell.value)))
-                except:
+                except Exception:
                     pass
 
             adjusted_width = min(max_length + 2, max_width)

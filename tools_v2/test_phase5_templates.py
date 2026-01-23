@@ -23,7 +23,6 @@ from tools_v2.activity_templates_phase5 import (
     get_phase5_activity_by_id,
     calculate_phase5_activity_cost,
 )
-from tools_v2.activity_templates_v2 import COMPLEXITY_MULTIPLIERS, INDUSTRY_MODIFIERS
 
 
 def test_template_structure():
@@ -388,7 +387,7 @@ def test_combined_all_phases():
 
         print(f"\n  COMBINED TOTAL: ${combined_low:,.0f} - ${combined_high:,.0f}")
 
-        print(f"\n  Activity counts:")
+        print("\n  Activity counts:")
         for name, _, _, count in phases:
             print(f"    {name}: {count} activities")
         print(f"    Total: {total_activities} activities")

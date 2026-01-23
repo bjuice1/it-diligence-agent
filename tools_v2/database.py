@@ -9,9 +9,7 @@ import sqlite3
 import json
 import uuid
 from pathlib import Path
-from datetime import datetime
-from typing import Dict, List, Optional, Any
-from dataclasses import asdict
+from typing import Dict, List, Optional
 
 from tools_v2.fact_store import FactStore, Fact, Gap
 from tools_v2.reasoning_tools import ReasoningStore

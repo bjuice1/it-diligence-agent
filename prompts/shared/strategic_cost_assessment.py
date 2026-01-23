@@ -6,7 +6,7 @@ and deal characteristics, complementing bottom-up inventory costing.
 """
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 from enum import Enum
 
 

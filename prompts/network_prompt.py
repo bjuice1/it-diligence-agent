@@ -167,27 +167,18 @@ Apply the Four-Lens Framework to each of these network areas:
 - File share access
 - Phone systems (if VoIP)
 
-## COST ESTIMATION REFERENCE
+## IMPORTANT: DO NOT ESTIMATE COSTS (Phase 6: Step 67)
 
-**Network work packages:**
-| Work Package | Typical Range |
-|--------------|---------------|
-| Network Discovery & Documentation | $25K-$75K |
-| IP Renumbering (per site) | $15K-$50K |
-| Firewall Migration | $50K-$200K |
-| WAN Circuit Cutover | $25K-$75K |
-| SD-WAN Implementation | $50K-$150K |
-| Network Refresh (per site) | $30K-$100K |
-| DNS Migration | $15K-$40K |
-| Day 1 Connectivity Setup | $25K-$75K |
+**Cost estimation is handled by the dedicated Costing Agent after all domain analyses are complete.**
 
-**Labor rates:**
-| Role | Blended Rate |
-|------|-------------|
-| Network Architect | $200/hr |
-| Network Engineer | $160/hr |
-| Security Engineer | $185/hr |
-| Project Manager | $175/hr |
+Focus your analysis on:
+- FACTS: What exists, configurations, counts
+- RISKS: Network gaps, security issues, obsolete equipment
+- STRATEGIC CONSIDERATIONS: Deal implications, integration complexity
+- WORK ITEMS: Scope and effort level (not dollar amounts)
+
+The Costing Agent will use your findings to generate comprehensive cost estimates.
+Do NOT include dollar amounts or cost ranges in your findings.
 
 ## MANDATORY NON-INTEGRATION RISK EVALUATION
 

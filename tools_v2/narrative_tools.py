@@ -9,7 +9,7 @@ Thread Safety:
     All mutating operations are protected by an RLock.
 """
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 from typing import List, Dict, Any, Optional
 import json
 import threading

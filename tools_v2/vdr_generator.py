@@ -150,7 +150,7 @@ SUGGESTED_DOCUMENTS = {
     "vulnerability": ["Vulnerability scan reports", "Patch management procedures", "Pentest reports"],
     "compliance": ["Compliance certifications", "Audit reports", "Gap assessments"],
     "incident_response": ["IR playbooks", "IR test results", "Incident history"],
-    "governance": ["Security policies", "Security training records", "Risk assessments"],
+    "security_governance": ["Security policies", "Security training records", "Risk assessments"],
 
     # Applications
     "erp": ["ERP architecture", "Customization inventory", "Support contracts"],
@@ -168,7 +168,7 @@ SUGGESTED_DOCUMENTS = {
     "provisioning": ["Provisioning procedures", "User lifecycle documentation"],
     "sso": ["SSO architecture", "Federated app list", "SSO configuration"],
     "mfa": ["MFA rollout status", "MFA policies", "Exemption list"],
-    "governance": ["Access review procedures", "RBAC documentation", "Audit logs"],
+    "iam_governance": ["Access review procedures", "RBAC documentation", "Audit logs"],
 
     # Organization
     "structure": ["IT org chart", "Reporting structure documentation"],
@@ -341,7 +341,7 @@ class VDRGenerator:
     def generate_markdown(self) -> str:
         """Generate markdown-formatted VDR request list."""
         pack = self.generate()
-        sorted_requests = pack.get_sorted()
+        _ = pack.get_sorted()
 
         lines = [
             "# VDR Request Pack",

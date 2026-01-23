@@ -6,11 +6,9 @@ Handles cleanup of temporary files and resources when process is interrupted (Ct
 
 import signal
 import atexit
-import tempfile
 import os
 import logging
-from typing import Set, Optional
-from pathlib import Path
+from typing import Set
 
 logger = logging.getLogger(__name__)
 

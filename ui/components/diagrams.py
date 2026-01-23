@@ -6,7 +6,7 @@ Provides mermaid diagram rendering, charts, and other visualizations.
 
 import streamlit as st
 import streamlit.components.v1 as components
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 
 
 def render_mermaid(mermaid_code: str, height: int = 400) -> None:
@@ -96,7 +96,7 @@ def render_risk_distribution_chart(risks: List[Dict]) -> None:
             severity_counts[sev] += 1
 
     # Create chart
-    chart_data = pd.DataFrame({
+    _ = pd.DataFrame({
         "Severity": list(severity_counts.keys()),
         "Count": list(severity_counts.values())
     })

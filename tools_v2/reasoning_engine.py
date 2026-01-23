@@ -11,9 +11,8 @@ The core intelligence that:
 The engine EXPLAINS its reasoning - it doesn't just produce numbers.
 """
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple, Any, Set
-from enum import Enum
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple, Any
 import json
 import hashlib
 import re
@@ -515,7 +514,7 @@ class ReasoningEngine:
                     workstream="security" if "mfa" in gap_key or "edr" in gap_key or "siem" in gap_key else "general",
                     finding=config["finding"],
                     implication=config["implication"],
-                    reasoning=f"This gap must be addressed to ensure secure operations post-transaction",
+                    reasoning="This gap must be addressed to ensure secure operations post-transaction",
                     supporting_facts=[f.get("fact_id", "unknown") for f in matching_facts],
                     deal_relevance="Requires remediation regardless of deal type",
                     milestone_impact={
@@ -987,7 +986,7 @@ class ReasoningEngine:
         activity_id = 1
 
         user_count = quant_context.get("user_count", 1000)
-        site_count = quant_context.get("site_count", 5)
+        _ = quant_context.get("site_count", 5)
         app_count = quant_context.get("app_count", 20)
         server_count = quant_context.get("server_count", 50)
 
@@ -1114,7 +1113,7 @@ class ReasoningEngine:
                         workstream="applications",
                         name="ERP consolidation assessment",
                         description=f"Assess path to consolidate {mismatch['target']} into buyer's {mismatch['buyer']}",
-                        why_needed=f"Two ERP systems is expensive and complex. Consolidation yields synergies.",
+                        why_needed="Two ERP systems is expensive and complex. Consolidation yields synergies.",
                         triggered_by=[],
                         cost_range=(100000, 300000),
                         timeline_months=(1, 3),
@@ -1379,11 +1378,11 @@ class ReasoningEngine:
             intro = f"This {deal_type} involves integrating a {user_count:,}-user organization into the buyer's IT environment."
 
         exec_lines = [
-            f"## Executive Summary",
+            "## Executive Summary",
             "",
             intro,
             "",
-            f"**Key Findings:**",
+            "**Key Findings:**",
         ]
 
         critical_considerations = [c for c in considerations if c.criticality == "critical"]
@@ -1486,7 +1485,6 @@ class ReasoningEngine:
         tech_stack = self.identify_technology_stack(all_facts)
 
         # Derive activities based on deal type
-        synergies = []
         if deal_type.lower() == "carveout" or deal_type.lower() == "divestiture":
             activities = self.derive_activities_for_carveout(all_considerations, quant_context)
         elif deal_type.lower() == "acquisition" or deal_type.lower() == "platform_addon":
@@ -1499,7 +1497,7 @@ class ReasoningEngine:
             activities = self.derive_activities_for_acquisition(
                 all_considerations, tech_mismatches, quant_context, buyer_context or {}
             )
-            synergies = self.derive_synergy_opportunities(tech_mismatches, quant_context)
+            _ = self.derive_synergy_opportunities(tech_mismatches, quant_context)
         else:
             # Default to carveout logic
             activities = self.derive_activities_for_carveout(all_considerations, quant_context)

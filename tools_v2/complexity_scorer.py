@@ -8,7 +8,7 @@ approach that led to inconsistent ratings across runs.
 Complexity is determined by specific, documented triggers - not LLM interpretation.
 """
 
-from typing import Dict, List, Any, Tuple, Optional
+from typing import Dict, List, Any, Tuple
 from dataclasses import dataclass
 import logging
 

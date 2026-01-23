@@ -19,14 +19,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from tools_v2.three_stage_reasoning import (
     normalize_category,
-    CATEGORY_SYNONYMS,
     stage2_match_activities,
     IdentifiedConsideration,
-    QuantitativeContext,
-    ACTIVITY_TEMPLATES,
-    OPERATIONAL_RUNRATE_TEMPLATES,
 )
-from tools_v2.feedback_tracker import FeedbackTracker, CostOverride
+from tools_v2.feedback_tracker import FeedbackTracker
 
 
 def test_category_normalization():
@@ -122,7 +118,7 @@ def test_quantity_tracking():
     # Verify
     extracted_ok = quant_ctx.user_count_source == "extracted"
     assumed_ok = quant_ctx2.user_count_source == "assumed"
-    formula_flagged = "[ASSUMED]" in activities2[2].cost_formula if len(activities2) > 2 else True
+    _ = "[ASSUMED]" in activities2[2].cost_formula if len(activities2) > 2 else True
 
     print(f"\n  Results: extracted tracking={'✓' if extracted_ok else '✗'}, "
           f"assumed tracking={'✓' if assumed_ok else '✗'}")
@@ -297,19 +293,19 @@ def test_feedback_tracker():
 
     # Get stats for an activity
     stats = tracker.get_template_stats("Migrate user accounts")
-    print(f"\n  Stats for 'Migrate user accounts':")
+    print("\n  Stats for 'Migrate user accounts':")
     print(f"    Times overridden: {stats.times_overridden}")
     print(f"    Avg delta %: {stats.avg_delta_percent:.1f}%")
     print(f"    Override contexts: {stats.override_contexts}")
 
     # Generate report
     report = tracker.generate_report()
-    print(f"\n  Feedback Report:")
+    print("\n  Feedback Report:")
     print(f"    Total overrides: {report['total_cost_overrides']}")
     print(f"    Unique activities: {report['unique_activities_overridden']}")
 
     if report['recommendations']:
-        print(f"    Recommendations:")
+        print("    Recommendations:")
         for r in report['recommendations'][:3]:
             print(f"      - {r}")
 
@@ -342,8 +338,8 @@ def test_workstream_fallback():
         include_runrate=False,
     )
 
-    print(f"\n  Category used: 'completely_made_up_category'")
-    print(f"  Workstream: 'identity'")
+    print("\n  Category used: 'completely_made_up_category'")
+    print("  Workstream: 'identity'")
     print(f"  Activities matched: {len(activities)}")
 
     if activities:

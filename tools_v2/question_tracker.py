@@ -6,7 +6,7 @@ and which remain open (gaps requiring follow-up).
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set
 from enum import Enum
 import re
 

@@ -8,7 +8,7 @@ Each work item goes through: Research → Review → Refine → Summary
 import os
 import json
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional
 from datetime import datetime
 from anthropic import Anthropic
 
@@ -16,7 +16,6 @@ from tools.costing_tools import (
     CostEstimationLog,
     CostRefinementStore,
     StageLog,
-    get_tools_for_stage,
     execute_costing_tool,
     STAGE1_RESEARCH_TOOLS,
     STAGE2_REVIEW_TOOLS,
@@ -362,8 +361,6 @@ def refine_all_work_items(
 # =============================================================================
 
 if __name__ == "__main__":
-    import sys
-
     # Configure logging
     logging.basicConfig(
         level=logging.INFO,

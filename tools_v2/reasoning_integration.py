@@ -9,7 +9,7 @@ This module handles the conversion and orchestration so the
 reasoning engine can be easily integrated into the main pipeline.
 """
 
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, asdict
 import json
 import csv

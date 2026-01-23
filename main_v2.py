@@ -60,7 +60,7 @@ from config_v2 import (
 )
 from tools_v2.fact_store import FactStore
 from tools_v2.reasoning_tools import ReasoningStore
-from tools_v2.session import DDSession, DealContext, DealType
+from tools_v2.session import DDSession
 from tools_v2.coverage import CoverageAnalyzer
 from tools_v2.vdr_generator import VDRGenerator
 from tools_v2.synthesis import SynthesisAnalyzer
@@ -137,7 +137,8 @@ def run_discovery(
     document_text: str,
     domain: str = "infrastructure",
     fact_store: Optional[FactStore] = None,
-    target_name: Optional[str] = None
+    target_name: Optional[str] = None,
+    industry: Optional[str] = None
 ) -> FactStore:
     """
     Run discovery phase for a domain.
@@ -147,6 +148,11 @@ def run_discovery(
         domain: Domain to analyze
         fact_store: Existing FactStore to add to (optional)
         target_name: Name of the target company (helps agent focus on correct entity)
+        industry: Industry for industry-aware discovery (applications domain).
+                  Valid keys: healthcare, financial_services, manufacturing,
+                  aviation_mro, defense_contractor, life_sciences, retail,
+                  logistics, energy_utilities, insurance, construction,
+                  food_beverage, professional_services, education, hospitality
 
     Returns:
         FactStore with extracted facts
@@ -155,7 +161,7 @@ def run_discovery(
         fact_store = FactStore()
 
     print(f"\n{'='*60}")
-    print(f"PHASE 1: DISCOVERY")
+    print("PHASE 1: DISCOVERY")
     print(f"Domain: {domain}")
     print(f"Model: {DISCOVERY_MODEL}")
     if target_name:
@@ -167,20 +173,29 @@ def run_discovery(
         raise ValueError(f"Discovery agent not available for domain: {domain}")
 
     agent_class = DISCOVERY_AGENTS[domain]
-    agent = agent_class(
-        fact_store=fact_store,
-        api_key=ANTHROPIC_API_KEY,
-        model=DISCOVERY_MODEL,
-        max_tokens=DISCOVERY_MAX_TOKENS,
-        max_iterations=DISCOVERY_MAX_ITERATIONS,
-        target_name=target_name
-    )
+
+    # Build agent kwargs
+    agent_kwargs = {
+        "fact_store": fact_store,
+        "api_key": ANTHROPIC_API_KEY,
+        "model": DISCOVERY_MODEL,
+        "max_tokens": DISCOVERY_MAX_TOKENS,
+        "max_iterations": DISCOVERY_MAX_ITERATIONS,
+        "target_name": target_name
+    }
+
+    # For applications domain, pass industry for industry-aware discovery
+    if domain == "applications" and industry:
+        agent_kwargs["industry"] = industry
+        print(f"Industry-aware discovery: {industry}")
+
+    agent = agent_class(**agent_kwargs)
 
     # Run discovery
     result = agent.discover(document_text)
 
     # Print summary
-    print(f"\nDiscovery Summary:")
+    print("\nDiscovery Summary:")
     print(f"  Facts extracted: {result['metrics'].get('facts_extracted', len(result['facts']))}")
     print(f"  Gaps identified: {result['metrics'].get('gaps_flagged', len(result['gaps']))}")
 
@@ -209,7 +224,7 @@ def run_reasoning(
         Dict with reasoning results
     """
     print(f"\n{'='*60}")
-    print(f"PHASE 2: REASONING")
+    print("PHASE 2: REASONING")
     print(f"Domain: {domain}")
     print(f"Model: {REASONING_MODEL}")
     print(f"{'='*60}")
@@ -244,7 +259,7 @@ def run_reasoning(
     result = agent.reason(deal_context)
 
     # Print summary
-    print(f"\nReasoning Summary:")
+    print("\nReasoning Summary:")
     findings = result.get('findings', {}).get('summary', {})
     print(f"  Risks: {findings.get('risks', 0)}")
     print(f"  Strategic considerations: {findings.get('strategic_considerations', 0)}")
@@ -297,7 +312,7 @@ def run_coverage_analysis(fact_store: FactStore) -> Dict:
         Dict with coverage results
     """
     print(f"\n{'='*60}")
-    print(f"PHASE 3: COVERAGE ANALYSIS")
+    print("PHASE 3: COVERAGE ANALYSIS")
     print(f"{'='*60}")
 
     analyzer = CoverageAnalyzer(fact_store)
@@ -310,7 +325,7 @@ def run_coverage_analysis(fact_store: FactStore) -> Dict:
     print(f"Missing Critical Items: {len(coverage['missing_critical'])}")
 
     # Per-domain breakdown
-    print(f"\nDomain Coverage:")
+    print("\nDomain Coverage:")
     for domain, data in coverage['domains'].items():
         if data['facts'] > 0 or data['gaps'] > 0:
             print(f"  {domain}: {data['coverage_percent']:.1f}% "
@@ -369,7 +384,7 @@ def run_synthesis(
         Dict with synthesis results
     """
     print(f"\n{'='*60}")
-    print(f"PHASE 4: SYNTHESIS")
+    print("PHASE 4: SYNTHESIS")
     print(f"{'='*60}")
 
     analyzer = SynthesisAnalyzer(fact_store, reasoning_store)
@@ -388,7 +403,7 @@ def run_synthesis(
               f"{group['finding_count']} findings "
               f"(${cost_low:,} - ${cost_high:,})")
 
-    print(f"\nCost Summary:")
+    print("\nCost Summary:")
     cost = results['cost_summary']
     print(f"  Total: ${cost['total']['low']:,} - ${cost['total']['high']:,}")
     print(f"  Day 1: ${cost['by_phase']['Day_1']['low']:,} - ${cost['by_phase']['Day_1']['high']:,}")
@@ -416,13 +431,13 @@ def run_vdr_generation(
         Dict with VDR results
     """
     print(f"\n{'='*60}")
-    print(f"PHASE 5: VDR REQUEST GENERATION")
+    print("PHASE 5: VDR REQUEST GENERATION")
     print(f"{'='*60}")
 
     generator = VDRGenerator(fact_store, reasoning_store)
     pack = generator.generate()
 
-    print(f"\nVDR Request Pack Summary:")
+    print("\nVDR Request Pack Summary:")
     print(f"  Total Requests: {pack.total_count}")
     print(f"  Critical: {pack.critical_count}")
     print(f"  High: {pack.high_count}")
@@ -432,7 +447,7 @@ def run_vdr_generation(
     # Show top 5 critical requests
     critical = pack.get_by_priority('critical')[:5]
     if critical:
-        print(f"\nTop Critical Requests:")
+        print("\nTop Critical Requests:")
         for req in critical:
             print(f"  [{req.request_id}] {req.title[:50]}")
 
@@ -671,7 +686,7 @@ def run_parallel_discovery(
     print(f"\nDiscovery complete: {fact_count} total facts, {gap_count} gaps")
     
     # Check for successful domains
-    successful = [r for r in results if r.get("status") == "success"]
+    _ = [r for r in results if r.get("status") == "success"]
     failed = [r for r in results if r.get("status") == "error"]
     
     if failed:
@@ -755,7 +770,7 @@ def run_parallel_reasoning(
                 all_results[domain] = {"error": error_msg}
 
     # Report summary
-    successful = [d for d, r in all_results.items() if "error" not in r]
+    _ = [d for d, r in all_results.items() if "error" not in r]
     failed = [d for d, r in all_results.items() if "error" in r]
     
     if failed:
@@ -1098,7 +1113,7 @@ Phases:
             if dd_session:
                 # Get deal context from session with formatted prompt context
                 deal_context = get_deal_context_from_session(dd_session)
-                print(f"\nUsing deal context from session:")
+                print("\nUsing deal context from session:")
                 print(f"  Deal Type: {deal_context.get('deal_type', 'platform')}")
                 if deal_context.get('buyer_name'):
                     print(f"  Buyer: {deal_context.get('buyer_name')}")
@@ -1416,7 +1431,7 @@ Phases:
                         vdr_pack_obj = VDRRequestPack.from_dict(vdr_data)
 
                 try:
-                    export_result = export_to_excel(
+                    export_to_excel(
                         fact_store=fact_store,
                         reasoning_store=merged_reasoning_store,
                         output_path=excel_file,
@@ -1466,7 +1481,7 @@ Phases:
                 print(f"Total Cost Range: ${cost['low']:,} - ${cost['high']:,}")
 
             # Per-domain breakdown
-            print(f"\nPer-Domain Summary:")
+            print("\nPer-Domain Summary:")
             for domain in domains_to_analyze:
                 domain_facts = fact_store.get_domain_facts(domain)
                 if domain in all_reasoning_results and all_reasoning_results[domain].get('findings'):
@@ -1491,7 +1506,7 @@ Phases:
             dd_session.save()
             print(f"\nSession saved: {dd_session.session_id}")
 
-        print(f"\nOutputs:")
+        print("\nOutputs:")
         print(f"  Facts: {facts_file}")
         if findings_file:
             print(f"  Findings: {findings_file}")

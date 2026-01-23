@@ -18,21 +18,15 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from tools_v2.activity_templates_phase10 import (
-    get_all_templates,
     get_activity_by_id,
     get_unified_activity_catalog,
     get_activity_count_by_phase,
     estimate_deal_costs,
-    compare_deal_scenarios,
     analyze_activity_coverage,
-    get_activities_by_type,
-    get_tsa_activities,
     validate_all_activities,
     check_id_uniqueness,
     calibrate_to_target,
     generate_executive_summary,
-    get_phase_summary,
-    DEAL_PROFILES,
 )
 
 
@@ -58,8 +52,8 @@ def test_unified_catalog():
         print(f"  MISMATCH: catalog={len(catalog)}, sum={total_from_counts}")
         return False
 
-    # Check we have activities from all 9 phases
-    expected_phases = 9
+    # Check we have activities from all 8 phases (one-time costs only)
+    expected_phases = 8
     actual_phases = len(counts)
 
     print(f"\n  Phases covered: {actual_phases} (expected: {expected_phases})")
@@ -80,9 +74,8 @@ def test_activity_lookup():
         ("DAT-001", "phase4_end_user"),         # Data landscape discovery
         ("LIC-MS-001", "phase5_security"),      # Microsoft 365 E5/E3 licensing
         ("INT-001", "phase6_data"),             # Integration landscape discovery
-        ("OPS-INF-001", "phase7_operations"),   # Cloud infrastructure IaaS
-        ("CMP-PRV-001", "phase8_compliance"),   # Privacy program assessment
-        ("VND-CON-001", "phase9_vendor"),       # IT contract inventory
+        ("CMP-PRV-001", "phase7_compliance"),   # Privacy program assessment
+        ("VND-CON-001", "phase8_vendor"),       # IT contract inventory
     ]
 
     all_found = True
@@ -100,9 +93,9 @@ def test_activity_lookup():
     # Test non-existent ID
     fake_activity = get_activity_by_id("FAKE-ID-999")
     if fake_activity is None:
-        print(f"  ✓ Non-existent ID correctly returns None")
+        print("  ✓ Non-existent ID correctly returns None")
     else:
-        print(f"  ✗ Non-existent ID should return None")
+        print("  ✗ Non-existent ID should return None")
         all_found = False
 
     return all_found
@@ -161,9 +154,9 @@ def test_id_uniqueness():
 
 
 def test_deal_estimation():
-    """Test deal cost estimation."""
+    """Test deal cost estimation (one-time costs only)."""
     print("\n" + "="*70)
-    print("TEST 5: Deal Cost Estimation")
+    print("TEST 5: Deal Cost Estimation (One-Time)")
     print("="*70)
 
     test_scenarios = ["carveout_small", "carveout_medium", "carveout_large", "standalone"]
@@ -171,14 +164,10 @@ def test_deal_estimation():
     for scenario in test_scenarios:
         estimate = estimate_deal_costs(scenario, industry="standard")
 
-        one_time = estimate["one_time_costs"]
-        annual = estimate["annual_costs"]
         total = estimate["total_costs"]
 
         print(f"\n  {scenario}:")
-        print(f"    One-time: ${one_time['low']:,.0f} - ${one_time['high']:,.0f}")
-        print(f"    Annual:   ${annual['low']:,.0f} - ${annual['high']:,.0f}")
-        print(f"    Total:    ${total['low']:,.0f} - ${total['high']:,.0f}")
+        print(f"    Total: ${total['low']:,.0f} - ${total['high']:,.0f}")
 
     # Verify costs scale with deal size
     small = estimate_deal_costs("carveout_small")
@@ -262,7 +251,7 @@ def test_calibration():
 
     print(f"\n  Target: ${target:,.0f}")
     print(f"  Current estimate: ${calibration['current_estimate']['low']:,.0f} - ${calibration['current_estimate']['high']:,.0f}")
-    print(f"\n  Adjustment factors:")
+    print("\n  Adjustment factors:")
     print(f"    To match low:  {calibration['adjustment_factors']['to_match_low']:.2f}x")
     print(f"    To match mid:  {calibration['adjustment_factors']['to_match_mid']:.2f}x")
     print(f"    To match high: {calibration['adjustment_factors']['to_match_high']:.2f}x")
@@ -289,7 +278,7 @@ def test_executive_summary():
 
 
 def test_comprehensive_scenario():
-    """Test comprehensive multi-phase scenario."""
+    """Test comprehensive multi-phase scenario (one-time costs only)."""
     print("\n" + "="*70)
     print("TEST 10: Comprehensive Multi-Phase Scenario")
     print("="*70)
@@ -298,34 +287,33 @@ def test_comprehensive_scenario():
     print("  - 5,000 users")
     print("  - Complex environment")
     print("  - Regulated industry")
+    print("  - One-time costs only (no run-rate)")
 
     estimate = estimate_deal_costs(
         deal_type="carveout_large",
         industry="financial_services",
     )
 
-    print(f"\n  Parameters:")
+    print("\n  Parameters:")
     for param, value in estimate["parameters"].items():
         if isinstance(value, (int, float)):
             print(f"    {param}: {value:,}")
         else:
             print(f"    {param}: {value}")
 
-    print(f"\n  Phase costs:")
+    print("\n  Phase costs:")
     for phase, data in sorted(estimate["phases"].items()):
         print(f"    {phase}: ${data['low']:,.0f} - ${data['high']:,.0f}")
 
-    print(f"\n  ONE-TIME COSTS: ${estimate['one_time_costs']['low']:,.0f} - ${estimate['one_time_costs']['high']:,.0f}")
-    print(f"  ANNUAL RUN-RATE: ${estimate['annual_costs']['low']:,.0f} - ${estimate['annual_costs']['high']:,.0f}")
-    print(f"  YEAR 1 TOTAL: ${estimate['total_costs']['low']:,.0f} - ${estimate['total_costs']['high']:,.0f}")
+    print(f"\n  TOTAL ONE-TIME COSTS: ${estimate['total_costs']['low']:,.0f} - ${estimate['total_costs']['high']:,.0f}")
 
     # Reasonableness check for large (5,000 user) complex financial services carveout
     # This is a massive deal - costs include ALL activities across ALL workstreams
     # Real deals would select relevant subset, so these are comprehensive maximums
-    # One-time: $100M - $300M range (low), $300M - $700M range (high)
+    # One-time: $80M - $250M range (low), $250M - $600M range (high) - reduced without run-rate
     one_time_reasonable = (
-        100_000_000 < estimate["one_time_costs"]["low"] < 300_000_000 and
-        300_000_000 < estimate["one_time_costs"]["high"] < 700_000_000
+        80_000_000 < estimate["total_costs"]["low"] < 250_000_000 and
+        250_000_000 < estimate["total_costs"]["high"] < 600_000_000
     )
 
     print(f"\n  Reasonableness check: {'PASS' if one_time_reasonable else 'FAIL'}")

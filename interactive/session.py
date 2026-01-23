@@ -5,12 +5,11 @@ Holds the current state including FactStore, ReasoningStore,
 modification history, and deal context.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 from pathlib import Path
 import json
-import copy
 
 from tools_v2.fact_store import FactStore
 from tools_v2.reasoning_tools import ReasoningStore

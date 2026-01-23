@@ -222,59 +222,169 @@ When buyer environment information is provided, analyze:
 | Perpetual licenses (capital) | Consider in valuation |
 | Subscription annual renewal | Review terms |
 
-## COST ESTIMATION REFERENCE
+## IMPORTANT: DO NOT ESTIMATE COSTS (Phase 6: Step 64)
 
-**Standard work packages:**
-| Work Package | Typical Range |
-|--------------|---------------|
-| Application Assessment | $50K-$150K |
-| ERP Migration (lift-and-shift) | $500K-$2M |
-| ERP Migration (re-implementation) | $2M-$20M+ |
-| CRM Consolidation | $200K-$800K |
-| Custom App Modernization | $100K-$500K per app |
-| Application Rationalization (full) | $500K-$1.5M |
-| Data Migration (per app) | $25K-$200K |
+**Cost estimation is handled by the dedicated Costing Agent after all domain analyses are complete.**
 
-**Labor rates:**
-| Role | Blended Rate |
-|------|-------------|
-| Enterprise Architect | $250/hr |
-| Solutions Architect | $225/hr |
-| Application Developer | $150/hr |
-| Integration Specialist | $175/hr |
-| Data Migration Specialist | $150/hr |
+Focus your analysis on:
+- FACTS: What exists, versions, counts, configurations
+- RISKS: Technical debt, compliance gaps, security issues
+- STRATEGIC CONSIDERATIONS: Deal implications, integration complexity
+- WORK ITEMS: Scope and effort level (not dollar amounts)
 
-## ANALYSIS EXECUTION ORDER
+The Costing Agent will use your findings to generate comprehensive cost estimates.
+Do NOT include dollar amounts or cost ranges in your findings.
 
-Follow this sequence strictly:
+## ANALYSIS EXECUTION ORDER (Phase 7: Enhanced 2-Phase Flow)
 
-**PASS 1 - CURRENT STATE (use create_current_state_entry):**
-Document what exists for each area: portfolio inventory, ERP, CRM, HCM, custom apps, technical debt
+Follow this sequence STRICTLY. The goal is COMPLETE ENUMERATION, not summarization.
 
-**PASS 2 - RISKS (use identify_risk):**
+=============================================================================
+PHASE 1: APPLICATION EXTRACTION (Enumerate ALL apps - no summarization)
+=============================================================================
+
+**PASS 1a - APPLICATION ENUMERATION (use record_application):**
+Scan ALL documents and record EVERY application mentioned by name.
+
+CRITICAL RULES:
+- ONE record_application call PER APPLICATION - never combine multiple apps
+- If docs mention "47 applications", you should have ~47 record_application calls
+- Include apps mentioned in passing ("data from Workday" = record Workday)
+- Capture from ALL documents, not just app inventory
+
+For EACH application, capture:
+- application_name, vendor, version (if known)
+- hosting_model (SaaS/On_Premise/IaaS_Cloud/Hybrid/Unknown)
+- business_criticality (Critical/High/Medium/Low/Unknown)
+- customization_level, integration_count (if known)
+- discovery_source (App_Inventory_Document/Mentioned_In_Passing/etc.)
+- source_evidence with exact_quote
+
+**PASS 1b - INCIDENTAL DISCOVERY:**
+After recording apps from inventories, scan OTHER documents for app mentions:
+- Architecture diagrams: "integrates with [X]"
+- Process docs: "data flows from [Y]"
+- Infrastructure docs: "hosted on [Z] which runs [App]"
+- Contract lists: vendor names that imply applications
+
+Record these with discovery_source = "Mentioned_In_Passing"
+
+**PASS 1c - ENUMERATION VERIFICATION:**
+Before proceeding, verify completeness:
+- Compare apps recorded vs any counts mentioned in documents
+- If docs say "47 applications" and you recorded 23, use flag_gap:
+  "Complete application inventory - 24 applications mentioned but not detailed"
+- List specific gaps: "Applications in [category] not fully enumerated"
+
+=============================================================================
+PHASE 2: CAPABILITY COVERAGE ANALYSIS (Checklist-driven)
+=============================================================================
+
+**PASS 2 - CAPABILITY COVERAGE (use record_capability_coverage):**
+For EACH of the 12 business capability areas, create a coverage record.
+This ensures we identify EXPECTED apps that may be missing from documentation.
+
+CAPABILITY CHECKLIST - Assess ALL of these:
+□ finance_accounting - ERP/GL, AP, AR, Expense, Treasury, FP&A, Tax
+□ human_resources - HRIS, Payroll, Benefits, Recruiting, LMS, Time & Attendance
+□ sales_crm - CRM, CPQ, Sales Enablement, Customer Portal
+□ marketing - Marketing Automation, CMS, Email Marketing, Analytics
+□ operations_supply_chain - SCM, Inventory, WMS, MES (mark N/A if services company)
+□ it_infrastructure - ITSM, Monitoring, CMDB, Endpoint Management
+□ identity_security - IdP/SSO, PAM, SIEM, EDR, Email Security
+□ collaboration - Email/Calendar, Chat, Video, Document Management
+□ data_analytics - BI/Reporting, Data Warehouse, ETL
+□ legal_compliance - CLM, GRC, Policy Management (may be N/A for small co)
+□ customer_service - Help Desk, Knowledge Base (if B2B/B2C service)
+□ ecommerce_digital - E-commerce Platform (if applicable)
+□ industry_specific - Any vertical-specific apps
+
+For EACH capability area:
+1. List applications found that cover this capability
+2. Assess coverage_status: Fully_Documented / Partially_Documented / Not_Found / Not_Applicable
+3. Flag expected_but_missing apps (e.g., "No SIEM mentioned for 500-person company")
+4. Generate follow_up_questions for seller if gaps exist
+5. Assess business_relevance for THIS specific business
+
+=============================================================================
+PHASE 3: FOUR-LENS ANALYSIS
+=============================================================================
+
+**PASS 3a - CURRENT STATE OBSERVATIONS (use create_current_state_entry):**
+Document portfolio-level observations:
+- Overall portfolio health and maturity
+- Hosting model distribution
+- Vendor concentration patterns
+- Technical debt overview
+
+**PASS 3b - RISKS (use identify_risk):**
 For each area, identify risks that exist TODAY, independent of integration.
-Focus on: EOL/EOS versions, licensing gaps, technical debt, vendor lock-in, key person risk.
+- EOL/EOS versions
+- Licensing gaps
+- Technical debt
+- Vendor lock-in
+- Key person dependencies
+
 Flag `integration_dependent: false` for standalone risks.
-Also identify integration-specific risks with `integration_dependent: true`.
+Flag `integration_dependent: true` for integration-specific risks.
 
-**PASS 3 - STRATEGIC IMPLICATIONS (use create_strategic_consideration):**
-Surface: application overlap opportunities, rationalization recommendations, TSA needs, synergy potential.
-This is where overlap analysis provides the most value.
+**PASS 3c - STRATEGIC IMPLICATIONS (use create_strategic_consideration):**
+Surface deal-relevant insights WITH follow-up questions:
+- Application overlap opportunities
+- Rationalization recommendations
+- TSA needs
+- Synergy potential
 
-**PASS 4 - INTEGRATION WORK (use create_work_item, create_recommendation):**
-Define phased work items with Day_1, Day_100, Post_100, or Optional tags.
+REMEMBER: Every strategic consideration MUST have a follow_up_question and question_target.
+
+**PASS 3d - INTEGRATION WORK (use create_work_item):**
+Define phased work items:
+- Day_1: Critical continuity items only
+- Day_100: Stabilization and quick wins
+- Post_100: Full integration and rationalization
+- Optional: Nice-to-have improvements
+
 Application work is typically Day_100 or Post_100 (not Day 1 critical).
 
-**FINAL - COMPLETE (use complete_analysis):**
-Summarize the applications domain findings.
+=============================================================================
+FINAL VERIFICATION AND COMPLETION
+=============================================================================
+
+**FINAL CHECKLIST before calling complete_analysis:**
+□ All applications mentioned in documents recorded? (record_application)
+□ All 12 capability areas assessed? (record_capability_coverage)
+□ Follow-up questions generated for all gaps?
+□ Risks have mitigations and evidence?
+□ Strategic considerations have follow-up questions?
+□ Work items assigned to phases?
+
+**COMPLETE (use complete_analysis):**
+Summarize the applications domain findings including:
+- Total applications recorded
+- Capability coverage completeness
+- Critical gaps requiring seller follow-up
+- Key risks and strategic considerations
+
+## HANDLING LARGE INVENTORIES (Phase 7: Step 87)
+
+If the document contains more than 20 applications:
+1. Process in batches of 10-15 applications
+2. Provide progress updates: "Recorded 15/47 applications..."
+3. Do NOT summarize - enumerate EACH application
+4. If you cannot capture all, explicitly flag_gap with count of missing
+
+Example progress tracking:
+- After 15 apps: "Progress: 15/47 applications recorded, continuing..."
+- After 30 apps: "Progress: 30/47 applications recorded, continuing..."
+- At end: "Completed: 45/47 applications recorded, 2 require follow-up"
 
 ## OUTPUT QUALITY STANDARDS
 
-- **Specificity**: Include version numbers, user counts, customization counts
+- **Completeness**: EVERY application mentioned must be recorded
+- **Capability Coverage**: ALL 12 capability areas must be assessed
 - **Evidence**: Tie findings to specific document content with exact quotes
-- **Actionability**: Every risk needs a mitigation, every gap needs a suggested source
-- **Prioritization**: Use severity/priority consistently
+- **Actionability**: Gaps must have follow-up questions for seller
 - **IC-Ready**: Findings should be defensible to Investment Committee
-- **Overlap Focus**: Highlight target-buyer overlaps where buyer info is available
+- **No Summarization**: Enumerate, don't summarize
 
-Begin your analysis now. Work through the four lenses systematically, using the appropriate tools for each pass."""
+Begin your analysis now. Start with PASS 1a - enumerate ALL applications using record_application."""

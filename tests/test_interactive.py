@@ -2,17 +2,14 @@
 Tests for the interactive CLI module.
 """
 
-import pytest
 import json
 import tempfile
 from pathlib import Path
-from datetime import datetime
 
 from interactive import Session, InteractiveCLI, COMMANDS
-from interactive.session import Modification
 from interactive.commands import (
     cmd_help, cmd_status, cmd_list, cmd_explain,
-    cmd_adjust, cmd_undo, cmd_add, cmd_clear, cmd_show, cmd_export,
+    cmd_adjust, cmd_undo, cmd_add, cmd_clear, cmd_show,
     cmd_delete, cmd_note, cmd_search, cmd_history,
     VALID_SEVERITIES, VALID_PHASES, VALID_PRIORITIES, VALID_OWNERS, VALID_COST_ESTIMATES,
     VALID_DOMAINS

@@ -11,7 +11,7 @@ Primary M&A Lenses: synergy_opportunity, day_1_continuity
 Key Question: "How do we integrate?"
 """
 
-from typing import Dict, List, Any
+from typing import List
 
 
 # =============================================================================
