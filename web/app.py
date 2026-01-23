@@ -54,44 +54,88 @@ session_store.configure(
 
 
 def get_session():
-    """Get the analysis session for the current user."""
+    """Get the analysis session for the current user.
+
+    IMPORTANT: This function now checks for newer files on disk and invalidates
+    cached sessions if newer data exists. This fixes the stale cache issue.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
     session_id = get_or_create_session_id(flask_session)
     user_session = session_store.get_session(session_id)
 
+    # First, find the newest valid facts file on disk
+    from config_v2 import OUTPUT_DIR
+
+    facts_files = sorted(OUTPUT_DIR.glob("facts_*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
+    findings_files = sorted(OUTPUT_DIR.glob("findings_*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
+
+    newest_facts_file = None
+    newest_facts_mtime = 0
+
+    for f in facts_files:
+        if f.stat().st_size > 500:  # Skip empty files
+            newest_facts_file = f
+            newest_facts_mtime = f.stat().st_mtime
+            break
+
+    # Check if we have a cached session and if it's still valid
     if user_session and user_session.analysis_session:
-        return user_session.analysis_session
+        cached = user_session.analysis_session
+        if cached.fact_store and len(cached.fact_store.facts) > 0:
+            # Check if cache is newer than files (cache is valid)
+            cache_time = getattr(user_session, '_cache_mtime', 0)
+            if cache_time >= newest_facts_mtime:
+                logger.debug(f"Using cached session with {len(cached.fact_store.facts)} facts (cache valid)")
+                return cached
+            else:
+                logger.info(f"Cache stale: cache_time={cache_time}, newest_file_time={newest_facts_mtime}")
+                # Clear stale cache
+                user_session.analysis_session = None
+                clear_organization_cache()  # Also clear org cache when session cache invalidated
 
     # Try to load from task results if available
     task_id = flask_session.get('current_task_id')
     if task_id:
         task = task_manager.get_task(task_id)
         if task and task.status == TaskStatus.COMPLETED and task.facts_file:
+            logger.info(f"Loading session from task {task_id}: {task.facts_file}")
             analysis_session = session_store.load_session_from_results(
                 session_id,
                 task.facts_file,
                 task.findings_file
             )
-            if analysis_session:
+            if analysis_session and analysis_session.fact_store and len(analysis_session.fact_store.facts) > 0:
+                logger.info(f"Loaded {len(analysis_session.fact_store.facts)} facts from task")
+                # Track when this was cached
+                if user_session:
+                    user_session._cache_mtime = newest_facts_mtime
                 return analysis_session
         elif not task:
             # Clear stale task_id if task no longer exists
             flask_session.pop('current_task_id', None)
 
-    # Try to load from most recent files as fallback
-    from config_v2 import OUTPUT_DIR
-    facts_files = sorted(OUTPUT_DIR.glob("facts_*.json"), reverse=True)
-    findings_files = sorted(OUTPUT_DIR.glob("findings_*.json"), reverse=True)
+    # Load from most recent NON-EMPTY facts file
+    logger.debug(f"Found {len(facts_files)} facts files in {OUTPUT_DIR}")
 
-    if facts_files:
+    if newest_facts_file:
+        logger.info(f"Loading from facts file: {newest_facts_file} ({newest_facts_file.stat().st_size} bytes)")
         analysis_session = Session.load_from_files(
-            facts_file=facts_files[0],
+            facts_file=newest_facts_file,
             findings_file=findings_files[0] if findings_files else None
         )
-        # Store in session store for future access
-        if user_session:
-            user_session.analysis_session = analysis_session
-        return analysis_session
+        if analysis_session and analysis_session.fact_store and len(analysis_session.fact_store.facts) > 0:
+            logger.info(f"Loaded {len(analysis_session.fact_store.facts)} facts from {newest_facts_file.name}")
+            # Store in session store for future access with timestamp
+            if user_session:
+                user_session.analysis_session = analysis_session
+                user_session._cache_mtime = newest_facts_mtime
+            return analysis_session
+        else:
+            logger.warning(f"File {newest_facts_file.name} had no facts")
 
+    logger.warning("No valid facts files found, creating empty session")
     # Create new empty session
     analysis_session = session_store.get_or_create_analysis_session(session_id)
     return analysis_session if analysis_session else Session()
@@ -136,9 +180,10 @@ def process_upload():
         return redirect(url_for('upload_documents'))
 
     # Get deal context
-    deal_type = request.form.get('deal_type', 'acquisition')
+    deal_type = request.form.get('deal_type', 'bolt_on')
     target_name = request.form.get('target_name', 'Target Company')
     industry = request.form.get('industry', '')
+    sub_industry = request.form.get('sub_industry', '')
     employee_count = request.form.get('employee_count', '')
 
     # Get selected domains (default to all if none selected)
@@ -152,6 +197,7 @@ def process_upload():
         'deal_type': deal_type,
         'target_name': target_name,
         'industry': industry,
+        'sub_industry': sub_industry,
         'employee_count': employee_count,
     }
 
@@ -205,15 +251,16 @@ def analysis_status():
     task_id = flask_session.get('current_task_id')
 
     if not task_id:
-        # No task - check for existing results
-        from config_v2 import FACTS_DIR
-        facts_files = list(FACTS_DIR.glob("facts_*.json"))
+        # No task - check for existing results in both locations
+        from config_v2 import FACTS_DIR, OUTPUT_DIR
+        facts_files = list(FACTS_DIR.glob("facts_*.json")) + list(OUTPUT_DIR.glob("facts_*.json"))
         if facts_files:
             return jsonify({
                 'complete': True,
                 'success': True,
                 'status': 'complete',
-                'message': 'Previous analysis results available'
+                'message': 'Previous analysis results available',
+                'redirect': '/dashboard'
             })
         return jsonify({
             'complete': True,
@@ -226,24 +273,30 @@ def analysis_status():
     status = task_manager.get_task_status(task_id)
 
     if not status:
+        # Clear stale task_id from session
+        flask_session.pop('current_task_id', None)
+        # Redirect to dashboard instead of showing error
         return jsonify({
             'complete': True,
-            'success': False,
-            'status': 'not_found',
-            'message': f'Task {task_id} not found'
+            'success': True,
+            'status': 'redirecting',
+            'message': 'Loading existing analysis results',
+            'redirect': '/dashboard'
         })
 
-    # If completed successfully, load results into session
+    # If completed successfully, load results into session and invalidate all caches
     if status['complete'] and status['success']:
         session_id = get_or_create_session_id(flask_session)
         if status.get('facts_file'):
+            # First invalidate all caches to ensure fresh data
+            invalidate_all_caches()
+
+            # Then load the new results
             session_store.load_session_from_results(
                 session_id,
                 status['facts_file'],
                 status.get('findings_file')
             )
-            # Clear org cache so new analysis data will be used
-            clear_organization_cache()
 
     return jsonify(status)
 
@@ -504,6 +557,63 @@ def work_item_detail(wi_id):
                          cost_range=cost_range)
 
 
+@app.route('/open-questions')
+def open_questions():
+    """Display open questions for the deal team."""
+    from pathlib import Path
+    from config_v2 import OUTPUT_DIR
+    import json
+
+    # Get deal context for display
+    s = get_session()
+    deal_context = s.deal_context if hasattr(s, 'deal_context') else {}
+
+    # Find most recent open questions file
+    questions = []
+    questions_files = sorted(OUTPUT_DIR.glob("open_questions_*.json"), reverse=True)
+    if questions_files:
+        try:
+            with open(questions_files[0]) as f:
+                questions = json.load(f)
+        except Exception as e:
+            flash(f'Error loading open questions: {e}', 'error')
+
+    # If no file exists, generate questions based on current context
+    if not questions and deal_context.get('industry'):
+        try:
+            from tools_v2.open_questions import generate_open_questions_for_deal
+            questions = generate_open_questions_for_deal(
+                industry=deal_context.get('industry'),
+                sub_industry=deal_context.get('sub_industry'),
+                deal_type=deal_context.get('deal_type', 'bolt_on'),
+                gaps=list(s.fact_store.gaps) if hasattr(s, 'fact_store') else []
+            )
+        except Exception as e:
+            flash(f'Error generating questions: {e}', 'error')
+
+    # Group questions by priority
+    by_priority = {'critical': [], 'important': [], 'nice_to_have': []}
+    for q in questions:
+        priority = q.get('priority', 'important')
+        if priority in by_priority:
+            by_priority[priority].append(q)
+
+    # Group by category for alternative view
+    by_category = {}
+    for q in questions:
+        cat = q.get('category', 'operational')
+        if cat not in by_category:
+            by_category[cat] = []
+        by_category[cat].append(q)
+
+    return render_template('open_questions.html',
+                         questions=questions,
+                         by_priority=by_priority,
+                         by_category=by_category,
+                         deal_context=deal_context,
+                         total=len(questions))
+
+
 @app.route('/work-item/<wi_id>/adjust', methods=['POST'])
 def adjust_work_item(wi_id):
     """Adjust a work item."""
@@ -744,44 +854,130 @@ def search():
 # Global organization analysis result cache
 _org_analysis_result = None
 _org_facts_count = 0  # Track fact count to detect new analyses
+_org_cache_session_id = None  # Track which session the cache belongs to
+_org_data_source = "unknown"  # Track data source for UI display
 
 
 def get_organization_analysis():
-    """Get or run the organization analysis."""
-    global _org_analysis_result, _org_facts_count
+    """Get or run the organization analysis.
 
-    # First, try to build from actual session facts
+    IMPORTANT: This function now ALWAYS rebuilds from the current session's facts.
+    This ensures we never show stale organization data after a new analysis runs.
+    """
+    global _org_analysis_result, _org_facts_count, _org_data_source, _org_cache_session_id
+
+    import logging
+    logger = logging.getLogger(__name__)
+
+    # First, get the current session (this handles cache invalidation)
     try:
         s = get_session()
-        if s and s.fact_store:
-            # Check if we have organization facts
-            org_facts = [f for f in s.fact_store.facts if f.domain == "organization"]
-            current_count = len(org_facts)
+        logger.info(f"get_organization_analysis: session has fact_store={s.fact_store is not None}")
 
-            # Rebuild if we have facts and either no cache or facts changed
-            if org_facts and (current_count != _org_facts_count or _org_analysis_result is None):
+        if s and s.fact_store:
+            total_facts = len(s.fact_store.facts)
+            org_facts = [f for f in s.fact_store.facts if f.domain == "organization"]
+            current_org_count = len(org_facts)
+
+            # Generate a session fingerprint based on fact content
+            # This ensures we rebuild if facts changed, not just count
+            fact_ids = sorted([f.fact_id for f in s.fact_store.facts]) if s.fact_store.facts else []
+            session_fingerprint = hash(tuple(fact_ids)) if fact_ids else 0
+
+            logger.info(f"Session has {total_facts} total facts, {current_org_count} org facts")
+            logger.info(f"Session fingerprint: {session_fingerprint}, cached: {_org_cache_session_id}")
+
+            # Check if we need to rebuild (different session or different facts)
+            needs_rebuild = (
+                _org_analysis_result is None or
+                _org_cache_session_id != session_fingerprint or
+                _org_facts_count != current_org_count
+            )
+
+            if needs_rebuild and total_facts > 0:
+                logger.info(f"Rebuilding organization data (needs_rebuild={needs_rebuild})")
+
                 from services.organization_bridge import build_organization_result
                 deal_context = s.deal_context or {}
                 target_name = deal_context.get('target_name', 'Target') if isinstance(deal_context, dict) else 'Target'
-                result = build_organization_result(s.fact_store, s.reasoning_store, target_name)
-                if result and result.store and result.store.staff_members:
-                    _org_analysis_result = result
-                    _org_facts_count = current_count
-                    return _org_analysis_result
-    except Exception as e:
-        import logging
-        logging.getLogger(__name__).warning(f"Could not build org from facts: {e}")
 
-    # Fall back to cached result or demo data
+                logger.info(f"Building org result for target: {target_name}")
+                result, status = build_organization_result(s.fact_store, s.reasoning_store, target_name)
+
+                # Update cache with new data
+                _org_cache_session_id = session_fingerprint
+                _org_facts_count = current_org_count
+
+                if status == "success" and result.total_it_headcount > 0:
+                    _org_analysis_result = result
+                    _org_data_source = "analysis"
+                    logger.info(f"SUCCESS: Built org analysis with {result.total_it_headcount} headcount from {current_org_count} org facts")
+                    return _org_analysis_result
+                elif status == "no_org_facts":
+                    # Analysis ran but no org data found - show empty state, not demo
+                    logger.warning(f"Analysis ran with {total_facts} facts but no organization facts found")
+                    _org_analysis_result = result  # Empty result
+                    _org_data_source = "analysis_no_org"
+                    return _org_analysis_result
+                else:
+                    logger.warning(f"build_organization_result returned status={status}, headcount={result.total_it_headcount}")
+                    # Still cache this result to avoid rebuilding every time
+                    _org_analysis_result = result
+                    _org_data_source = "analysis"
+                    return _org_analysis_result
+
+            elif _org_analysis_result is not None:
+                # Cache is valid, return cached result
+                logger.debug(f"Using cached org result ({_org_facts_count} org facts)")
+                return _org_analysis_result
+
+    except Exception as e:
+        import traceback
+        logger.error(f"Could not build org from facts: {e}")
+        logger.error(traceback.format_exc())
+
+    # Fall back to demo data only if we have nothing
     if _org_analysis_result is None:
+        logger.warning("Falling back to DEMO data - no real org data available")
         _org_analysis_result = _create_demo_organization_data()
+        _org_data_source = "demo"
+        _org_cache_session_id = None
+        _org_facts_count = 0
+
     return _org_analysis_result
+
+
+def get_org_data_source():
+    """Get whether org data is from analysis or demo."""
+    global _org_data_source
+    return _org_data_source
 
 
 def clear_organization_cache():
     """Clear the organization cache to force rebuild."""
-    global _org_analysis_result, _org_facts_count
+    global _org_analysis_result, _org_facts_count, _org_cache_session_id, _org_data_source
     _org_analysis_result = None
+    _org_facts_count = 0
+    _org_cache_session_id = None
+    _org_data_source = "unknown"
+
+
+def invalidate_all_caches():
+    """Invalidate all caches - call this after new analysis completes."""
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info("Invalidating all caches after analysis")
+
+    # Clear organization cache
+    clear_organization_cache()
+
+    # Clear session store caches
+    session_id = flask_session.get('session_id')
+    if session_id:
+        user_session = session_store.get_session(session_id)
+        if user_session:
+            user_session.analysis_session = None
+            user_session._cache_mtime = 0
     _org_facts_count = 0
 
 
@@ -1098,9 +1294,22 @@ def _create_demo_organization_data():
 
 @app.route('/organization/refresh')
 def organization_refresh():
-    """Refresh organization data from current analysis."""
-    clear_organization_cache()
-    flash('Organization data refreshed from analysis', 'success')
+    """Refresh organization data from current analysis.
+
+    This forces a complete cache invalidation and reload from the latest files.
+    """
+    # Invalidate ALL caches to ensure we get fresh data
+    invalidate_all_caches()
+
+    # Now get fresh session data (will reload from newest files)
+    s = get_session()
+    if s and s.fact_store:
+        total_facts = len(s.fact_store.facts)
+        org_facts = len([f for f in s.fact_store.facts if f.domain == "organization"])
+        flash(f'Organization data refreshed - found {org_facts} org facts (of {total_facts} total)', 'success')
+    else:
+        flash('Organization cache cleared - no analysis session found', 'warning')
+
     return redirect(url_for('organization_overview'))
 
 
@@ -1108,13 +1317,15 @@ def organization_refresh():
 def organization_overview():
     """Organization module overview."""
     result = get_organization_analysis()
+    data_source = get_org_data_source()
 
     return render_template('organization/overview.html',
                          result=result,
                          store=result.data_store,
                          comparison=result.benchmark_comparison,
                          msp_summary=result.msp_summary,
-                         ss_summary=result.shared_services_summary)
+                         ss_summary=result.shared_services_summary,
+                         data_source=data_source)
 
 
 @app.route('/organization/staffing')
@@ -1160,13 +1371,17 @@ def organization_staffing():
     # Convert keys to strings for template
     categories_by_name = {cat.value: data for cat, data in categories.items()}
 
+    # Get MSP relationships for the org chart
+    msp_relationships = store.msp_relationships if hasattr(store, 'msp_relationships') else []
+
     return render_template('organization/staffing_tree.html',
                          categories=categories_by_name,
                          total_headcount=store.get_target_headcount(),
                          total_compensation=store.total_compensation,
                          fte_count=store.total_internal_fte,
                          contractor_count=store.total_contractor,
-                         key_person_count=len(store.get_key_persons()))
+                         key_person_count=len(store.get_key_persons()),
+                         msp_relationships=msp_relationships)
 
 
 @app.route('/organization/benchmark')
@@ -1202,52 +1417,7 @@ def organization_shared_services():
                          staffing_needs=result.hiring_recommendations)
 
 
-@app.route('/organization/run-analysis', methods=['POST'])
-def run_organization_analysis():
-    """Run organization analysis from uploaded census."""
-    global _org_analysis_result
-
-    # Get company info from form
-    company_name = request.form.get('company_name', 'Target Company')
-    employee_count = int(request.form.get('employee_count', 200))
-    revenue = float(request.form.get('revenue', 50000000))
-    industry = request.form.get('industry', 'manufacturing')
-
-    company_info = CompanyInfo(
-        name=company_name,
-        employee_count=employee_count,
-        revenue=revenue,
-        industry=industry
-    )
-
-    # Get session for fact store access
-    s = get_session()
-
-    # Run the pipeline
-    pipeline = OrganizationAnalysisPipeline()
-
-    # Check for uploaded census file
-    census_file = request.files.get('census_file')
-    census_path = None
-    if census_file and census_file.filename:
-        from pathlib import Path
-        from config_v2 import DATA_DIR
-        census_path = DATA_DIR / 'uploads' / census_file.filename
-        census_path.parent.mkdir(exist_ok=True)
-        census_file.save(str(census_path))
-
-    try:
-        _org_analysis_result = pipeline.run_full_analysis(
-            company_info=company_info,
-            census_path=census_path,
-            fact_store=s.fact_store,
-            reasoning_store=s.reasoning_store
-        )
-        flash('Organization analysis completed successfully', 'success')
-    except Exception as e:
-        flash(f'Analysis error: {str(e)}', 'error')
-
-    return redirect(url_for('organization_overview'))
+# Organization manual analysis endpoint removed - organization data now comes directly from document analysis
 
 
 # =============================================================================

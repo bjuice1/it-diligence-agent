@@ -3,6 +3,8 @@
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/organization.css') }}">
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:false, theme:'neutral'});</script>
 {% endblock %}
 
 {% block content %}
@@ -37,6 +39,44 @@
         </div>
     </div>
 
+    <!-- View Toggle -->
+    <div class="view-toggle">
+        <button class="view-btn active" id="btn-tree-view" onclick="showView('tree')">
+            <span>&#128101;</span> Census View
+        </button>
+        <button class="view-btn" id="btn-chart-view" onclick="showView('chart')">
+            <span>&#128200;</span> Org Chart View
+        </button>
+    </div>
+
+    <!-- Org Chart View (Mermaid) -->
+    <div id="chart-view" class="view-content" style="display: none;">
+        <div class="chart-controls">
+            <label for="dept-filter">Focus on Department:</label>
+            <select id="dept-filter" onchange="updateChart()">
+                <option value="all">All Departments</option>
+                {% for cat_name in categories.keys() %}
+                <option value="{{ cat_name }}">{{ categories[cat_name].display_name }}</option>
+                {% endfor %}
+            </select>
+            <div class="zoom-controls">
+                <button class="zoom-btn" onclick="zoomChart(-0.1)" title="Zoom Out">&#8722;</button>
+                <span class="zoom-level" id="zoom-level">100%</span>
+                <button class="zoom-btn" onclick="zoomChart(0.1)" title="Zoom In">&#43;</button>
+                <button class="zoom-btn zoom-fit" onclick="fitToScreen()" title="Fit to Screen">Fit</button>
+                <button class="zoom-btn" onclick="resetZoom()" title="Reset Zoom">Reset</button>
+            </div>
+        </div>
+        <div id="mermaid-container" class="mermaid-container">
+            <div class="mermaid-wrapper" id="mermaid-wrapper">
+                <div class="mermaid" id="org-chart">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tree View (existing) -->
+    <div id="tree-view" class="view-content">
     <!-- Controls -->
     <div class="tree-controls">
         <button class="btn btn-sm" onclick="expandAll()">Expand All</button>
@@ -100,7 +140,310 @@
         </div>
         {% endfor %}
     </div>
+    </div><!-- end tree-view -->
 </div>
 
+<style>
+.view-toggle {
+    display: flex;
+    gap: 10px;
+    margin: 20px 0;
+    padding: 10px;
+    background: var(--bg-surface-sunken);
+    border-radius: 8px;
+}
+.view-btn {
+    padding: 10px 20px;
+    border: 1px solid var(--border-default);
+    border-radius: 6px;
+    background: var(--bg-surface);
+    cursor: pointer;
+    font-size: 0.95em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.view-btn:hover {
+    border-color: var(--accent);
+}
+.view-btn.active {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+}
+.chart-controls {
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+.chart-controls select {
+    padding: 8px 12px;
+    border: 1px solid var(--border-default);
+    border-radius: 6px;
+    background: var(--bg-surface);
+}
+/* Zoom Controls */
+.zoom-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+    background: var(--bg-surface-sunken);
+    padding: 6px 10px;
+    border-radius: 6px;
+}
+.zoom-btn {
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--border-default);
+    border-radius: 4px;
+    background: var(--bg-surface);
+    cursor: pointer;
+    font-size: 1.1em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+.zoom-btn:hover {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+}
+.zoom-btn.zoom-fit {
+    width: auto;
+    padding: 0 10px;
+    font-size: 0.85em;
+}
+.zoom-level {
+    min-width: 45px;
+    text-align: center;
+    font-size: 0.85em;
+    color: var(--text-secondary);
+}
+/* Mermaid Container - Fixed Layout */
+.mermaid-container {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 12px;
+    padding: 20px;
+    min-height: 500px;
+    max-height: 80vh;
+    overflow: auto;
+    width: 100%;
+    position: relative;
+}
+.mermaid-wrapper {
+    display: inline-block;
+    transform-origin: top left;
+    transition: transform 0.2s ease;
+}
+.mermaid {
+    display: inline-block;
+}
+.mermaid svg {
+    max-width: none !important;
+    height: auto !important;
+}
+</style>
+
 <script src="{{ url_for('static', filename='js/staffing_tree.js') }}"></script>
+<script>
+// Org chart data from server
+const orgData = {
+    {% for cat_name, category in categories.items() %}
+    "{{ cat_name }}": {
+        "display_name": "{{ category.display_name }}",
+        "total": {{ category.total_headcount }},
+        "roles": [
+            {% for role in category.roles %}
+            {
+                "title": "{{ role.role_title|e }}",
+                "headcount": {{ role.headcount }},
+                "members": {{ role.members|length }}
+            }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        ]
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+};
+
+// MSP/Vendor data from server
+const mspData = [
+    {% if msp_relationships %}
+    {% for msp in msp_relationships %}
+    {
+        "name": "{{ msp.vendor_name|e }}",
+        "fte_equivalent": {{ msp.total_fte_equivalent|default(0) }},
+        "services": [{% for svc in msp.services %}"{{ svc.service_name|e }}"{% if not loop.last %},{% endif %}{% endfor %}],
+        "scope": "{{ msp.services[0].scope_description|e if msp.services else '' }}"
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+    {% endif %}
+];
+
+// Zoom state
+let currentZoom = 1.0;
+const MIN_ZOOM = 0.3;
+const MAX_ZOOM = 2.0;
+
+function showView(view) {
+    const treeView = document.getElementById('tree-view');
+    const chartView = document.getElementById('chart-view');
+    const btnTree = document.getElementById('btn-tree-view');
+    const btnChart = document.getElementById('btn-chart-view');
+
+    if (view === 'tree') {
+        treeView.style.display = 'block';
+        chartView.style.display = 'none';
+        btnTree.classList.add('active');
+        btnChart.classList.remove('active');
+    } else {
+        treeView.style.display = 'none';
+        chartView.style.display = 'block';
+        btnTree.classList.remove('active');
+        btnChart.classList.add('active');
+        updateChart();
+    }
+}
+
+function zoomChart(delta) {
+    currentZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, currentZoom + delta));
+    applyZoom();
+}
+
+function resetZoom() {
+    currentZoom = 1.0;
+    applyZoom();
+}
+
+function fitToScreen() {
+    const container = document.getElementById('mermaid-container');
+    const wrapper = document.getElementById('mermaid-wrapper');
+    const svg = wrapper.querySelector('svg');
+
+    if (!svg) return;
+
+    // Get natural dimensions
+    const svgRect = svg.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+
+    // Calculate scale to fit
+    const scaleX = (containerRect.width - 40) / (svgRect.width / currentZoom);
+    const scaleY = (containerRect.height - 40) / (svgRect.height / currentZoom);
+
+    currentZoom = Math.min(scaleX, scaleY, 1.5); // Cap at 150%
+    currentZoom = Math.max(MIN_ZOOM, currentZoom);
+    applyZoom();
+}
+
+function applyZoom() {
+    const wrapper = document.getElementById('mermaid-wrapper');
+    wrapper.style.transform = `scale(${currentZoom})`;
+    document.getElementById('zoom-level').textContent = Math.round(currentZoom * 100) + '%';
+}
+
+function updateChart() {
+    const filter = document.getElementById('dept-filter').value;
+    const chartDiv = document.getElementById('org-chart');
+
+    // Build mermaid code - use LR (left-right) for wider layout
+    let lines = ['flowchart TB'];
+    lines.push('    CEO["👔 CIO / IT Leader"]');
+
+    // Add MSP/Vendor support section
+    if (mspData.length > 0) {
+        lines.push('    subgraph VENDORS["🏢 External Vendor Support"]');
+        mspData.forEach((msp, idx) => {
+            const mspId = `MSP${idx}`;
+            const svcText = msp.services.length > 0 ? msp.services.slice(0, 2).join(', ') : msp.scope;
+            lines.push(`        ${mspId}["🔗 ${msp.name}<br/>(${msp.fte_equivalent} FTE eq.)<br/><i>${svcText}</i>"]`);
+        });
+        lines.push('    end');
+    }
+
+    let deptIndex = 0;
+    let deptIds = [];
+    for (const [catName, catData] of Object.entries(orgData)) {
+        if (filter !== 'all' && catName !== filter) continue;
+
+        const deptId = `DEPT${deptIndex}`;
+        deptIds.push(deptId);
+        lines.push(`    ${deptId}["📁 ${catData.display_name}<br/><b>${catData.total} FTE</b>"]`);
+        lines.push(`    CEO --> ${deptId}`);
+
+        // Add roles (limit to 8 for readability)
+        catData.roles.slice(0, 8).forEach((role, roleIndex) => {
+            const roleId = `R${deptIndex}_${roleIndex}`;
+            const hcText = role.headcount > 1 ? `<br/>(${role.headcount})` : '';
+            lines.push(`    ${roleId}["${role.title}${hcText}"]`);
+            lines.push(`    ${deptId} --> ${roleId}`);
+        });
+
+        deptIndex++;
+    }
+
+    // Connect MSPs to relevant departments (dotted lines)
+    if (mspData.length > 0) {
+        mspData.forEach((msp, idx) => {
+            const mspId = `MSP${idx}`;
+            // Connect to first department as support relationship
+            if (deptIds.length > 0) {
+                // Find relevant dept based on service scope
+                const scope = (msp.scope || '').toLowerCase();
+                let targetDept = deptIds[0];
+                if (scope.includes('infra') && deptIds.find(d => orgData[Object.keys(orgData)[deptIds.indexOf(d)]]?.display_name?.toLowerCase().includes('infra'))) {
+                    targetDept = deptIds.find(d => orgData[Object.keys(orgData)[deptIds.indexOf(d)]]?.display_name?.toLowerCase().includes('infra')) || deptIds[0];
+                }
+                lines.push(`    ${mspId} -.->|supports| ${targetDept}`);
+            }
+        });
+    }
+
+    // Styling
+    lines.push('');
+    lines.push('    style CEO fill:#f97316,color:#fff,font-size:18px');
+    deptIds.forEach((deptId, i) => {
+        lines.push(`    style ${deptId} fill:#3b82f6,color:#fff,font-size:16px`);
+    });
+    // Style MSPs differently (purple for external)
+    mspData.forEach((msp, idx) => {
+        lines.push(`    style MSP${idx} fill:#8b5cf6,color:#fff,font-size:14px`);
+    });
+    if (mspData.length > 0) {
+        lines.push('    style VENDORS fill:#f3e8ff,stroke:#8b5cf6,stroke-width:2px');
+    }
+
+    const mermaidCode = lines.join('\n');
+
+    // Clear and re-render
+    chartDiv.innerHTML = mermaidCode;
+    chartDiv.removeAttribute('data-processed');
+
+    // Configure mermaid with compact spacing (Point 7)
+    mermaid.initialize({
+        startOnLoad: false,
+        theme: 'neutral',
+        flowchart: {
+            nodeSpacing: 50,      // Reduced from 100
+            rankSpacing: 70,      // Reduced from 120
+            curve: 'basis',
+            padding: 15,          // Reduced from 30
+            htmlLabels: true,
+            useMaxWidth: false
+        },
+        themeVariables: {
+            fontSize: '14px',     // Slightly smaller for compact view
+            fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif'
+        }
+    });
+    mermaid.init(undefined, chartDiv);
+
+    // Reset zoom when chart updates
+    currentZoom = 1.0;
+    applyZoom();
+}
+</script>
 {% endblock %}

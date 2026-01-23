@@ -1,5 +1,57 @@
 /* Organization Module Styles */
 
+/* Data Source Banner */
+.data-source-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-size: 0.95em;
+}
+
+.data-source-demo {
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    color: #92400e;
+}
+
+.data-source-analysis {
+    background: #d1fae5;
+    border: 1px solid #10b981;
+    color: #065f46;
+}
+
+.data-source-warning {
+    background: #e0e7ff;
+    border: 1px solid #6366f1;
+    color: #3730a3;
+}
+
+.data-source-banner .banner-icon {
+    font-size: 1.2em;
+}
+
+.data-source-banner .banner-text {
+    flex: 1;
+}
+
+.data-source-banner .btn-sm {
+    padding: 6px 12px;
+    font-size: 0.85em;
+    background: #f59e0b;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.data-source-banner .btn-sm:hover {
+    background: #d97706;
+}
+
 /* Back Link */
 .back-link {
     display: inline-block;

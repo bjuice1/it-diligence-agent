@@ -52,29 +52,44 @@
         <thead>
             <tr>
                 <th scope="col" style="width: 100px;">Severity</th>
-                <th scope="col" style="width: 100px;">ID</th>
+                <th scope="col" style="width: 80px;">ID</th>
                 <th scope="col">Title</th>
                 <th scope="col" style="width: 120px;">Domain</th>
-                <th scope="col" style="width: 80px;">Facts</th>
+                <th scope="col" style="width: 140px;">Based On</th>
             </tr>
         </thead>
         <tbody>
             {% if risks %}
             {% for risk in risks %}
             <tr data-id="{{ risk.finding_id }}"
+                data-display-id="R-{{ '%03d'|format(loop.index) }}"
                 data-severity="{{ risk.severity }}"
                 data-domain="{{ risk.domain }}"
                 data-title="{{ risk.title|e }}"
                 data-description="{{ risk.description|e if risk.description else '' }}"
                 data-mitigation="{{ risk.mitigation|e if risk.mitigation else '' }}"
+                data-reasoning="{{ risk.reasoning|e if risk.reasoning else '' }}"
                 data-based-on="{{ risk.based_on_facts|join(', ') if risk.based_on_facts else '' }}">
                 <td>
                     <span class="badge badge-{{ risk.severity }}">{{ risk.severity|upper }}</span>
                 </td>
-                <td class="font-mono text-sm">{{ risk.finding_id }}</td>
+                <td class="font-mono text-sm" title="{{ risk.finding_id }}">R-{{ '%03d'|format(loop.index) }}</td>
                 <td>{{ risk.title }}</td>
                 <td class="text-muted text-sm">{{ risk.domain|replace('_', ' ')|title }}</td>
-                <td class="text-muted text-sm">{{ risk.based_on_facts|length if risk.based_on_facts else 0 }}</td>
+                <td class="text-sm">
+                    {% if risk.based_on_facts %}
+                    <span class="fact-ids" title="{{ risk.based_on_facts|join(', ') }}">
+                        {% for fact_id in risk.based_on_facts[:2] %}
+                        <a href="{{ url_for('facts') }}?q={{ fact_id }}" class="fact-link">{{ fact_id }}</a>{% if not loop.last %} {% endif %}
+                        {% endfor %}
+                        {% if risk.based_on_facts|length > 2 %}
+                        <span class="text-muted">+{{ risk.based_on_facts|length - 2 }}</span>
+                        {% endif %}
+                    </span>
+                    {% else %}
+                    <span class="text-muted">-</span>
+                    {% endif %}
+                </td>
             </tr>
             {% endfor %}
             {% else %}
@@ -142,6 +157,16 @@
 
 {% block scripts %}
 <script>
+    // Format fact IDs as clickable links
+    function formatFactLinks(factIds) {
+        if (!factIds) return '<span class="text-muted">None</span>';
+        const facts = factIds.split(', ').filter(f => f.trim());
+        if (facts.length === 0) return '<span class="text-muted">None</span>';
+        return facts.map(f =>
+            `<a href="{{ url_for('facts') }}?q=${encodeURIComponent(f)}" class="fact-link">${f}</a>`
+        ).join(' ');
+    }
+
     // Handle row selection and open drawer
     document.addEventListener('rowSelected', function(e) {
         const row = e.detail.row;
@@ -150,6 +175,10 @@
         openDrawer(
             data.title,
             `
+            <div class="drawer-section">
+                <div class="drawer-section-title">ID</div>
+                <div class="drawer-section-content font-mono">${data.displayId} <span class="text-muted text-sm">(${data.id})</span></div>
+            </div>
             <div class="drawer-section">
                 <div class="drawer-section-title">Severity</div>
                 <div class="drawer-section-content">
@@ -169,8 +198,12 @@
                 <div class="drawer-section-content">${data.mitigation || 'No mitigation specified'}</div>
             </div>
             <div class="drawer-section">
+                <div class="drawer-section-title">Reasoning</div>
+                <div class="drawer-section-content">${data.reasoning || 'No reasoning provided'}</div>
+            </div>
+            <div class="drawer-section">
                 <div class="drawer-section-title">Based On Facts</div>
-                <div class="drawer-section-content font-mono text-sm">${data.basedOn || 'N/A'}</div>
+                <div class="drawer-section-content font-mono text-sm">${formatFactLinks(data.basedOn)}</div>
             </div>
             `,
             `
@@ -198,4 +231,26 @@
         });
     }
 </script>
+<style>
+.fact-link {
+    color: var(--accent);
+    text-decoration: none;
+    padding: 2px 6px;
+    background: var(--bg-surface-sunken);
+    border-radius: 4px;
+    font-size: 0.85em;
+    display: inline-block;
+    margin: 1px;
+}
+.fact-link:hover {
+    background: var(--accent);
+    color: white;
+}
+.fact-ids {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+}
+</style>
 {% endblock %}

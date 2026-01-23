@@ -53,7 +53,7 @@ DEFAULT_SALARIES = {
 }
 
 
-def build_organization_from_facts(fact_store: FactStore, target_name: str = "Target") -> OrganizationDataStore:
+def build_organization_from_facts(fact_store: FactStore, target_name: str = "Target") -> Tuple[OrganizationDataStore, str]:
     """
     Build an OrganizationDataStore from organization-domain facts.
 
@@ -62,16 +62,25 @@ def build_organization_from_facts(fact_store: FactStore, target_name: str = "Tar
         target_name: Name of the target company
 
     Returns:
-        Populated OrganizationDataStore
+        Tuple of (OrganizationDataStore, status) where status is:
+        - "success": Org data was found and built
+        - "no_org_facts": Analysis ran but no org facts found
+        - "no_facts": No facts at all in the store
     """
     store = OrganizationDataStore()
+
+    # Check if fact store has any facts at all
+    total_facts = len(fact_store.facts) if fact_store.facts else 0
+    if total_facts == 0:
+        logger.warning("No facts at all in fact store")
+        return store, "no_facts"
 
     # Get organization domain facts
     org_facts = [f for f in fact_store.facts if f.domain == "organization"]
 
     if not org_facts:
-        logger.warning("No organization facts found in fact store")
-        return store
+        logger.warning(f"No organization facts found in fact store (has {total_facts} facts in other domains)")
+        return store, "no_org_facts"
 
     # Process facts by category
     leadership_facts = [f for f in org_facts if f.category == "leadership"]
@@ -140,7 +149,7 @@ def build_organization_from_facts(fact_store: FactStore, target_name: str = "Tar
     logger.info(f"Built organization store with {len(staff_members)} staff, {len(msp_relationships)} MSPs")
     logger.info(f"  FTEs: {store.total_internal_fte}, Contractors: {store.total_contractor}, Total Comp: ${store.total_compensation:,.0f}")
 
-    return store
+    return store, "success"
 
 
 def _create_staff_from_leadership_fact(fact: Fact) -> List[StaffMember]:
@@ -213,41 +222,44 @@ def _create_staff_from_team_fact(fact: Fact, default_category: RoleCategory) -> 
     details = fact.details or {}
     members = []
 
-    # Get team name from item, responsibilities, or construct from category
-    team_name = details.get('item') or details.get('responsibilities', '').split()[0] if details.get('responsibilities') else None
-    if not team_name:
-        team_name = f"{default_category.display_name} Team"
+    # Get team name from fact.item (e.g., "Applications Team")
+    team_name = fact.item if fact.item else f"{default_category.display_name} Team"
+    # Clean up team name for display (remove "Team" suffix if present)
+    team_name_clean = team_name.replace(" Team", "").strip()
 
     headcount = _parse_headcount(details.get('headcount', details.get('count', details.get('fte_count', 1))))
     contractor_count = _parse_headcount(details.get('contractor_count', 0))
 
     # Calculate per-person compensation from total if available
-    total_cost = details.get('total_personnel_cost') or details.get('total_cost')
+    total_cost = details.get('total_personnel_cost') or details.get('total_cost') or details.get('personnel_cost')
     if total_cost and headcount > 0:
-        # Parse cost string like "$2,075,736"
         per_person_cost = _parse_cost(total_cost) / headcount
     else:
         per_person_cost = DEFAULT_SALARIES.get(default_category, 100000)
 
-    # Determine category from team name or responsibilities
-    responsibilities = details.get('responsibilities', team_name)
-    category = _determine_category_from_name(responsibilities, default_category)
+    # Determine category from team name
+    category = _determine_category_from_name(team_name, default_category)
 
-    # Create placeholder staff members for the headcount
+    # Create staff members with proper role titles
+    # Names are placeholders since we don't have individual names from VDR docs
     for i in range(min(headcount, 50)):  # Cap at 50 to avoid huge lists
-        role_title = f"{responsibilities} Staff" if responsibilities else f"{category.display_name} Staff"
+        # Role title is the meaningful team/function name
+        role_title = team_name
+
+        # Name is a simple placeholder - the role_title carries the meaning
         if i == 0 and details.get('manager'):
-            role_title = f"{responsibilities} Manager"
-            name = details.get('manager', f"{responsibilities} Manager")
+            name = details.get('manager')
+            role_title = f"{team_name_clean} Manager"
         else:
-            name = f"{responsibilities} #{i+1}" if responsibilities else f"{category.display_name} #{i+1}"
+            # Use simple "Staff N" naming - role_title provides context
+            name = f"Staff {i+1}"
 
         members.append(StaffMember(
             id=gen_id("STAFF"),
             name=name,
             role_title=role_title,
             role_category=category,
-            department=responsibilities or team_name,
+            department=team_name,
             employment_type=EmploymentType.FTE,
             base_compensation=per_person_cost,
             location=details.get('location', 'Unknown'),
@@ -259,10 +271,10 @@ def _create_staff_from_team_fact(fact: Fact, default_category: RoleCategory) -> 
     for i in range(min(contractor_count, 20)):  # Cap contractors
         members.append(StaffMember(
             id=gen_id("STAFF"),
-            name=f"{responsibilities} Contractor #{i+1}" if responsibilities else f"Contractor #{i+1}",
-            role_title=f"{responsibilities} Contractor" if responsibilities else "Contractor",
+            name=f"{team_name_clean} Contractor #{i+1}",
+            role_title=f"{team_name_clean} Contractor",
             role_category=category,
-            department=responsibilities or team_name,
+            department=team_name,
             employment_type=EmploymentType.CONTRACTOR,
             base_compensation=int(per_person_cost * 1.3),  # Contractor premium
             location=details.get('location', 'Unknown'),
@@ -476,7 +488,7 @@ def build_organization_result(
     fact_store: FactStore,
     reasoning_store: Any = None,
     target_name: str = "Target"
-) -> OrganizationAnalysisResult:
+) -> Tuple[OrganizationAnalysisResult, str]:
     """
     Build a complete OrganizationAnalysisResult from facts.
 
@@ -486,12 +498,15 @@ def build_organization_result(
         target_name: Name of the target company
 
     Returns:
-        Complete OrganizationAnalysisResult
+        Tuple of (OrganizationAnalysisResult, status) where status is:
+        - "success": Org data was found and built
+        - "no_org_facts": Analysis ran but no org facts found
+        - "no_facts": No facts at all in the store
     """
     from models.organization_stores import StaffingComparisonResult
     from datetime import datetime
 
-    store = build_organization_from_facts(fact_store, target_name)
+    store, status = build_organization_from_facts(fact_store, target_name)
 
     # Calculate summaries
     msp_summary = _build_msp_summary(store.msp_relationships)
@@ -507,7 +522,7 @@ def build_organization_result(
         total_expected_min=0,
         total_expected_typical=0,
         total_expected_max=0,
-        overall_status="analyzed"
+        overall_status="analyzed" if status == "success" else "no_data"
     )
 
     # Build the result
@@ -523,7 +538,7 @@ def build_organization_result(
     # Add the data_store (expected by templates)
     result.data_store = store
 
-    return result
+    return result, status
 
 
 def _build_msp_summary(msps: List[MSPRelationship]) -> MSPSummary:

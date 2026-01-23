@@ -51,7 +51,7 @@
         <thead>
             <tr>
                 <th scope="col" style="width: 100px;">Importance</th>
-                <th scope="col" style="width: 120px;">ID</th>
+                <th scope="col" style="width: 80px;">ID</th>
                 <th scope="col">Description</th>
                 <th scope="col" style="width: 120px;">Domain</th>
                 <th scope="col" style="width: 120px;">Category</th>
@@ -61,6 +61,7 @@
             {% if gaps %}
             {% for gap in gaps %}
             <tr data-id="{{ gap.gap_id }}"
+                data-display-id="GAP-{{ '%03d'|format(loop.index) }}"
                 data-description="{{ gap.description|e }}"
                 data-domain="{{ gap.domain }}"
                 data-category="{{ gap.category }}"
@@ -68,7 +69,7 @@
                 <td>
                     <span class="badge badge-{{ gap.importance }}">{{ gap.importance }}</span>
                 </td>
-                <td class="font-mono text-sm">{{ gap.gap_id }}</td>
+                <td class="font-mono text-sm" title="{{ gap.gap_id }}">GAP-{{ '%03d'|format(loop.index) }}</td>
                 <td>{{ gap.description }}</td>
                 <td class="text-muted text-sm">{{ gap.domain|replace('_', ' ')|title }}</td>
                 <td class="text-muted text-sm">{{ gap.category|replace('_', ' ')|title }}</td>
@@ -161,7 +162,7 @@
             `
             <div class="drawer-section">
                 <div class="drawer-section-title">ID</div>
-                <div class="drawer-section-content font-mono">${data.id}</div>
+                <div class="drawer-section-content font-mono">${data.displayId} <span class="text-muted text-sm">(${data.id})</span></div>
             </div>
             <div class="drawer-section">
                 <div class="drawer-section-title">Importance</div>

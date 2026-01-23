@@ -6,6 +6,26 @@
 {% endblock %}
 
 {% block content %}
+<!-- Data Source Indicator -->
+{% if data_source == 'demo' %}
+<div class="data-source-banner data-source-demo">
+    <span class="banner-icon">&#9888;</span>
+    <span class="banner-text"><strong>Demo Data</strong> - No analysis data found. Run an analysis to see real organization data.</span>
+    <a href="{{ url_for('upload') }}" class="btn btn-sm">Upload Documents</a>
+</div>
+{% elif data_source == 'analysis_no_org' %}
+<div class="data-source-banner data-source-warning">
+    <span class="banner-icon">&#128269;</span>
+    <span class="banner-text"><strong>No Organization Data</strong> - Analysis completed but no organization/staffing information was found in your documents.</span>
+    <a href="{{ url_for('upload') }}" class="btn btn-sm">Upload More Documents</a>
+</div>
+{% elif data_source == 'analysis' %}
+<div class="data-source-banner data-source-analysis">
+    <span class="banner-icon">&#10003;</span>
+    <span class="banner-text"><strong>Analysis Data</strong> - Showing organization data extracted from your documents.</span>
+</div>
+{% endif %}
+
 <div class="page-header">
     <div class="header-with-actions">
         <div>

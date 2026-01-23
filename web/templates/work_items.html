@@ -74,26 +74,33 @@
     <table class="table" aria-label="Work items table">
         <thead>
             <tr>
-                <th scope="col" style="width: 100px;">ID</th>
+                <th scope="col" style="width: 80px;">ID</th>
                 <th scope="col">Title</th>
                 <th scope="col" style="width: 120px;">Domain</th>
                 <th scope="col" style="width: 100px;">Owner</th>
                 <th scope="col" style="width: 80px;">Priority</th>
-                <th scope="col" style="width: 140px; text-align: right;">Cost Estimate</th>
+                <th scope="col" style="width: 100px;">Facts</th>
+                <th scope="col" style="width: 120px; text-align: right;">Cost Est.</th>
             </tr>
         </thead>
         <tbody>
             {% if items %}
             {% for wi in items %}
+            {% set all_facts = (wi.triggered_by or []) + (wi.based_on_facts or []) %}
+            {% set unique_facts = all_facts|unique|list %}
             <tr data-id="{{ wi.finding_id }}"
+                data-display-id="WI-{{ '%03d'|format(loop.index) }}"
                 data-title="{{ wi.title|e }}"
                 data-description="{{ wi.description|e if wi.description else '' }}"
                 data-domain="{{ wi.domain }}"
                 data-phase="{{ wi.phase }}"
                 data-owner="{{ wi.owner_type }}"
                 data-priority="{{ wi.priority|default('medium') }}"
-                data-cost="{{ wi.cost_estimate }}">
-                <td class="font-mono text-sm">{{ wi.finding_id }}</td>
+                data-cost="{{ wi.cost_estimate }}"
+                data-triggered-by="{{ (wi.triggered_by or [])|join(', ') }}"
+                data-based-on="{{ (wi.based_on_facts or [])|join(', ') }}"
+                data-triggered-by-risks="{{ (wi.triggered_by_risks or [])|join(', ') }}">
+                <td class="font-mono text-sm" title="{{ wi.finding_id }}">WI-{{ '%03d'|format(loop.index) }}</td>
                 <td>{{ wi.title }}</td>
                 <td class="text-muted text-sm">{{ wi.domain|replace('_', ' ')|title }}</td>
                 <td>
@@ -102,7 +109,14 @@
                 <td>
                     <span class="badge badge-{{ wi.priority|default('medium') }}">{{ wi.priority|default('medium') }}</span>
                 </td>
-                <td style="text-align: right;" class="cost-range">{{ wi.cost_estimate|replace('_', ' ') }}</td>
+                <td class="text-sm">
+                    {% if unique_facts %}
+                    <span class="fact-count" title="{{ unique_facts|join(', ') }}">{{ unique_facts|length }} fact{{ 's' if unique_facts|length != 1 else '' }}</span>
+                    {% else %}
+                    <span class="text-muted">-</span>
+                    {% endif %}
+                </td>
+                <td style="text-align: right;" class="cost-range text-sm">{{ wi.cost_estimate|replace('_', ' ') }}</td>
             </tr>
             {% endfor %}
             {% else %}
@@ -167,6 +181,16 @@
 
 {% block scripts %}
 <script>
+    // Format fact IDs as clickable links
+    function formatFactLinks(factIds) {
+        if (!factIds) return '<span class="text-muted">None</span>';
+        const facts = factIds.split(', ').filter(f => f.trim());
+        if (facts.length === 0) return '<span class="text-muted">None</span>';
+        return facts.map(f =>
+            `<a href="{{ url_for('facts') }}?q=${encodeURIComponent(f)}" class="fact-link">${f}</a>`
+        ).join(', ');
+    }
+
     // Handle row selection and open drawer
     document.addEventListener('rowSelected', function(e) {
         const row = e.detail.row;
@@ -176,9 +200,40 @@
         const costRanges = {{ cost_ranges|tojson|safe }};
         const costRange = costRanges[data.cost] || { low: 0, high: 0 };
 
+        // Build fact linkage section
+        const triggeredBy = data.triggeredBy;
+        const basedOn = data.basedOn;
+        const triggeredByRisks = data.triggeredByRisks;
+
+        let factSection = '';
+        if (triggeredBy || basedOn) {
+            factSection = `
+            <div class="drawer-section">
+                <div class="drawer-section-title">Triggered By (Facts)</div>
+                <div class="drawer-section-content font-mono text-sm">${formatFactLinks(triggeredBy)}</div>
+            </div>
+            <div class="drawer-section">
+                <div class="drawer-section-title">Based On (Facts)</div>
+                <div class="drawer-section-content font-mono text-sm">${formatFactLinks(basedOn)}</div>
+            </div>`;
+        }
+
+        let riskSection = '';
+        if (triggeredByRisks) {
+            riskSection = `
+            <div class="drawer-section">
+                <div class="drawer-section-title">Addresses Risks</div>
+                <div class="drawer-section-content font-mono text-sm">${triggeredByRisks || '<span class="text-muted">None</span>'}</div>
+            </div>`;
+        }
+
         openDrawer(
             data.title,
             `
+            <div class="drawer-section">
+                <div class="drawer-section-title">ID</div>
+                <div class="drawer-section-content font-mono">${data.displayId} <span class="text-muted text-sm">(${data.id})</span></div>
+            </div>
             <div class="drawer-section">
                 <div class="drawer-section-title">Phase</div>
                 <div class="drawer-section-content">
@@ -206,6 +261,8 @@
                     <span class="text-muted">$${costRange.low.toLocaleString()} - $${costRange.high.toLocaleString()}</span>
                 </div>
             </div>
+            ${factSection}
+            ${riskSection}
             <div class="drawer-section">
                 <div class="drawer-section-title">Description</div>
                 <div class="drawer-section-content">${data.description || 'No description available'}</div>
@@ -218,4 +275,22 @@
         );
     });
 </script>
+<style>
+.fact-link {
+    color: var(--accent);
+    text-decoration: none;
+    padding: 2px 6px;
+    background: var(--bg-surface-sunken);
+    border-radius: 4px;
+    font-size: 0.85em;
+}
+.fact-link:hover {
+    background: var(--accent);
+    color: white;
+}
+.fact-count {
+    color: var(--accent);
+    cursor: help;
+}
+</style>
 {% endblock %}
