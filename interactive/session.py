@@ -385,16 +385,18 @@ class Session:
         with open(findings_file) as f:
             data = json.load(f)
 
-        # Handle both single-domain and multi-domain formats
+        # Handle multiple formats
         if isinstance(data, dict):
-            # Check if it's multi-domain format (keys are domain names)
-            if any(k in data for k in ['infrastructure', 'network', 'cybersecurity', 'applications', 'identity_access', 'organization']):
-                # Multi-domain format
+            # Format 1: Top-level risks/work_items arrays (new format from reasoning agents)
+            if 'risks' in data or 'work_items' in data:
+                cls._add_findings_to_store(store, data, 'unknown')
+            # Format 2: Multi-domain format (keys are domain names)
+            elif any(k in data for k in ['infrastructure', 'network', 'cybersecurity', 'applications', 'identity_access', 'organization']):
                 for domain, domain_data in data.items():
                     if isinstance(domain_data, dict) and 'findings' in domain_data:
                         cls._add_findings_to_store(store, domain_data['findings'], domain)
+            # Format 3: Single-domain format with 'findings' key
             elif 'findings' in data:
-                # Single-domain format
                 cls._add_findings_to_store(store, data['findings'], data.get('domain', 'unknown'))
 
         return store

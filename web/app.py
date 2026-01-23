@@ -239,6 +239,8 @@ def analysis_status():
                 status['facts_file'],
                 status.get('findings_file')
             )
+            # Clear org cache so new analysis data will be used
+            clear_organization_cache()
 
     return jsonify(status)
 
@@ -738,15 +740,46 @@ def search():
 
 # Global organization analysis result cache
 _org_analysis_result = None
+_org_facts_count = 0  # Track fact count to detect new analyses
 
 
 def get_organization_analysis():
     """Get or run the organization analysis."""
-    global _org_analysis_result
+    global _org_analysis_result, _org_facts_count
+
+    # First, try to build from actual session facts
+    try:
+        s = get_session()
+        if s and s.fact_store:
+            # Check if we have organization facts
+            org_facts = [f for f in s.fact_store.facts if f.domain == "organization"]
+            current_count = len(org_facts)
+
+            # Rebuild if we have facts and either no cache or facts changed
+            if org_facts and (current_count != _org_facts_count or _org_analysis_result is None):
+                from services.organization_bridge import build_organization_result
+                deal_context = s.deal_context or {}
+                target_name = deal_context.get('target_name', 'Target') if isinstance(deal_context, dict) else 'Target'
+                result = build_organization_result(s.fact_store, s.reasoning_store, target_name)
+                if result and result.store and result.store.staff_members:
+                    _org_analysis_result = result
+                    _org_facts_count = current_count
+                    return _org_analysis_result
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Could not build org from facts: {e}")
+
+    # Fall back to cached result or demo data
     if _org_analysis_result is None:
-        # Try to load existing analysis or create demo data
         _org_analysis_result = _create_demo_organization_data()
     return _org_analysis_result
+
+
+def clear_organization_cache():
+    """Clear the organization cache to force rebuild."""
+    global _org_analysis_result, _org_facts_count
+    _org_analysis_result = None
+    _org_facts_count = 0
 
 
 def _create_demo_organization_data():
@@ -1058,6 +1091,14 @@ def _create_demo_organization_data():
     result.data_store = store
 
     return result
+
+
+@app.route('/organization/refresh')
+def organization_refresh():
+    """Refresh organization data from current analysis."""
+    clear_organization_cache()
+    flash('Organization data refreshed from analysis', 'success')
+    return redirect(url_for('organization_overview'))
 
 
 @app.route('/organization')
@@ -1612,6 +1653,6 @@ if __name__ == '__main__':
     print("\n" + "="*60)
     print("  IT Due Diligence Agent - Web Interface")
     print("="*60)
-    print("\n  Starting server at: http://127.0.0.1:5000")
+    print("\n  Starting server at: http://127.0.0.1:5001")
     print("  Press Ctrl+C to stop\n")
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=5001)

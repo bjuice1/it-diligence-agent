@@ -7,8 +7,15 @@
 
 {% block content %}
 <div class="page-header">
-    <h1>Organization & Staffing Analysis</h1>
-    <p class="subtitle">IT staffing assessment with benchmark comparison and dependency analysis</p>
+    <div class="header-with-actions">
+        <div>
+            <h1>Organization & Staffing Analysis</h1>
+            <p class="subtitle">IT staffing assessment with benchmark comparison and dependency analysis</p>
+        </div>
+        <div class="header-actions">
+            <a href="{{ url_for('organization_refresh') }}" class="btn btn-secondary">&#8635; Refresh from Analysis</a>
+        </div>
+    </div>
 </div>
 
 <div class="org-overview">
@@ -193,45 +200,5 @@
     </div>
     {% endif %}
 
-    <!-- Quick Actions -->
-    <div class="quick-actions">
-        <h3>Run New Analysis</h3>
-        <form action="{{ url_for('run_organization_analysis') }}" method="post" enctype="multipart/form-data" class="analysis-form">
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="company_name">Company Name</label>
-                    <input type="text" id="company_name" name="company_name" value="Target Company">
-                </div>
-                <div class="form-group">
-                    <label for="employee_count">Employee Count</label>
-                    <input type="number" id="employee_count" name="employee_count" value="200">
-                </div>
-                <div class="form-group">
-                    <label for="revenue">Revenue ($)</label>
-                    <input type="number" id="revenue" name="revenue" value="50000000">
-                </div>
-                <div class="form-group">
-                    <label for="industry">Industry</label>
-                    <select id="industry" name="industry">
-                        <option value="manufacturing">Manufacturing</option>
-                        <option value="professional_services">Professional Services</option>
-                        <option value="healthcare">Healthcare</option>
-                        <option value="financial_services">Financial Services</option>
-                        <option value="technology">Technology</option>
-                        <option value="retail">Retail</option>
-                    </select>
-                </div>
-            </div>
-            <div class="form-row">
-                <div class="form-group file-group">
-                    <label for="census_file">Census File (CSV/Excel)</label>
-                    <input type="file" id="census_file" name="census_file" accept=".csv,.xlsx,.xls">
-                </div>
-                <div class="form-group">
-                    <button type="submit" class="btn btn-primary">Run Analysis</button>
-                </div>
-            </div>
-        </form>
-    </div>
 </div>
 {% endblock %}
