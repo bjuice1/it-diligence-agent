@@ -89,7 +89,7 @@ class BaseReasoningAgent(ABC):
         api_key: str,
         model: str = "claude-sonnet-4-20250514",
         max_tokens: int = 8192,
-        max_iterations: int = 40
+        max_iterations: int = 40  # Allow thorough analysis - completion prompts prevent infinite loops
     ):
         if not api_key:
             raise ValueError("API key must be provided")
@@ -321,7 +321,9 @@ class BaseReasoningAgent(ABC):
             "CRITICAL: Every finding MUST cite the fact IDs that support it.",
             "Use the based_on_facts/triggered_by fields to link findings to evidence.",
             "",
-            f"Call complete_reasoning when you have fully analyzed the {self.domain} domain."
+            "IMPORTANT: When you have finished analyzing all the facts and created your findings,",
+            f"you MUST call complete_reasoning() to signal completion of the {self.domain} domain.",
+            "Do not continue generating findings indefinitely - call complete_reasoning when done."
         ]
 
         if deal_context:
@@ -471,13 +473,44 @@ class BaseReasoningAgent(ABC):
 
         # Handle no tool calls
         if response.stop_reason == "end_turn" and not tool_results:
-            print("  [WARN] No tool calls - prompting to continue")
-            self.messages.append({
-                "role": "user",
-                "content": "Please continue your analysis. Use identify_risk, create_strategic_consideration, "
-                          "create_work_item, and create_recommendation to record findings. "
-                          "Call complete_reasoning when done."
-            })
+            # Check if we have findings - if so, prompt to complete
+            findings_count = (
+                len(self.reasoning_store.risks) +
+                len(self.reasoning_store.work_items) +
+                len(self.reasoning_store.strategic_considerations) +
+                len(self.reasoning_store.recommendations)
+            )
+            if findings_count > 0:
+                print("  [INFO] Findings generated - prompting to complete")
+                self.messages.append({
+                    "role": "user",
+                    "content": f"You have generated {findings_count} findings. If your analysis is complete, "
+                              "call complete_reasoning() now. If you have more findings to add, continue."
+                })
+            else:
+                print("  [WARN] No tool calls - prompting to continue")
+                self.messages.append({
+                    "role": "user",
+                    "content": "Please continue your analysis. Use identify_risk, create_strategic_consideration, "
+                              "create_work_item, and create_recommendation to record findings. "
+                              "Call complete_reasoning when done."
+                })
+
+        # If we've made many tool calls without completing, remind about completion
+        if self.metrics.tool_calls >= 8 and not self.reasoning_complete:
+            findings_count = (
+                len(self.reasoning_store.risks) +
+                len(self.reasoning_store.work_items) +
+                len(self.reasoning_store.strategic_considerations) +
+                len(self.reasoning_store.recommendations)
+            )
+            if findings_count >= 5 and tool_results:
+                # Add a gentle reminder
+                self.messages.append({
+                    "role": "user",
+                    "content": f"You have created {findings_count} findings. Remember to call complete_reasoning() "
+                              "when you have finished your analysis."
+                })
 
     def get_metrics(self) -> ReasoningMetrics:
         """Get execution metrics"""

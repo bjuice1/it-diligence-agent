@@ -12,7 +12,7 @@ Provides functionality for:
 import json
 import logging
 from pathlib import Path
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Any
 from datetime import datetime
 
 from models.organization_models import (
@@ -38,6 +38,36 @@ logger = logging.getLogger(__name__)
 DEFAULT_BENCHMARKS_DIR = Path(__file__).parent.parent / "data" / "benchmarks"
 PROFILES_FILE = "benchmark_profiles.json"
 COMPENSATION_FILE = "compensation_benchmarks.json"
+CUSTOM_BENCHMARKS_FILE = "custom_benchmarks.json"
+
+
+class BenchmarkDataSource:
+    """
+    Tracks source and attribution for benchmark data (Point 60).
+    """
+
+    def __init__(
+        self,
+        name: str,
+        version: str,
+        last_updated: str,
+        source_type: str = "internal",
+        notes: str = ""
+    ):
+        self.name = name
+        self.version = version
+        self.last_updated = last_updated
+        self.source_type = source_type  # "internal", "custom", "industry"
+        self.notes = notes
+
+    def to_dict(self) -> Dict:
+        return {
+            "name": self.name,
+            "version": self.version,
+            "last_updated": self.last_updated,
+            "source_type": self.source_type,
+            "notes": self.notes
+        }
 
 
 class BenchmarkService:
@@ -64,7 +94,10 @@ class BenchmarkService:
         self._compensation_benchmarks: Dict = {}
         self._location_adjustments: Dict = {}
         self._industry_adjustments: Dict = {}
+        self._custom_benchmarks: Dict = {}
         self._loaded = False
+        self._data_sources: List[BenchmarkDataSource] = []
+        self._metadata: Dict = {}
 
     def load_benchmarks(self) -> bool:
         """
@@ -74,6 +107,8 @@ class BenchmarkService:
             True if loaded successfully, False otherwise.
         """
         try:
+            self._data_sources = []
+
             # Load profiles
             profiles_path = self.benchmarks_dir / PROFILES_FILE
             if profiles_path.exists():
@@ -88,6 +123,16 @@ class BenchmarkService:
                     except Exception as e:
                         logger.warning(f"Failed to parse profile {p.get('profile_id')}: {e}")
 
+                # Track data source (Point 60)
+                metadata = data.get('metadata', {})
+                self._data_sources.append(BenchmarkDataSource(
+                    name="Staffing Profiles",
+                    version=metadata.get('version', '1.0'),
+                    last_updated=metadata.get('last_updated', 'unknown'),
+                    source_type="internal",
+                    notes=metadata.get('source', '')
+                ))
+
                 logger.info(f"Loaded {len(self._profiles)} benchmark profiles")
             else:
                 logger.warning(f"Profiles file not found: {profiles_path}")
@@ -101,16 +146,76 @@ class BenchmarkService:
                 self._compensation_benchmarks = comp_data.get('compensation_benchmarks', {})
                 self._location_adjustments = comp_data.get('location_adjustments', {})
                 self._industry_adjustments = comp_data.get('industry_adjustments', {})
+                self._metadata = comp_data.get('metadata', {})
+
+                # Track data source (Point 60)
+                self._data_sources.append(BenchmarkDataSource(
+                    name="Compensation Benchmarks",
+                    version=self._metadata.get('version', '1.0'),
+                    last_updated=self._metadata.get('last_updated', 'unknown'),
+                    source_type="internal",
+                    notes=self._metadata.get('source', '')
+                ))
 
                 logger.info(f"Loaded compensation benchmarks for {len(self._compensation_benchmarks)} categories")
             else:
                 logger.warning(f"Compensation file not found: {comp_path}")
+
+            # Load custom benchmarks if available (Point 61)
+            custom_path = self.benchmarks_dir / CUSTOM_BENCHMARKS_FILE
+            if custom_path.exists():
+                self._load_custom_benchmarks(custom_path)
 
             self._loaded = True
             return True
 
         except Exception as e:
             logger.error(f"Failed to load benchmarks: {e}")
+            return False
+
+    def _load_custom_benchmarks(self, custom_path: Path) -> bool:
+        """Load custom benchmark data (Point 61)."""
+        try:
+            with open(custom_path, 'r') as f:
+                custom_data = json.load(f)
+
+            self._custom_benchmarks = custom_data
+
+            # Merge custom compensation benchmarks
+            if 'compensation_benchmarks' in custom_data:
+                for category, roles in custom_data['compensation_benchmarks'].items():
+                    if category not in self._compensation_benchmarks:
+                        self._compensation_benchmarks[category] = {}
+                    self._compensation_benchmarks[category].update(roles)
+
+            # Merge custom profiles
+            if 'profiles' in custom_data:
+                for p in custom_data['profiles']:
+                    try:
+                        profile = self._parse_profile(p)
+                        # Check if profile already exists
+                        existing = next((pr for pr in self._profiles if pr.profile_id == profile.profile_id), None)
+                        if existing:
+                            self._profiles.remove(existing)
+                        self._profiles.append(profile)
+                    except Exception as e:
+                        logger.warning(f"Failed to parse custom profile: {e}")
+
+            # Track data source
+            metadata = custom_data.get('metadata', {})
+            self._data_sources.append(BenchmarkDataSource(
+                name="Custom Benchmarks",
+                version=metadata.get('version', '1.0'),
+                last_updated=metadata.get('last_updated', 'unknown'),
+                source_type="custom",
+                notes=metadata.get('source', 'User-provided benchmarks')
+            ))
+
+            logger.info("Loaded custom benchmarks")
+            return True
+
+        except Exception as e:
+            logger.warning(f"Failed to load custom benchmarks: {e}")
             return False
 
     def _parse_profile(self, data: Dict) -> BenchmarkProfile:
@@ -567,3 +672,222 @@ class BenchmarkService:
             range_size = benchmark['p75'] - benchmark['p50']
             position = value - benchmark['p50']
             return 50 + int((position / range_size) * 25) if range_size > 0 else 62
+
+    # =========================================================================
+    # Data Source Attribution (Point 60)
+    # =========================================================================
+
+    def get_data_sources(self) -> List[Dict]:
+        """
+        Get attribution information for all loaded benchmark data sources.
+
+        Returns list of data source info dicts.
+        """
+        if not self._loaded:
+            self.load_benchmarks()
+        return [ds.to_dict() for ds in self._data_sources]
+
+    def get_benchmark_metadata(self) -> Dict:
+        """Get metadata about loaded benchmarks."""
+        if not self._loaded:
+            self.load_benchmarks()
+        return {
+            "profiles_count": len(self._profiles),
+            "compensation_categories": list(self._compensation_benchmarks.keys()),
+            "location_tiers": list(self._location_adjustments.keys()),
+            "industries": list(self._industry_adjustments.keys()),
+            "data_sources": self.get_data_sources(),
+            "has_custom_benchmarks": bool(self._custom_benchmarks)
+        }
+
+    # =========================================================================
+    # Custom Benchmark Upload (Point 61)
+    # =========================================================================
+
+    def upload_custom_benchmarks(self, data: Dict, source_name: str = "User Upload") -> bool:
+        """
+        Upload custom benchmark data (Point 61).
+
+        Args:
+            data: Dict with 'compensation_benchmarks' and/or 'profiles'
+            source_name: Name to attribute this data source
+
+        Returns:
+            True if upload successful
+        """
+        try:
+            # Validate structure
+            if not isinstance(data, dict):
+                raise ValueError("Data must be a dictionary")
+
+            # Merge compensation benchmarks
+            if 'compensation_benchmarks' in data:
+                for category, roles in data['compensation_benchmarks'].items():
+                    if category not in self._compensation_benchmarks:
+                        self._compensation_benchmarks[category] = {}
+                    for role, values in roles.items():
+                        # Validate required fields
+                        if not all(k in values for k in ['p25', 'p50', 'p75']):
+                            logger.warning(f"Skipping role {role}: missing p25/p50/p75")
+                            continue
+                        self._compensation_benchmarks[category][role] = values
+
+            # Merge profiles
+            if 'profiles' in data:
+                for p in data['profiles']:
+                    try:
+                        profile = self._parse_profile(p)
+                        # Replace existing or add new
+                        existing = next((pr for pr in self._profiles if pr.profile_id == profile.profile_id), None)
+                        if existing:
+                            self._profiles.remove(existing)
+                        self._profiles.append(profile)
+                    except Exception as e:
+                        logger.warning(f"Failed to parse custom profile: {e}")
+
+            # Track data source
+            self._data_sources.append(BenchmarkDataSource(
+                name=source_name,
+                version="custom",
+                last_updated=datetime.now().strftime("%Y-%m-%d"),
+                source_type="custom",
+                notes="User-uploaded benchmark data"
+            ))
+
+            # Persist to custom benchmarks file
+            self._save_custom_benchmarks(data)
+
+            logger.info(f"Uploaded custom benchmarks from {source_name}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to upload custom benchmarks: {e}")
+            return False
+
+    def _save_custom_benchmarks(self, data: Dict) -> None:
+        """Save custom benchmarks to file."""
+        custom_path = self.benchmarks_dir / CUSTOM_BENCHMARKS_FILE
+
+        # Load existing if present
+        existing = {}
+        if custom_path.exists():
+            with open(custom_path, 'r') as f:
+                existing = json.load(f)
+
+        # Merge new data
+        if 'compensation_benchmarks' in data:
+            if 'compensation_benchmarks' not in existing:
+                existing['compensation_benchmarks'] = {}
+            for cat, roles in data['compensation_benchmarks'].items():
+                if cat not in existing['compensation_benchmarks']:
+                    existing['compensation_benchmarks'][cat] = {}
+                existing['compensation_benchmarks'][cat].update(roles)
+
+        if 'profiles' in data:
+            if 'profiles' not in existing:
+                existing['profiles'] = []
+            # Add or replace profiles
+            for p in data['profiles']:
+                existing_idx = next(
+                    (i for i, ep in enumerate(existing['profiles'])
+                     if ep.get('profile_id') == p.get('profile_id')),
+                    None
+                )
+                if existing_idx is not None:
+                    existing['profiles'][existing_idx] = p
+                else:
+                    existing['profiles'].append(p)
+
+        # Update metadata
+        existing['metadata'] = {
+            'version': '1.0',
+            'last_updated': datetime.now().strftime("%Y-%m-%d"),
+            'source': 'Custom user-uploaded benchmarks'
+        }
+
+        # Save
+        with open(custom_path, 'w') as f:
+            json.dump(existing, f, indent=2)
+
+    # =========================================================================
+    # Regional Adjustments (Point 59)
+    # =========================================================================
+
+    def get_location_tiers(self) -> Dict[str, Dict]:
+        """Get available location tiers with multipliers."""
+        if not self._loaded:
+            self.load_benchmarks()
+        return self._location_adjustments.copy()
+
+    def get_industry_adjustments(self) -> Dict[str, Dict]:
+        """Get available industry adjustments."""
+        if not self._loaded:
+            self.load_benchmarks()
+        return self._industry_adjustments.copy()
+
+    def apply_regional_adjustment(
+        self,
+        base_compensation: float,
+        location_tier: str,
+        industry: str = "general"
+    ) -> Dict[str, float]:
+        """
+        Apply regional and industry adjustments to compensation (Point 59).
+
+        Args:
+            base_compensation: Base compensation amount
+            location_tier: Location tier key (e.g., "tier_1_metro")
+            industry: Industry key (e.g., "healthcare")
+
+        Returns:
+            Dict with adjusted compensation and breakdown
+        """
+        if not self._loaded:
+            self.load_benchmarks()
+
+        loc_mult = self._location_adjustments.get(location_tier, {}).get('multiplier', 1.0)
+        ind_mult = self._industry_adjustments.get(industry, {}).get('multiplier', 1.0)
+        total_mult = loc_mult * ind_mult
+        adjusted = base_compensation * total_mult
+
+        return {
+            'base_compensation': base_compensation,
+            'location_tier': location_tier,
+            'location_multiplier': loc_mult,
+            'industry': industry,
+            'industry_multiplier': ind_mult,
+            'total_multiplier': total_mult,
+            'adjusted_compensation': adjusted
+        }
+
+    def estimate_compensation_for_region(
+        self,
+        role_title: str,
+        category: str,
+        location_tier: str = "average",
+        industry: str = "general"
+    ) -> Optional[Dict]:
+        """
+        Get full compensation estimate with regional adjustment.
+
+        Returns p25/p50/p75 all adjusted for location and industry.
+        """
+        benchmark = self.get_compensation_benchmark(
+            role_title, category, location_tier, industry
+        )
+        if not benchmark:
+            return None
+
+        return {
+            'role_title': role_title,
+            'role_matched': benchmark.get('role_matched', role_title),
+            'category': category,
+            'location_tier': location_tier,
+            'industry': industry,
+            'p25': benchmark['p25'],
+            'p50': benchmark['p50'],
+            'p75': benchmark['p75'],
+            'location_adjustment': benchmark.get('location_adjustment', 1.0),
+            'industry_adjustment': benchmark.get('industry_adjustment', 1.0),
+            'description': benchmark.get('description', '')
+        }

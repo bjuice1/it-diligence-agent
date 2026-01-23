@@ -4,9 +4,50 @@
 
 {% block content %}
 <div class="page-header">
-    <h1>Analysis Dashboard</h1>
-    <p>Overview of IT due diligence findings for this deal</p>
+    <div class="flex justify-between items-start">
+        <div>
+            <h1>Analysis Dashboard</h1>
+            <p>Overview of IT due diligence findings for this deal</p>
+        </div>
+        <div class="flex gap-2">
+            {% if analysis_metadata %}
+            <span class="text-sm text-muted" style="line-height: 2.5;">
+                Analyzed {{ analysis_metadata.file_count }} file(s)
+                {% if analysis_metadata.timestamp %}
+                on {{ analysis_metadata.timestamp }}
+                {% endif %}
+            </span>
+            {% endif %}
+            <a href="{{ url_for('upload_documents') }}" class="btn btn-secondary btn-sm">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                New Analysis
+            </a>
+        </div>
+    </div>
 </div>
+
+{% if summary.facts == 0 and summary.risks == 0 %}
+<!-- Empty State - No Analysis -->
+<div class="card" style="text-align: center; padding: 60px 40px;">
+    <div style="font-size: 4em; margin-bottom: 20px;">📊</div>
+    <h2 style="margin-bottom: 10px;">No Analysis Results</h2>
+    <p class="text-muted" style="margin-bottom: 30px; max-width: 400px; margin-left: auto; margin-right: auto;">
+        Upload documents to start analyzing IT infrastructure, security, applications, and organization.
+    </p>
+    <a href="{{ url_for('upload_documents') }}" class="btn btn-primary btn-lg">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        Upload Documents
+    </a>
+</div>
+{% else %}
 
 <!-- Metrics Row -->
 <div class="metrics-row">
@@ -20,10 +61,15 @@
         <span class="metric-value">{{ summary.gaps }}</span>
         <span class="metric-subtext">Requiring VDR requests</span>
     </div>
-    <div class="metric-card {{ 'metric-warning' if summary.risk_summary.critical|default(0) > 0 else '' }}">
+    <div class="metric-card {{ 'metric-danger' if summary.risk_summary.critical|default(0) > 0 else 'metric-warning' if summary.risk_summary.high|default(0) > 0 else '' }}">
         <span class="metric-label">Risks Identified</span>
         <span class="metric-value">{{ summary.risks }}</span>
-        <span class="metric-subtext">{{ summary.risk_summary.critical|default(0) }} critical, {{ summary.risk_summary.high|default(0) }} high</span>
+        <span class="metric-subtext">
+            {% if summary.risk_summary.critical|default(0) > 0 %}
+            <span style="color: var(--danger);">{{ summary.risk_summary.critical }} critical</span>,
+            {% endif %}
+            {{ summary.risk_summary.high|default(0) }} high
+        </span>
     </div>
     <div class="metric-card">
         <span class="metric-label">Work Items</span>
@@ -31,6 +77,27 @@
         <span class="metric-subtext">{{ summary.cost_summary.Day_1.count|default(0) if summary.cost_summary else 0 }} for Day 1</span>
     </div>
 </div>
+
+<!-- Domain Coverage -->
+{% if summary.domains_with_facts %}
+<div class="card mb-4">
+    <div class="card-header">
+        <span class="card-title">Domain Coverage</span>
+    </div>
+    <div class="card-body">
+        <div class="flex gap-2 flex-wrap">
+            {% set all_domains = ['infrastructure', 'network', 'cybersecurity', 'applications', 'identity_access', 'organization'] %}
+            {% for domain in all_domains %}
+            <span class="badge {% if domain in summary.domains_with_facts %}badge-success{% else %}badge-outline{% endif %}"
+                  style="padding: 8px 16px; font-size: 0.9em;">
+                {% if domain in summary.domains_with_facts %}✓{% else %}○{% endif %}
+                {{ domain|replace('_', ' ')|title }}
+            </span>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- Main Content Grid -->
 <div class="grid grid-2 gap-4">
@@ -100,12 +167,12 @@
                     </thead>
                     <tbody>
                         {% for risk in top_risks %}
-                        <tr data-id="{{ risk.risk_id }}" data-type="risk">
+                        <tr data-id="{{ risk.finding_id }}" data-type="risk">
                             <td>
-                                <span class="badge badge-{{ risk.severity }}">{{ risk.severity }}</span>
+                                <span class="badge badge-{{ risk.severity }}">{{ risk.severity|upper }}</span>
                             </td>
                             <td class="truncate" style="max-width: 200px;">{{ risk.title }}</td>
-                            <td class="text-muted text-sm">{{ risk.domain }}</td>
+                            <td class="text-muted text-sm">{{ risk.domain|replace('_', ' ')|title }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -143,14 +210,14 @@
                 </thead>
                 <tbody>
                     {% for wi in day1_items %}
-                    <tr data-id="{{ wi.work_item_id }}" data-type="work_item">
-                        <td class="font-mono text-sm">{{ wi.work_item_id }}</td>
+                    <tr data-id="{{ wi.finding_id }}" data-type="work_item">
+                        <td class="font-mono text-sm">{{ wi.finding_id }}</td>
                         <td class="truncate" style="max-width: 300px;">{{ wi.title }}</td>
-                        <td class="text-muted text-sm">{{ wi.domain }}</td>
+                        <td class="text-muted text-sm">{{ wi.domain|replace('_', ' ')|title }}</td>
                         <td>
-                            <span class="badge badge-outline badge-info">{{ wi.owner }}</span>
+                            <span class="badge badge-outline badge-info">{{ wi.owner_type }}</span>
                         </td>
-                        <td style="text-align: right;" class="cost-range">{{ wi.cost_estimate }}</td>
+                        <td style="text-align: right;" class="cost-range">{{ wi.cost_estimate|replace('_', ' ') }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -167,17 +234,22 @@
 </div>
 
 <!-- Quick Actions -->
-<div class="flex gap-3 mt-4">
-    <form action="{{ url_for('export') }}" method="POST" style="display: inline;">
-        <button type="submit" class="btn btn-primary">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="7 10 12 15 17 10"></polyline>
-                <line x1="12" y1="15" x2="12" y2="3"></line>
-            </svg>
-            Export Session
-        </button>
-    </form>
+<div class="flex gap-3 mt-4 flex-wrap">
+    <a href="/api/export/excel" class="btn btn-primary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        Export to Excel
+    </a>
+    <a href="/api/export/json" class="btn btn-secondary" target="_blank">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+        </svg>
+        Export JSON
+    </a>
     <a href="{{ url_for('gaps') }}" class="btn btn-secondary">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="12" cy="12" r="10"></circle>
@@ -186,7 +258,17 @@
         </svg>
         Review Gaps ({{ summary.gaps }})
     </a>
+    <a href="{{ url_for('export_vdr') }}" class="btn btn-secondary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+        </svg>
+        Generate VDR Request
+    </a>
 </div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
@@ -194,8 +276,8 @@
     // Store data for drawer
     const risksData = {
         {% for risk in top_risks %}
-        "{{ risk.risk_id }}": {
-            id: "{{ risk.risk_id }}",
+        "{{ risk.finding_id }}": {
+            id: "{{ risk.finding_id }}",
             title: "{{ risk.title|e }}",
             severity: "{{ risk.severity }}",
             domain: "{{ risk.domain }}",
@@ -208,12 +290,12 @@
 
     const workItemsData = {
         {% for wi in day1_items %}
-        "{{ wi.work_item_id }}": {
-            id: "{{ wi.work_item_id }}",
+        "{{ wi.finding_id }}": {
+            id: "{{ wi.finding_id }}",
             title: "{{ wi.title|e }}",
             domain: "{{ wi.domain }}",
             phase: "{{ wi.phase }}",
-            owner: "{{ wi.owner }}",
+            owner: "{{ wi.owner_type }}",
             cost: "{{ wi.cost_estimate }}",
             description: "{{ wi.description|e if wi.description else 'No description available' }}",
             priority: "{{ wi.priority|default('medium') }}"
@@ -238,7 +320,7 @@
                 </div>
                 <div class="drawer-section">
                     <div class="drawer-section-title">Domain</div>
-                    <div class="drawer-section-content">${r.domain}</div>
+                    <div class="drawer-section-content">${r.domain.replace('_', ' ')}</div>
                 </div>
                 <div class="drawer-section">
                     <div class="drawer-section-title">Description</div>
@@ -272,7 +354,7 @@
                 </div>
                 <div class="drawer-section">
                     <div class="drawer-section-title">Cost Estimate</div>
-                    <div class="drawer-section-content font-mono">${w.cost}</div>
+                    <div class="drawer-section-content font-mono">${w.cost.replace(/_/g, ' ')}</div>
                 </div>
                 <div class="drawer-section">
                     <div class="drawer-section-title">Description</div>

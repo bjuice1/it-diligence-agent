@@ -7,7 +7,7 @@ Ties together census data, MSP data, shared services, and benchmarks.
 
 import logging
 from datetime import datetime
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 
 from models.organization_models import (
     StaffMember,
@@ -27,16 +27,79 @@ from services.benchmark_service import BenchmarkService
 
 logger = logging.getLogger(__name__)
 
+# Configurable defaults (Point 62)
+DEFAULT_MSP_COST_PER_FTE = 100000  # Can be overridden
+DEFAULT_CONTRACTOR_MARKUP = 1.3  # 30% markup for contractors
+DEFAULT_MSP_MARKUP = 1.5  # 50% markup for MSP services
+
+# Role equivalency mappings (Point 64)
+ROLE_EQUIVALENCY_MAP = {
+    # Common variations -> normalized role
+    "sys admin": "systems administrator",
+    "sysadmin": "systems administrator",
+    "server admin": "systems administrator",
+    "linux admin": "systems administrator",
+    "windows admin": "systems administrator",
+    "network admin": "network administrator",
+    "net admin": "network administrator",
+    "neteng": "network engineer",
+    "devops": "devops engineer",
+    "sre": "devops engineer",
+    "site reliability": "devops engineer",
+    "cloud admin": "cloud engineer",
+    "aws admin": "cloud engineer",
+    "azure admin": "cloud engineer",
+    "help desk": "help desk technician",
+    "helpdesk": "help desk technician",
+    "it support": "help desk technician",
+    "desktop support": "help desk technician",
+    "sec analyst": "security analyst",
+    "infosec analyst": "security analyst",
+    "cyber analyst": "security analyst",
+    "dba": "database administrator",
+    "db admin": "database administrator",
+    "developer": "software developer",
+    "programmer": "software developer",
+    "coder": "software developer",
+    "software dev": "software developer",
+    "ba": "business analyst",
+    "pm": "project manager",
+    "project mgr": "project manager",
+}
+
 
 class StaffingComparisonService:
     """
     Compares actual staffing to benchmarks and provides comprehensive analysis.
     """
 
-    def __init__(self, benchmark_service: Optional[BenchmarkService] = None):
+    def __init__(
+        self,
+        benchmark_service: Optional[BenchmarkService] = None,
+        msp_cost_per_fte: float = DEFAULT_MSP_COST_PER_FTE,
+        contractor_markup: float = DEFAULT_CONTRACTOR_MARKUP,
+        msp_markup: float = DEFAULT_MSP_MARKUP
+    ):
+        """
+        Initialize with configurable cost parameters (Point 62).
+
+        Args:
+            benchmark_service: BenchmarkService instance
+            msp_cost_per_fte: Cost per FTE for MSP resources
+            contractor_markup: Markup factor for contractors vs FTE
+            msp_markup: Markup factor for MSP services vs FTE
+        """
         self.benchmark_service = benchmark_service or BenchmarkService()
         if not self.benchmark_service._loaded:
             self.benchmark_service.load_benchmarks()
+
+        # Configurable cost parameters (Point 62)
+        self.msp_cost_per_fte = msp_cost_per_fte
+        self.contractor_markup = contractor_markup
+        self.msp_markup = msp_markup
+
+        # Role equivalency for matching (Point 64)
+        self.role_equivalency_map = ROLE_EQUIVALENCY_MAP.copy()
 
     def run_full_comparison(
         self,
@@ -325,3 +388,271 @@ class StaffingComparisonService:
     ) -> TotalITCostSummary:
         """Calculate complete IT cost summary."""
         return org_store.calculate_cost_summary()
+
+    # =========================================================================
+    # Confidence Intervals (Point 63)
+    # =========================================================================
+
+    def calculate_comparison_with_confidence(
+        self,
+        staff_by_category: Dict[str, int],
+        benchmark: BenchmarkProfile,
+        confidence_level: float = 0.9
+    ) -> Dict[str, Any]:
+        """
+        Compare staffing with confidence intervals (Point 63).
+
+        Returns comparison with low/mid/high estimates.
+        """
+        comparisons = []
+
+        for category_name, bench_range in benchmark.expected_staffing.items():
+            actual = staff_by_category.get(category_name, 0)
+
+            # Calculate confidence interval range
+            range_size = bench_range.max_value - bench_range.min_value
+            midpoint = bench_range.typical_value
+
+            # Confidence interval (using typical as center)
+            margin = range_size * (1 - confidence_level) / 2
+            ci_low = max(bench_range.min_value, midpoint - margin)
+            ci_high = min(bench_range.max_value, midpoint + margin)
+
+            # Variance analysis
+            variance_from_low = actual - ci_low
+            variance_from_mid = actual - midpoint
+            variance_from_high = actual - ci_high
+
+            # Status with confidence
+            if actual < ci_low:
+                status = "understaffed"
+                confidence_status = "high_confidence"
+            elif actual > ci_high:
+                status = "overstaffed"
+                confidence_status = "high_confidence"
+            elif actual < bench_range.min_value:
+                status = "understaffed"
+                confidence_status = "moderate_confidence"
+            elif actual > bench_range.max_value:
+                status = "overstaffed"
+                confidence_status = "moderate_confidence"
+            else:
+                status = "in_range"
+                confidence_status = "high_confidence"
+
+            comparisons.append({
+                'category': category_name,
+                'actual': actual,
+                'benchmark_min': int(bench_range.min_value),
+                'benchmark_typical': int(bench_range.typical_value),
+                'benchmark_max': int(bench_range.max_value),
+                'confidence_interval': {
+                    'level': confidence_level,
+                    'low': ci_low,
+                    'high': ci_high
+                },
+                'variance': {
+                    'from_low': variance_from_low,
+                    'from_mid': variance_from_mid,
+                    'from_high': variance_from_high
+                },
+                'status': status,
+                'confidence_status': confidence_status
+            })
+
+        return {
+            'comparisons': comparisons,
+            'confidence_level': confidence_level,
+            'benchmark_profile': benchmark.profile_name
+        }
+
+    # =========================================================================
+    # Role Equivalency Mapping (Point 64)
+    # =========================================================================
+
+    def normalize_role_title(self, role_title: str) -> str:
+        """
+        Normalize a role title for comparison (Point 64).
+
+        Maps non-standard titles to benchmark roles.
+        """
+        title_lower = role_title.lower().strip()
+
+        # Direct match
+        if title_lower in self.role_equivalency_map:
+            return self.role_equivalency_map[title_lower]
+
+        # Substring match
+        for key, normalized in self.role_equivalency_map.items():
+            if key in title_lower:
+                return normalized
+
+        # No mapping found, return original
+        return role_title.lower()
+
+    def map_roles_to_benchmarks(
+        self,
+        staff: List[StaffMember]
+    ) -> Dict[str, List[StaffMember]]:
+        """
+        Group staff by normalized benchmark role.
+
+        Returns dict mapping normalized role to list of staff.
+        """
+        role_groups = {}
+
+        for member in staff:
+            normalized = self.normalize_role_title(member.role_title)
+            if normalized not in role_groups:
+                role_groups[normalized] = []
+            role_groups[normalized].append(member)
+
+        return role_groups
+
+    def add_role_equivalency(self, variation: str, normalized_role: str) -> None:
+        """Add a custom role equivalency mapping."""
+        self.role_equivalency_map[variation.lower()] = normalized_role.lower()
+
+    # =========================================================================
+    # Historical Trend Analysis (Point 65)
+    # =========================================================================
+
+    def compare_with_historical(
+        self,
+        current_staff_by_category: Dict[str, int],
+        historical_staff_by_category: Dict[str, int],
+        benchmark: BenchmarkProfile
+    ) -> Dict[str, Any]:
+        """
+        Compare current vs historical staffing trends (Point 65).
+
+        Args:
+            current_staff_by_category: Current headcount by category
+            historical_staff_by_category: Previous period headcount
+            benchmark: Benchmark profile for context
+
+        Returns:
+            Trend analysis with recommendations
+        """
+        trends = []
+        total_current = sum(current_staff_by_category.values())
+        total_historical = sum(historical_staff_by_category.values())
+        total_change = total_current - total_historical
+
+        for category in set(current_staff_by_category.keys()) | set(historical_staff_by_category.keys()):
+            current = current_staff_by_category.get(category, 0)
+            historical = historical_staff_by_category.get(category, 0)
+            change = current - historical
+
+            # Calculate percent change
+            pct_change = (change / historical * 100) if historical > 0 else (100 if current > 0 else 0)
+
+            # Get benchmark context
+            bench_range = benchmark.expected_staffing.get(category)
+            benchmark_status = None
+            if bench_range:
+                if current < bench_range.min_value:
+                    benchmark_status = "below_benchmark"
+                elif current > bench_range.max_value:
+                    benchmark_status = "above_benchmark"
+                else:
+                    benchmark_status = "within_benchmark"
+
+            # Determine trend direction
+            if change > 0:
+                trend = "increasing"
+            elif change < 0:
+                trend = "decreasing"
+            else:
+                trend = "stable"
+
+            # Generate insight
+            insight = self._generate_trend_insight(
+                category, change, pct_change, benchmark_status
+            )
+
+            trends.append({
+                'category': category,
+                'current': current,
+                'historical': historical,
+                'change': change,
+                'percent_change': round(pct_change, 1),
+                'trend': trend,
+                'benchmark_status': benchmark_status,
+                'insight': insight
+            })
+
+        return {
+            'period_comparison': 'current vs historical',
+            'total_current': total_current,
+            'total_historical': total_historical,
+            'total_change': total_change,
+            'category_trends': trends,
+            'recommendations': self._generate_trend_recommendations(trends)
+        }
+
+    def _generate_trend_insight(
+        self,
+        category: str,
+        change: int,
+        pct_change: float,
+        benchmark_status: Optional[str]
+    ) -> str:
+        """Generate insight text for a category trend."""
+        if change == 0:
+            return f"{category.title()} staffing unchanged"
+
+        direction = "increased" if change > 0 else "decreased"
+        magnitude = abs(change)
+
+        insight = f"{category.title()} {direction} by {magnitude} ({pct_change:+.0f}%)"
+
+        if benchmark_status == "below_benchmark":
+            if change < 0:
+                insight += ". Now further below benchmark - risk increasing."
+            else:
+                insight += ". Moving toward benchmark but still below."
+        elif benchmark_status == "above_benchmark":
+            if change > 0:
+                insight += ". Now further above benchmark."
+            else:
+                insight += ". Moving toward benchmark range."
+
+        return insight
+
+    def _generate_trend_recommendations(
+        self,
+        trends: List[Dict]
+    ) -> List[str]:
+        """Generate recommendations based on trends."""
+        recommendations = []
+
+        # Check for significant decreases in critical areas
+        critical_categories = ['security', 'infrastructure', 'leadership']
+        for trend in trends:
+            if trend['category'] in critical_categories and trend['change'] < -1:
+                recommendations.append(
+                    f"Investigate {trend['category']} staffing decrease - "
+                    f"verify coverage not compromised"
+                )
+
+        # Check for rapid growth areas
+        rapid_growth = [t for t in trends if t['percent_change'] > 25]
+        if rapid_growth:
+            cats = [t['category'] for t in rapid_growth]
+            recommendations.append(
+                f"Review rapid headcount growth in: {', '.join(cats)}"
+            )
+
+        # Check for areas still below benchmark despite growth
+        growing_but_under = [
+            t for t in trends
+            if t['change'] > 0 and t.get('benchmark_status') == 'below_benchmark'
+        ]
+        if growing_but_under:
+            cats = [t['category'] for t in growing_but_under]
+            recommendations.append(
+                f"Continue staffing growth in: {', '.join(cats)} - still below benchmark"
+            )
+
+        return recommendations

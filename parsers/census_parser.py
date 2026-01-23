@@ -118,6 +118,90 @@ ROLE_CLASSIFICATION_RULES = {
 KEY_PERSON_TENURE_YEARS = 5
 KEY_PERSON_ROLES = ["cio", "ciso", "cto", "director", "manager", "architect", "lead", "principal"]
 
+# Compensation bounds for validation (Points 51-52)
+MIN_REALISTIC_SALARY = 20000  # Flag salaries below $20K
+MAX_REALISTIC_SALARY = 1000000  # Flag salaries above $1M
+COMPENSATION_WARNING_THRESHOLDS = {
+    "very_low": 30000,   # Very low for IT roles
+    "low": 50000,        # Below market for most IT roles
+    "high": 500000,      # Unusually high
+    "very_high": 750000  # Extremely high
+}
+
+
+class CensusValidationReport:
+    """
+    Validation report for census parsing (Point 56).
+    Tracks all issues, warnings, and statistics during parsing.
+    """
+
+    def __init__(self):
+        self.errors: List[str] = []
+        self.warnings: List[str] = []
+        self.info: List[str] = []
+        self.column_mapping_confidence: Dict[str, float] = {}
+        self.rows_processed = 0
+        self.rows_skipped = 0
+        self.rows_with_warnings = 0
+        self.compensation_issues: List[Dict] = []
+        self.date_issues: List[Dict] = []
+        self.missing_fields: Dict[str, int] = {}
+
+    def add_error(self, message: str, row: Optional[int] = None):
+        prefix = f"Row {row}: " if row else ""
+        self.errors.append(f"{prefix}{message}")
+
+    def add_warning(self, message: str, row: Optional[int] = None):
+        prefix = f"Row {row}: " if row else ""
+        self.warnings.append(f"{prefix}{message}")
+
+    def add_info(self, message: str):
+        self.info.append(message)
+
+    def add_compensation_issue(self, row: int, name: str, value: float, issue: str):
+        self.compensation_issues.append({
+            "row": row,
+            "name": name,
+            "value": value,
+            "issue": issue
+        })
+
+    def add_date_issue(self, row: int, name: str, value: str, issue: str):
+        self.date_issues.append({
+            "row": row,
+            "name": name,
+            "value": value,
+            "issue": issue
+        })
+
+    def set_column_confidence(self, field: str, confidence: float):
+        self.column_mapping_confidence[field] = confidence
+
+    def track_missing_field(self, field: str):
+        self.missing_fields[field] = self.missing_fields.get(field, 0) + 1
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "summary": {
+                "rows_processed": self.rows_processed,
+                "rows_skipped": self.rows_skipped,
+                "rows_with_warnings": self.rows_with_warnings,
+                "error_count": len(self.errors),
+                "warning_count": len(self.warnings)
+            },
+            "column_mapping_confidence": self.column_mapping_confidence,
+            "missing_fields": self.missing_fields,
+            "errors": self.errors,
+            "warnings": self.warnings,
+            "info": self.info,
+            "compensation_issues": self.compensation_issues,
+            "date_issues": self.date_issues
+        }
+
+    def is_valid(self) -> bool:
+        """Returns True if no critical errors."""
+        return len(self.errors) == 0
+
 
 class CensusParser:
     """
@@ -134,12 +218,14 @@ class CensusParser:
         self.role_rules = ROLE_CLASSIFICATION_RULES.copy()
         self._detected_columns: Dict[str, str] = {}
         self._parse_warnings: List[str] = []
+        self._validation_report: Optional[CensusValidationReport] = None
 
     def parse_file(
         self,
         file_path: str,
         entity: str = "target",
-        sheet_name: Optional[str] = None
+        sheet_name: Optional[str] = None,
+        generate_report: bool = True
     ) -> List[StaffMember]:
         """
         Parse a census file (Excel or CSV) into StaffMember objects.
@@ -148,14 +234,18 @@ class CensusParser:
             file_path: Path to the census file
             entity: Entity identifier ("target", "buyer", "parent")
             sheet_name: For Excel files, which sheet to read (default: first)
+            generate_report: If True, generate detailed validation report (Point 56)
 
         Returns:
             List of StaffMember objects
         """
         path = Path(file_path)
         self._parse_warnings = []
+        self._validation_report = CensusValidationReport() if generate_report else None
 
         if not path.exists():
+            if self._validation_report:
+                self._validation_report.add_error(f"File not found: {file_path}")
             raise FileNotFoundError(f"Census file not found: {file_path}")
 
         # Determine file type and load data
@@ -165,34 +255,65 @@ class CensusParser:
         elif suffix == '.csv':
             rows = self._load_csv(path)
         else:
+            if self._validation_report:
+                self._validation_report.add_error(f"Unsupported file type: {suffix}")
             raise ValueError(f"Unsupported file type: {suffix}. Use .xlsx, .xls, or .csv")
 
         if not rows:
             logger.warning(f"No data rows found in {file_path}")
+            if self._validation_report:
+                self._validation_report.add_warning("No data rows found in file")
             return []
 
         # First row is headers
         headers = rows[0]
         data_rows = rows[1:]
 
-        # Detect column mappings
-        self._detected_columns = self._detect_columns(headers)
+        if self._validation_report:
+            self._validation_report.add_info(f"Found {len(data_rows)} data rows")
+
+        # Detect column mappings with confidence scores (Point 54)
+        self._detected_columns, confidence_scores = self._detect_columns_with_confidence(headers)
         logger.info(f"Detected columns: {self._detected_columns}")
+
+        if self._validation_report:
+            self._validation_report.column_mapping_confidence = confidence_scores
+            for field, conf in confidence_scores.items():
+                if conf < 0.7:
+                    self._validation_report.add_warning(
+                        f"Low confidence ({conf:.0%}) mapping for field '{field}'"
+                    )
 
         # Parse each row
         staff_members = []
         for i, row in enumerate(data_rows, start=2):  # Start at 2 for Excel row numbers
+            if self._validation_report:
+                self._validation_report.rows_processed += 1
+
             try:
                 member = self._parse_row(row, headers, entity, i)
                 if member:
+                    # Validate compensation (Point 52)
+                    self._validate_compensation(member, i)
                     staff_members.append(member)
+                else:
+                    if self._validation_report:
+                        self._validation_report.rows_skipped += 1
             except Exception as e:
                 self._parse_warnings.append(f"Row {i}: {str(e)}")
                 logger.warning(f"Failed to parse row {i}: {e}")
+                if self._validation_report:
+                    self._validation_report.add_error(str(e), i)
+                    self._validation_report.rows_skipped += 1
 
         logger.info(f"Parsed {len(staff_members)} staff members from {file_path}")
         if self._parse_warnings:
             logger.warning(f"{len(self._parse_warnings)} warnings during parsing")
+
+        if self._validation_report:
+            self._validation_report.add_info(
+                f"Successfully parsed {len(staff_members)} of {len(data_rows)} rows"
+            )
 
         return staff_members
 
@@ -258,20 +379,74 @@ class CensusParser:
         Returns:
             Dict mapping field names to actual column names
         """
+        detected, _ = self._detect_columns_with_confidence(headers)
+        return detected
+
+    def _detect_columns_with_confidence(
+        self,
+        headers: List[str]
+    ) -> Tuple[Dict[str, str], Dict[str, float]]:
+        """
+        Auto-detect columns with confidence scores (Point 54).
+
+        Args:
+            headers: List of column header names
+
+        Returns:
+            Tuple of (detected mappings, confidence scores)
+        """
         detected = {}
+        confidence = {}
         headers_lower = [str(h).lower().strip() if h else "" for h in headers]
 
         for field, variations in self.column_mappings.items():
+            best_match = None
+            best_score = 0.0
+
             for var in variations:
                 var_lower = var.lower()
                 for i, header in enumerate(headers_lower):
-                    if var_lower == header or var_lower in header:
-                        detected[field] = headers[i]
-                        break
-                if field in detected:
-                    break
+                    if not header:
+                        continue
 
-        return detected
+                    # Calculate match score
+                    score = 0.0
+
+                    # Exact match = 1.0
+                    if var_lower == header:
+                        score = 1.0
+                    # Exact substring at start = 0.9
+                    elif header.startswith(var_lower):
+                        score = 0.9
+                    # Exact substring match = 0.8
+                    elif var_lower in header:
+                        score = 0.8
+                    # Header in variation = 0.7
+                    elif header in var_lower:
+                        score = 0.7
+                    # Fuzzy: significant overlap = 0.5
+                    elif self._word_overlap(var_lower, header) > 0.5:
+                        score = 0.5 + self._word_overlap(var_lower, header) * 0.3
+
+                    if score > best_score:
+                        best_score = score
+                        best_match = headers[i]
+
+            if best_match and best_score > 0.4:  # Minimum threshold
+                detected[field] = best_match
+                confidence[field] = best_score
+
+        return detected, confidence
+
+    def _word_overlap(self, s1: str, s2: str) -> float:
+        """Calculate word overlap between two strings."""
+        words1 = set(s1.replace('_', ' ').split())
+        words2 = set(s2.replace('_', ' ').split())
+        if not words1 or not words2:
+            return 0.0
+        intersection = words1 & words2
+        union = words1 | words2
+        return len(intersection) / len(union) if union else 0.0
 
     def _parse_row(
         self,
@@ -336,7 +511,7 @@ class CensusParser:
         tenure_years = None
         hire_date = None
         if hire_date_str:
-            hire_date = self._parse_date(hire_date_str)
+            hire_date = self._parse_date(hire_date_str, row_num, name)
             if hire_date:
                 tenure_years = self._calculate_tenure(hire_date)
 
@@ -397,50 +572,112 @@ class CensusParser:
         except ValueError:
             return 0.0
 
-    def _parse_date(self, value: str) -> Optional[str]:
-        """Parse date value into ISO format string."""
+    def _parse_date(self, value: str, row_num: int = None, name: str = None) -> Optional[str]:
+        """
+        Parse date value into ISO format string (Point 53, 55).
+
+        Handles multiple formats including European date formats.
+        Validates that dates are not in the future.
+        """
         if not value:
             return None
 
         # If it's already a date object
         if isinstance(value, (datetime, date)):
-            return value.strftime("%Y-%m-%d")
+            dt = value if isinstance(value, datetime) else datetime.combine(value, datetime.min.time())
+            return self._validate_and_format_date(dt, row_num, name, str(value))
 
         value = str(value).strip()
 
-        # Common date formats to try
+        # Extended date formats including European formats (Point 55)
         formats = [
+            # ISO formats
             "%Y-%m-%d",
+            "%Y/%m/%d",
+            # US formats
             "%m/%d/%Y",
             "%m/%d/%y",
+            "%m-%d-%Y",
+            "%m-%d-%y",
+            # European formats (Point 55)
             "%d/%m/%Y",
             "%d/%m/%y",
-            "%Y/%m/%d",
             "%d-%m-%Y",
-            "%m-%d-%Y",
+            "%d-%m-%y",
+            "%d.%m.%Y",
+            "%d.%m.%y",
+            # Text formats
             "%B %d, %Y",
             "%b %d, %Y",
             "%d %B %Y",
             "%d %b %Y",
+            "%B %d %Y",
+            "%b %d %Y",
+            # Other common formats
+            "%Y%m%d",
+            "%d-%b-%Y",
+            "%d-%b-%y",
         ]
 
         for fmt in formats:
             try:
                 dt = datetime.strptime(value, fmt)
-                return dt.strftime("%Y-%m-%d")
+                return self._validate_and_format_date(dt, row_num, name, value)
             except ValueError:
                 continue
 
         # Try pandas if available for more flexible parsing
         try:
             import pandas as pd
-            dt = pd.to_datetime(value)
-            return dt.strftime("%Y-%m-%d")
+            dt = pd.to_datetime(value, dayfirst=False)  # Try US format first
+            if pd.isna(dt):
+                dt = pd.to_datetime(value, dayfirst=True)  # Then European
+            if not pd.isna(dt):
+                return self._validate_and_format_date(dt.to_pydatetime(), row_num, name, value)
         except:
             pass
 
+        # Record date parsing issue
+        if self._validation_report and row_num and name:
+            self._validation_report.add_date_issue(
+                row_num, name, value, "Could not parse date format"
+            )
         logger.warning(f"Could not parse date: {value}")
         return None
+
+    def _validate_and_format_date(
+        self,
+        dt: datetime,
+        row_num: int = None,
+        name: str = None,
+        original_value: str = None
+    ) -> str:
+        """Validate date and return ISO format (Point 53)."""
+        today = datetime.now()
+
+        # Check for future dates (Point 53)
+        if dt > today:
+            if self._validation_report and row_num and name:
+                self._validation_report.add_date_issue(
+                    row_num, name, original_value or str(dt),
+                    f"Future date detected: {dt.strftime('%Y-%m-%d')}"
+                )
+                self._validation_report.add_warning(
+                    f"Future hire date for {name}: {dt.strftime('%Y-%m-%d')}",
+                    row_num
+                )
+            logger.warning(f"Future date detected: {dt}")
+
+        # Check for unreasonably old dates (before 1960)
+        if dt.year < 1960:
+            if self._validation_report and row_num and name:
+                self._validation_report.add_date_issue(
+                    row_num, name, original_value or str(dt),
+                    f"Date appears too old: {dt.strftime('%Y-%m-%d')}"
+                )
+            logger.warning(f"Date appears too old: {dt}")
+
+        return dt.strftime("%Y-%m-%d")
 
     def _calculate_tenure(self, hire_date: str) -> float:
         """Calculate tenure in years from hire date."""
@@ -448,9 +685,63 @@ class CensusParser:
             hire = datetime.strptime(hire_date, "%Y-%m-%d")
             today = datetime.now()
             delta = today - hire
-            return round(delta.days / 365.25, 1)
+            tenure = round(delta.days / 365.25, 1)
+            # Handle future dates (negative tenure)
+            if tenure < 0:
+                return 0.0
+            return tenure
         except:
             return None
+
+    def _validate_compensation(self, member: StaffMember, row_num: int) -> None:
+        """
+        Validate compensation is within realistic bounds (Point 52).
+
+        Flags unrealistic salary values for review.
+        """
+        if not self._validation_report:
+            return
+
+        comp = member.base_compensation
+        if comp <= 0:
+            self._validation_report.track_missing_field("salary")
+            return
+
+        # Check minimum bounds
+        if comp < MIN_REALISTIC_SALARY:
+            self._validation_report.add_compensation_issue(
+                row_num, member.name, comp,
+                f"Below minimum realistic salary (${MIN_REALISTIC_SALARY:,})"
+            )
+            self._validation_report.add_warning(
+                f"Suspiciously low salary ${comp:,.0f} for {member.name}",
+                row_num
+            )
+            self._validation_report.rows_with_warnings += 1
+
+        # Check maximum bounds
+        elif comp > MAX_REALISTIC_SALARY:
+            self._validation_report.add_compensation_issue(
+                row_num, member.name, comp,
+                f"Above maximum realistic salary (${MAX_REALISTIC_SALARY:,})"
+            )
+            self._validation_report.add_warning(
+                f"Unusually high salary ${comp:,.0f} for {member.name}",
+                row_num
+            )
+            self._validation_report.rows_with_warnings += 1
+
+        # Check warning thresholds
+        elif comp < COMPENSATION_WARNING_THRESHOLDS["very_low"]:
+            self._validation_report.add_compensation_issue(
+                row_num, member.name, comp,
+                "Very low for IT role - verify accuracy"
+            )
+        elif comp > COMPENSATION_WARNING_THRESHOLDS["very_high"]:
+            self._validation_report.add_compensation_issue(
+                row_num, member.name, comp,
+                "Very high compensation - may be total comp or executive"
+            )
 
     def _classify_role(self, role_title: str, department: str) -> RoleCategory:
         """
@@ -619,3 +910,58 @@ class CensusParser:
     def get_detected_columns(self) -> Dict[str, str]:
         """Get the column mappings detected in the most recent parse."""
         return self._detected_columns.copy()
+
+    def get_validation_report(self) -> Optional[CensusValidationReport]:
+        """Get the validation report from the most recent parse (Point 56)."""
+        return self._validation_report
+
+    def get_column_confidence(self) -> Dict[str, float]:
+        """Get column mapping confidence scores (Point 54)."""
+        if self._validation_report:
+            return self._validation_report.column_mapping_confidence.copy()
+        return {}
+
+    def validate_staff_member(self, member: StaffMember) -> List[str]:
+        """
+        Validate a StaffMember object for data quality (Point 51).
+
+        Returns list of validation issues found.
+        """
+        issues = []
+
+        # Required fields
+        if not member.name or member.name == "Unknown":
+            issues.append("Missing or invalid name")
+
+        if not member.role_title or member.role_title == "Unknown":
+            issues.append("Missing role title")
+
+        # Compensation validation
+        if member.base_compensation <= 0:
+            issues.append("Missing base compensation")
+        elif member.base_compensation < MIN_REALISTIC_SALARY:
+            issues.append(f"Base compensation ${member.base_compensation:,.0f} below ${MIN_REALISTIC_SALARY:,}")
+        elif member.base_compensation > MAX_REALISTIC_SALARY:
+            issues.append(f"Base compensation ${member.base_compensation:,.0f} above ${MAX_REALISTIC_SALARY:,}")
+
+        # Total comp should be >= base
+        if member.total_compensation and member.base_compensation:
+            if member.total_compensation < member.base_compensation:
+                issues.append("Total compensation less than base compensation")
+
+        # Tenure validation
+        if member.tenure_years is not None:
+            if member.tenure_years < 0:
+                issues.append("Negative tenure years")
+            elif member.tenure_years > 50:
+                issues.append(f"Unusually long tenure: {member.tenure_years} years")
+
+        # Employment type validation
+        if not member.employment_type:
+            issues.append("Missing employment type")
+
+        # Location validation
+        if not member.location or member.location == "Unknown":
+            issues.append("Missing location")
+
+        return issues

@@ -182,6 +182,31 @@ QUOTE_VALIDATION_THRESHOLD = 0.85  # Minimum similarity to consider quote valid
 
 
 # =============================================================================
+# WEB UPLOAD CONFIGURATION (Point 112: Extract magic numbers)
+# =============================================================================
+
+# File upload limits
+MAX_FILE_SIZE_MB = 50           # Maximum single file size in MB
+MAX_TOTAL_UPLOAD_MB = 200       # Maximum total upload size in MB
+MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
+MAX_TOTAL_UPLOAD_BYTES = MAX_TOTAL_UPLOAD_MB * 1024 * 1024
+
+# Supported file types
+ALLOWED_EXTENSIONS = {'pdf', 'txt', 'md', 'docx', 'xlsx', 'csv'}
+
+# Session configuration
+SESSION_MAX_AGE_HOURS = 24      # Session expiration time
+SESSION_CLEANUP_INTERVAL = 3600 # Cleanup interval in seconds
+
+# Pagination
+DEFAULT_PAGE_SIZE = 50          # Default items per page
+MAX_PAGE_SIZE = 200             # Maximum items per page
+
+# Analysis timeouts
+ANALYSIS_TIMEOUT_SECONDS = 1800 # 30 minutes max for analysis
+
+
+# =============================================================================
 # OUTPUT CONFIGURATION
 # =============================================================================
 
@@ -193,3 +218,67 @@ EXPORT_FACTS_JSON = True
 EXPORT_FINDINGS_JSON = True
 EXPORT_EXCEL = True
 EXPORT_HTML = True
+
+
+# =============================================================================
+# ENVIRONMENT VALIDATION
+# =============================================================================
+
+def validate_environment() -> dict:
+    """
+    Validate the environment configuration.
+
+    Returns dict with:
+    - valid: bool - whether environment is properly configured
+    - api_key_configured: bool - whether API key is set
+    - directories_exist: bool - whether required directories exist
+    - warnings: list - non-fatal issues
+    - errors: list - fatal issues
+    """
+    result = {
+        'valid': True,
+        'api_key_configured': bool(ANTHROPIC_API_KEY),
+        'directories_exist': True,
+        'warnings': [],
+        'errors': []
+    }
+
+    # Check API key
+    if not ANTHROPIC_API_KEY:
+        result['errors'].append('ANTHROPIC_API_KEY not configured. Set it in .env file or environment.')
+        result['valid'] = False
+    elif len(ANTHROPIC_API_KEY) < 20:
+        result['warnings'].append('ANTHROPIC_API_KEY appears to be invalid (too short)')
+
+    # Check directories
+    try:
+        ensure_directories()
+    except Exception as e:
+        result['errors'].append(f'Could not create directories: {e}')
+        result['directories_exist'] = False
+        result['valid'] = False
+
+    # Check if output directory is writable
+    try:
+        test_file = OUTPUT_DIR / '.write_test'
+        test_file.touch()
+        test_file.unlink()
+    except Exception as e:
+        result['warnings'].append(f'Output directory may not be writable: {e}')
+
+    return result
+
+
+def get_config_summary() -> dict:
+    """Get a summary of current configuration for debugging."""
+    return {
+        'base_dir': str(BASE_DIR),
+        'data_dir': str(DATA_DIR),
+        'output_dir': str(OUTPUT_DIR),
+        'discovery_model': DISCOVERY_MODEL,
+        'reasoning_model': REASONING_MODEL,
+        'domains': DOMAINS,
+        'api_key_set': bool(ANTHROPIC_API_KEY),
+        'parallel_enabled': PARALLEL_DISCOVERY and PARALLEL_REASONING,
+        'max_parallel_agents': MAX_PARALLEL_AGENTS,
+    }

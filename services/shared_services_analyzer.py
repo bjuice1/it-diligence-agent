@@ -109,6 +109,44 @@ SERVICE_KEYWORDS = {
     "compliance_security": ["compliance", "audit", "sox", "hipaa", "pci"]
 }
 
+# TSA duration estimation factors (Point 66)
+TSA_DURATION_FACTORS = {
+    "complexity": {
+        "low": 0.75,      # Simple service, reduce duration
+        "medium": 1.0,    # Standard duration
+        "high": 1.5,      # Complex service, increase duration
+        "critical": 2.0   # Business-critical, extend duration
+    },
+    "replacement_difficulty": {
+        "easy": 0.5,      # Easy to replace (common skill)
+        "moderate": 1.0,  # Standard replacement
+        "hard": 1.5,      # Specialized skill required
+        "very_hard": 2.0  # Rare skill or custom system
+    },
+    "integration_depth": {
+        "standalone": 0.5,   # Minimal integration
+        "moderate": 1.0,     # Some integration
+        "deep": 1.5,         # Deep integration
+        "embedded": 2.0      # Deeply embedded in operations
+    }
+}
+
+# Risk scoring weights (Point 67)
+DEPENDENCY_RISK_WEIGHTS = {
+    "criticality": 0.30,
+    "replacement_difficulty": 0.25,
+    "fte_equivalent": 0.15,
+    "will_transfer": 0.20,
+    "tsa_duration": 0.10
+}
+
+# Replacement cost multipliers (Point 68)
+REPLACEMENT_COST_RANGES = {
+    "low": 0.8,     # Optimistic scenario
+    "mid": 1.0,     # Expected scenario
+    "high": 1.3     # Conservative scenario
+}
+
 
 class SharedServicesAnalyzer:
     """
@@ -398,3 +436,392 @@ class SharedServicesAnalyzer:
             return 55000
         else:
             return 80000
+
+    # =========================================================================
+    # TSA Duration Estimation (Point 66)
+    # =========================================================================
+
+    def estimate_tsa_duration(
+        self,
+        dependency: SharedServiceDependency,
+        complexity: str = "medium",
+        replacement_difficulty: str = "moderate",
+        integration_depth: str = "moderate"
+    ) -> Dict[str, Any]:
+        """
+        Estimate TSA duration based on multiple factors (Point 66).
+
+        Args:
+            dependency: The shared service dependency
+            complexity: low/medium/high/critical
+            replacement_difficulty: easy/moderate/hard/very_hard
+            integration_depth: standalone/moderate/deep/embedded
+
+        Returns:
+            Dict with duration estimate and breakdown
+        """
+        # Get base duration
+        service_type = self._identify_service_type(dependency.service_name)
+        defaults = self.service_defaults.get(service_type, {})
+        base_months = defaults.get('tsa_months', 12)
+
+        # Apply factors
+        complexity_factor = TSA_DURATION_FACTORS["complexity"].get(complexity, 1.0)
+        difficulty_factor = TSA_DURATION_FACTORS["replacement_difficulty"].get(
+            replacement_difficulty, 1.0
+        )
+        integration_factor = TSA_DURATION_FACTORS["integration_depth"].get(
+            integration_depth, 1.0
+        )
+
+        # Calculate adjusted duration
+        adjusted_months = base_months * complexity_factor * difficulty_factor * integration_factor
+
+        # Apply FTE scaling (more FTE = longer transition)
+        fte_factor = 1.0 + (dependency.fte_equivalent - 1) * 0.1
+        adjusted_months *= fte_factor
+
+        # Round to nearest month
+        estimated_months = max(3, round(adjusted_months))
+
+        return {
+            'service_name': dependency.service_name,
+            'base_duration_months': base_months,
+            'complexity': complexity,
+            'complexity_factor': complexity_factor,
+            'replacement_difficulty': replacement_difficulty,
+            'difficulty_factor': difficulty_factor,
+            'integration_depth': integration_depth,
+            'integration_factor': integration_factor,
+            'fte_scaling_factor': fte_factor,
+            'estimated_duration_months': estimated_months,
+            'recommended_range': {
+                'minimum': max(3, estimated_months - 2),
+                'recommended': estimated_months,
+                'conservative': estimated_months + 3
+            }
+        }
+
+    # =========================================================================
+    # Dependency Risk Scoring (Point 67)
+    # =========================================================================
+
+    def calculate_dependency_risk_score(
+        self,
+        dependency: SharedServiceDependency
+    ) -> Dict[str, Any]:
+        """
+        Calculate risk score for a shared service dependency (Point 67).
+
+        Returns score 0-100 with breakdown.
+        """
+        scores = {}
+
+        # Criticality score (0-100)
+        criticality_scores = {
+            'critical': 100,
+            'high': 75,
+            'medium': 50,
+            'low': 25
+        }
+        scores['criticality'] = criticality_scores.get(dependency.criticality, 50)
+
+        # Replacement difficulty (based on FTE and service type)
+        service_type = self._identify_service_type(dependency.service_name)
+        base_difficulty = {
+            'erp_administration': 80,
+            'security_operations': 75,
+            'database_administration': 70,
+            'network_engineering': 65,
+            'cloud_administration': 65,
+            'identity_management': 60,
+            'application_development': 55,
+            'compliance_security': 50,
+            'help_desk': 35,
+            'it_procurement': 30
+        }.get(service_type, 50)
+        scores['replacement_difficulty'] = base_difficulty
+
+        # FTE scaling (more FTE = higher risk)
+        fte_score = min(100, dependency.fte_equivalent * 25)
+        scores['fte_equivalent'] = fte_score
+
+        # Transfer risk (not transferring = higher risk)
+        scores['will_transfer'] = 0 if dependency.will_transfer else 100
+
+        # TSA duration risk
+        tsa_score = min(100, dependency.tsa_duration_months * 8)
+        scores['tsa_duration'] = tsa_score
+
+        # Calculate weighted total
+        total_score = 0
+        for factor, weight in DEPENDENCY_RISK_WEIGHTS.items():
+            total_score += scores.get(factor, 0) * weight
+
+        # Classify risk level
+        if total_score >= 75:
+            risk_level = "critical"
+        elif total_score >= 50:
+            risk_level = "high"
+        elif total_score >= 25:
+            risk_level = "medium"
+        else:
+            risk_level = "low"
+
+        return {
+            'dependency_id': dependency.id,
+            'service_name': dependency.service_name,
+            'total_risk_score': round(total_score, 1),
+            'risk_level': risk_level,
+            'score_breakdown': scores,
+            'weights_applied': DEPENDENCY_RISK_WEIGHTS.copy(),
+            'mitigation_priority': 1 if total_score >= 75 else (2 if total_score >= 50 else 3)
+        }
+
+    def rank_dependencies_by_risk(
+        self,
+        dependencies: List[SharedServiceDependency]
+    ) -> List[Dict]:
+        """Rank all dependencies by risk score."""
+        scored = [self.calculate_dependency_risk_score(d) for d in dependencies]
+        scored.sort(key=lambda x: x['total_risk_score'], reverse=True)
+        return scored
+
+    # =========================================================================
+    # Replacement Cost Ranges (Point 68)
+    # =========================================================================
+
+    def calculate_replacement_cost_range(
+        self,
+        dependency: SharedServiceDependency
+    ) -> Dict[str, float]:
+        """
+        Calculate low/mid/high replacement cost estimates (Point 68).
+
+        Returns dict with three cost scenarios.
+        """
+        base_cost = dependency.replacement_cost_annual
+
+        return {
+            'low': base_cost * REPLACEMENT_COST_RANGES['low'],
+            'mid': base_cost * REPLACEMENT_COST_RANGES['mid'],
+            'high': base_cost * REPLACEMENT_COST_RANGES['high'],
+            'service_name': dependency.service_name,
+            'fte_equivalent': dependency.fte_equivalent,
+            'cost_per_fte': self.cost_per_fte,
+            'notes': self._get_cost_range_notes(dependency)
+        }
+
+    def _get_cost_range_notes(self, dependency: SharedServiceDependency) -> str:
+        """Generate notes explaining cost range."""
+        notes = []
+
+        if dependency.criticality == 'critical':
+            notes.append("Critical service may require premium talent")
+
+        if dependency.fte_equivalent > 2:
+            notes.append("Multi-FTE service may have team-building costs")
+
+        service_type = self._identify_service_type(dependency.service_name)
+        if service_type in ['erp_administration', 'security_operations']:
+            notes.append("Specialized skills may be above market rate")
+
+        if not dependency.will_transfer:
+            notes.append("No knowledge transfer from incumbent")
+
+        return "; ".join(notes) if notes else "Standard replacement scenario"
+
+    def calculate_total_replacement_cost_range(
+        self,
+        dependencies: List[SharedServiceDependency]
+    ) -> Dict[str, float]:
+        """Calculate aggregate replacement cost ranges."""
+        totals = {'low': 0, 'mid': 0, 'high': 0}
+
+        for dep in dependencies:
+            if dep.will_transfer:
+                continue
+            costs = self.calculate_replacement_cost_range(dep)
+            totals['low'] += costs['low']
+            totals['mid'] += costs['mid']
+            totals['high'] += costs['high']
+
+        return totals
+
+    # =========================================================================
+    # Criticality Ranking (Point 69)
+    # =========================================================================
+
+    def rank_by_criticality(
+        self,
+        dependencies: List[SharedServiceDependency]
+    ) -> Dict[str, List[SharedServiceDependency]]:
+        """
+        Rank dependencies by business impact (Point 69).
+
+        Returns dict grouping dependencies by criticality level.
+        """
+        rankings = {
+            'critical': [],
+            'high': [],
+            'medium': [],
+            'low': []
+        }
+
+        for dep in dependencies:
+            level = dep.criticality
+            if level in rankings:
+                rankings[level].append(dep)
+            else:
+                rankings['medium'].append(dep)
+
+        # Sort within each level by FTE (higher FTE first)
+        for level in rankings:
+            rankings[level].sort(key=lambda d: d.fte_equivalent, reverse=True)
+
+        return rankings
+
+    def get_critical_dependencies_summary(
+        self,
+        dependencies: List[SharedServiceDependency]
+    ) -> Dict[str, Any]:
+        """Get summary of critical dependencies requiring immediate attention."""
+        critical = [d for d in dependencies if d.criticality == 'critical']
+        high = [d for d in dependencies if d.criticality == 'high']
+
+        return {
+            'critical_count': len(critical),
+            'high_count': len(high),
+            'critical_services': [d.service_name for d in critical],
+            'high_priority_services': [d.service_name for d in high],
+            'total_critical_fte': sum(d.fte_equivalent for d in critical),
+            'total_high_fte': sum(d.fte_equivalent for d in high),
+            'immediate_attention_required': len(critical) > 0
+        }
+
+    # =========================================================================
+    # Day 1 Readiness Checklist (Point 70)
+    # =========================================================================
+
+    def generate_day1_checklist(
+        self,
+        dependencies: List[SharedServiceDependency]
+    ) -> List[Dict[str, Any]]:
+        """
+        Generate Day 1 readiness checklist (Point 70).
+
+        Returns list of action items needed before Day 1.
+        """
+        checklist = []
+
+        # Group by criticality
+        ranked = self.rank_by_criticality(dependencies)
+
+        # Critical items first
+        for dep in ranked['critical']:
+            if not dep.will_transfer:
+                checklist.append({
+                    'priority': 'P0',
+                    'category': 'Critical Service Coverage',
+                    'action': f"Confirm TSA coverage for {dep.service_name}",
+                    'responsible': 'Deal Lead',
+                    'due': 'Signing',
+                    'dependency_id': dep.id,
+                    'risk_if_missed': 'Business continuity failure'
+                })
+                checklist.append({
+                    'priority': 'P0',
+                    'category': 'Critical Service Coverage',
+                    'action': f"Identify interim support contact for {dep.service_name}",
+                    'responsible': 'IT Lead',
+                    'due': 'Day 1',
+                    'dependency_id': dep.id,
+                    'risk_if_missed': 'No escalation path for issues'
+                })
+
+        # High priority items
+        for dep in ranked['high']:
+            if not dep.will_transfer:
+                checklist.append({
+                    'priority': 'P1',
+                    'category': 'High Priority Service',
+                    'action': f"Document current state of {dep.service_name}",
+                    'responsible': 'IT Lead',
+                    'due': 'Week 1',
+                    'dependency_id': dep.id,
+                    'risk_if_missed': 'Knowledge loss during transition'
+                })
+
+        # Access and credentials
+        for dep in dependencies:
+            if dep.tsa_candidate:
+                checklist.append({
+                    'priority': 'P1',
+                    'category': 'Access Management',
+                    'action': f"Verify continued access for {dep.service_name} under TSA",
+                    'responsible': 'Security Lead',
+                    'due': 'Day 1',
+                    'dependency_id': dep.id,
+                    'risk_if_missed': 'Service access failure'
+                })
+
+        # Communication items
+        checklist.append({
+            'priority': 'P0',
+            'category': 'Communication',
+            'action': 'Distribute TSA contact list to IT staff',
+            'responsible': 'IT Director',
+            'due': 'Day 1',
+            'dependency_id': None,
+            'risk_if_missed': 'Staff unable to get support'
+        })
+
+        checklist.append({
+            'priority': 'P0',
+            'category': 'Communication',
+            'action': 'Brief service desk on escalation procedures for TSA services',
+            'responsible': 'Service Desk Manager',
+            'due': 'Day 1',
+            'dependency_id': None,
+            'risk_if_missed': 'Incorrect routing of support requests'
+        })
+
+        # Sort by priority
+        priority_order = {'P0': 0, 'P1': 1, 'P2': 2}
+        checklist.sort(key=lambda x: (priority_order.get(x['priority'], 3), x['due']))
+
+        return checklist
+
+    def generate_day1_readiness_report(
+        self,
+        dependencies: List[SharedServiceDependency]
+    ) -> Dict[str, Any]:
+        """Generate comprehensive Day 1 readiness report."""
+        checklist = self.generate_day1_checklist(dependencies)
+        risk_rankings = self.rank_dependencies_by_risk(dependencies)
+        critical_summary = self.get_critical_dependencies_summary(dependencies)
+        cost_range = self.calculate_total_replacement_cost_range(dependencies)
+
+        p0_items = [c for c in checklist if c['priority'] == 'P0']
+        p1_items = [c for c in checklist if c['priority'] == 'P1']
+
+        return {
+            'executive_summary': {
+                'total_dependencies': len(dependencies),
+                'critical_dependencies': critical_summary['critical_count'],
+                'high_priority_dependencies': critical_summary['high_count'],
+                'p0_actions_required': len(p0_items),
+                'p1_actions_required': len(p1_items),
+                'estimated_replacement_cost': cost_range
+            },
+            'critical_summary': critical_summary,
+            'risk_rankings': risk_rankings[:5],  # Top 5 risks
+            'day1_checklist': checklist,
+            'tsa_services': [d.service_name for d in dependencies if d.tsa_candidate],
+            'recommendations': [
+                "Complete all P0 items before Day 1",
+                "Establish TSA governance structure",
+                "Create weekly TSA status reporting",
+                "Begin replacement planning for critical services"
+            ]
+        }

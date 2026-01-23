@@ -809,6 +809,577 @@ class ReasoningStore:
 
             return results
 
+    # =========================================================================
+    # PHASE 5 IMPROVEMENTS (Points 76-80)
+    # =========================================================================
+
+    def prioritize_risks(self, weights: Optional[Dict[str, float]] = None) -> List[Dict[str, Any]]:
+        """
+        Point 76: Sophisticated risk prioritization algorithm.
+
+        Calculates a composite priority score based on:
+        - Severity (40% default weight)
+        - Business impact / remediation cost (25% default weight)
+        - Confidence level (15% default weight)
+        - Has remediation plan (10% default weight)
+        - Integration dependency (10% default weight)
+
+        Args:
+            weights: Optional custom weights for scoring factors
+
+        Returns:
+            List of risks with priority_score and ranking
+        """
+        default_weights = {
+            "severity": 0.40,
+            "business_impact": 0.25,
+            "confidence": 0.15,
+            "has_remediation": 0.10,
+            "integration_dependency": 0.10
+        }
+        w = weights or default_weights
+
+        severity_scores = {"critical": 1.0, "high": 0.75, "medium": 0.5, "low": 0.25}
+        confidence_scores = {"high": 1.0, "medium": 0.6, "low": 0.3}
+
+        with self._lock:
+            # Get risks with costs first
+            risks_with_costs = self.get_risks_with_costs()
+
+            # Find max cost for normalization
+            max_cost = max(
+                (r["remediation_cost"]["high"] for r in risks_with_costs),
+                default=1
+            ) or 1
+
+            prioritized = []
+            for risk in risks_with_costs:
+                # Calculate component scores
+                severity_score = severity_scores.get(risk.get("severity", "low"), 0.25)
+                confidence_score = confidence_scores.get(risk.get("confidence", "low"), 0.3)
+
+                # Normalize cost to 0-1 scale (higher cost = higher priority)
+                cost_score = risk["remediation_cost"]["high"] / max_cost if max_cost > 0 else 0
+
+                # Remediation plan factor (risks without plans need attention)
+                remediation_score = 0.0 if risk["has_remediation_plan"] else 1.0
+
+                # Integration dependency (standalone risks may need attention regardless)
+                integration_score = 0.5 if risk.get("integration_dependent", False) else 1.0
+
+                # Calculate composite score
+                priority_score = (
+                    w["severity"] * severity_score +
+                    w["business_impact"] * cost_score +
+                    w["confidence"] * confidence_score +
+                    w["has_remediation"] * remediation_score +
+                    w["integration_dependency"] * integration_score
+                )
+
+                risk["priority_score"] = round(priority_score, 3)
+                risk["score_breakdown"] = {
+                    "severity": round(severity_score, 2),
+                    "business_impact": round(cost_score, 2),
+                    "confidence": round(confidence_score, 2),
+                    "remediation_gap": round(remediation_score, 2),
+                    "integration_factor": round(integration_score, 2)
+                }
+                prioritized.append(risk)
+
+            # Sort by priority score descending
+            prioritized.sort(key=lambda x: x["priority_score"], reverse=True)
+
+            # Add ranking
+            for i, risk in enumerate(prioritized, 1):
+                risk["priority_rank"] = i
+
+            return prioritized
+
+    def get_work_item_dependency_graph(self) -> Dict[str, Any]:
+        """
+        Point 77: Build work item dependency mapping.
+
+        Returns a graph structure showing:
+        - Which work items block others
+        - Which work items are blocked by others
+        - Critical path items (most blocking dependencies)
+        - Orphan items (no dependencies either way)
+
+        Returns:
+            Dict with dependency graph and analysis
+        """
+        with self._lock:
+            # Build dependency maps
+            blocks = {}  # item_id -> list of items it blocks
+            blocked_by = {}  # item_id -> list of items blocking it
+            all_ids = set()
+
+            for wi in self.work_items:
+                wi_id = wi.finding_id
+                all_ids.add(wi_id)
+                blocks[wi_id] = []
+                blocked_by[wi_id] = list(wi.dependencies) if wi.dependencies else []
+
+            # Build reverse mapping (blocks)
+            for wi_id, deps in blocked_by.items():
+                for dep_id in deps:
+                    if dep_id in blocks:
+                        blocks[dep_id].append(wi_id)
+
+            # Identify critical path items (most outgoing blocks)
+            critical_path = sorted(
+                [(wi_id, len(blocks[wi_id])) for wi_id in all_ids],
+                key=lambda x: x[1],
+                reverse=True
+            )[:10]  # Top 10 most blocking items
+
+            # Identify orphans (no dependencies in or out)
+            orphans = [
+                wi_id for wi_id in all_ids
+                if not blocks[wi_id] and not blocked_by[wi_id]
+            ]
+
+            # Identify root items (nothing blocks them, but they block others)
+            roots = [
+                wi_id for wi_id in all_ids
+                if not blocked_by[wi_id] and blocks[wi_id]
+            ]
+
+            # Identify leaf items (blocked by others, but don't block anything)
+            leaves = [
+                wi_id for wi_id in all_ids
+                if blocked_by[wi_id] and not blocks[wi_id]
+            ]
+
+            # Build item details
+            item_details = {}
+            for wi in self.work_items:
+                item_details[wi.finding_id] = {
+                    "title": wi.title,
+                    "phase": wi.phase,
+                    "priority": wi.priority,
+                    "domain": wi.domain,
+                    "blocks": blocks.get(wi.finding_id, []),
+                    "blocked_by": blocked_by.get(wi.finding_id, []),
+                    "is_critical_path": wi.finding_id in [x[0] for x in critical_path[:5]],
+                    "is_orphan": wi.finding_id in orphans,
+                    "is_root": wi.finding_id in roots,
+                    "is_leaf": wi.finding_id in leaves
+                }
+
+            return {
+                "items": item_details,
+                "critical_path": [{"id": x[0], "blocks_count": x[1]} for x in critical_path],
+                "roots": roots,
+                "leaves": leaves,
+                "orphans": orphans,
+                "total_items": len(all_ids),
+                "total_dependencies": sum(len(v) for v in blocked_by.values())
+            }
+
+    def consolidate_findings(self, similarity_threshold: float = 0.7) -> Dict[str, Any]:
+        """
+        Point 78: Merge similar findings across domains.
+
+        Identifies potentially duplicate or overlapping findings based on:
+        - Title similarity
+        - Shared fact citations
+        - Same category/lens
+
+        Args:
+            similarity_threshold: Minimum similarity score to flag (0.0-1.0)
+
+        Returns:
+            Dict with consolidation recommendations
+        """
+        from difflib import SequenceMatcher
+
+        def title_similarity(a: str, b: str) -> float:
+            """Calculate title similarity using SequenceMatcher."""
+            return SequenceMatcher(None, a.lower(), b.lower()).ratio()
+
+        def fact_overlap(facts_a: List[str], facts_b: List[str]) -> float:
+            """Calculate overlap in cited facts."""
+            if not facts_a or not facts_b:
+                return 0.0
+            set_a, set_b = set(facts_a), set(facts_b)
+            intersection = len(set_a & set_b)
+            union = len(set_a | set_b)
+            return intersection / union if union > 0 else 0.0
+
+        with self._lock:
+            consolidation_groups = {
+                "risks": [],
+                "work_items": [],
+                "strategic_considerations": []
+            }
+
+            # Check risks for similarity
+            for i, risk_a in enumerate(self.risks):
+                for risk_b in self.risks[i+1:]:
+                    title_sim = title_similarity(risk_a.title, risk_b.title)
+                    fact_sim = fact_overlap(risk_a.based_on_facts, risk_b.based_on_facts)
+                    same_category = risk_a.category == risk_b.category
+                    same_lens = risk_a.mna_lens == risk_b.mna_lens
+
+                    # Weighted similarity score
+                    similarity = (
+                        0.4 * title_sim +
+                        0.3 * fact_sim +
+                        0.15 * (1.0 if same_category else 0.0) +
+                        0.15 * (1.0 if same_lens else 0.0)
+                    )
+
+                    if similarity >= similarity_threshold:
+                        consolidation_groups["risks"].append({
+                            "item_a": {"id": risk_a.finding_id, "title": risk_a.title, "domain": risk_a.domain},
+                            "item_b": {"id": risk_b.finding_id, "title": risk_b.title, "domain": risk_b.domain},
+                            "similarity_score": round(similarity, 3),
+                            "breakdown": {
+                                "title_similarity": round(title_sim, 2),
+                                "fact_overlap": round(fact_sim, 2),
+                                "same_category": same_category,
+                                "same_lens": same_lens
+                            },
+                            "recommendation": "Consider merging" if similarity > 0.85 else "Review for overlap"
+                        })
+
+            # Check work items for similarity
+            for i, wi_a in enumerate(self.work_items):
+                for wi_b in self.work_items[i+1:]:
+                    title_sim = title_similarity(wi_a.title, wi_b.title)
+                    fact_sim = fact_overlap(wi_a.triggered_by, wi_b.triggered_by)
+                    same_phase = wi_a.phase == wi_b.phase
+                    same_owner = wi_a.owner_type == wi_b.owner_type
+
+                    similarity = (
+                        0.4 * title_sim +
+                        0.3 * fact_sim +
+                        0.15 * (1.0 if same_phase else 0.0) +
+                        0.15 * (1.0 if same_owner else 0.0)
+                    )
+
+                    if similarity >= similarity_threshold:
+                        consolidation_groups["work_items"].append({
+                            "item_a": {"id": wi_a.finding_id, "title": wi_a.title, "domain": wi_a.domain},
+                            "item_b": {"id": wi_b.finding_id, "title": wi_b.title, "domain": wi_b.domain},
+                            "similarity_score": round(similarity, 3),
+                            "breakdown": {
+                                "title_similarity": round(title_sim, 2),
+                                "fact_overlap": round(fact_sim, 2),
+                                "same_phase": same_phase,
+                                "same_owner": same_owner
+                            },
+                            "recommendation": "Consider merging" if similarity > 0.85 else "Review for overlap"
+                        })
+
+            return {
+                "consolidation_candidates": consolidation_groups,
+                "summary": {
+                    "potential_risk_duplicates": len(consolidation_groups["risks"]),
+                    "potential_work_item_duplicates": len(consolidation_groups["work_items"]),
+                    "potential_sc_duplicates": len(consolidation_groups["strategic_considerations"]),
+                    "threshold_used": similarity_threshold
+                }
+            }
+
+    def quantify_business_impact(self) -> Dict[str, Any]:
+        """
+        Point 79: Estimate dollar impact of risks.
+
+        Calculates business impact based on:
+        - Direct remediation costs (from work items)
+        - Indirect costs (delay, productivity loss estimates)
+        - Risk-weighted exposure
+
+        Returns:
+            Dict with impact quantification by risk, domain, and phase
+        """
+        # Impact multipliers for indirect costs
+        INDIRECT_COST_MULTIPLIERS = {
+            "critical": 2.5,  # Critical risks have significant indirect costs
+            "high": 1.8,
+            "medium": 1.3,
+            "low": 1.1
+        }
+
+        # Delay cost per day by severity (business disruption)
+        DELAY_COST_PER_DAY = {
+            "critical": 50000,
+            "high": 20000,
+            "medium": 5000,
+            "low": 1000
+        }
+
+        with self._lock:
+            risks_with_costs = self.get_risks_with_costs()
+
+            impact_by_risk = []
+            total_direct = 0
+            total_indirect = 0
+            total_risk_weighted = 0
+
+            for risk in risks_with_costs:
+                severity = risk.get("severity", "low")
+                direct_low = risk["remediation_cost"]["low"]
+                direct_high = risk["remediation_cost"]["high"]
+
+                # Calculate indirect costs
+                multiplier = INDIRECT_COST_MULTIPLIERS.get(severity, 1.1)
+                indirect_low = int(direct_low * (multiplier - 1))
+                indirect_high = int(direct_high * (multiplier - 1))
+
+                # Risk-weighted exposure (probability-adjusted)
+                confidence = risk.get("confidence", "low")
+                probability_factor = {"high": 0.8, "medium": 0.5, "low": 0.3}.get(confidence, 0.3)
+                risk_weighted_low = int((direct_low + indirect_low) * probability_factor)
+                risk_weighted_high = int((direct_high + indirect_high) * probability_factor)
+
+                # Potential delay impact (assuming 30-day delay for unaddressed risks)
+                delay_days = 30 if not risk["has_remediation_plan"] else 10
+                delay_cost = DELAY_COST_PER_DAY.get(severity, 1000) * delay_days
+
+                impact = {
+                    "risk_id": risk["finding_id"],
+                    "title": risk["title"],
+                    "severity": severity,
+                    "direct_cost": {"low": direct_low, "high": direct_high},
+                    "indirect_cost": {"low": indirect_low, "high": indirect_high},
+                    "total_cost": {
+                        "low": direct_low + indirect_low,
+                        "high": direct_high + indirect_high
+                    },
+                    "risk_weighted_exposure": {
+                        "low": risk_weighted_low,
+                        "high": risk_weighted_high
+                    },
+                    "potential_delay_cost": delay_cost,
+                    "has_remediation_plan": risk["has_remediation_plan"]
+                }
+                impact_by_risk.append(impact)
+
+                total_direct += direct_high
+                total_indirect += indirect_high
+                total_risk_weighted += risk_weighted_high
+
+            # Aggregate by domain
+            by_domain = {}
+            for risk in risks_with_costs:
+                domain = risk.get("domain", "unknown")
+                if domain not in by_domain:
+                    by_domain[domain] = {"low": 0, "high": 0, "count": 0}
+                by_domain[domain]["low"] += risk["remediation_cost"]["low"]
+                by_domain[domain]["high"] += risk["remediation_cost"]["high"]
+                by_domain[domain]["count"] += 1
+
+            # Aggregate by severity
+            by_severity = {}
+            for risk in risks_with_costs:
+                severity = risk.get("severity", "low")
+                if severity not in by_severity:
+                    by_severity[severity] = {"low": 0, "high": 0, "count": 0}
+                by_severity[severity]["low"] += risk["remediation_cost"]["low"]
+                by_severity[severity]["high"] += risk["remediation_cost"]["high"]
+                by_severity[severity]["count"] += 1
+
+            return {
+                "impact_by_risk": impact_by_risk,
+                "totals": {
+                    "direct_cost": {"low": int(total_direct * 0.6), "high": total_direct},
+                    "indirect_cost": {"low": int(total_indirect * 0.6), "high": total_indirect},
+                    "combined": {
+                        "low": int((total_direct + total_indirect) * 0.6),
+                        "high": total_direct + total_indirect
+                    },
+                    "risk_weighted_exposure": {
+                        "low": int(total_risk_weighted * 0.6),
+                        "high": total_risk_weighted
+                    }
+                },
+                "by_domain": by_domain,
+                "by_severity": by_severity,
+                "risk_count": len(risks_with_costs)
+            }
+
+    def classify_timeline(self, work_item_id: str) -> Dict[str, Any]:
+        """
+        Point 80: Improved Day 1/100/Post-100 classification.
+
+        Analyzes a work item and returns classification recommendation with rationale.
+
+        Classification criteria:
+        - Day_1: Business continuity critical, no workarounds, immediate impact
+        - Day_100: Stabilization required, workarounds exist but unsustainable
+        - Post_100: Optimization, nice-to-have improvements
+
+        Args:
+            work_item_id: ID of work item to classify
+
+        Returns:
+            Dict with recommended phase and confidence
+        """
+        with self._lock:
+            # Find the work item
+            work_item = None
+            for wi in self.work_items:
+                if wi.finding_id == work_item_id:
+                    work_item = wi
+                    break
+
+            if not work_item:
+                return {"error": f"Work item not found: {work_item_id}"}
+
+            # Classification factors
+            factors = {
+                "is_business_critical": False,
+                "has_workaround": True,  # Assume workaround exists unless proven otherwise
+                "blocks_other_items": False,
+                "addresses_critical_risk": False,
+                "affects_day1_continuity": False,
+                "is_tsa_dependent": False,
+                "is_optimization": False
+            }
+
+            # Check if addresses critical/high risk
+            for risk_id in work_item.triggered_by_risks:
+                for risk in self.risks:
+                    if risk.finding_id == risk_id:
+                        if risk.severity in ["critical", "high"]:
+                            factors["addresses_critical_risk"] = True
+                        if risk.mna_lens == "day_1_continuity":
+                            factors["affects_day1_continuity"] = True
+                        break
+
+            # Check M&A lens
+            if work_item.mna_lens == "day_1_continuity":
+                factors["is_business_critical"] = True
+                factors["affects_day1_continuity"] = True
+            elif work_item.mna_lens == "tsa_exposure":
+                factors["is_tsa_dependent"] = True
+            elif work_item.mna_lens == "synergy_opportunity":
+                factors["is_optimization"] = True
+
+            # Check if this blocks other items
+            for other_wi in self.work_items:
+                if work_item_id in other_wi.dependencies:
+                    factors["blocks_other_items"] = True
+                    break
+
+            # Priority factor
+            if work_item.priority == "critical":
+                factors["is_business_critical"] = True
+
+            # Determine recommended phase
+            score_day1 = 0
+            score_day100 = 0
+            score_post100 = 0
+
+            if factors["is_business_critical"]:
+                score_day1 += 3
+            if factors["affects_day1_continuity"]:
+                score_day1 += 3
+            if factors["addresses_critical_risk"]:
+                score_day1 += 2
+            if factors["blocks_other_items"]:
+                score_day1 += 1
+                score_day100 += 1
+
+            if factors["is_tsa_dependent"]:
+                score_day100 += 2
+            if not factors["is_business_critical"] and factors["addresses_critical_risk"]:
+                score_day100 += 1
+
+            if factors["is_optimization"]:
+                score_post100 += 3
+            if not factors["addresses_critical_risk"] and not factors["is_business_critical"]:
+                score_post100 += 2
+
+            # Determine recommendation
+            scores = {
+                "Day_1": score_day1,
+                "Day_100": score_day100,
+                "Post_100": score_post100
+            }
+            recommended_phase = max(scores, key=scores.get)
+
+            # Calculate confidence
+            max_score = max(scores.values())
+            total_score = sum(scores.values()) or 1
+            confidence = "high" if max_score / total_score > 0.6 else "medium" if max_score / total_score > 0.4 else "low"
+
+            # Check if current phase matches recommendation
+            phase_matches = work_item.phase == recommended_phase
+
+            return {
+                "work_item_id": work_item_id,
+                "title": work_item.title,
+                "current_phase": work_item.phase,
+                "recommended_phase": recommended_phase,
+                "phase_matches": phase_matches,
+                "confidence": confidence,
+                "scores": scores,
+                "factors": factors,
+                "rationale": self._generate_timeline_rationale(recommended_phase, factors)
+            }
+
+    def _generate_timeline_rationale(self, phase: str, factors: Dict[str, bool]) -> str:
+        """Generate human-readable rationale for timeline classification."""
+        rationale_parts = []
+
+        if phase == "Day_1":
+            if factors["is_business_critical"]:
+                rationale_parts.append("Business-critical item requiring immediate attention")
+            if factors["affects_day1_continuity"]:
+                rationale_parts.append("Directly affects Day 1 operational continuity")
+            if factors["addresses_critical_risk"]:
+                rationale_parts.append("Addresses critical/high severity risk")
+            if factors["blocks_other_items"]:
+                rationale_parts.append("Blocks other integration work items")
+        elif phase == "Day_100":
+            if factors["is_tsa_dependent"]:
+                rationale_parts.append("Requires TSA negotiation/transition period")
+            rationale_parts.append("Stabilization priority - workarounds may exist but need resolution")
+        else:  # Post_100
+            if factors["is_optimization"]:
+                rationale_parts.append("Optimization/synergy opportunity")
+            rationale_parts.append("Lower urgency - can be addressed after initial stabilization")
+
+        return "; ".join(rationale_parts) if rationale_parts else "Standard classification based on priority and impact"
+
+    def reclassify_all_timelines(self) -> Dict[str, Any]:
+        """
+        Run timeline classification on all work items and return recommendations.
+
+        Returns:
+            Dict with classification results and summary of changes
+        """
+        with self._lock:
+            results = []
+            phase_changes = {"Day_1": 0, "Day_100": 0, "Post_100": 0}
+            mismatches = []
+
+            for wi in self.work_items:
+                classification = self.classify_timeline(wi.finding_id)
+                results.append(classification)
+
+                if not classification.get("phase_matches", True):
+                    mismatches.append({
+                        "work_item_id": wi.finding_id,
+                        "title": wi.title,
+                        "current": wi.phase,
+                        "recommended": classification["recommended_phase"],
+                        "confidence": classification["confidence"]
+                    })
+                    phase_changes[classification["recommended_phase"]] += 1
+
+            return {
+                "classifications": results,
+                "mismatches": mismatches,
+                "mismatch_count": len(mismatches),
+                "total_items": len(self.work_items),
+                "recommended_changes": phase_changes
+            }
+
     def merge_from(self, other: "ReasoningStore") -> Dict[str, int]:
         """
         Merge findings from another store.

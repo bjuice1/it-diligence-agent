@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analyzing Documents - IT Due Diligence</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .processing-container {
+            text-align: center;
+            max-width: 600px;
+            padding: 40px;
+        }
+
+        /* Animated Logo */
+        .logo-container {
+            position: relative;
+            width: 150px;
+            height: 150px;
+            margin: 0 auto 40px;
+        }
+
+        .logo-ring {
+            position: absolute;
+            border: 3px solid transparent;
+            border-radius: 50%;
+            animation: spin 3s linear infinite;
+        }
+
+        .ring-1 {
+            width: 150px;
+            height: 150px;
+            border-top-color: #e94560;
+            border-right-color: #e94560;
+        }
+
+        .ring-2 {
+            width: 120px;
+            height: 120px;
+            top: 15px;
+            left: 15px;
+            border-bottom-color: #533483;
+            border-left-color: #533483;
+            animation-direction: reverse;
+            animation-duration: 2s;
+        }
+
+        .ring-3 {
+            width: 90px;
+            height: 90px;
+            top: 30px;
+            left: 30px;
+            border-top-color: #00d9ff;
+            border-right-color: #00d9ff;
+            animation-duration: 1.5s;
+        }
+
+        .logo-center {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            top: 45px;
+            left: 45px;
+            background: linear-gradient(135deg, #e94560, #533483);
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5em;
+            font-weight: bold;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+
+        .status-text {
+            color: #888;
+            font-size: 1.1em;
+            margin-bottom: 10px;
+        }
+
+        .phase-text {
+            color: #e94560;
+            font-size: 1em;
+            margin-bottom: 20px;
+            min-height: 24px;
+        }
+
+        /* Stats */
+        .stats-row {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #00d9ff;
+        }
+
+        .stat-label {
+            font-size: 0.8em;
+            color: #666;
+        }
+
+        /* Progress Steps */
+        .progress-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            text-align: left;
+            margin-bottom: 40px;
+        }
+
+        .step {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px 20px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+            transition: all 0.5s;
+        }
+
+        .step.active {
+            background: rgba(233, 69, 96, 0.2);
+            border-left: 3px solid #e94560;
+        }
+
+        .step.complete {
+            background: rgba(0, 217, 255, 0.1);
+            border-left: 3px solid #00d9ff;
+        }
+
+        .step.error {
+            background: rgba(255, 100, 100, 0.2);
+            border-left: 3px solid #ff6464;
+        }
+
+        .step-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2em;
+            background: rgba(255,255,255,0.1);
+            flex-shrink: 0;
+        }
+
+        .step.active .step-icon {
+            background: #e94560;
+            animation: pulse 1s ease-in-out infinite;
+        }
+
+        .step.complete .step-icon {
+            background: #00d9ff;
+        }
+
+        .step.error .step-icon {
+            background: #ff6464;
+        }
+
+        .step-content {
+            flex: 1;
+        }
+
+        .step-title {
+            font-weight: 600;
+            margin-bottom: 3px;
+        }
+
+        .step-detail {
+            font-size: 0.85em;
+            color: #666;
+        }
+
+        .step.active .step-detail {
+            color: #e94560;
+        }
+
+        .step.complete .step-detail {
+            color: #00d9ff;
+        }
+
+        /* Floating particles */
+        .particles {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: hidden;
+            z-index: -1;
+        }
+
+        .particle {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: rgba(233, 69, 96, 0.3);
+            border-radius: 50%;
+            animation: float 15s infinite;
+        }
+
+        .particle:nth-child(2) { left: 20%; animation-delay: 2s; background: rgba(83, 52, 131, 0.3); }
+        .particle:nth-child(3) { left: 40%; animation-delay: 4s; }
+        .particle:nth-child(4) { left: 60%; animation-delay: 6s; background: rgba(0, 217, 255, 0.3); }
+        .particle:nth-child(5) { left: 80%; animation-delay: 8s; }
+        .particle:nth-child(6) { left: 10%; animation-delay: 10s; background: rgba(83, 52, 131, 0.3); }
+        .particle:nth-child(7) { left: 30%; animation-delay: 1s; }
+        .particle:nth-child(8) { left: 50%; animation-delay: 3s; background: rgba(0, 217, 255, 0.3); }
+        .particle:nth-child(9) { left: 70%; animation-delay: 5s; }
+        .particle:nth-child(10) { left: 90%; animation-delay: 7s; background: rgba(83, 52, 131, 0.3); }
+
+        @keyframes float {
+            0% {
+                transform: translateY(100vh) scale(0);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            90% {
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(-100vh) scale(1);
+                opacity: 0;
+            }
+        }
+
+        /* Fun facts */
+        .fun-fact {
+            padding: 20px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+            font-style: italic;
+            color: #888;
+            animation: fadeInOut 8s infinite;
+        }
+
+        @keyframes fadeInOut {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+
+        /* Progress bar */
+        .progress-bar-container {
+            width: 100%;
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            margin-bottom: 30px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #e94560, #533483, #00d9ff);
+            background-size: 200% 100%;
+            animation: progressAnim 2s linear infinite;
+            width: 0%;
+            transition: width 0.5s ease-out;
+        }
+
+        @keyframes progressAnim {
+            0% { background-position: 0% 0%; }
+            100% { background-position: 200% 0%; }
+        }
+
+        /* Cancel button */
+        .cancel-btn {
+            background: transparent;
+            border: 1px solid #666;
+            color: #666;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: all 0.3s;
+        }
+
+        .cancel-btn:hover {
+            border-color: #ff6464;
+            color: #ff6464;
+        }
+
+        /* Error message */
+        .error-message {
+            background: rgba(255, 100, 100, 0.2);
+            border: 1px solid #ff6464;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="particles">
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+    </div>
+
+    <div class="processing-container">
+        <div class="logo-container">
+            <div class="logo-ring ring-1"></div>
+            <div class="logo-ring ring-2"></div>
+            <div class="logo-ring ring-3"></div>
+            <div class="logo-center">DD</div>
+        </div>
+
+        <h1>Analyzing Your Documents</h1>
+        <p class="status-text">Processing {{ file_count }} document(s)...</p>
+        <p class="phase-text" id="phase-text">Initializing...</p>
+
+        <div class="progress-bar-container">
+            <div class="progress-bar" id="progress-bar"></div>
+        </div>
+
+        <div class="stats-row">
+            <div class="stat">
+                <div class="stat-value" id="facts-count">0</div>
+                <div class="stat-label">Facts Extracted</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="risks-count">0</div>
+                <div class="stat-label">Risks Identified</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="items-count">0</div>
+                <div class="stat-label">Work Items</div>
+            </div>
+        </div>
+
+        <div class="progress-steps" id="steps">
+            <div class="step" id="step-parse" data-phases="initializing,parsing_documents">
+                <div class="step-icon">&#128194;</div>
+                <div class="step-content">
+                    <div class="step-title">Processing Documents</div>
+                    <div class="step-detail">Reading {{ file_count }} uploaded files...</div>
+                </div>
+            </div>
+            <div class="step" id="step-discovery" data-phases="discovery_infrastructure,discovery_network,discovery_cybersecurity,discovery_applications,discovery_identity,discovery_organization">
+                <div class="step-icon">&#128269;</div>
+                <div class="step-content">
+                    <div class="step-title">Extracting Facts</div>
+                    <div class="step-detail" id="discovery-detail">AI analyzing content across domains</div>
+                </div>
+            </div>
+            <div class="step" id="step-reasoning" data-phases="reasoning">
+                <div class="step-icon">&#9888;</div>
+                <div class="step-content">
+                    <div class="step-title">Identifying Risks</div>
+                    <div class="step-detail">Generating findings and recommendations</div>
+                </div>
+            </div>
+            <div class="step" id="step-synthesis" data-phases="synthesis,finalizing,complete">
+                <div class="step-icon">&#128200;</div>
+                <div class="step-content">
+                    <div class="step-title">Generating Report</div>
+                    <div class="step-detail">Building recommendations and work items</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="fun-fact" id="fun-fact">
+            <span id="fact-text">Did you know? The average M&A IT due diligence uncovers 15-25 previously unknown risks.</span>
+        </div>
+
+        <div class="error-message" id="error-message">
+            <strong>Analysis Error:</strong>
+            <p id="error-text"></p>
+        </div>
+
+        <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
+            <button class="cancel-btn" id="cancel-btn" onclick="cancelAnalysis()">Cancel Analysis</button>
+            <button class="cancel-btn" id="partial-btn" onclick="viewPartialResults()" style="display: none; border-color: #00d9ff; color: #00d9ff;">
+                View Partial Results
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const taskId = '{{ task_id or "" }}';
+        let pollInterval = null;
+
+        const facts = [
+            "Did you know? The average M&A IT due diligence uncovers 15-25 previously unknown risks.",
+            "IT issues account for 50-70% of failed post-merger integrations.",
+            "Hidden technical debt averages $1M per $100M in deal value.",
+            "MSP dependencies often represent 20-40% of IT operational capacity.",
+            "License compliance gaps are found in 80% of technology assessments.",
+            "Cybersecurity vulnerabilities are the #1 deal-breaker in tech M&A.",
+            "Shared services typically hide 1-3 FTE of IT headcount needs."
+        ];
+
+        let factIndex = 0;
+        const factText = document.getElementById('fact-text');
+
+        setInterval(() => {
+            factIndex = (factIndex + 1) % facts.length;
+            factText.style.opacity = 0;
+            setTimeout(() => {
+                factText.textContent = facts[factIndex];
+                factText.style.opacity = 1;
+            }, 500);
+        }, 8000);
+
+        // Phase to step mapping
+        const phaseStepMap = {
+            'initializing': 'step-parse',
+            'parsing_documents': 'step-parse',
+            'discovery_infrastructure': 'step-discovery',
+            'discovery_network': 'step-discovery',
+            'discovery_cybersecurity': 'step-discovery',
+            'discovery_applications': 'step-discovery',
+            'discovery_identity': 'step-discovery',
+            'discovery_organization': 'step-discovery',
+            'reasoning': 'step-reasoning',
+            'synthesis': 'step-synthesis',
+            'finalizing': 'step-synthesis',
+            'complete': 'step-synthesis'
+        };
+
+        // Phase display names for discovery detail
+        const discoveryPhaseNames = {
+            'discovery_infrastructure': 'Analyzing infrastructure...',
+            'discovery_network': 'Analyzing network...',
+            'discovery_cybersecurity': 'Analyzing cybersecurity...',
+            'discovery_applications': 'Analyzing applications...',
+            'discovery_identity': 'Analyzing identity & access...',
+            'discovery_organization': 'Analyzing organization...'
+        };
+
+        function updateProgress(status) {
+            const progress = status.progress || {};
+            const phase = progress.phase || 'initializing';
+            const percent = progress.percent_complete || 0;
+
+            // Update progress bar
+            document.getElementById('progress-bar').style.width = percent + '%';
+
+            // Update phase text
+            document.getElementById('phase-text').textContent = progress.phase_display || 'Processing...';
+
+            // Update stats
+            const factsCount = progress.facts_extracted || 0;
+            const risksCount = progress.risks_identified || 0;
+            const itemsCount = progress.work_items_created || 0;
+
+            document.getElementById('facts-count').textContent = factsCount;
+            document.getElementById('risks-count').textContent = risksCount;
+            document.getElementById('items-count').textContent = itemsCount;
+
+            // Show partial results button if we have some data
+            const partialBtn = document.getElementById('partial-btn');
+            if (factsCount > 0 || risksCount > 0) {
+                partialBtn.style.display = 'inline-block';
+            }
+
+            // Update discovery detail if in discovery phase
+            if (discoveryPhaseNames[phase]) {
+                document.getElementById('discovery-detail').textContent = discoveryPhaseNames[phase];
+            }
+
+            // Update step states
+            const currentStepId = phaseStepMap[phase];
+            const stepOrder = ['step-parse', 'step-discovery', 'step-reasoning', 'step-synthesis'];
+            const currentIndex = stepOrder.indexOf(currentStepId);
+
+            stepOrder.forEach((stepId, index) => {
+                const step = document.getElementById(stepId);
+                step.classList.remove('active', 'complete');
+
+                if (index < currentIndex) {
+                    step.classList.add('complete');
+                } else if (index === currentIndex) {
+                    step.classList.add('active');
+                }
+            });
+        }
+
+        function showError(message) {
+            document.getElementById('error-message').classList.add('show');
+            document.getElementById('error-text').textContent = message;
+            document.getElementById('cancel-btn').textContent = 'Go Back';
+        }
+
+        function checkStatus() {
+            fetch('/analysis/status')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.complete) {
+                        clearInterval(pollInterval);
+
+                        if (data.success) {
+                            // Mark all steps complete
+                            document.querySelectorAll('.step').forEach(s => {
+                                s.classList.remove('active');
+                                s.classList.add('complete');
+                            });
+                            document.getElementById('progress-bar').style.width = '100%';
+                            document.getElementById('phase-text').textContent = 'Analysis complete! Redirecting...';
+
+                            // Redirect after brief delay
+                            setTimeout(() => {
+                                window.location.href = '/dashboard';
+                            }, 1500);
+                        } else {
+                            // Show error
+                            showError(data.error || data.message || 'Analysis failed');
+                        }
+                    } else {
+                        // Update progress display
+                        updateProgress(data);
+                    }
+                })
+                .catch(err => {
+                    console.error('Status check failed:', err);
+                });
+        }
+
+        function cancelAnalysis() {
+            if (document.getElementById('cancel-btn').textContent === 'Go Back') {
+                window.location.href = '/upload';
+                return;
+            }
+
+            if (!confirm('Are you sure you want to cancel the analysis?')) {
+                return;
+            }
+
+            fetch('/analysis/cancel', { method: 'POST' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        window.location.href = '/upload';
+                    } else {
+                        alert('Could not cancel: ' + (data.message || 'Unknown error'));
+                    }
+                })
+                .catch(err => {
+                    console.error('Cancel failed:', err);
+                    window.location.href = '/upload';
+                });
+        }
+
+        function viewPartialResults() {
+            if (!confirm('Analysis is still running. View partial results anyway?')) {
+                return;
+            }
+            // Navigate to dashboard - partial results will be shown
+            window.location.href = '/dashboard';
+        }
+
+        // Start polling
+        if (taskId) {
+            // Immediate check
+            checkStatus();
+            // Then poll every 2 seconds
+            pollInterval = setInterval(checkStatus, 2000);
+        } else {
+            // No task ID - check if there are existing results
+            checkStatus();
+            pollInterval = setInterval(checkStatus, 3000);
+        }
+    </script>
+</body>
+</html>

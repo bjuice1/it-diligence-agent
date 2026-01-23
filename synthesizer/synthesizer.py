@@ -306,6 +306,532 @@ class ITDDSynthesizer:
         }
 
     # =========================================================================
+    # PHASE 5 IMPROVEMENTS (Points 86-90)
+    # =========================================================================
+
+    def generate_coherent_narrative(self, section_order: Optional[List[str]] = None) -> str:
+        """
+        Point 86: Generate a coherent narrative with smooth transitions.
+
+        Creates a flowing narrative that connects sections logically.
+
+        Args:
+            section_order: Optional custom order for sections
+
+        Returns:
+            Markdown-formatted narrative string
+        """
+        default_order = [
+            "executive_summary",
+            "critical_risks",
+            "domain_analysis",
+            "integration_impact",
+            "recommendations",
+            "next_steps"
+        ]
+        order = section_order or default_order
+
+        # Transition phrases for narrative flow
+        transitions = {
+            "executive_summary": "",
+            "critical_risks": "Building on the overall assessment, the following critical risks require immediate attention:",
+            "domain_analysis": "Looking deeper into each domain, the analysis reveals:",
+            "integration_impact": "From an integration perspective, these findings have significant implications:",
+            "recommendations": "Based on the identified risks and analysis, we recommend the following actions:",
+            "next_steps": "To move forward effectively, the deal team should focus on:"
+        }
+
+        sections = []
+
+        for section in order:
+            transition = transitions.get(section, "")
+            content = self._generate_section_content(section)
+
+            if content:
+                if transition:
+                    sections.append(f"\n{transition}\n\n{content}")
+                else:
+                    sections.append(content)
+
+        return "\n".join(sections)
+
+    def _generate_section_content(self, section: str) -> str:
+        """Generate content for a specific narrative section."""
+        if section == "executive_summary":
+            return self._generate_exec_summary_section()
+        elif section == "critical_risks":
+            return self._generate_critical_risks_section()
+        elif section == "domain_analysis":
+            return self._generate_domain_analysis_section()
+        elif section == "integration_impact":
+            return self._generate_integration_impact_section()
+        elif section == "recommendations":
+            return self._generate_recommendations_section()
+        elif section == "next_steps":
+            return self._generate_next_steps_section()
+        return ""
+
+    def _generate_exec_summary_section(self) -> str:
+        """Generate executive summary section."""
+        assessment = self.result.overall_assessment or "Assessment pending"
+        critical_count = len([r for r in self.result.risks if r.severity == "Critical"])
+        high_count = len([r for r in self.result.risks if r.severity == "High"])
+
+        return f"""## Executive Summary
+
+**Overall IT Assessment:** {assessment}
+
+The IT due diligence review of {self.target_company} identified {len(self.result.risks)} risks across {len(self.result.domain_summaries)} domains. Of these, {critical_count} are critical and {high_count} are high severity.
+
+**Estimated One-Time Integration Cost:** ${self.result.total_one_time_low:,.0f} - ${self.result.total_one_time_high:,.0f}
+"""
+
+    def _generate_critical_risks_section(self) -> str:
+        """Generate critical risks section."""
+        critical = [r for r in self.result.risks if r.severity == "Critical"]
+        if not critical:
+            return "### Critical Risks\n\nNo critical risks identified."
+
+        lines = ["### Critical Risks\n"]
+        for i, risk in enumerate(critical[:5], 1):
+            lines.append(f"{i}. **{risk.title}** ({risk.domain})")
+            lines.append(f"   - {risk.description}")
+            if risk.mitigation:
+                lines.append(f"   - *Mitigation:* {risk.mitigation}")
+            lines.append("")
+
+        return "\n".join(lines)
+
+    def _generate_domain_analysis_section(self) -> str:
+        """Generate domain analysis section."""
+        lines = ["### Domain Analysis\n"]
+
+        for domain, summary in self.result.domain_summaries.items():
+            status_icon = "🔴" if summary.critical_risks > 0 else "🟡" if summary.risk_count > 3 else "🟢"
+            lines.append(f"**{domain}** {status_icon}")
+            lines.append(f"- {summary.risk_count} risks identified ({summary.critical_risks} critical)")
+            if summary.top_risks:
+                lines.append(f"- Key issues: {', '.join(summary.top_risks[:2])}")
+            lines.append("")
+
+        return "\n".join(lines)
+
+    def _generate_integration_impact_section(self) -> str:
+        """Generate integration impact section."""
+        return f"""### Integration Impact
+
+**Cost Impact:** The estimated integration costs of ${self.result.total_one_time_low:,.0f} - ${self.result.total_one_time_high:,.0f} should be factored into deal economics.
+
+**Timeline Considerations:** Critical risks require immediate attention to ensure Day 1 readiness. Technical debt items may extend the integration timeline.
+
+**Resource Requirements:** Based on the scope of findings, dedicated integration resources will be needed across infrastructure, applications, and security domains.
+"""
+
+    def _generate_recommendations_section(self) -> str:
+        """Generate recommendations section."""
+        lines = ["### Key Recommendations\n"]
+
+        # Prioritize recommendations based on risk severity
+        prioritized = sorted(self.result.risks, key=lambda r: (
+            {"Critical": 0, "High": 1, "Medium": 2, "Low": 3}.get(r.severity, 4)
+        ))
+
+        for i, risk in enumerate(prioritized[:5], 1):
+            if risk.mitigation:
+                lines.append(f"{i}. {risk.mitigation}")
+
+        return "\n".join(lines)
+
+    def _generate_next_steps_section(self) -> str:
+        """Generate next steps section."""
+        lines = ["### Next Steps\n"]
+
+        # Generate actionable next steps
+        if self.result.questions:
+            lines.append("**Information Requests:**")
+            for q in self.result.questions[:3]:
+                lines.append(f"- {q.question}")
+            lines.append("")
+
+        lines.append("**Immediate Actions:**")
+        lines.append("1. Review and validate critical risks with target IT team")
+        lines.append("2. Develop Day 1 readiness checklist")
+        lines.append("3. Finalize TSA scope and duration estimates")
+
+        return "\n".join(lines)
+
+    def generate_one_page_executive_summary(self) -> str:
+        """
+        Point 87: Auto-generate a 1-page executive summary.
+
+        Creates a concise executive summary suitable for leadership review.
+
+        Returns:
+            Markdown-formatted one-page summary
+        """
+        critical_risks = [r for r in self.result.risks if r.severity == "Critical"]
+        high_risks = [r for r in self.result.risks if r.severity == "High"]
+
+        # Determine overall rating
+        if len(critical_risks) > 3:
+            rating = "🔴 HIGH RISK"
+            rating_text = "Significant concerns requiring deal structure consideration"
+        elif len(critical_risks) > 0:
+            rating = "🟠 MODERATE RISK"
+            rating_text = "Material issues identified but manageable with proper planning"
+        elif len(high_risks) > 5:
+            rating = "🟡 LOW-MODERATE RISK"
+            rating_text = "Some issues require attention but no deal-breakers"
+        else:
+            rating = "🟢 LOW RISK"
+            rating_text = "IT posture is generally sound"
+
+        summary = f"""# IT Due Diligence Executive Summary
+## {self.target_company}
+*Generated: {datetime.now().strftime('%B %d, %Y')}*
+
+---
+
+## Overall Assessment: {rating}
+
+{rating_text}
+
+| Metric | Value |
+|--------|-------|
+| Total Risks | {len(self.result.risks)} |
+| Critical | {len(critical_risks)} |
+| High | {len(high_risks)} |
+| Estimated Cost | ${self.result.total_one_time_low:,.0f} - ${self.result.total_one_time_high:,.0f} |
+
+---
+
+## Top 3 Critical Findings
+
+"""
+        # Add top findings
+        for i, risk in enumerate(critical_risks[:3], 1):
+            summary += f"**{i}. {risk.title}**\n"
+            summary += f"- {risk.description[:150]}{'...' if len(risk.description) > 150 else ''}\n"
+            summary += f"- *Impact:* {risk.severity} | *Domain:* {risk.domain}\n\n"
+
+        if not critical_risks:
+            summary += "*No critical findings identified.*\n\n"
+
+        # Domain summary table
+        summary += """---
+
+## Domain Summary
+
+| Domain | Risk Count | Critical | Status |
+|--------|------------|----------|--------|
+"""
+        for domain, ds in self.result.domain_summaries.items():
+            status = "🔴" if ds.critical_risks > 0 else "🟡" if ds.risk_count > 3 else "🟢"
+            summary += f"| {domain} | {ds.risk_count} | {ds.critical_risks} | {status} |\n"
+
+        # Key recommendations
+        summary += """
+---
+
+## Key Recommendations
+
+"""
+        recommendations = [r.mitigation for r in self.result.risks if r.mitigation and r.severity in ["Critical", "High"]][:4]
+        for i, rec in enumerate(recommendations, 1):
+            summary += f"{i}. {rec}\n"
+
+        summary += """
+---
+
+*This summary is auto-generated from detailed IT due diligence analysis. See full report for complete findings and evidence.*
+"""
+        return summary
+
+    def prioritize_findings(self, findings: Optional[List] = None) -> List[Dict]:
+        """
+        Point 88: Prioritize findings with most important first.
+
+        Uses multi-factor scoring:
+        - Severity weight (40%)
+        - Business impact (25%)
+        - Confidence level (20%)
+        - Actionability (15%)
+
+        Args:
+            findings: Optional list of findings (uses self.result.risks if None)
+
+        Returns:
+            List of findings sorted by priority score
+        """
+        items = findings if findings else self.result.risks
+
+        severity_scores = {"Critical": 1.0, "High": 0.75, "Medium": 0.5, "Low": 0.25}
+
+        prioritized = []
+        for item in items:
+            severity = getattr(item, 'severity', 'Medium')
+            severity_score = severity_scores.get(severity, 0.5)
+
+            # Business impact based on domain criticality
+            domain = getattr(item, 'domain', 'Unknown')
+            domain_weights = {
+                "Security": 1.0,
+                "Infrastructure": 0.9,
+                "Applications": 0.8,
+                "Identity": 0.85,
+                "Network": 0.7,
+                "IT Organization": 0.6
+            }
+            impact_score = domain_weights.get(domain, 0.5)
+
+            # Has mitigation = more actionable
+            has_mitigation = bool(getattr(item, 'mitigation', None))
+            actionability_score = 0.8 if has_mitigation else 0.3
+
+            # Confidence based on evidence
+            has_evidence = bool(getattr(item, 'evidence', None))
+            confidence_score = 0.9 if has_evidence else 0.5
+
+            # Calculate composite score
+            priority_score = (
+                0.40 * severity_score +
+                0.25 * impact_score +
+                0.20 * confidence_score +
+                0.15 * actionability_score
+            )
+
+            prioritized.append({
+                "finding": item,
+                "priority_score": round(priority_score, 3),
+                "rank": 0,  # Will be set after sorting
+                "score_breakdown": {
+                    "severity": severity_score,
+                    "business_impact": impact_score,
+                    "confidence": confidence_score,
+                    "actionability": actionability_score
+                }
+            })
+
+        # Sort by priority score descending
+        prioritized.sort(key=lambda x: x["priority_score"], reverse=True)
+
+        # Assign ranks
+        for i, item in enumerate(prioritized, 1):
+            item["rank"] = i
+
+        return prioritized
+
+    def score_recommendation_actionability(self, recommendations: Optional[List] = None) -> List[Dict]:
+        """
+        Point 89: Score how actionable each recommendation is.
+
+        Actionability factors:
+        - Specificity (clear what to do)
+        - Feasibility (realistic to implement)
+        - Timeline clarity (when to do it)
+        - Resource clarity (who/what needed)
+        - Measurability (success criteria)
+
+        Args:
+            recommendations: List of recommendation strings or objects
+
+        Returns:
+            List of recommendations with actionability scores
+        """
+        items = recommendations if recommendations else [r.mitigation for r in self.result.risks if r.mitigation]
+
+        # Keywords indicating actionability
+        action_verbs = ["implement", "deploy", "upgrade", "migrate", "establish", "create", "configure", "enable", "disable", "replace", "remove", "install"]
+        timeline_words = ["immediately", "before", "within", "by", "prior to", "day 1", "day 100", "post-close"]
+        resource_words = ["vendor", "team", "consultant", "staff", "budget", "resource"]
+        measurable_words = ["complete", "achieve", "reduce", "increase", "ensure", "verify", "confirm"]
+
+        scored = []
+        for item in items:
+            text = str(item).lower() if item else ""
+
+            # Calculate component scores
+            has_action = any(verb in text for verb in action_verbs)
+            has_timeline = any(word in text for word in timeline_words)
+            has_resource = any(word in text for word in resource_words)
+            has_measurable = any(word in text for word in measurable_words)
+
+            # Specificity based on length and detail
+            specificity = min(1.0, len(text) / 200) if text else 0
+
+            # Calculate overall actionability
+            actionability_score = (
+                0.30 * (1.0 if has_action else 0.2) +
+                0.20 * (1.0 if has_timeline else 0.3) +
+                0.15 * (1.0 if has_resource else 0.4) +
+                0.15 * (1.0 if has_measurable else 0.3) +
+                0.20 * specificity
+            )
+
+            # Determine actionability level
+            if actionability_score >= 0.7:
+                level = "High"
+            elif actionability_score >= 0.5:
+                level = "Medium"
+            else:
+                level = "Low"
+
+            scored.append({
+                "recommendation": item,
+                "actionability_score": round(actionability_score, 2),
+                "actionability_level": level,
+                "has_action_verb": has_action,
+                "has_timeline": has_timeline,
+                "has_resource_clarity": has_resource,
+                "has_measurable_outcome": has_measurable,
+                "suggestions": self._generate_actionability_suggestions(
+                    has_action, has_timeline, has_resource, has_measurable
+                )
+            })
+
+        # Sort by actionability score
+        scored.sort(key=lambda x: x["actionability_score"], reverse=True)
+        return scored
+
+    def _generate_actionability_suggestions(
+        self, has_action: bool, has_timeline: bool,
+        has_resource: bool, has_measurable: bool
+    ) -> List[str]:
+        """Generate suggestions to improve recommendation actionability."""
+        suggestions = []
+        if not has_action:
+            suggestions.append("Add specific action verb (e.g., 'Deploy', 'Configure', 'Migrate')")
+        if not has_timeline:
+            suggestions.append("Add timeline (e.g., 'within 30 days', 'by Day 100')")
+        if not has_resource:
+            suggestions.append("Specify responsible party or required resources")
+        if not has_measurable:
+            suggestions.append("Add success criteria or measurable outcome")
+        return suggestions
+
+    def generate_timeline_visualization(self, work_items: Optional[List[Dict]] = None) -> str:
+        """
+        Point 90: Generate visual timeline of work items by phase.
+
+        Creates an ASCII/text-based timeline visualization.
+
+        Args:
+            work_items: Optional list of work items with phase info
+
+        Returns:
+            Text-based timeline visualization
+        """
+        # Use passed work items or generate from risks
+        if work_items:
+            items = work_items
+        else:
+            # Convert risks to work items
+            items = []
+            for risk in self.result.risks:
+                phase = "Day_1" if risk.severity == "Critical" else "Day_100" if risk.severity == "High" else "Post_100"
+                items.append({
+                    "title": risk.title,
+                    "phase": phase,
+                    "priority": risk.severity,
+                    "domain": risk.domain
+                })
+
+        # Group by phase
+        by_phase = {"Day_1": [], "Day_100": [], "Post_100": []}
+        for item in items:
+            phase = item.get("phase", "Day_100")
+            if phase in by_phase:
+                by_phase[phase].append(item)
+
+        # Generate visualization
+        timeline = """
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                        INTEGRATION TIMELINE                                   ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                              ║
+║  DAY 1                    DAY 100                   POST-100                 ║
+║  (Close)                  (Stabilize)              (Optimize)               ║
+║    │                         │                         │                     ║
+║    ▼                         ▼                         ▼                     ║
+"""
+
+        # Add items to timeline
+        max_items = max(len(by_phase["Day_1"]), len(by_phase["Day_100"]), len(by_phase["Post_100"]), 1)
+
+        for i in range(min(max_items, 8)):  # Show up to 8 items
+            d1 = by_phase["Day_1"][i]["title"][:18] if i < len(by_phase["Day_1"]) else ""
+            d100 = by_phase["Day_100"][i]["title"][:18] if i < len(by_phase["Day_100"]) else ""
+            post = by_phase["Post_100"][i]["title"][:18] if i < len(by_phase["Post_100"]) else ""
+
+            timeline += f"║  • {d1:<18}     • {d100:<18}     • {post:<18}  ║\n"
+
+        # Add counts
+        timeline += f"""║                                                                              ║
+║  [{len(by_phase['Day_1'])} items]               [{len(by_phase['Day_100'])} items]               [{len(by_phase['Post_100'])} items]              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+PHASE SUMMARY:
+┌─────────────┬───────────┬──────────────────────────────────────────────────┐
+│ Phase       │ Count     │ Focus                                            │
+├─────────────┼───────────┼──────────────────────────────────────────────────┤
+│ Day 1       │ {len(by_phase['Day_1']):>5}     │ Business continuity, critical systems            │
+│ Day 100     │ {len(by_phase['Day_100']):>5}     │ Stabilization, technical debt reduction          │
+│ Post-100    │ {len(by_phase['Post_100']):>5}     │ Optimization, synergy capture                    │
+└─────────────┴───────────┴──────────────────────────────────────────────────┘
+"""
+        return timeline
+
+    def generate_timeline_data(self, work_items: Optional[List[Dict]] = None) -> Dict:
+        """
+        Generate structured timeline data for UI visualization.
+
+        Returns:
+            Dict with timeline data suitable for charting
+        """
+        if work_items:
+            items = work_items
+        else:
+            items = []
+            for risk in self.result.risks:
+                phase = "Day_1" if risk.severity == "Critical" else "Day_100" if risk.severity == "High" else "Post_100"
+                items.append({
+                    "id": risk.id,
+                    "title": risk.title,
+                    "phase": phase,
+                    "priority": risk.severity,
+                    "domain": risk.domain
+                })
+
+        # Group by phase
+        by_phase = {
+            "Day_1": {"items": [], "label": "Day 1 (Close)", "milestone": 0},
+            "Day_100": {"items": [], "label": "Day 100 (Stabilize)", "milestone": 100},
+            "Post_100": {"items": [], "label": "Post-100 (Optimize)", "milestone": 200}
+        }
+
+        for item in items:
+            phase = item.get("phase", "Day_100")
+            if phase in by_phase:
+                by_phase[phase]["items"].append(item)
+
+        # Sort items within each phase by priority
+        priority_order = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3}
+        for phase_data in by_phase.values():
+            phase_data["items"].sort(key=lambda x: priority_order.get(x.get("priority", "Medium"), 2))
+            phase_data["count"] = len(phase_data["items"])
+
+        return {
+            "phases": by_phase,
+            "total_items": len(items),
+            "timeline_milestones": [
+                {"day": 0, "label": "Close"},
+                {"day": 30, "label": "Day 30"},
+                {"day": 100, "label": "Day 100"},
+                {"day": 200, "label": "Day 200+"}
+            ]
+        }
+
+    # =========================================================================
     # Main Synthesis
     # =========================================================================
 

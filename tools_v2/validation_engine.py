@@ -41,6 +41,24 @@ VARIANCE_FAILURE_THRESHOLD = 0.50
 # Minimum granular facts per system to consider "covered"
 MIN_FACTS_PER_SYSTEM = 1
 
+# Quote validation threshold (Point 81)
+QUOTE_VALIDATION_THRESHOLD = 0.85  # Fuzzy match threshold
+
+# Anomaly detection thresholds (Point 84)
+ANOMALY_THRESHOLDS = {
+    "numeric_outlier_zscore": 2.5,  # Z-score for numeric outliers
+    "text_length_outlier": 3.0,     # Standard deviations for text length
+    "confidence_outlier": 0.3       # Facts below this confidence flagged
+}
+
+# Consistency check factors (Point 83)
+CONSISTENCY_WEIGHTS = {
+    "evidence_coverage": 0.25,
+    "cross_reference": 0.25,
+    "domain_balance": 0.20,
+    "fact_quality": 0.30
+}
+
 
 # =============================================================================
 # DATA CLASSES
@@ -596,6 +614,492 @@ class ValidationEngine:
                 r.message for r in report.results
                 if r.status == "fail" and r.severity in ("high", "critical")
             ]
+        }
+
+    # =========================================================================
+    # EVIDENCE QUOTE VALIDATION (Point 81)
+    # =========================================================================
+
+    def validate_evidence_quotes(
+        self,
+        facts: List[Any],
+        source_documents: Dict[str, str],
+        threshold: float = QUOTE_VALIDATION_THRESHOLD
+    ) -> List[ValidationResult]:
+        """
+        Validate that evidence quotes exist in source documents (Point 81).
+
+        Args:
+            facts: List of facts with evidence quotes
+            source_documents: Dict of filename -> content
+            threshold: Fuzzy match threshold (0-1)
+
+        Returns:
+            List of ValidationResult for each fact
+        """
+        results = []
+
+        for fact in facts:
+            # Get evidence quote
+            evidence = getattr(fact, 'evidence', {}) or {}
+            quote = evidence.get('exact_quote', '')
+            source_doc = getattr(fact, 'source_document', '')
+
+            if not quote:
+                results.append(ValidationResult(
+                    check_id=self._next_check_id(),
+                    check_type="quote_validation",
+                    status="warn",
+                    severity="low",
+                    message=f"Fact {getattr(fact, 'fact_id', 'unknown')} has no evidence quote",
+                    fact_id=getattr(fact, 'fact_id', None),
+                    suggested_action="Add evidence quote for traceability"
+                ))
+                continue
+
+            if not source_doc or source_doc not in source_documents:
+                results.append(ValidationResult(
+                    check_id=self._next_check_id(),
+                    check_type="quote_validation",
+                    status="warn",
+                    severity="medium",
+                    message=f"Source document '{source_doc}' not available for validation",
+                    fact_id=getattr(fact, 'fact_id', None),
+                    details={"source_document": source_doc},
+                    suggested_action="Verify source document is included in analysis"
+                ))
+                continue
+
+            # Check if quote exists in document
+            doc_content = source_documents[source_doc].lower()
+            quote_lower = quote.lower()
+
+            # Exact match
+            if quote_lower in doc_content:
+                results.append(ValidationResult(
+                    check_id=self._next_check_id(),
+                    check_type="quote_validation",
+                    status="pass",
+                    severity="low",
+                    message=f"Evidence quote verified in {source_doc}",
+                    fact_id=getattr(fact, 'fact_id', None)
+                ))
+            else:
+                # Fuzzy match
+                similarity = self._calculate_quote_similarity(quote_lower, doc_content)
+
+                if similarity >= threshold:
+                    results.append(ValidationResult(
+                        check_id=self._next_check_id(),
+                        check_type="quote_validation",
+                        status="pass",
+                        severity="low",
+                        message=f"Evidence quote fuzzy-matched ({similarity:.0%})",
+                        fact_id=getattr(fact, 'fact_id', None),
+                        details={"similarity": similarity, "threshold": threshold}
+                    ))
+                else:
+                    results.append(ValidationResult(
+                        check_id=self._next_check_id(),
+                        check_type="quote_validation",
+                        status="fail" if similarity < 0.5 else "warn",
+                        severity="high" if similarity < 0.5 else "medium",
+                        message=f"Evidence quote not found in source ({similarity:.0%} match)",
+                        fact_id=getattr(fact, 'fact_id', None),
+                        details={
+                            "quote_preview": quote[:100],
+                            "similarity": similarity,
+                            "source_document": source_doc
+                        },
+                        suggested_action="Verify quote accuracy or update source reference"
+                    ))
+
+        return results
+
+    def _calculate_quote_similarity(self, quote: str, document: str) -> float:
+        """Calculate similarity between quote and document content."""
+        # Simple approach: check word overlap
+        quote_words = set(quote.split())
+        if not quote_words:
+            return 0.0
+
+        # Find consecutive word matches
+        best_match = 0
+        doc_words = document.split()
+
+        for i in range(len(doc_words)):
+            matches = 0
+            for j, word in enumerate(quote.split()):
+                if i + j < len(doc_words) and doc_words[i + j] == word:
+                    matches += 1
+            if matches > best_match:
+                best_match = matches
+
+        return best_match / len(quote_words) if quote_words else 0.0
+
+    # =========================================================================
+    # CROSS-REFERENCE VALIDATION (Point 82)
+    # =========================================================================
+
+    def validate_cross_references(
+        self,
+        findings: List[Any],
+        fact_store
+    ) -> List[ValidationResult]:
+        """
+        Validate that fact IDs referenced in findings exist (Point 82).
+
+        Args:
+            findings: List of findings with fact citations
+            fact_store: FactStore to validate against
+
+        Returns:
+            List of ValidationResult
+        """
+        results = []
+        all_fact_ids = set(fact_store.get_all_citable_ids())
+
+        for finding in findings:
+            # Get cited fact IDs
+            cited_ids = getattr(finding, 'supporting_facts', []) or []
+            if hasattr(finding, 'fact_citations'):
+                cited_ids.extend(finding.fact_citations)
+
+            if not cited_ids:
+                results.append(ValidationResult(
+                    check_id=self._next_check_id(),
+                    check_type="cross_reference",
+                    status="warn",
+                    severity="medium",
+                    message=f"Finding has no fact citations",
+                    details={"finding_id": getattr(finding, 'id', 'unknown')},
+                    suggested_action="Add supporting fact references"
+                ))
+                continue
+
+            # Validate each cited ID
+            valid_ids = [fid for fid in cited_ids if fid in all_fact_ids]
+            invalid_ids = [fid for fid in cited_ids if fid not in all_fact_ids]
+
+            if invalid_ids:
+                results.append(ValidationResult(
+                    check_id=self._next_check_id(),
+                    check_type="cross_reference",
+                    status="fail",
+                    severity="high",
+                    message=f"Finding cites {len(invalid_ids)} non-existent fact IDs",
+                    details={
+                        "finding_id": getattr(finding, 'id', 'unknown'),
+                        "invalid_ids": invalid_ids,
+                        "valid_ids": valid_ids
+                    },
+                    suggested_action="Correct invalid fact references"
+                ))
+            else:
+                results.append(ValidationResult(
+                    check_id=self._next_check_id(),
+                    check_type="cross_reference",
+                    status="pass",
+                    severity="low",
+                    message=f"All {len(valid_ids)} fact citations valid",
+                    details={"finding_id": getattr(finding, 'id', 'unknown')}
+                ))
+
+        return results
+
+    # =========================================================================
+    # CONSISTENCY SCORING (Point 83)
+    # =========================================================================
+
+    def calculate_consistency_score(
+        self,
+        fact_store,
+        findings: List[Any] = None
+    ) -> Dict[str, Any]:
+        """
+        Score overall analysis consistency (Point 83).
+
+        Returns score 0-100 with breakdown.
+        """
+        scores = {}
+
+        # Evidence coverage score
+        facts = fact_store.facts
+        facts_with_evidence = sum(
+            1 for f in facts
+            if f.evidence and f.evidence.get('exact_quote')
+        )
+        evidence_rate = facts_with_evidence / len(facts) if facts else 0
+        scores['evidence_coverage'] = evidence_rate * 100
+
+        # Cross-reference score (if findings provided)
+        if findings:
+            valid_citations = 0
+            total_citations = 0
+            all_fact_ids = set(fact_store.get_all_citable_ids())
+
+            for finding in findings:
+                cited = getattr(finding, 'supporting_facts', []) or []
+                total_citations += len(cited)
+                valid_citations += sum(1 for c in cited if c in all_fact_ids)
+
+            if total_citations > 0:
+                scores['cross_reference'] = (valid_citations / total_citations) * 100
+            else:
+                scores['cross_reference'] = 0
+        else:
+            scores['cross_reference'] = 100  # No findings to validate
+
+        # Domain balance score
+        domain_counts = {}
+        for fact in facts:
+            domain_counts[fact.domain] = domain_counts.get(fact.domain, 0) + 1
+
+        if domain_counts:
+            avg_count = sum(domain_counts.values()) / len(domain_counts)
+            variance = sum((c - avg_count) ** 2 for c in domain_counts.values())
+            std_dev = (variance / len(domain_counts)) ** 0.5 if domain_counts else 0
+            # Higher balance = lower std dev relative to avg
+            balance_ratio = 1 - (std_dev / avg_count) if avg_count > 0 else 0
+            scores['domain_balance'] = max(0, balance_ratio * 100)
+        else:
+            scores['domain_balance'] = 0
+
+        # Fact quality score (based on confidence)
+        confidence_scores = [
+            f.confidence_score if hasattr(f, 'confidence_score') else 0.5
+            for f in facts
+        ]
+        avg_confidence = sum(confidence_scores) / len(confidence_scores) if confidence_scores else 0
+        scores['fact_quality'] = avg_confidence * 100
+
+        # Weighted total
+        total_score = sum(
+            scores[k] * CONSISTENCY_WEIGHTS.get(k, 0.25)
+            for k in scores
+        )
+
+        return {
+            'total_score': round(total_score, 1),
+            'grade': self._score_to_grade(total_score),
+            'breakdown': {k: round(v, 1) for k, v in scores.items()},
+            'weights': CONSISTENCY_WEIGHTS.copy()
+        }
+
+    def _score_to_grade(self, score: float) -> str:
+        """Convert numeric score to letter grade."""
+        if score >= 90:
+            return "A"
+        elif score >= 80:
+            return "B"
+        elif score >= 70:
+            return "C"
+        elif score >= 60:
+            return "D"
+        else:
+            return "F"
+
+    # =========================================================================
+    # ANOMALY DETECTION (Point 84)
+    # =========================================================================
+
+    def detect_anomalies(self, fact_store) -> List[ValidationResult]:
+        """
+        Flag unusual findings for human review (Point 84).
+
+        Detects:
+        - Numeric outliers (z-score)
+        - Text length outliers
+        - Low confidence facts
+        - Unusual patterns
+        """
+        results = []
+        facts = fact_store.facts
+
+        # Detect low confidence facts
+        low_conf = [
+            f for f in facts
+            if hasattr(f, 'confidence_score')
+            and f.confidence_score < ANOMALY_THRESHOLDS['confidence_outlier']
+        ]
+        if low_conf:
+            results.append(ValidationResult(
+                check_id=self._next_check_id(),
+                check_type="anomaly_detection",
+                status="warn",
+                severity="medium",
+                message=f"{len(low_conf)} facts with low confidence scores",
+                details={
+                    "fact_ids": [f.fact_id for f in low_conf[:10]],
+                    "threshold": ANOMALY_THRESHOLDS['confidence_outlier']
+                },
+                suggested_action="Review low-confidence facts for accuracy"
+            ))
+
+        # Detect facts with unusually long or short items
+        item_lengths = [len(f.item) for f in facts]
+        if item_lengths:
+            avg_len = sum(item_lengths) / len(item_lengths)
+            variance = sum((l - avg_len) ** 2 for l in item_lengths) / len(item_lengths)
+            std_dev = variance ** 0.5
+
+            if std_dev > 0:
+                outliers = [
+                    f for f in facts
+                    if abs(len(f.item) - avg_len) / std_dev > ANOMALY_THRESHOLDS['text_length_outlier']
+                ]
+                if outliers:
+                    results.append(ValidationResult(
+                        check_id=self._next_check_id(),
+                        check_type="anomaly_detection",
+                        status="warn",
+                        severity="low",
+                        message=f"{len(outliers)} facts with unusual item lengths",
+                        details={
+                            "fact_ids": [f.fact_id for f in outliers[:10]],
+                            "avg_length": avg_len,
+                            "std_dev": std_dev
+                        },
+                        suggested_action="Review unusually long/short fact items"
+                    ))
+
+        # Detect domain imbalance
+        domain_counts = {}
+        for f in facts:
+            domain_counts[f.domain] = domain_counts.get(f.domain, 0) + 1
+
+        if domain_counts:
+            avg_count = sum(domain_counts.values()) / len(domain_counts)
+            for domain, count in domain_counts.items():
+                if count < avg_count * 0.25:  # Less than 25% of average
+                    results.append(ValidationResult(
+                        check_id=self._next_check_id(),
+                        check_type="anomaly_detection",
+                        status="warn",
+                        severity="medium",
+                        message=f"Domain '{domain}' has unusually few facts ({count})",
+                        details={
+                            "domain": domain,
+                            "fact_count": count,
+                            "average": avg_count
+                        },
+                        suggested_action=f"Investigate low coverage in {domain} domain"
+                    ))
+
+        if not results:
+            results.append(ValidationResult(
+                check_id=self._next_check_id(),
+                check_type="anomaly_detection",
+                status="pass",
+                severity="low",
+                message="No anomalies detected"
+            ))
+
+        return results
+
+    # =========================================================================
+    # QA REPORT GENERATION (Point 85)
+    # =========================================================================
+
+    def generate_qa_report(
+        self,
+        fact_store,
+        findings: List[Any] = None,
+        source_documents: Dict[str, str] = None
+    ) -> Dict[str, Any]:
+        """
+        Generate comprehensive QA report for analysis (Point 85).
+
+        Returns complete quality assessment with recommendations.
+        """
+        report_sections = {}
+
+        # 1. Consistency scoring
+        report_sections['consistency'] = self.calculate_consistency_score(
+            fact_store, findings
+        )
+
+        # 2. Evidence validation
+        evidence_results = []
+        if source_documents:
+            evidence_results = self.validate_evidence_quotes(
+                fact_store.facts, source_documents
+            )
+        report_sections['evidence_validation'] = {
+            'total_checked': len(evidence_results),
+            'passed': sum(1 for r in evidence_results if r.status == 'pass'),
+            'warnings': sum(1 for r in evidence_results if r.status == 'warn'),
+            'failures': sum(1 for r in evidence_results if r.status == 'fail')
+        }
+
+        # 3. Cross-reference validation
+        xref_results = []
+        if findings:
+            xref_results = self.validate_cross_references(findings, fact_store)
+        report_sections['cross_reference'] = {
+            'total_checked': len(xref_results),
+            'passed': sum(1 for r in xref_results if r.status == 'pass'),
+            'failures': sum(1 for r in xref_results if r.status == 'fail')
+        }
+
+        # 4. Anomaly detection
+        anomaly_results = self.detect_anomalies(fact_store)
+        report_sections['anomalies'] = {
+            'total_detected': sum(1 for r in anomaly_results if r.status != 'pass'),
+            'results': [r.to_dict() for r in anomaly_results]
+        }
+
+        # 5. Coverage analysis
+        doc_coverage = fact_store.get_document_coverage()
+        report_sections['coverage'] = {
+            'documents_analyzed': doc_coverage.get('total_documents', 0),
+            'domains_covered': doc_coverage.get('coverage_summary', {}).get('total_domain_count', 0),
+            'categories_covered': doc_coverage.get('coverage_summary', {}).get('total_category_count', 0)
+        }
+
+        # 6. Duplicate analysis
+        duplicates = fact_store.find_duplicates()
+        report_sections['duplicates'] = {
+            'potential_duplicates': len(duplicates),
+            'duplicate_pairs': duplicates[:10]  # First 10
+        }
+
+        # 7. Gap analysis
+        gap_analysis = fact_store.analyze_gaps()
+        report_sections['gaps'] = {
+            'total_gaps': gap_analysis.get('total_gaps', 0),
+            'critical_gaps': gap_analysis.get('critical_gaps', 0),
+            'high_gaps': gap_analysis.get('high_gaps', 0)
+        }
+
+        # 8. Confidence summary
+        confidence = fact_store.get_confidence_summary()
+        report_sections['confidence'] = confidence
+
+        # Generate overall assessment
+        overall_score = report_sections['consistency']['total_score']
+        overall_grade = report_sections['consistency']['grade']
+
+        # Generate recommendations
+        recommendations = []
+        if report_sections['evidence_validation']['failures'] > 0:
+            recommendations.append("Review and correct evidence quotes that failed validation")
+        if report_sections['cross_reference']['failures'] > 0:
+            recommendations.append("Fix invalid fact citations in findings")
+        if report_sections['duplicates']['potential_duplicates'] > 5:
+            recommendations.append("Review and deduplicate similar facts")
+        if report_sections['gaps']['critical_gaps'] > 0:
+            recommendations.append("Address critical information gaps")
+        if confidence.get('distribution', {}).get('low_confidence_under_50', 0) > 10:
+            recommendations.append("Improve evidence for low-confidence facts")
+
+        return {
+            'generated_at': datetime.utcnow().isoformat(),
+            'overall_score': overall_score,
+            'overall_grade': overall_grade,
+            'sections': report_sections,
+            'recommendations': recommendations,
+            'summary': f"Analysis quality: {overall_grade} ({overall_score:.0f}/100)"
         }
 
 

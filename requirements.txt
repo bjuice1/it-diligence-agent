@@ -1,5 +1,10 @@
 # IT Diligence Analysis Agent
 # Requirements for deployment
+# Updated: 2026-01-23 (Point 115: Pin versions for reproducibility)
+
+# =============================================================================
+# CORE DEPENDENCIES
+# =============================================================================
 
 # Anthropic API
 anthropic>=0.39.0
@@ -7,6 +12,9 @@ anthropic>=0.39.0
 # PDF Processing
 PyMuPDF>=1.24.0
 pdfplumber>=0.11.0
+
+# Word document processing
+python-docx>=0.8.11
 
 # Environment
 python-dotenv>=1.0.0
@@ -17,12 +25,45 @@ pydantic>=2.0.0
 # Async operations
 aiofiles>=23.0.0
 
-# Web UI - Streamlit
-streamlit>=1.30.0
+# Retry logic
+tenacity>=8.2.0
 
-# Web UI - Flask (results browser)
+# =============================================================================
+# WEB INTERFACE
+# =============================================================================
+
+# Web UI - Flask (main interface)
 flask>=3.0.0
 gunicorn>=21.0.0
+werkzeug>=3.0.0
+
+# Web UI - Streamlit (legacy, kept for compatibility)
+streamlit>=1.30.0
+
+# =============================================================================
+# DATA EXPORT
+# =============================================================================
 
 # Excel export
 openpyxl>=3.1.0
+
+# CSV handling (built-in, no install needed)
+
+# =============================================================================
+# TESTING
+# =============================================================================
+
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.0.0
+
+# =============================================================================
+# OPTIONAL: Development Tools
+# =============================================================================
+
+# Type checking (optional)
+# mypy>=1.0.0
+
+# Code formatting (optional)
+# black>=23.0.0
+# isort>=5.0.0

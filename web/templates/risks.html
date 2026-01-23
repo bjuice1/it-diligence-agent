@@ -61,7 +61,7 @@
         <tbody>
             {% if risks %}
             {% for risk in risks %}
-            <tr data-id="{{ risk.risk_id }}"
+            <tr data-id="{{ risk.finding_id }}"
                 data-severity="{{ risk.severity }}"
                 data-domain="{{ risk.domain }}"
                 data-title="{{ risk.title|e }}"
@@ -69,9 +69,9 @@
                 data-mitigation="{{ risk.mitigation|e if risk.mitigation else '' }}"
                 data-based-on="{{ risk.based_on_facts|join(', ') if risk.based_on_facts else '' }}">
                 <td>
-                    <span class="badge badge-{{ risk.severity }}">{{ risk.severity }}</span>
+                    <span class="badge badge-{{ risk.severity }}">{{ risk.severity|upper }}</span>
                 </td>
-                <td class="font-mono text-sm">{{ risk.risk_id }}</td>
+                <td class="font-mono text-sm">{{ risk.finding_id }}</td>
                 <td>{{ risk.title }}</td>
                 <td class="text-muted text-sm">{{ risk.domain|replace('_', ' ')|title }}</td>
                 <td class="text-muted text-sm">{{ risk.based_on_facts|length if risk.based_on_facts else 0 }}</td>
@@ -98,13 +98,44 @@
     </table>
 </div>
 
+<!-- Pagination -->
+{% if total_pages > 1 %}
+<div class="pagination mt-4">
+    <div class="pagination-info">
+        Showing {{ (page - 1) * per_page + 1 }} - {{ [page * per_page, total]|min }} of {{ total }} risks
+    </div>
+    <div class="pagination-controls">
+        {% if page > 1 %}
+        <a href="{{ url_for('risks', page=page-1, severity=severity_filter, domain=domain_filter, q=request.args.get('q', '')) }}"
+           class="btn btn-sm btn-ghost">&laquo; Previous</a>
+        {% endif %}
+
+        {% for p in range(1, total_pages + 1) %}
+            {% if p == page %}
+            <span class="btn btn-sm btn-primary">{{ p }}</span>
+            {% elif p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
+            <a href="{{ url_for('risks', page=p, severity=severity_filter, domain=domain_filter, q=request.args.get('q', '')) }}"
+               class="btn btn-sm btn-ghost">{{ p }}</a>
+            {% elif p == page - 3 or p == page + 3 %}
+            <span class="btn btn-sm btn-ghost">...</span>
+            {% endif %}
+        {% endfor %}
+
+        {% if page < total_pages %}
+        <a href="{{ url_for('risks', page=page+1, severity=severity_filter, domain=domain_filter, q=request.args.get('q', '')) }}"
+           class="btn btn-sm btn-ghost">Next &raquo;</a>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
 <!-- Summary Stats -->
-{% if risks %}
+{% if all_risks %}
 <div class="flex gap-4 mt-4 text-sm text-muted">
-    <span><strong>{{ risks|selectattr('severity', 'equalto', 'critical')|list|length }}</strong> Critical</span>
-    <span><strong>{{ risks|selectattr('severity', 'equalto', 'high')|list|length }}</strong> High</span>
-    <span><strong>{{ risks|selectattr('severity', 'equalto', 'medium')|list|length }}</strong> Medium</span>
-    <span><strong>{{ risks|selectattr('severity', 'equalto', 'low')|list|length }}</strong> Low</span>
+    <span><strong>{{ all_risks|selectattr('severity', 'equalto', 'critical')|list|length }}</strong> Critical</span>
+    <span><strong>{{ all_risks|selectattr('severity', 'equalto', 'high')|list|length }}</strong> High</span>
+    <span><strong>{{ all_risks|selectattr('severity', 'equalto', 'medium')|list|length }}</strong> Medium</span>
+    <span><strong>{{ all_risks|selectattr('severity', 'equalto', 'low')|list|length }}</strong> Low</span>
 </div>
 {% endif %}
 {% endblock %}

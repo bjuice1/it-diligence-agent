@@ -270,6 +270,112 @@ class PDFParser:
         print(f"Saved extracted content to: {output_path}")
 
 
+def parse_documents(file_paths: List[Path]) -> List[Dict]:
+    """
+    Parse multiple documents and return list of dicts with content.
+
+    Supports: PDF, TXT, MD, Markdown files
+
+    Args:
+        file_paths: List of file paths to parse
+
+    Returns:
+        List of dicts with 'filename' and 'content' keys
+    """
+    results = []
+    parser = PDFParser()
+
+    for filepath in file_paths:
+        filepath = Path(filepath)
+
+        if not filepath.exists():
+            print(f"File not found: {filepath}")
+            continue
+
+        try:
+            suffix = filepath.suffix.lower()
+
+            if suffix == '.pdf':
+                # Parse PDF
+                parsed = parser.parse_file(filepath)
+                results.append({
+                    'filename': filepath.name,
+                    'content': parsed.get_text_for_analysis(),
+                    'pages': parsed.total_pages,
+                    'type': 'pdf'
+                })
+
+            elif suffix in ['.txt', '.md', '.markdown']:
+                # Read text files directly
+                with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+                results.append({
+                    'filename': filepath.name,
+                    'content': content,
+                    'pages': 1,
+                    'type': 'text'
+                })
+
+            elif suffix in ['.doc', '.docx']:
+                # For Word docs, try to extract text if python-docx available
+                try:
+                    import docx
+                    doc = docx.Document(filepath)
+                    content = '\n'.join([para.text for para in doc.paragraphs])
+                    results.append({
+                        'filename': filepath.name,
+                        'content': content,
+                        'pages': 1,
+                        'type': 'docx'
+                    })
+                except ImportError:
+                    print(f"python-docx not installed, skipping: {filepath.name}")
+
+            elif suffix in ['.xls', '.xlsx']:
+                # For Excel, try basic extraction
+                try:
+                    import openpyxl
+                    wb = openpyxl.load_workbook(filepath, data_only=True)
+                    content_parts = []
+                    for sheet_name in wb.sheetnames:
+                        sheet = wb[sheet_name]
+                        content_parts.append(f"## Sheet: {sheet_name}\n")
+                        for row in sheet.iter_rows(values_only=True):
+                            row_text = '\t'.join([str(c) if c else '' for c in row])
+                            if row_text.strip():
+                                content_parts.append(row_text)
+                    content = '\n'.join(content_parts)
+                    results.append({
+                        'filename': filepath.name,
+                        'content': content,
+                        'pages': len(wb.sheetnames),
+                        'type': 'xlsx'
+                    })
+                except ImportError:
+                    print(f"openpyxl not available for: {filepath.name}")
+                except Exception as e:
+                    print(f"Error reading Excel file {filepath.name}: {e}")
+
+            else:
+                # Try to read as text anyway
+                try:
+                    with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                        content = f.read()
+                    results.append({
+                        'filename': filepath.name,
+                        'content': content,
+                        'pages': 1,
+                        'type': 'unknown'
+                    })
+                except Exception as e:
+                    print(f"Could not read {filepath.name}: {e}")
+
+        except Exception as e:
+            print(f"Error parsing {filepath.name}: {e}")
+
+    return results
+
+
 # Convenience function
 def parse_pdfs(input_path: Path) -> str:
     """

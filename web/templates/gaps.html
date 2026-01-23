@@ -5,7 +5,7 @@
 {% block content %}
 <div class="page-header">
     <h1>Information Gaps</h1>
-    <p>{{ gaps|length }} gaps requiring additional information from VDR</p>
+    <p>{{ total }} gaps requiring additional information from VDR</p>
 </div>
 
 <!-- Filters Bar -->
@@ -95,13 +95,44 @@
     </table>
 </div>
 
+<!-- Pagination -->
+{% if total_pages and total_pages > 1 %}
+<div class="pagination mt-4">
+    <div class="pagination-info">
+        Showing {{ (page - 1) * per_page + 1 }} - {{ [page * per_page, total]|min }} of {{ total }} gaps
+    </div>
+    <div class="pagination-controls">
+        {% if page > 1 %}
+        <a href="{{ url_for('gaps', page=page-1, domain=domain_filter, importance=importance_filter, q=request.args.get('q', '')) }}"
+           class="btn btn-sm btn-ghost">&laquo; Previous</a>
+        {% endif %}
+
+        {% for p in range(1, total_pages + 1) %}
+            {% if p == page %}
+            <span class="btn btn-sm btn-primary">{{ p }}</span>
+            {% elif p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
+            <a href="{{ url_for('gaps', page=p, domain=domain_filter, importance=importance_filter, q=request.args.get('q', '')) }}"
+               class="btn btn-sm btn-ghost">{{ p }}</a>
+            {% elif p == page - 3 or p == page + 3 %}
+            <span class="btn btn-sm btn-ghost">...</span>
+            {% endif %}
+        {% endfor %}
+
+        {% if page < total_pages %}
+        <a href="{{ url_for('gaps', page=page+1, domain=domain_filter, importance=importance_filter, q=request.args.get('q', '')) }}"
+           class="btn btn-sm btn-ghost">Next &raquo;</a>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
 <!-- Summary Stats -->
-{% if gaps %}
+{% if all_gaps %}
 <div class="flex gap-4 mt-4 text-sm text-muted">
-    <span><strong>{{ gaps|selectattr('importance', 'equalto', 'critical')|list|length }}</strong> Critical</span>
-    <span><strong>{{ gaps|selectattr('importance', 'equalto', 'high')|list|length }}</strong> High</span>
-    <span><strong>{{ gaps|selectattr('importance', 'equalto', 'medium')|list|length }}</strong> Medium</span>
-    <span><strong>{{ gaps|selectattr('importance', 'equalto', 'low')|list|length }}</strong> Low</span>
+    <span><strong>{{ all_gaps|selectattr('importance', 'equalto', 'critical')|list|length }}</strong> Critical</span>
+    <span><strong>{{ all_gaps|selectattr('importance', 'equalto', 'high')|list|length }}</strong> High</span>
+    <span><strong>{{ all_gaps|selectattr('importance', 'equalto', 'medium')|list|length }}</strong> Medium</span>
+    <span><strong>{{ all_gaps|selectattr('importance', 'equalto', 'low')|list|length }}</strong> Low</span>
 </div>
 
 <!-- Export VDR Requests -->

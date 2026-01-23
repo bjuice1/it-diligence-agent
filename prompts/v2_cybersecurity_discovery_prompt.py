@@ -169,7 +169,7 @@ For each category below, create inventory entries using `create_inventory_entry`
 2. For each of the 9 categories above:
    - If security controls exist: Create inventory entries with `create_inventory_entry`
    - If information is missing: Create gap entry with `flag_gap`
-3. Call `complete_analysis` when all categories are processed
+3. Call `complete_discovery` when all categories are processed
 
 Begin extraction now. Work through each category systematically."""
 

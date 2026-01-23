@@ -381,6 +381,11 @@ const selectedFiles = document.getElementById('selected-files');
 const submitBtn = document.getElementById('submit-btn');
 let files = [];
 
+// Configuration
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB per file
+const MAX_TOTAL_SIZE = 200 * 1024 * 1024; // 200MB total
+const ALLOWED_EXTENSIONS = ['.pdf', '.xlsx', '.xls', '.csv', '.docx', '.doc', '.pptx', '.ppt', '.txt', '.json', '.md', '.markdown'];
+
 // Click to upload
 dropzone.addEventListener('click', () => fileInput.click());
 
@@ -405,34 +410,123 @@ fileInput.addEventListener('change', (e) => {
     handleFiles(e.target.files);
 });
 
+function getFileExtension(filename) {
+    return '.' + filename.split('.').pop().toLowerCase();
+}
+
 function handleFiles(newFiles) {
+    let errors = [];
+
     for (let file of newFiles) {
-        if (!files.some(f => f.name === file.name)) {
-            files.push(file);
+        // Check for duplicates
+        if (files.some(f => f.name === file.name)) {
+            errors.push(`"${file.name}" is already added`);
+            continue;
         }
+
+        // Check file extension
+        const ext = getFileExtension(file.name);
+        if (!ALLOWED_EXTENSIONS.includes(ext)) {
+            errors.push(`"${file.name}" - unsupported file type (${ext})`);
+            continue;
+        }
+
+        // Check file size
+        if (file.size > MAX_FILE_SIZE) {
+            errors.push(`"${file.name}" exceeds 50MB limit (${formatSize(file.size)})`);
+            continue;
+        }
+
+        files.push(file);
     }
+
+    // Check total size
+    const totalSize = files.reduce((sum, f) => sum + f.size, 0);
+    if (totalSize > MAX_TOTAL_SIZE) {
+        errors.push(`Total size (${formatSize(totalSize)}) exceeds 200MB limit`);
+    }
+
+    if (errors.length > 0) {
+        showError(errors.join('\n'));
+    }
+
     updateFileList();
 }
 
+function showError(message) {
+    // Create or update error display
+    let errorDiv = document.getElementById('upload-error');
+    if (!errorDiv) {
+        errorDiv = document.createElement('div');
+        errorDiv.id = 'upload-error';
+        errorDiv.style.cssText = 'background: var(--critical-bg); color: var(--critical); padding: 12px 16px; border-radius: 8px; margin-top: 15px; font-size: 0.9em; white-space: pre-line;';
+        selectedFiles.parentNode.insertBefore(errorDiv, selectedFiles);
+    }
+    errorDiv.textContent = message;
+    errorDiv.style.display = 'block';
+
+    // Auto-hide after 5 seconds
+    setTimeout(() => {
+        errorDiv.style.display = 'none';
+    }, 5000);
+}
+
 function updateFileList() {
+    const totalSize = files.reduce((sum, f) => sum + f.size, 0);
+
     if (files.length > 0) {
         selectedFiles.style.display = 'block';
-        fileList.innerHTML = files.map((file, i) => `
+        fileList.innerHTML = files.map((file, i) => {
+            const ext = getFileExtension(file.name);
+            const icon = getFileIcon(ext);
+            return `
             <li>
-                <span>${file.name} (${formatSize(file.size)})</span>
+                <span>
+                    <span style="margin-right: 8px;">${icon}</span>
+                    ${file.name}
+                    <span style="color: var(--text-muted); margin-left: 8px;">(${formatSize(file.size)})</span>
+                </span>
                 <span class="file-remove" onclick="removeFile(${i})">✕</span>
             </li>
-        `).join('');
-        submitBtn.disabled = false;
+        `}).join('');
+
+        // Add total summary
+        fileList.innerHTML += `
+            <li style="background: var(--bg-surface-sunken); font-weight: 500; margin-top: 10px;">
+                <span>Total: ${files.length} file(s)</span>
+                <span>${formatSize(totalSize)}</span>
+            </li>
+        `;
+
+        submitBtn.disabled = totalSize > MAX_TOTAL_SIZE;
+        submitBtn.innerHTML = totalSize > MAX_TOTAL_SIZE
+            ? '<span>⚠</span> Total size exceeds limit'
+            : '<span>▶</span> Start Analysis';
     } else {
         selectedFiles.style.display = 'none';
         submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span>▶</span> Start Analysis';
     }
+}
+
+function getFileIcon(ext) {
+    const icons = {
+        '.pdf': '📄',
+        '.xlsx': '📊', '.xls': '📊', '.csv': '📊',
+        '.docx': '📝', '.doc': '📝',
+        '.pptx': '📽', '.ppt': '📽',
+        '.txt': '📃', '.md': '📃', '.markdown': '📃',
+        '.json': '{ }'
+    };
+    return icons[ext] || '📁';
 }
 
 function removeFile(index) {
     files.splice(index, 1);
     updateFileList();
+    // Hide error when files change
+    const errorDiv = document.getElementById('upload-error');
+    if (errorDiv) errorDiv.style.display = 'none';
 }
 
 function formatSize(bytes) {
@@ -443,6 +537,24 @@ function formatSize(bytes) {
 
 // Form submit - add files to FormData
 document.getElementById('upload-form').addEventListener('submit', function(e) {
+    // Validate before submit
+    if (files.length === 0) {
+        e.preventDefault();
+        showError('Please select at least one file to analyze');
+        return;
+    }
+
+    const totalSize = files.reduce((sum, f) => sum + f.size, 0);
+    if (totalSize > MAX_TOTAL_SIZE) {
+        e.preventDefault();
+        showError('Total file size exceeds 200MB limit. Please remove some files.');
+        return;
+    }
+
+    // Show uploading state
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner"></span> Uploading...';
+
     const formData = new FormData(this);
 
     // Clear existing files and add our tracked files
@@ -452,4 +564,21 @@ document.getElementById('upload-form').addEventListener('submit', function(e) {
     });
 });
 </script>
+
+<style>
+.spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid transparent;
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 8px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+</style>
 {% endblock %}

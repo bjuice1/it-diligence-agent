@@ -49,6 +49,18 @@ DOMAIN_PREFIXES = {
     "general": "GEN"
 }
 
+# Similarity threshold for duplicate detection (Point 72)
+DUPLICATE_SIMILARITY_THRESHOLD = 0.85
+
+# Confidence scoring factors (Point 73)
+CONFIDENCE_FACTORS = {
+    "has_evidence": 0.30,        # Has evidence quote
+    "evidence_length": 0.15,    # Evidence quote length
+    "has_details": 0.20,        # Has detailed attributes
+    "has_source": 0.15,         # Has source document
+    "is_verified": 0.20         # Human verified
+}
+
 
 @dataclass
 class Fact:
@@ -78,9 +90,43 @@ class Fact:
     verified: bool = False              # Has human verified this fact?
     verified_by: Optional[str] = None   # Who verified (username/email)
     verified_at: Optional[str] = None   # When verified (ISO timestamp)
+    # Confidence scoring (Point 73)
+    confidence_score: float = 0.0       # 0.0-1.0 confidence rating
+    # Domain overlap detection (Point 75)
+    related_domains: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict:
         return asdict(self)
+
+    def calculate_confidence(self) -> float:
+        """Calculate confidence score based on evidence quality (Point 73)."""
+        score = 0.0
+
+        # Has evidence quote
+        if self.evidence and self.evidence.get("exact_quote"):
+            score += CONFIDENCE_FACTORS["has_evidence"]
+            # Evidence length bonus
+            quote_len = len(self.evidence.get("exact_quote", ""))
+            if quote_len >= 50:
+                score += CONFIDENCE_FACTORS["evidence_length"]
+            elif quote_len >= 20:
+                score += CONFIDENCE_FACTORS["evidence_length"] * 0.5
+
+        # Has meaningful details
+        if self.details and len(self.details) >= 2:
+            score += CONFIDENCE_FACTORS["has_details"]
+        elif self.details:
+            score += CONFIDENCE_FACTORS["has_details"] * 0.5
+
+        # Has source document
+        if self.source_document:
+            score += CONFIDENCE_FACTORS["has_source"]
+
+        # Is verified
+        if self.verified:
+            score += CONFIDENCE_FACTORS["is_verified"]
+
+        return min(1.0, score)
 
     @classmethod
     def from_dict(cls, data: Dict) -> "Fact":
@@ -110,6 +156,78 @@ class Gap:
         return cls(**data)
 
 
+# =============================================================================
+# OPEN QUESTION ENTITY (Point 82 - Enhancement Plan)
+# =============================================================================
+
+# Suggested recipients for open questions
+QUESTION_RECIPIENTS = [
+    "Target CIO",
+    "Target IT Director",
+    "Target Security Lead",
+    "Target Infrastructure Lead",
+    "Target Applications Lead",
+    "Target Network Lead",
+    "IT Operations",
+    "Integration Team",
+    "Management"
+]
+
+@dataclass
+class OpenQuestion:
+    """
+    An open question for follow-up with management or target company.
+
+    Open Questions are distinct from Gaps and Risks:
+    - Gap: Missing information identified during discovery
+    - Risk: A concern based on evidence (facts)
+    - OpenQuestion: A specific question to ask stakeholders
+
+    The triage flow is:
+    - Gaps → OpenQuestions (transform missing info into actionable questions)
+    - Facts → Risks (where evidence supports concern)
+    - Risks → WorkItems (remediation actions)
+    """
+    question_id: str                              # Q-INFRA-001
+    question_text: str                            # The actual question to ask
+    domain: str                                   # infrastructure, network, etc.
+    category: str                                 # Category within domain
+    priority: str                                 # critical, high, medium, low
+    source_gap_ids: List[str] = field(default_factory=list)  # Gap IDs that led to this question
+    suggested_recipient: str = "Management"       # Who should answer this
+    context: str = ""                             # Background context for the question
+    impact_if_unanswered: str = ""               # Why this question matters
+    status: str = "open"                          # open, answered, not_applicable, deferred
+    answer: str = ""                              # The answer when provided
+    answered_by: str = ""                         # Who provided the answer
+    answered_at: str = ""                         # When answered
+    created_at: str = field(default_factory=lambda: _generate_timestamp())
+
+    def to_dict(self) -> Dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> "OpenQuestion":
+        return cls(**data)
+
+    def mark_answered(self, answer: str, answered_by: str) -> None:
+        """Mark the question as answered."""
+        self.status = "answered"
+        self.answer = answer
+        self.answered_by = answered_by
+        self.answered_at = _generate_timestamp()
+
+    def mark_not_applicable(self, reason: str = "") -> None:
+        """Mark the question as not applicable."""
+        self.status = "not_applicable"
+        self.answer = reason or "Not applicable to this assessment"
+
+    def mark_deferred(self, reason: str = "") -> None:
+        """Mark the question as deferred for later."""
+        self.status = "deferred"
+        self.answer = reason or "Deferred for future follow-up"
+
+
 class FactStore:
     """
     Central store for facts extracted during Discovery phase.
@@ -120,6 +238,7 @@ class FactStore:
     - Merge capability for parallel discovery agents
     - Export to JSON for reasoning phase handoff
     - Load from JSON to resume or reason from existing facts
+    - Open Questions for follow-up (Point 82-86)
 
     Usage:
         # In Discovery agent
@@ -135,23 +254,29 @@ class FactStore:
 
         # Pass to Reasoning agent
         facts = store.get_domain_facts("infrastructure")
+
+        # Transform gaps to open questions
+        questions = store.transform_gaps_to_questions()
     """
 
     def __init__(self):
         self.facts: List[Fact] = []
         self.gaps: List[Gap] = []
+        self.open_questions: List[OpenQuestion] = []  # Point 82
         self._fact_counters: Dict[str, int] = {}
         self._gap_counters: Dict[str, int] = {}
+        self._question_counters: Dict[str, int] = {}  # Point 82
         self.discovery_complete: Dict[str, bool] = {}
         self.metadata: Dict[str, Any] = {
             "created_at": _generate_timestamp(),
-            "version": "2.0"
+            "version": "2.1"  # Version bump for open questions
         }
         # Thread safety: Lock for all mutating operations
         self._lock = threading.RLock()
-        # Performance: Index for O(1) fact/gap lookups
+        # Performance: Index for O(1) fact/gap/question lookups
         self._fact_index: Dict[str, Fact] = {}
         self._gap_index: Dict[str, Gap] = {}
+        self._question_index: Dict[str, OpenQuestion] = {}  # Point 82
 
     def add_fact(self, domain: str, category: str, item: str,
                  details: Dict[str, Any], status: str,
@@ -318,7 +443,7 @@ class FactStore:
         Get complete fact inventory across all domains.
 
         Returns:
-            Dict with all facts, gaps, and metadata
+            Dict with all facts, gaps, open questions, and metadata
         """
         with self._lock:
             all_domains = set(f.domain for f in self.facts) | set(g.domain for g in self.gaps)
@@ -328,10 +453,12 @@ class FactStore:
                 "summary": {
                     "total_facts": len(self.facts),
                     "total_gaps": len(self.gaps),
+                    "total_open_questions": len(self.open_questions),
                     "domains": list(all_domains)
                 },
                 "facts": [f.to_dict() for f in self.facts],
                 "gaps": [g.to_dict() for g in self.gaps],
+                "open_questions": [q.to_dict() for q in self.open_questions],
                 "by_domain": {d: self.get_domain_facts(d) for d in all_domains},
                 "discovery_complete": self.discovery_complete
             }
@@ -810,7 +937,7 @@ class FactStore:
     def load(cls, path: str) -> "FactStore":
         """Load fact store from JSON file with retry logic."""
         from tools_v2.io_utils import safe_file_read
-        
+
         data = safe_file_read(path, mode='r', encoding='utf-8', max_retries=3)
 
         store = cls()
@@ -855,9 +982,26 @@ class FactStore:
             except (ValueError, IndexError) as e:
                 logger.warning(f"Could not parse gap ID {gap.gap_id}: {e}")
 
+        # Load open questions (Point 82)
+        for question_dict in data.get("open_questions", []):
+            question = OpenQuestion.from_dict(question_dict)
+            store.open_questions.append(question)
+            store._question_index[question.question_id] = question
+
+            try:
+                parts = question.question_id.split("-")
+                if len(parts) >= 3:
+                    prefix = parts[1]
+                    seq = int(parts[2])
+                    store._question_counters[prefix] = max(
+                        store._question_counters.get(prefix, 0), seq
+                    )
+            except (ValueError, IndexError) as e:
+                logger.warning(f"Could not parse question ID {question.question_id}: {e}")
+
         store.discovery_complete = data.get("discovery_complete", {})
 
-        logger.info(f"Loaded {len(store.facts)} facts from {path}")
+        logger.info(f"Loaded {len(store.facts)} facts, {len(store.gaps)} gaps, {len(store.open_questions)} questions from {path}")
         return store
 
     def format_for_reasoning(self, domain: str, entity: str = "target") -> str:
@@ -931,3 +1075,786 @@ class FactStore:
 
     def __repr__(self) -> str:
         return f"FactStore(facts={len(self.facts)}, gaps={len(self.gaps)})"
+
+    # =========================================================================
+    # DOCUMENT COVERAGE TRACKING (Point 71)
+    # =========================================================================
+
+    def get_document_coverage(self) -> Dict[str, Any]:
+        """
+        Track which documents were analyzed by which agents (Point 71).
+
+        Returns detailed breakdown of document -> domain -> facts.
+        """
+        with self._lock:
+            coverage = {}
+
+            for fact in self.facts:
+                doc = fact.source_document or "(unknown)"
+                domain = fact.domain
+
+                if doc not in coverage:
+                    coverage[doc] = {
+                        "domains_covered": set(),
+                        "fact_count": 0,
+                        "categories": set(),
+                        "agents": set()
+                    }
+
+                coverage[doc]["domains_covered"].add(domain)
+                coverage[doc]["fact_count"] += 1
+                coverage[doc]["categories"].add(fact.category)
+
+            # Convert sets to lists for JSON serialization
+            for doc in coverage:
+                coverage[doc]["domains_covered"] = list(coverage[doc]["domains_covered"])
+                coverage[doc]["categories"] = list(coverage[doc]["categories"])
+                coverage[doc]["agents"] = list(coverage[doc]["agents"])
+
+            # Generate summary
+            total_docs = len(coverage)
+            docs_with_multi_domain = sum(
+                1 for d in coverage.values()
+                if len(d["domains_covered"]) > 1
+            )
+
+            return {
+                "total_documents": total_docs,
+                "documents_with_multi_domain_coverage": docs_with_multi_domain,
+                "documents": coverage,
+                "coverage_summary": self._calculate_coverage_summary(coverage)
+            }
+
+    def _calculate_coverage_summary(self, coverage: Dict) -> Dict[str, Any]:
+        """Generate coverage summary statistics."""
+        domains_seen = set()
+        categories_seen = set()
+
+        for doc_data in coverage.values():
+            domains_seen.update(doc_data["domains_covered"])
+            categories_seen.update(doc_data["categories"])
+
+        return {
+            "domains_covered": list(domains_seen),
+            "categories_covered": list(categories_seen),
+            "total_domain_count": len(domains_seen),
+            "total_category_count": len(categories_seen)
+        }
+
+    def get_uncovered_documents(self, all_documents: List[str]) -> List[str]:
+        """Return documents that haven't produced any facts."""
+        covered = set(self.get_source_documents())
+        return [d for d in all_documents if d not in covered]
+
+    # =========================================================================
+    # FACT DEDUPLICATION (Point 72)
+    # =========================================================================
+
+    def find_duplicates(self, threshold: float = DUPLICATE_SIMILARITY_THRESHOLD) -> List[Dict]:
+        """
+        Find potential duplicate facts (Point 72).
+
+        Uses item + category similarity to detect duplicates.
+        Returns list of duplicate pairs with similarity scores.
+        """
+        with self._lock:
+            duplicates = []
+
+            for i, fact1 in enumerate(self.facts):
+                for fact2 in self.facts[i + 1:]:
+                    # Same domain and category are more likely duplicates
+                    if fact1.domain != fact2.domain:
+                        continue
+
+                    similarity = self._calculate_fact_similarity(fact1, fact2)
+
+                    if similarity >= threshold:
+                        duplicates.append({
+                            "fact1_id": fact1.fact_id,
+                            "fact2_id": fact2.fact_id,
+                            "item1": fact1.item,
+                            "item2": fact2.item,
+                            "domain": fact1.domain,
+                            "similarity": similarity,
+                            "recommendation": self._get_duplicate_recommendation(fact1, fact2)
+                        })
+
+            return duplicates
+
+    def _calculate_fact_similarity(self, fact1: Fact, fact2: Fact) -> float:
+        """Calculate similarity between two facts."""
+        # Item text similarity
+        item1_words = set(fact1.item.lower().split())
+        item2_words = set(fact2.item.lower().split())
+
+        if not item1_words or not item2_words:
+            return 0.0
+
+        intersection = item1_words & item2_words
+        union = item1_words | item2_words
+        jaccard = len(intersection) / len(union) if union else 0
+
+        # Category match bonus
+        category_match = 1.0 if fact1.category == fact2.category else 0.0
+
+        # Details similarity
+        details_sim = 0.0
+        if fact1.details and fact2.details:
+            common_keys = set(fact1.details.keys()) & set(fact2.details.keys())
+            if common_keys:
+                matching_values = sum(
+                    1 for k in common_keys
+                    if str(fact1.details[k]).lower() == str(fact2.details[k]).lower()
+                )
+                details_sim = matching_values / len(common_keys)
+
+        # Weighted average
+        return 0.5 * jaccard + 0.3 * category_match + 0.2 * details_sim
+
+    def _get_duplicate_recommendation(self, fact1: Fact, fact2: Fact) -> str:
+        """Generate recommendation for handling duplicate."""
+        # Prefer verified facts
+        if fact1.verified and not fact2.verified:
+            return f"Keep {fact1.fact_id} (verified)"
+        if fact2.verified and not fact1.verified:
+            return f"Keep {fact2.fact_id} (verified)"
+
+        # Prefer facts with more evidence
+        ev1_len = len(fact1.evidence.get("exact_quote", "")) if fact1.evidence else 0
+        ev2_len = len(fact2.evidence.get("exact_quote", "")) if fact2.evidence else 0
+        if ev1_len > ev2_len:
+            return f"Keep {fact1.fact_id} (better evidence)"
+        if ev2_len > ev1_len:
+            return f"Keep {fact2.fact_id} (better evidence)"
+
+        # Prefer facts with more details
+        d1_len = len(fact1.details) if fact1.details else 0
+        d2_len = len(fact2.details) if fact2.details else 0
+        if d1_len > d2_len:
+            return f"Keep {fact1.fact_id} (more details)"
+        if d2_len > d1_len:
+            return f"Keep {fact2.fact_id} (more details)"
+
+        return "Manual review recommended"
+
+    def deduplicate(self, threshold: float = DUPLICATE_SIMILARITY_THRESHOLD) -> Dict[str, Any]:
+        """
+        Remove duplicate facts automatically.
+
+        Returns summary of removed duplicates.
+        """
+        duplicates = self.find_duplicates(threshold)
+        removed = []
+
+        with self._lock:
+            for dup in duplicates:
+                # Determine which to remove based on recommendation
+                rec = dup["recommendation"]
+                if "Keep " + dup["fact1_id"] in rec:
+                    to_remove = dup["fact2_id"]
+                elif "Keep " + dup["fact2_id"] in rec:
+                    to_remove = dup["fact1_id"]
+                else:
+                    continue  # Manual review needed, skip
+
+                # Remove the duplicate
+                fact = self._fact_index.get(to_remove)
+                if fact:
+                    self.facts.remove(fact)
+                    del self._fact_index[to_remove]
+                    removed.append(to_remove)
+
+        return {
+            "duplicates_found": len(duplicates),
+            "automatically_removed": len(removed),
+            "removed_fact_ids": removed,
+            "manual_review_needed": len(duplicates) - len(removed)
+        }
+
+    # =========================================================================
+    # CONFIDENCE SCORING (Point 73)
+    # =========================================================================
+
+    def calculate_all_confidence_scores(self) -> Dict[str, float]:
+        """Calculate and update confidence scores for all facts."""
+        scores = {}
+        with self._lock:
+            for fact in self.facts:
+                score = fact.calculate_confidence()
+                fact.confidence_score = score
+                scores[fact.fact_id] = score
+        return scores
+
+    def get_low_confidence_facts(self, threshold: float = 0.5) -> List[Fact]:
+        """Get facts with confidence below threshold."""
+        with self._lock:
+            return [f for f in self.facts if f.confidence_score < threshold]
+
+    def get_high_confidence_facts(self, threshold: float = 0.8) -> List[Fact]:
+        """Get facts with confidence above threshold."""
+        with self._lock:
+            return [f for f in self.facts if f.confidence_score >= threshold]
+
+    def get_confidence_summary(self) -> Dict[str, Any]:
+        """Get summary of confidence scores across all facts."""
+        self.calculate_all_confidence_scores()
+
+        with self._lock:
+            if not self.facts:
+                return {"total": 0, "average": 0, "distribution": {}}
+
+            scores = [f.confidence_score for f in self.facts]
+            return {
+                "total_facts": len(scores),
+                "average_confidence": sum(scores) / len(scores),
+                "min_confidence": min(scores),
+                "max_confidence": max(scores),
+                "distribution": {
+                    "high_confidence_90+": sum(1 for s in scores if s >= 0.9),
+                    "good_confidence_70-89": sum(1 for s in scores if 0.7 <= s < 0.9),
+                    "medium_confidence_50-69": sum(1 for s in scores if 0.5 <= s < 0.7),
+                    "low_confidence_under_50": sum(1 for s in scores if s < 0.5)
+                }
+            }
+
+    # =========================================================================
+    # GAP DETECTION IMPROVEMENTS (Point 74)
+    # =========================================================================
+
+    def analyze_gaps(self) -> Dict[str, Any]:
+        """
+        Analyze gaps and identify missing information patterns (Point 74).
+        """
+        with self._lock:
+            if not self.gaps:
+                return {"total_gaps": 0, "by_importance": {}, "by_domain": {}}
+
+            by_importance = {}
+            by_domain = {}
+            by_category = {}
+
+            for gap in self.gaps:
+                # Group by importance
+                imp = gap.importance
+                if imp not in by_importance:
+                    by_importance[imp] = []
+                by_importance[imp].append(gap.to_dict())
+
+                # Group by domain
+                dom = gap.domain
+                if dom not in by_domain:
+                    by_domain[dom] = []
+                by_domain[dom].append(gap.to_dict())
+
+                # Group by category
+                cat = gap.category
+                if cat not in by_category:
+                    by_category[cat] = []
+                by_category[cat].append(gap.to_dict())
+
+            return {
+                "total_gaps": len(self.gaps),
+                "critical_gaps": len(by_importance.get("critical", [])),
+                "high_gaps": len(by_importance.get("high", [])),
+                "by_importance": {k: len(v) for k, v in by_importance.items()},
+                "by_domain": {k: len(v) for k, v in by_domain.items()},
+                "by_category": {k: len(v) for k, v in by_category.items()},
+                "gaps_by_importance": by_importance
+            }
+
+    def suggest_followup_questions(self) -> List[Dict[str, str]]:
+        """Generate follow-up questions based on identified gaps."""
+        questions = []
+
+        with self._lock:
+            for gap in self.gaps:
+                if gap.importance in ("critical", "high"):
+                    questions.append({
+                        "gap_id": gap.gap_id,
+                        "domain": gap.domain,
+                        "question": f"What is the current status of {gap.description}?",
+                        "importance": gap.importance
+                    })
+
+        return questions
+
+    # =========================================================================
+    # DOMAIN OVERLAP DETECTION (Point 75)
+    # =========================================================================
+
+    def detect_domain_overlaps(self) -> List[Dict[str, Any]]:
+        """
+        Identify facts that span multiple domains (Point 75).
+
+        Some facts (e.g., "Azure AD integration") may be relevant to
+        both identity_access and infrastructure domains.
+        """
+        overlaps = []
+        domain_keywords = {
+            "infrastructure": ["server", "vm", "cloud", "azure", "aws", "storage"],
+            "network": ["network", "firewall", "vpn", "lan", "wan", "routing"],
+            "cybersecurity": ["security", "encryption", "vulnerability", "threat", "siem"],
+            "applications": ["application", "erp", "crm", "saas", "software"],
+            "identity_access": ["identity", "active directory", "sso", "mfa", "authentication"],
+            "organization": ["staff", "team", "vendor", "contract", "budget"]
+        }
+
+        with self._lock:
+            for fact in self.facts:
+                # Check which domains the fact content matches
+                fact_text = f"{fact.item} {fact.category}".lower()
+                if fact.evidence:
+                    fact_text += f" {fact.evidence.get('exact_quote', '')}".lower()
+
+                matched_domains = []
+                for domain, keywords in domain_keywords.items():
+                    if any(kw in fact_text for kw in keywords):
+                        matched_domains.append(domain)
+
+                # If matches multiple domains (beyond its own)
+                if len(matched_domains) > 1 and fact.domain in matched_domains:
+                    other_domains = [d for d in matched_domains if d != fact.domain]
+                    if other_domains:
+                        # Update the fact's related_domains
+                        fact.related_domains = other_domains
+
+                        overlaps.append({
+                            "fact_id": fact.fact_id,
+                            "primary_domain": fact.domain,
+                            "related_domains": other_domains,
+                            "item": fact.item,
+                            "recommendation": f"Consider cross-referencing with {', '.join(other_domains)}"
+                        })
+
+        return overlaps
+
+    def get_cross_domain_summary(self) -> Dict[str, Any]:
+        """Get summary of cross-domain fact relationships."""
+        overlaps = self.detect_domain_overlaps()
+
+        domain_connections = {}
+        for overlap in overlaps:
+            primary = overlap["primary_domain"]
+            for related in overlap["related_domains"]:
+                key = tuple(sorted([primary, related]))
+                if key not in domain_connections:
+                    domain_connections[key] = 0
+                domain_connections[key] += 1
+
+        return {
+            "total_overlapping_facts": len(overlaps),
+            "domain_connections": {
+                f"{k[0]} <-> {k[1]}": v
+                for k, v in domain_connections.items()
+            },
+            "overlapping_facts": overlaps
+        }
+
+    # =========================================================================
+    # OPEN QUESTIONS (Points 82-86 - Enhancement Plan)
+    # =========================================================================
+
+    def _generate_question_id(self, domain: str) -> str:
+        """
+        Generate unique question ID: Q-{DOMAIN_PREFIX}-{SEQ}
+
+        NOTE: Must be called within self._lock context.
+        """
+        prefix = DOMAIN_PREFIXES.get(domain, "GEN")
+
+        if prefix not in self._question_counters:
+            self._question_counters[prefix] = 0
+
+        self._question_counters[prefix] += 1
+        return f"Q-{prefix}-{self._question_counters[prefix]:03d}"
+
+    def add_open_question(
+        self,
+        domain: str,
+        category: str,
+        question_text: str,
+        priority: str,
+        source_gap_ids: List[str] = None,
+        suggested_recipient: str = "Management",
+        context: str = "",
+        impact_if_unanswered: str = ""
+    ) -> str:
+        """
+        Add an open question and return its unique ID.
+
+        Args:
+            domain: infrastructure, network, etc.
+            category: Category within domain
+            question_text: The actual question to ask
+            priority: critical, high, medium, low
+            source_gap_ids: Gap IDs that led to this question
+            suggested_recipient: Who should answer this
+            context: Background context
+            impact_if_unanswered: Why this matters
+
+        Returns:
+            Unique question ID (e.g., Q-INFRA-001)
+        """
+        with self._lock:
+            question_id = self._generate_question_id(domain)
+
+            question = OpenQuestion(
+                question_id=question_id,
+                question_text=question_text,
+                domain=domain,
+                category=category,
+                priority=priority,
+                source_gap_ids=source_gap_ids or [],
+                suggested_recipient=suggested_recipient,
+                context=context,
+                impact_if_unanswered=impact_if_unanswered
+            )
+
+            self.open_questions.append(question)
+            self._question_index[question_id] = question
+            logger.debug(f"Added question {question_id}: {question_text[:50]}...")
+
+        return question_id
+
+    def get_question(self, question_id: str) -> Optional[OpenQuestion]:
+        """Get a specific question by ID (O(1) lookup using index)."""
+        with self._lock:
+            return self._question_index.get(question_id)
+
+    def transform_gaps_to_questions(self, include_low_priority: bool = False) -> List[str]:
+        """
+        Transform gaps into actionable open questions (Point 83).
+
+        Converts identified information gaps into specific questions
+        that can be asked to stakeholders.
+
+        Args:
+            include_low_priority: Whether to include low importance gaps
+
+        Returns:
+            List of created question IDs
+        """
+        created_question_ids = []
+
+        with self._lock:
+            for gap in self.gaps:
+                # Skip low importance gaps unless requested
+                if gap.importance == "low" and not include_low_priority:
+                    continue
+
+                # Generate question text from gap description
+                question_text = self._gap_to_question_text(gap)
+
+                # Determine suggested recipient based on domain
+                recipient = self._suggest_recipient_for_domain(gap.domain, gap.category)
+
+                # Determine impact based on importance
+                impact = self._determine_gap_impact(gap)
+
+                # Create the question
+                question_id = self.add_open_question(
+                    domain=gap.domain,
+                    category=gap.category,
+                    question_text=question_text,
+                    priority=gap.importance,
+                    source_gap_ids=[gap.gap_id],
+                    suggested_recipient=recipient,
+                    context=f"Gap identified during {gap.domain} discovery",
+                    impact_if_unanswered=impact
+                )
+
+                created_question_ids.append(question_id)
+
+        logger.info(f"Transformed {len(created_question_ids)} gaps into open questions")
+        return created_question_ids
+
+    def _gap_to_question_text(self, gap: Gap) -> str:
+        """Convert a gap description into a question."""
+        description = gap.description.strip()
+
+        # If already ends with question mark, use as-is
+        if description.endswith("?"):
+            return description
+
+        # Common patterns to convert
+        lower_desc = description.lower()
+
+        if lower_desc.startswith("no ") or lower_desc.startswith("missing "):
+            # "No information about X" -> "What is the current status of X?"
+            subject = description.split(" ", 2)[-1] if len(description.split()) > 2 else description
+            return f"Can you provide details about {subject}?"
+
+        if lower_desc.startswith("unclear ") or lower_desc.startswith("unknown "):
+            subject = description.split(" ", 1)[-1] if len(description.split()) > 1 else description
+            return f"What is the status of {subject}?"
+
+        if "not specified" in lower_desc or "not provided" in lower_desc:
+            return f"Can you clarify: {description}?"
+
+        if "lack of" in lower_desc:
+            subject = description.replace("lack of", "").strip()
+            return f"What is available regarding {subject}?"
+
+        # Default: wrap in a question format
+        return f"Can you provide information about: {description}?"
+
+    def _suggest_recipient_for_domain(self, domain: str, category: str) -> str:
+        """Suggest appropriate recipient for a question based on domain."""
+        recipient_map = {
+            "infrastructure": "Target Infrastructure Lead",
+            "network": "Target Network Lead",
+            "cybersecurity": "Target Security Lead",
+            "applications": "Target Applications Lead",
+            "identity_access": "Target Security Lead",
+            "organization": "Target IT Director"
+        }
+
+        # Some categories have specific recipients
+        category_overrides = {
+            "budget": "Target IT Director",
+            "staffing": "Target IT Director",
+            "contracts": "Target IT Director",
+            "security": "Target Security Lead",
+            "compliance": "Target Security Lead"
+        }
+
+        # Check category override first
+        for key, recipient in category_overrides.items():
+            if key in category.lower():
+                return recipient
+
+        return recipient_map.get(domain, "Target CIO")
+
+    def _determine_gap_impact(self, gap: Gap) -> str:
+        """Determine the impact if a gap remains unanswered."""
+        impact_templates = {
+            "critical": "Unable to complete critical assessment of {domain} {category}. May affect deal viability assessment.",
+            "high": "Assessment of {domain} {category} will be incomplete. Risk analysis may miss significant concerns.",
+            "medium": "Partial understanding of {domain} {category}. Some risks may not be fully characterized.",
+            "low": "Minor gap in {domain} {category} documentation. Limited impact on overall assessment."
+        }
+
+        template = impact_templates.get(gap.importance, impact_templates["medium"])
+        return template.format(domain=gap.domain, category=gap.category)
+
+    def prioritize_questions(self) -> List[OpenQuestion]:
+        """
+        Return questions sorted by priority (Point 84).
+
+        Priority order: critical > high > medium > low
+        Within same priority, older questions first.
+        """
+        priority_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+
+        with self._lock:
+            sorted_questions = sorted(
+                self.open_questions,
+                key=lambda q: (priority_order.get(q.priority, 4), q.created_at)
+            )
+            return sorted_questions
+
+    def categorize_questions(self) -> Dict[str, Any]:
+        """
+        Categorize questions by domain, recipient, and status (Point 85).
+
+        Returns organized view of all questions.
+        """
+        with self._lock:
+            by_domain: Dict[str, List[Dict]] = {}
+            by_recipient: Dict[str, List[Dict]] = {}
+            by_status: Dict[str, List[Dict]] = {}
+            by_priority: Dict[str, List[Dict]] = {}
+
+            for q in self.open_questions:
+                q_dict = q.to_dict()
+
+                # By domain
+                if q.domain not in by_domain:
+                    by_domain[q.domain] = []
+                by_domain[q.domain].append(q_dict)
+
+                # By recipient
+                if q.suggested_recipient not in by_recipient:
+                    by_recipient[q.suggested_recipient] = []
+                by_recipient[q.suggested_recipient].append(q_dict)
+
+                # By status
+                if q.status not in by_status:
+                    by_status[q.status] = []
+                by_status[q.status].append(q_dict)
+
+                # By priority
+                if q.priority not in by_priority:
+                    by_priority[q.priority] = []
+                by_priority[q.priority].append(q_dict)
+
+            return {
+                "total_questions": len(self.open_questions),
+                "by_domain": {k: len(v) for k, v in by_domain.items()},
+                "by_recipient": {k: len(v) for k, v in by_recipient.items()},
+                "by_status": {k: len(v) for k, v in by_status.items()},
+                "by_priority": {k: len(v) for k, v in by_priority.items()},
+                "questions_by_domain": by_domain,
+                "questions_by_recipient": by_recipient
+            }
+
+    def deduplicate_questions(self, similarity_threshold: float = 0.8) -> Dict[str, Any]:
+        """
+        Merge similar questions across domains (Point 86).
+
+        Returns summary of merged questions.
+        """
+        merged_count = 0
+        merged_pairs = []
+
+        with self._lock:
+            questions_to_remove = set()
+
+            for i, q1 in enumerate(self.open_questions):
+                if q1.question_id in questions_to_remove:
+                    continue
+
+                for q2 in self.open_questions[i + 1:]:
+                    if q2.question_id in questions_to_remove:
+                        continue
+
+                    similarity = self._calculate_question_similarity(q1, q2)
+
+                    if similarity >= similarity_threshold:
+                        # Merge: keep the higher priority question
+                        priority_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+                        if priority_order.get(q2.priority, 4) < priority_order.get(q1.priority, 4):
+                            keep, remove = q2, q1
+                        else:
+                            keep, remove = q1, q2
+
+                        # Add source gaps from removed to kept
+                        keep.source_gap_ids.extend(remove.source_gap_ids)
+                        keep.source_gap_ids = list(set(keep.source_gap_ids))
+
+                        questions_to_remove.add(remove.question_id)
+                        merged_pairs.append({
+                            "kept": keep.question_id,
+                            "removed": remove.question_id,
+                            "similarity": similarity
+                        })
+                        merged_count += 1
+
+            # Remove duplicates
+            for qid in questions_to_remove:
+                q = self._question_index.get(qid)
+                if q:
+                    self.open_questions.remove(q)
+                    del self._question_index[qid]
+
+        return {
+            "questions_merged": merged_count,
+            "questions_remaining": len(self.open_questions),
+            "merge_details": merged_pairs
+        }
+
+    def _calculate_question_similarity(self, q1: OpenQuestion, q2: OpenQuestion) -> float:
+        """Calculate similarity between two questions."""
+        # Jaccard similarity on words
+        words1 = set(q1.question_text.lower().split())
+        words2 = set(q2.question_text.lower().split())
+
+        if not words1 or not words2:
+            return 0.0
+
+        intersection = words1 & words2
+        union = words1 | words2
+        jaccard = len(intersection) / len(union) if union else 0
+
+        # Boost if same domain
+        domain_match = 0.2 if q1.domain == q2.domain else 0.0
+
+        # Boost if same category
+        category_match = 0.1 if q1.category == q2.category else 0.0
+
+        return min(1.0, jaccard * 0.7 + domain_match + category_match)
+
+    def get_unanswered_questions(self, domain: str = None) -> List[OpenQuestion]:
+        """Get all unanswered questions, optionally filtered by domain."""
+        with self._lock:
+            questions = [q for q in self.open_questions if q.status == "open"]
+            if domain:
+                questions = [q for q in questions if q.domain == domain]
+            return questions
+
+    def get_question_summary(self) -> Dict[str, Any]:
+        """Get summary of open questions status."""
+        with self._lock:
+            total = len(self.open_questions)
+            open_count = sum(1 for q in self.open_questions if q.status == "open")
+            answered = sum(1 for q in self.open_questions if q.status == "answered")
+            deferred = sum(1 for q in self.open_questions if q.status == "deferred")
+            na = sum(1 for q in self.open_questions if q.status == "not_applicable")
+
+            # Critical questions still open
+            critical_open = sum(
+                1 for q in self.open_questions
+                if q.status == "open" and q.priority == "critical"
+            )
+
+            return {
+                "total_questions": total,
+                "open": open_count,
+                "answered": answered,
+                "deferred": deferred,
+                "not_applicable": na,
+                "completion_rate": (answered + na) / total if total > 0 else 0.0,
+                "critical_open": critical_open
+            }
+
+    def answer_question(self, question_id: str, answer: str, answered_by: str) -> bool:
+        """Mark a question as answered."""
+        with self._lock:
+            question = self._question_index.get(question_id)
+            if not question:
+                return False
+
+            question.mark_answered(answer, answered_by)
+            logger.info(f"Question {question_id} answered by {answered_by}")
+            return True
+
+    def export_questions_for_followup(self, format: str = "list") -> Any:
+        """
+        Export questions in a format suitable for sending to stakeholders.
+
+        Args:
+            format: "list" for simple list, "by_recipient" for grouped by recipient
+
+        Returns:
+            Formatted questions for export
+        """
+        with self._lock:
+            if format == "by_recipient":
+                result = {}
+                for q in self.open_questions:
+                    if q.status != "open":
+                        continue
+                    recipient = q.suggested_recipient
+                    if recipient not in result:
+                        result[recipient] = []
+                    result[recipient].append({
+                        "id": q.question_id,
+                        "question": q.question_text,
+                        "priority": q.priority,
+                        "domain": q.domain,
+                        "context": q.context,
+                        "impact": q.impact_if_unanswered
+                    })
+                return result
+            else:
+                return [
+                    {
+                        "id": q.question_id,
+                        "question": q.question_text,
+                        "priority": q.priority,
+                        "domain": q.domain,
+                        "recipient": q.suggested_recipient,
+                        "context": q.context
+                    }
+                    for q in self.open_questions if q.status == "open"
+                ]
