@@ -100,6 +100,7 @@ class BaseDiscoveryAgent(ABC):
         # State
         self.messages: List[Dict] = []
         self.discovery_complete: bool = False
+        self.current_document_name: str = ""  # Track source document for fact traceability
 
         # Metrics
         self.metrics = DiscoveryMetrics()
@@ -147,12 +148,13 @@ class BaseDiscoveryAgent(ABC):
         """Return the categories this domain should extract. Override in subclass."""
         return []
 
-    def discover(self, document_text: str) -> Dict[str, Any]:
+    def discover(self, document_text: str, document_name: str = "") -> Dict[str, Any]:
         """
         Run discovery on the provided document.
 
         Args:
             document_text: Text extracted from IT documents
+            document_name: Filename of source document for fact traceability
 
         Returns:
             Dict with discovery results including:
@@ -161,7 +163,8 @@ class BaseDiscoveryAgent(ABC):
             - metrics: Execution metrics
         """
         self.start_time = time()
-        self.logger.info(f"Starting {self.domain.upper()} discovery")
+        self.current_document_name = document_name  # Store for injection into tool calls
+        self.logger.info(f"Starting {self.domain.upper()} discovery from: {document_name or 'unknown'}")
         print(f"\n{'='*60}")
         print(f"Discovery: {self.domain.upper()}")
         print(f"{'='*60}")
@@ -383,6 +386,11 @@ class BaseDiscoveryAgent(ABC):
 
                 self.metrics.tool_calls += 1
                 print(f"  Tool: {tool_name}")
+
+                # Inject source_document for traceability
+                if tool_name == "create_inventory_entry" and self.current_document_name:
+                    tool_input = dict(tool_input)  # Make a copy
+                    tool_input["source_document"] = self.current_document_name
 
                 # Execute tool
                 try:

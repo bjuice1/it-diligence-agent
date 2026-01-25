@@ -1,0 +1,1493 @@
+{% extends "base.html" %}
+{% block title %}Document Management{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Document Management</h1>
+    <p class="subtitle">Upload documents for incremental analysis updates</p>
+</div>
+
+<!-- Upload Section -->
+<div class="upload-section">
+    <div class="upload-card">
+        <h3>Upload Documents</h3>
+        <p class="upload-desc">Add new or updated documents to enhance your analysis</p>
+        <div class="upload-zone" id="upload-zone">
+            <div class="upload-icon">&#128196;</div>
+            <p>Drag & drop files here or <label for="file-input" class="upload-link">browse</label></p>
+            <input type="file" id="file-input" multiple accept=".md,.txt,.pdf,.docx,.xlsx" style="display: none;">
+            <p class="upload-hint">Supports: MD, TXT, PDF, DOCX, XLSX</p>
+        </div>
+        <div id="upload-queue" class="upload-queue"></div>
+        <button id="upload-btn" class="btn btn-primary" style="display: none;" onclick="uploadFiles()">
+            Upload & Analyze
+        </button>
+    </div>
+</div>
+
+<!-- Processing Queue Section -->
+<div id="processing-section" class="processing-section" style="display: none;">
+    <div class="section-header">
+        <h2>Processing Queue</h2>
+        <span class="queue-stats">
+            <span id="queue-active">0</span> active,
+            <span id="queue-pending">0</span> pending
+        </span>
+    </div>
+    <div id="processing-queue" class="processing-queue"></div>
+</div>
+
+<!-- Tiered Review Section -->
+{% if tier_stats and tier_stats.total > 0 %}
+<div class="tier-review-section">
+    <div class="section-header">
+        <h2>Pending Changes ({{ tier_stats.total }})</h2>
+        <span class="tier-hint">Changes are organized by review tier</span>
+    </div>
+
+    <div class="tier-cards">
+        <!-- Tier 1: Auto-Apply -->
+        <div class="tier-card tier1">
+            <div class="tier-header">
+                <span class="tier-number">1</span>
+                <span class="tier-name">Auto-Apply</span>
+            </div>
+            <div class="tier-count">{{ tier_stats.tier1 }}</div>
+            <div class="tier-desc">Low-risk, high confidence changes</div>
+            {% if tier_stats.tier1 > 0 %}
+            <button class="btn btn-sm btn-auto" onclick="autoApplyAll()">
+                Auto-Apply All
+            </button>
+            {% endif %}
+        </div>
+
+        <!-- Tier 2: Batch Review -->
+        <div class="tier-card tier2">
+            <div class="tier-header">
+                <span class="tier-number">2</span>
+                <span class="tier-name">Batch Review</span>
+            </div>
+            <div class="tier-count">{{ tier_stats.tier2 }}</div>
+            <div class="tier-desc">Quick scan recommended</div>
+            {% if tier_stats.tier2 > 0 %}
+            <a href="/review/batch" class="btn btn-sm">Review Batch</a>
+            {% endif %}
+        </div>
+
+        <!-- Tier 3: Individual Review -->
+        <div class="tier-card tier3">
+            <div class="tier-header">
+                <span class="tier-number">3</span>
+                <span class="tier-name">Individual Review</span>
+            </div>
+            <div class="tier-count">{{ tier_stats.tier3 }}</div>
+            <div class="tier-desc">Conflicts with verified facts</div>
+            {% if tier_stats.tier3 > 0 %}
+            <a href="/review/conflicts" class="btn btn-sm btn-conflict">Resolve Conflicts</a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- What's New Section -->
+{% if whats_new.new or whats_new.updated or whats_new.conflicts %}
+<div class="whats-new-section">
+    <div class="section-header">
+        <h2>What's New</h2>
+        <button class="btn btn-sm btn-secondary" onclick="clearChangeMarkers()">Mark All Reviewed</button>
+    </div>
+
+    {% if whats_new.new %}
+    <div class="change-group">
+        <h4 class="change-label new-label">New Facts ({{ whats_new.new|length }})</h4>
+        <div class="change-list">
+            {% for fact in whats_new.new[:10] %}
+            <div class="change-item new-item">
+                <span class="change-badge new">NEW</span>
+                <span class="change-domain">{{ fact.domain }}</span>
+                <span class="change-content">{{ fact.item }}</span>
+            </div>
+            {% endfor %}
+            {% if whats_new.new|length > 10 %}
+            <div class="change-more">+{{ whats_new.new|length - 10 }} more new facts</div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if whats_new.updated %}
+    <div class="change-group">
+        <h4 class="change-label updated-label">Updated Facts ({{ whats_new.updated|length }})</h4>
+        <div class="change-list">
+            {% for fact in whats_new.updated[:10] %}
+            <div class="change-item updated-item">
+                <span class="change-badge updated">UPDATED</span>
+                <span class="change-domain">{{ fact.domain }}</span>
+                <span class="change-content">{{ fact.item }}</span>
+            </div>
+            {% endfor %}
+            {% if whats_new.updated|length > 10 %}
+            <div class="change-more">+{{ whats_new.updated|length - 10 }} more updated facts</div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Conflicts Section -->
+{% if pending_conflicts %}
+<div class="conflicts-section">
+    <h2>Conflicts Requiring Resolution ({{ pending_conflicts|length }})</h2>
+    <p class="conflicts-desc">These changes conflict with verified facts and need your decision.</p>
+
+    <div class="conflicts-list">
+        {% for conflict in pending_conflicts %}
+        <div class="conflict-card" data-conflict-id="{{ conflict.conflict_id }}">
+            <div class="conflict-header">
+                <span class="conflict-type">{{ conflict.conflict_type.value|replace('_', ' ')|title }}</span>
+                <span class="conflict-fact">{{ conflict.existing_fact_id }}</span>
+            </div>
+
+            <div class="conflict-details">
+                <h4>Field Changes:</h4>
+                {% for field, values in conflict.field_conflicts.items() %}
+                <div class="field-conflict">
+                    <span class="field-name">{{ field }}:</span>
+                    <div class="field-values">
+                        <div class="old-value">
+                            <span class="value-label">Current:</span>
+                            <span class="value">{{ values[0] }}</span>
+                        </div>
+                        <div class="new-value">
+                            <span class="value-label">New:</span>
+                            <span class="value">{{ values[1] }}</span>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="conflict-actions">
+                <button class="btn btn-sm" onclick="resolveConflict('{{ conflict.conflict_id }}', 'keep_existing')">
+                    Keep Current
+                </button>
+                <button class="btn btn-sm btn-primary" onclick="resolveConflict('{{ conflict.conflict_id }}', 'use_new')">
+                    Use New Value
+                </button>
+                <button class="btn btn-sm btn-secondary" onclick="resolveConflict('{{ conflict.conflict_id }}', 'merge')">
+                    Merge Both
+                </button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Stale Items Section -->
+<div id="stale-items-section" class="stale-items-section" style="display: none;">
+    <div class="section-header">
+        <h2>Items Needing Review</h2>
+        <button class="btn btn-sm btn-secondary" onclick="bulkRevalidate()">Mark All Reviewed</button>
+    </div>
+    <p class="stale-desc">These items may be affected by recent fact changes.</p>
+
+    <div class="stale-groups">
+        <div class="stale-group" id="stale-risks">
+            <h4><span class="stale-icon">&#9888;</span> Risks</h4>
+            <div class="stale-list"></div>
+        </div>
+        <div class="stale-group" id="stale-work-items">
+            <h4><span class="stale-icon">&#128221;</span> Work Items</h4>
+            <div class="stale-list"></div>
+        </div>
+        <div class="stale-group" id="stale-inventory">
+            <h4><span class="stale-icon">&#128230;</span> Inventory Items</h4>
+            <div class="stale-list"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Document Registry -->
+<div class="documents-section">
+    <h2>Document Registry</h2>
+
+    {% if stats.total_documents > 0 %}
+    <div class="doc-stats">
+        <div class="doc-stat">
+            <span class="stat-value">{{ stats.total_documents }}</span>
+            <span class="stat-label">Documents</span>
+        </div>
+        <div class="doc-stat">
+            <span class="stat-value">{{ stats.total_facts_linked }}</span>
+            <span class="stat-label">Facts Linked</span>
+        </div>
+        <div class="doc-stat">
+            <span class="stat-value">{{ stats.analysis_runs }}</span>
+            <span class="stat-label">Analysis Runs</span>
+        </div>
+    </div>
+
+    <div class="documents-table">
+        <table>
+            <thead>
+                <tr>
+                    <th>Document</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Version</th>
+                    <th>Facts</th>
+                    <th>Last Processed</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for doc in documents %}
+                <tr class="doc-row" data-doc-id="{{ doc.doc_id }}">
+                    <td class="doc-name">
+                        <span class="doc-icon">&#128196;</span>
+                        {{ doc.filename }}
+                    </td>
+                    <td class="doc-type">{{ doc.document_type|upper }}</td>
+                    <td class="doc-status status-{{ doc.status.value }}">
+                        {{ doc.status.value|title }}
+                    </td>
+                    <td class="doc-version">v{{ doc.version }}</td>
+                    <td class="doc-facts">{{ doc.fact_count }}</td>
+                    <td class="doc-date">{{ doc.last_processed_at[:10] if doc.last_processed_at else '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-icon">&#128196;</div>
+        <h3>No Documents Yet</h3>
+        <p>Upload documents above to start tracking and enable incremental updates.</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Analysis Run History -->
+{% if analysis_runs %}
+<div class="runs-section">
+    <h2>Analysis History</h2>
+    <div class="runs-list">
+        {% for run in analysis_runs|reverse %}
+        <div class="run-card">
+            <div class="run-header">
+                <span class="run-id">{{ run.run_id }}</span>
+                <span class="run-date">{{ run.started_at[:10] if run.started_at else '' }}</span>
+            </div>
+            <div class="run-stats">
+                <span class="run-stat">{{ run.documents_processed }} docs</span>
+                <span class="run-stat new">+{{ run.documents_new }} new</span>
+                <span class="run-stat updated">{{ run.documents_updated }} updated</span>
+                {% if run.conflicts_detected > 0 %}
+                <span class="run-stat conflict">{{ run.conflicts_detected }} conflicts</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<style>
+/* Upload Section */
+.upload-section {
+    margin-bottom: 30px;
+}
+
+.upload-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 12px;
+    padding: 25px;
+}
+
+.upload-card h3 {
+    margin: 0 0 5px 0;
+}
+
+.upload-desc {
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+}
+
+.upload-zone {
+    border: 2px dashed var(--border-default);
+    border-radius: 10px;
+    padding: 40px;
+    text-align: center;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.upload-zone:hover, .upload-zone.dragover {
+    border-color: var(--accent);
+    background: rgba(59, 130, 246, 0.05);
+}
+
+.upload-icon {
+    font-size: 3em;
+    margin-bottom: 10px;
+}
+
+.upload-link {
+    color: var(--accent);
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+.upload-hint {
+    font-size: 0.85em;
+    color: var(--text-muted);
+    margin-top: 10px;
+}
+
+.upload-queue {
+    margin-top: 15px;
+}
+
+.upload-file {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    background: var(--bg-surface-sunken);
+    border-radius: 6px;
+    margin-bottom: 8px;
+}
+
+.upload-file .filename {
+    flex: 1;
+}
+
+.upload-file .change-type {
+    font-size: 0.8em;
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+.upload-file .change-type.new {
+    background: rgba(34, 197, 94, 0.15);
+    color: #166534;
+}
+
+.upload-file .change-type.updated {
+    background: rgba(59, 130, 246, 0.15);
+    color: #1d4ed8;
+}
+
+.upload-file .change-type.unchanged {
+    background: var(--bg-surface-sunken);
+    color: var(--text-muted);
+}
+
+.upload-file .remove-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 1.2em;
+}
+
+/* What's New Section */
+.whats-new-section {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 30px;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.section-header h2 {
+    margin: 0;
+}
+
+.change-group {
+    margin-bottom: 20px;
+}
+
+.change-label {
+    margin: 0 0 10px 0;
+    font-size: 0.9em;
+}
+
+.new-label { color: #16a34a; }
+.updated-label { color: #2563eb; }
+
+.change-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.change-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 15px;
+    background: var(--bg-surface-sunken);
+    border-radius: 6px;
+}
+
+.change-badge {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.7em;
+    font-weight: 600;
+}
+
+.change-badge.new {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.change-badge.updated {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.change-domain {
+    font-size: 0.85em;
+    color: var(--text-secondary);
+    min-width: 100px;
+}
+
+.change-content {
+    flex: 1;
+    font-size: 0.9em;
+}
+
+.change-more {
+    text-align: center;
+    padding: 10px;
+    color: var(--text-muted);
+    font-size: 0.85em;
+}
+
+/* Conflicts Section */
+.conflicts-section {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 30px;
+}
+
+.conflicts-section h2 {
+    color: #991b1b;
+    margin: 0 0 5px 0;
+}
+
+.conflicts-desc {
+    color: #7f1d1d;
+    margin-bottom: 20px;
+}
+
+.conflicts-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.conflict-card {
+    background: white;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    padding: 15px;
+}
+
+.conflict-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.conflict-type {
+    font-weight: 600;
+    color: #dc2626;
+}
+
+.conflict-fact {
+    font-family: monospace;
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+
+.field-conflict {
+    margin-bottom: 10px;
+}
+
+.field-name {
+    font-weight: 500;
+    display: block;
+    margin-bottom: 5px;
+}
+
+.field-values {
+    display: flex;
+    gap: 15px;
+}
+
+.old-value, .new-value {
+    flex: 1;
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 0.9em;
+}
+
+.old-value {
+    background: #fef2f2;
+}
+
+.new-value {
+    background: #ecfdf5;
+}
+
+.value-label {
+    display: block;
+    font-size: 0.8em;
+    color: var(--text-secondary);
+    margin-bottom: 3px;
+}
+
+.conflict-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid var(--border-default);
+}
+
+/* Documents Table */
+.documents-section {
+    margin-bottom: 30px;
+}
+
+.doc-stats {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.doc-stat {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 8px;
+    padding: 15px 20px;
+    text-align: center;
+}
+
+.doc-stat .stat-value {
+    display: block;
+    font-size: 1.5em;
+    font-weight: 600;
+}
+
+.doc-stat .stat-label {
+    font-size: 0.85em;
+    color: var(--text-secondary);
+}
+
+.documents-table {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.documents-table table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.documents-table th {
+    text-align: left;
+    padding: 12px 15px;
+    background: var(--bg-surface-sunken);
+    font-size: 0.85em;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.documents-table td {
+    padding: 12px 15px;
+    border-top: 1px solid var(--border-default);
+}
+
+.doc-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.doc-icon {
+    font-size: 1.2em;
+}
+
+.doc-status {
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.8em;
+}
+
+.status-processed {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.status-pending {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.status-failed {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+/* Analysis Runs */
+.runs-section h2 {
+    margin-bottom: 15px;
+}
+
+.runs-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.run-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 8px;
+    padding: 12px 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.run-id {
+    font-family: monospace;
+    font-size: 0.9em;
+}
+
+.run-date {
+    color: var(--text-muted);
+    font-size: 0.85em;
+}
+
+.run-stats {
+    display: flex;
+    gap: 15px;
+}
+
+.run-stat {
+    font-size: 0.85em;
+    color: var(--text-secondary);
+}
+
+.run-stat.new { color: #16a34a; }
+.run-stat.updated { color: #2563eb; }
+.run-stat.conflict { color: #dc2626; }
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 50px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 12px;
+}
+
+.empty-icon {
+    font-size: 3em;
+    margin-bottom: 15px;
+}
+
+.empty-state h3 {
+    margin: 0 0 10px 0;
+}
+
+.empty-state p {
+    color: var(--text-secondary);
+}
+
+/* Processing Queue */
+.processing-section {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 30px;
+}
+
+.processing-section .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.processing-section h2 {
+    margin: 0;
+}
+
+.queue-stats {
+    font-size: 0.9em;
+    color: var(--text-secondary);
+}
+
+.queue-stats span {
+    font-weight: 600;
+}
+
+.processing-queue {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.processing-item {
+    background: var(--bg-surface-sunken);
+    border-radius: 8px;
+    padding: 15px;
+}
+
+.processing-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.processing-filename {
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.processing-status {
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    font-weight: 500;
+}
+
+.processing-status.queued {
+    background: #f3f4f6;
+    color: #6b7280;
+}
+
+.processing-status.extracting {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.processing-status.analyzing {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.processing-status.classifying {
+    background: #e0e7ff;
+    color: #4338ca;
+}
+
+.processing-status.merging {
+    background: #ede9fe;
+    color: #6d28d9;
+}
+
+.processing-status.complete {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.processing-status.failed {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.processing-progress {
+    margin-bottom: 8px;
+}
+
+.progress-bar {
+    height: 6px;
+    background: var(--border-default);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+.progress-fill.complete {
+    background: #22c55e;
+}
+
+.progress-fill.failed {
+    background: #ef4444;
+}
+
+.processing-stage {
+    font-size: 0.85em;
+    color: var(--text-secondary);
+    text-align: right;
+}
+
+.processing-results {
+    display: flex;
+    gap: 15px;
+    font-size: 0.85em;
+    color: var(--text-secondary);
+}
+
+.processing-results .result-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.processing-results .added { color: #16a34a; }
+.processing-results .updated { color: #2563eb; }
+.processing-results .conflicts { color: #dc2626; }
+
+.processing-error {
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: #fef2f2;
+    border-radius: 6px;
+    color: #991b1b;
+    font-size: 0.85em;
+}
+
+/* Tier Review Section */
+.tier-review-section {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 30px;
+}
+
+.tier-review-section .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.tier-review-section h2 {
+    margin: 0;
+}
+
+.tier-hint {
+    font-size: 0.85em;
+    color: var(--text-secondary);
+}
+
+.tier-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+}
+
+.tier-card {
+    background: var(--bg-surface-sunken);
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+    border: 2px solid transparent;
+    transition: all 0.2s;
+}
+
+.tier-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.tier-card.tier1 {
+    border-color: #86efac;
+    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+}
+
+.tier-card.tier2 {
+    border-color: #93c5fd;
+    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+}
+
+.tier-card.tier3 {
+    border-color: #fca5a5;
+    background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+}
+
+.tier-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.tier-number {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--text-primary);
+    color: white;
+    font-size: 0.8em;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tier-name {
+    font-weight: 600;
+    font-size: 0.95em;
+}
+
+.tier-count {
+    font-size: 2.5em;
+    font-weight: 700;
+    margin: 10px 0;
+}
+
+.tier-desc {
+    font-size: 0.85em;
+    color: var(--text-secondary);
+    margin-bottom: 15px;
+}
+
+.btn-auto {
+    background: #22c55e;
+    color: white;
+}
+
+.btn-auto:hover {
+    background: #16a34a;
+}
+
+.btn-conflict {
+    background: #ef4444;
+    color: white;
+}
+
+.btn-conflict:hover {
+    background: #dc2626;
+}
+
+@media (max-width: 768px) {
+    .tier-cards {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Stale Items Section */
+.stale-items-section {
+    background: #fffbeb;
+    border: 1px solid #fcd34d;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 30px;
+}
+
+.stale-items-section .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.stale-items-section h2 {
+    margin: 0;
+    color: #92400e;
+}
+
+.stale-desc {
+    color: #92400e;
+    margin-bottom: 20px;
+    font-size: 0.9em;
+}
+
+.stale-groups {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+}
+
+.stale-group {
+    background: white;
+    border-radius: 8px;
+    padding: 15px;
+}
+
+.stale-group h4 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 12px 0;
+    font-size: 0.95em;
+}
+
+.stale-icon {
+    font-size: 1.1em;
+}
+
+.stale-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.stale-item {
+    padding: 10px 12px;
+    background: #fef3c7;
+    border-radius: 6px;
+    font-size: 0.85em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.stale-item .item-name {
+    font-weight: 500;
+}
+
+.stale-item .item-reason {
+    font-size: 0.8em;
+    color: #92400e;
+}
+
+.stale-item .review-btn {
+    background: white;
+    border: 1px solid #d97706;
+    color: #d97706;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    cursor: pointer;
+}
+
+.stale-item .review-btn:hover {
+    background: #d97706;
+    color: white;
+}
+
+.stale-empty {
+    color: var(--text-muted);
+    font-size: 0.85em;
+    text-align: center;
+    padding: 15px;
+}
+
+@media (max-width: 768px) {
+    .stale-groups {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+<script>
+// File upload handling
+const uploadZone = document.getElementById('upload-zone');
+const fileInput = document.getElementById('file-input');
+const uploadQueue = document.getElementById('upload-queue');
+const uploadBtn = document.getElementById('upload-btn');
+let filesToUpload = [];
+
+// Drag and drop
+uploadZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    uploadZone.classList.add('dragover');
+});
+
+uploadZone.addEventListener('dragleave', () => {
+    uploadZone.classList.remove('dragover');
+});
+
+uploadZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadZone.classList.remove('dragover');
+    handleFiles(e.dataTransfer.files);
+});
+
+uploadZone.addEventListener('click', () => {
+    fileInput.click();
+});
+
+fileInput.addEventListener('change', () => {
+    handleFiles(fileInput.files);
+});
+
+function handleFiles(files) {
+    for (const file of files) {
+        if (!filesToUpload.find(f => f.name === file.name)) {
+            filesToUpload.push(file);
+        }
+    }
+    renderQueue();
+}
+
+function renderQueue() {
+    if (filesToUpload.length === 0) {
+        uploadQueue.innerHTML = '';
+        uploadBtn.style.display = 'none';
+        return;
+    }
+
+    uploadQueue.innerHTML = filesToUpload.map((file, idx) => `
+        <div class="upload-file">
+            <span class="filename">${file.name}</span>
+            <span class="filesize">${(file.size / 1024).toFixed(1)} KB</span>
+            <button class="remove-btn" onclick="removeFile(${idx})">&times;</button>
+        </div>
+    `).join('');
+
+    uploadBtn.style.display = 'block';
+}
+
+function removeFile(idx) {
+    filesToUpload.splice(idx, 1);
+    renderQueue();
+}
+
+async function uploadFiles() {
+    if (filesToUpload.length === 0) return;
+
+    const formData = new FormData();
+    for (const file of filesToUpload) {
+        formData.append('files', file);
+    }
+
+    uploadBtn.textContent = 'Uploading...';
+    uploadBtn.disabled = true;
+
+    try {
+        const response = await fetch('/api/documents/upload', {
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            alert(`Successfully registered ${result.documents.length} documents. Run analysis to extract facts.`);
+            window.location.reload();
+        } else {
+            alert('Error: ' + result.message);
+        }
+    } catch (error) {
+        alert('Upload failed: ' + error.message);
+    } finally {
+        uploadBtn.textContent = 'Upload & Analyze';
+        uploadBtn.disabled = false;
+    }
+}
+
+// Conflict resolution
+async function resolveConflict(conflictId, resolution) {
+    try {
+        const response = await fetch(`/api/documents/conflicts/${conflictId}/resolve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                resolution: resolution,
+                resolved_by: 'web_user'
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            // Remove conflict card
+            const card = document.querySelector(`[data-conflict-id="${conflictId}"]`);
+            if (card) {
+                card.style.transition = 'all 0.3s';
+                card.style.opacity = '0';
+                setTimeout(() => card.remove(), 300);
+            }
+        } else {
+            alert('Error: ' + result.message);
+        }
+    } catch (error) {
+        alert('Failed to resolve conflict: ' + error.message);
+    }
+}
+
+async function clearChangeMarkers() {
+    try {
+        const response = await fetch('/api/documents/clear-markers', {
+            method: 'POST'
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            window.location.reload();
+        }
+    } catch (error) {
+        alert('Failed to clear markers: ' + error.message);
+    }
+}
+
+// Processing queue polling
+let processingPollInterval = null;
+
+async function checkProcessingStatus() {
+    try {
+        const response = await fetch('/api/documents/processing/status');
+        const data = await response.json();
+
+        const section = document.getElementById('processing-section');
+        const queue = document.getElementById('processing-queue');
+
+        if (data.queue && data.queue.length > 0) {
+            section.style.display = 'block';
+
+            // Update stats
+            const active = data.queue.filter(d => d.status !== 'queued' && d.status !== 'complete' && d.status !== 'failed').length;
+            const pending = data.queue.filter(d => d.status === 'queued').length;
+            document.getElementById('queue-active').textContent = active;
+            document.getElementById('queue-pending').textContent = pending;
+
+            // Render queue items
+            queue.innerHTML = data.queue.map(item => renderProcessingItem(item)).join('');
+
+            // If any items are still processing, continue polling
+            const hasActive = data.queue.some(d =>
+                d.status !== 'complete' && d.status !== 'failed'
+            );
+
+            if (hasActive && !processingPollInterval) {
+                processingPollInterval = setInterval(checkProcessingStatus, 2000);
+            } else if (!hasActive && processingPollInterval) {
+                clearInterval(processingPollInterval);
+                processingPollInterval = null;
+                // Reload to show What's New
+                setTimeout(() => window.location.reload(), 1000);
+            }
+        } else {
+            section.style.display = 'none';
+            if (processingPollInterval) {
+                clearInterval(processingPollInterval);
+                processingPollInterval = null;
+            }
+        }
+    } catch (error) {
+        console.error('Failed to check processing status:', error);
+    }
+}
+
+function renderProcessingItem(item) {
+    const statusClass = item.status.toLowerCase();
+    const progressClass = item.status === 'complete' ? 'complete' : (item.status === 'failed' ? 'failed' : '');
+
+    let resultsHtml = '';
+    if (item.status === 'complete' || item.facts_extracted > 0) {
+        resultsHtml = `
+            <div class="processing-results">
+                <span class="result-item">${item.facts_extracted} extracted</span>
+                <span class="result-item added">+${item.facts_added} added</span>
+                <span class="result-item updated">${item.facts_updated} updated</span>
+                ${item.conflicts_found > 0 ? `<span class="result-item conflicts">${item.conflicts_found} conflicts</span>` : ''}
+            </div>
+        `;
+    }
+
+    let errorHtml = '';
+    if (item.error_message) {
+        errorHtml = `<div class="processing-error">${item.error_message}</div>`;
+    }
+
+    return `
+        <div class="processing-item" data-doc-id="${item.doc_id}">
+            <div class="processing-item-header">
+                <span class="processing-filename">
+                    <span>&#128196;</span>
+                    ${item.filename}
+                </span>
+                <span class="processing-status ${statusClass}">${formatStatus(item.status)}</span>
+            </div>
+            <div class="processing-progress">
+                <div class="progress-bar">
+                    <div class="progress-fill ${progressClass}" style="width: ${item.progress_percent}%"></div>
+                </div>
+                <div class="processing-stage">${item.current_stage} (${item.progress_percent}%)</div>
+            </div>
+            ${resultsHtml}
+            ${errorHtml}
+        </div>
+    `;
+}
+
+function formatStatus(status) {
+    const statusLabels = {
+        'queued': 'Queued',
+        'extracting': 'Extracting...',
+        'analyzing': 'Analyzing...',
+        'classifying': 'Classifying...',
+        'merging': 'Merging...',
+        'complete': 'Complete',
+        'failed': 'Failed'
+    };
+    return statusLabels[status] || status;
+}
+
+// Check on page load
+document.addEventListener('DOMContentLoaded', () => {
+    checkProcessingStatus();
+});
+
+// Auto-apply all Tier 1 changes
+async function autoApplyAll() {
+    if (!confirm('Auto-apply all Tier 1 changes? These are low-risk, high-confidence changes.')) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/changes/auto-apply', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            alert(`Successfully applied ${result.applied_count} changes.`);
+            window.location.reload();
+        } else {
+            alert('Error: ' + result.message);
+        }
+    } catch (error) {
+        alert('Auto-apply failed: ' + error.message);
+    }
+}
+
+// Stale items handling
+async function checkStaleItems() {
+    try {
+        const response = await fetch('/api/stale-items');
+        const data = await response.json();
+
+        const section = document.getElementById('stale-items-section');
+        const hasStaleItems = (data.risks?.length > 0) ||
+                             (data.work_items?.length > 0) ||
+                             (data.inventory?.length > 0);
+
+        if (hasStaleItems) {
+            section.style.display = 'block';
+            renderStaleItems('stale-risks', data.risks || []);
+            renderStaleItems('stale-work-items', data.work_items || []);
+            renderStaleItems('stale-inventory', data.inventory || []);
+        } else {
+            section.style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Failed to check stale items:', error);
+    }
+}
+
+function renderStaleItems(containerId, items) {
+    const container = document.getElementById(containerId);
+    const list = container.querySelector('.stale-list');
+
+    if (items.length === 0) {
+        list.innerHTML = '<div class="stale-empty">No items needing review</div>';
+        return;
+    }
+
+    list.innerHTML = items.map(item => `
+        <div class="stale-item" data-item-type="${item.item_type}" data-item-id="${item.item_id}">
+            <div>
+                <div class="item-name">${item.item_id}</div>
+                <div class="item-reason">${formatStaleReason(item.reason)}</div>
+            </div>
+            <button class="review-btn" onclick="markItemReviewed('${item.item_type}', '${item.item_id}')">
+                Mark Reviewed
+            </button>
+        </div>
+    `).join('');
+}
+
+function formatStaleReason(reason) {
+    const reasons = {
+        'fact_updated': 'Supporting fact was updated',
+        'fact_removed': 'Supporting fact was removed',
+        'fact_conflict': 'Fact conflict detected',
+        'verification_changed': 'Verification status changed'
+    };
+    return reasons[reason] || reason;
+}
+
+async function markItemReviewed(itemType, itemId) {
+    try {
+        const response = await fetch(`/api/stale-items/${itemType}/${itemId}/review`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reviewer: 'web_user' })
+        });
+
+        const result = await response.json();
+        if (result.status === 'success') {
+            // Remove item from UI
+            const item = document.querySelector(`[data-item-type="${itemType}"][data-item-id="${itemId}"]`);
+            if (item) {
+                item.style.transition = 'all 0.3s';
+                item.style.opacity = '0';
+                setTimeout(() => {
+                    item.remove();
+                    checkStaleItems(); // Refresh to check if section should hide
+                }, 300);
+            }
+        }
+    } catch (error) {
+        alert('Failed to mark as reviewed: ' + error.message);
+    }
+}
+
+async function bulkRevalidate() {
+    if (!confirm('Mark all stale items as reviewed?')) return;
+
+    try {
+        const response = await fetch('/api/stale-items/bulk-revalidate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reviewer: 'web_user', notes: 'Bulk review' })
+        });
+
+        const result = await response.json();
+        if (result.status === 'success') {
+            alert(`Marked ${result.revalidated_count} items as reviewed.`);
+            window.location.reload();
+        }
+    } catch (error) {
+        alert('Bulk revalidation failed: ' + error.message);
+    }
+}
+
+// Also check stale items on page load
+document.addEventListener('DOMContentLoaded', () => {
+    checkStaleItems();
+});
+</script>
+{% endblock %}

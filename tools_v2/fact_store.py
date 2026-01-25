@@ -61,6 +61,34 @@ CONFIDENCE_FACTORS = {
     "is_verified": 0.20         # Human verified
 }
 
+# Verification status options (Phase 1 - Validation Workflow)
+class VerificationStatus:
+    """Verification status values for facts."""
+    PENDING = "pending"          # Not yet reviewed
+    CONFIRMED = "confirmed"      # Human confirmed as accurate
+    INCORRECT = "incorrect"      # Human marked as incorrect
+    NEEDS_INFO = "needs_info"    # Needs more information to verify
+    SKIPPED = "skipped"          # Reviewer skipped (will revisit)
+
+VERIFICATION_STATUSES = [
+    VerificationStatus.PENDING,
+    VerificationStatus.CONFIRMED,
+    VerificationStatus.INCORRECT,
+    VerificationStatus.NEEDS_INFO,
+    VerificationStatus.SKIPPED
+]
+
+# Domain priority weights for review queue
+DOMAIN_PRIORITY_WEIGHTS = {
+    "cybersecurity": 1.0,      # Highest priority - security critical
+    "infrastructure": 0.9,
+    "applications": 0.8,
+    "network": 0.8,
+    "identity_access": 0.85,
+    "organization": 0.6,
+    "general": 0.5
+}
+
 
 @dataclass
 class Fact:
@@ -90,13 +118,66 @@ class Fact:
     verified: bool = False              # Has human verified this fact?
     verified_by: Optional[str] = None   # Who verified (username/email)
     verified_at: Optional[str] = None   # When verified (ISO timestamp)
+    # Extended verification workflow (Phase 1)
+    verification_status: str = "pending"  # pending, confirmed, incorrect, needs_info, skipped
+    verification_note: str = ""           # Reviewer's note about verification
+    reviewer_id: Optional[str] = None     # Who is assigned to review this fact
     # Confidence scoring (Point 73)
     confidence_score: float = 0.0       # 0.0-1.0 confidence rating
     # Domain overlap detection (Point 75)
     related_domains: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict:
-        return asdict(self)
+        result = asdict(self)
+        # Include calculated review priority
+        result['review_priority'] = self.review_priority
+        return result
+
+    @property
+    def review_priority(self) -> float:
+        """
+        Calculate review priority score (higher = more urgent to review).
+
+        Factors:
+        - Domain weight (security > infrastructure > apps > org)
+        - Inverse confidence (low confidence = high priority)
+        - Evidence quality (no evidence = high priority)
+        - Source document (no source = higher priority)
+
+        Returns:
+            Float 0.0-1.0 where 1.0 is highest priority
+        """
+        # Already verified facts have zero priority
+        if self.verification_status == VerificationStatus.CONFIRMED:
+            return 0.0
+        if self.verification_status == VerificationStatus.INCORRECT:
+            return 0.0
+
+        # Start with domain weight
+        domain_weight = DOMAIN_PRIORITY_WEIGHTS.get(self.domain, 0.5)
+
+        # Inverse confidence (low confidence = high priority)
+        confidence_factor = 1.0 - self.confidence_score
+
+        # Evidence quality factor
+        evidence_factor = 0.0
+        if not self.evidence or not self.evidence.get("exact_quote"):
+            evidence_factor = 0.3  # No evidence = boost priority
+        elif len(self.evidence.get("exact_quote", "")) < 20:
+            evidence_factor = 0.15  # Short evidence = small boost
+
+        # Source document factor
+        source_factor = 0.2 if not self.source_document else 0.0
+
+        # Combine factors (weighted average)
+        priority = (
+            domain_weight * 0.3 +
+            confidence_factor * 0.4 +
+            evidence_factor +
+            source_factor
+        )
+
+        return min(1.0, priority)
 
     def calculate_confidence(self) -> float:
         """Calculate confidence score based on evidence quality (Point 73)."""
@@ -130,6 +211,22 @@ class Fact:
 
     @classmethod
     def from_dict(cls, data: Dict) -> "Fact":
+        # Handle backwards compatibility - remove calculated field if present
+        data = dict(data)  # Make a copy
+        data.pop('review_priority', None)  # Remove calculated field if present
+
+        # Set defaults for new fields if not present (backwards compatibility)
+        if 'verification_status' not in data:
+            # Migrate from old verified boolean to new status
+            if data.get('verified', False):
+                data['verification_status'] = VerificationStatus.CONFIRMED
+            else:
+                data['verification_status'] = VerificationStatus.PENDING
+        if 'verification_note' not in data:
+            data['verification_note'] = ""
+        if 'reviewer_id' not in data:
+            data['reviewer_id'] = None
+
         return cls(**data)
 
 
@@ -328,11 +425,54 @@ class FactStore:
                 source_document=source_document
             )
 
+            # Calculate initial confidence score
+            fact.confidence_score = fact.calculate_confidence()
+
             self.facts.append(fact)
             self._fact_index[fact_id] = fact  # Update index
-            logger.debug(f"Added fact {fact_id}: {item}")
+            logger.debug(f"Added fact {fact_id}: {item} (confidence: {fact.confidence_score:.2f})")
 
         return fact_id
+
+    def add_fact_from_dict(self, fact_data: Dict[str, Any]) -> Optional['Fact']:
+        """
+        Add a fact from a dictionary (for incremental updates).
+
+        Args:
+            fact_data: Dictionary containing fact fields
+
+        Returns:
+            The created Fact object, or None if creation failed
+        """
+        try:
+            domain = fact_data.get("domain", "unknown")
+            category = fact_data.get("category", "general")
+            item = fact_data.get("item", "")
+            details = fact_data.get("details", {})
+            status = fact_data.get("status", "documented")
+            evidence = fact_data.get("evidence", {})
+            entity = fact_data.get("entity", "target")
+            source_document = fact_data.get("source_document", "")
+
+            if not item:
+                return None
+
+            fact_id = self.add_fact(
+                domain=domain,
+                category=category,
+                item=item,
+                details=details,
+                status=status,
+                evidence=evidence,
+                entity=entity,
+                source_document=source_document
+            )
+
+            return self.get_fact(fact_id)
+
+        except Exception as e:
+            logger.error(f"Failed to add fact from dict: {e}")
+            return None
 
     def add_gap(self, domain: str, category: str,
                 description: str, importance: str) -> str:
@@ -815,6 +955,240 @@ class FactStore:
                 "verification_rate": verified / total if total > 0 else 0.0,
                 "by_domain": by_domain
             }
+
+    def get_review_queue(
+        self,
+        domain: str = None,
+        limit: int = 50,
+        include_skipped: bool = False
+    ) -> List[Fact]:
+        """
+        Get facts needing review, sorted by priority.
+
+        Priority is calculated based on:
+        - Domain weight (security > infrastructure > apps)
+        - Inverse confidence (low confidence = high priority)
+        - Evidence quality (no evidence = high priority)
+
+        Args:
+            domain: Optional domain filter
+            limit: Max facts to return (default 50)
+            include_skipped: Include previously skipped facts
+
+        Returns:
+            List of facts sorted by review priority (highest first)
+        """
+        with self._lock:
+            # Filter to reviewable facts
+            reviewable_statuses = [VerificationStatus.PENDING]
+            if include_skipped:
+                reviewable_statuses.append(VerificationStatus.SKIPPED)
+
+            facts = [
+                f for f in self.facts
+                if f.verification_status in reviewable_statuses
+            ]
+
+            # Apply domain filter
+            if domain:
+                facts = [f for f in facts if f.domain == domain]
+
+            # Sort by review priority (highest first)
+            facts.sort(key=lambda f: f.review_priority, reverse=True)
+
+            # Apply limit
+            return facts[:limit]
+
+    def get_review_stats(self) -> Dict[str, Any]:
+        """
+        Get comprehensive review queue statistics.
+
+        Returns:
+            Dict with queue stats, progress by domain, priority breakdown
+        """
+        with self._lock:
+            total = len(self.facts)
+
+            # Count by verification status
+            by_status = {
+                VerificationStatus.PENDING: 0,
+                VerificationStatus.CONFIRMED: 0,
+                VerificationStatus.INCORRECT: 0,
+                VerificationStatus.NEEDS_INFO: 0,
+                VerificationStatus.SKIPPED: 0
+            }
+            for fact in self.facts:
+                status = fact.verification_status
+                if status in by_status:
+                    by_status[status] += 1
+
+            # Priority breakdown
+            high_priority = sum(1 for f in self.facts if f.review_priority >= 0.7)
+            medium_priority = sum(1 for f in self.facts if 0.4 <= f.review_priority < 0.7)
+            low_priority = sum(1 for f in self.facts if 0.0 < f.review_priority < 0.4)
+
+            # By domain progress
+            by_domain = {}
+            for fact in self.facts:
+                if fact.domain not in by_domain:
+                    by_domain[fact.domain] = {
+                        "total": 0,
+                        "pending": 0,
+                        "confirmed": 0,
+                        "incorrect": 0,
+                        "needs_info": 0
+                    }
+                by_domain[fact.domain]["total"] += 1
+                if fact.verification_status == VerificationStatus.PENDING:
+                    by_domain[fact.domain]["pending"] += 1
+                elif fact.verification_status == VerificationStatus.CONFIRMED:
+                    by_domain[fact.domain]["confirmed"] += 1
+                elif fact.verification_status == VerificationStatus.INCORRECT:
+                    by_domain[fact.domain]["incorrect"] += 1
+                elif fact.verification_status == VerificationStatus.NEEDS_INFO:
+                    by_domain[fact.domain]["needs_info"] += 1
+
+            # Calculate completion rates
+            for domain in by_domain:
+                d = by_domain[domain]
+                d["completion_rate"] = d["confirmed"] / d["total"] if d["total"] > 0 else 0.0
+
+            pending_count = by_status[VerificationStatus.PENDING]
+            confirmed_count = by_status[VerificationStatus.CONFIRMED]
+
+            return {
+                "total_facts": total,
+                "queue_size": pending_count + by_status[VerificationStatus.SKIPPED],
+                "pending": pending_count,
+                "confirmed": confirmed_count,
+                "incorrect": by_status[VerificationStatus.INCORRECT],
+                "needs_info": by_status[VerificationStatus.NEEDS_INFO],
+                "skipped": by_status[VerificationStatus.SKIPPED],
+                "completion_rate": confirmed_count / total if total > 0 else 0.0,
+                "priority_breakdown": {
+                    "high": high_priority,
+                    "medium": medium_priority,
+                    "low": low_priority
+                },
+                "by_domain": by_domain,
+                # Phase 5: Enhanced stats
+                "confidence_breakdown": self._get_confidence_breakdown(),
+                "verified_today": self._get_verified_today_count(),
+                "remaining_critical": self._get_remaining_critical_count(),
+                "reviewer_stats": self._get_reviewer_stats(),
+                "average_confidence": self._get_average_confidence()
+            }
+
+    def _get_confidence_breakdown(self) -> Dict[str, int]:
+        """Get count of facts by confidence tier."""
+        high = sum(1 for f in self.facts if f.confidence_score >= 0.8)
+        medium = sum(1 for f in self.facts if 0.5 <= f.confidence_score < 0.8)
+        low = sum(1 for f in self.facts if f.confidence_score < 0.5)
+        return {"high": high, "medium": medium, "low": low}
+
+    def _get_verified_today_count(self) -> int:
+        """Count facts verified in the last 24 hours."""
+        from datetime import datetime, timedelta
+        today = datetime.now().date()
+        count = 0
+        for fact in self.facts:
+            if fact.verification_status == VerificationStatus.CONFIRMED and fact.updated_at:
+                try:
+                    verified_date = datetime.fromisoformat(fact.updated_at.replace('Z', '+00:00')).date()
+                    if verified_date == today:
+                        count += 1
+                except (ValueError, AttributeError):
+                    pass
+        return count
+
+    def _get_remaining_critical_count(self) -> int:
+        """Count pending facts with high priority (security + low confidence)."""
+        return sum(1 for f in self.facts
+                   if f.verification_status == VerificationStatus.PENDING
+                   and f.review_priority >= 0.7)
+
+    def _get_reviewer_stats(self) -> List[Dict[str, Any]]:
+        """Get verification stats per reviewer."""
+        reviewer_counts = {}
+        for fact in self.facts:
+            if fact.verification_status in [VerificationStatus.CONFIRMED, VerificationStatus.INCORRECT]:
+                reviewer = fact.reviewer_id or "unknown"
+                if reviewer not in reviewer_counts:
+                    reviewer_counts[reviewer] = {"confirmed": 0, "incorrect": 0}
+                if fact.verification_status == VerificationStatus.CONFIRMED:
+                    reviewer_counts[reviewer]["confirmed"] += 1
+                else:
+                    reviewer_counts[reviewer]["incorrect"] += 1
+
+        # Sort by total reviews
+        result = []
+        for reviewer, counts in reviewer_counts.items():
+            total = counts["confirmed"] + counts["incorrect"]
+            result.append({
+                "reviewer_id": reviewer,
+                "confirmed": counts["confirmed"],
+                "incorrect": counts["incorrect"],
+                "total": total
+            })
+        return sorted(result, key=lambda x: x["total"], reverse=True)
+
+    def _get_average_confidence(self) -> float:
+        """Get average confidence score across all facts."""
+        if not self.facts:
+            return 0.0
+        return sum(f.confidence_score for f in self.facts) / len(self.facts)
+
+    def update_verification_status(
+        self,
+        fact_id: str,
+        status: str,
+        reviewer_id: str,
+        note: str = ""
+    ) -> bool:
+        """
+        Update verification status for a fact.
+
+        Args:
+            fact_id: The fact ID to update
+            status: New verification status (pending, confirmed, incorrect, needs_info, skipped)
+            reviewer_id: Who is making this update
+            note: Optional verification note
+
+        Returns:
+            True if fact was found and updated, False otherwise
+        """
+        if status not in VERIFICATION_STATUSES:
+            raise ValueError(f"Invalid status '{status}'. Must be one of: {VERIFICATION_STATUSES}")
+
+        with self._lock:
+            fact = self._fact_index.get(fact_id)
+            if not fact:
+                logger.warning(f"Cannot update verification - fact not found: {fact_id}")
+                return False
+
+            # Update verification fields
+            fact.verification_status = status
+            fact.reviewer_id = reviewer_id
+            fact.updated_at = _generate_timestamp()
+
+            if note:
+                fact.verification_note = note
+
+            # Also update legacy verified boolean for backwards compatibility
+            if status == VerificationStatus.CONFIRMED:
+                fact.verified = True
+                fact.verified_by = reviewer_id
+                fact.verified_at = _generate_timestamp()
+            elif status in [VerificationStatus.INCORRECT, VerificationStatus.PENDING]:
+                fact.verified = False
+                fact.verified_by = None
+                fact.verified_at = None
+
+            # Recalculate confidence (verified status affects it)
+            fact.confidence_score = fact.calculate_confidence()
+
+            logger.info(f"Fact {fact_id} status updated to {status} by {reviewer_id}")
+            return True
 
     def bulk_verify(self, fact_ids: List[str], verified_by: str) -> Dict[str, int]:
         """

@@ -53,7 +53,7 @@
                     <span class="badge badge-deal">Deal-Type</span>
                     {% endif %}
                 </div>
-                <div class="question-text">{{ q.question }}</div>
+                <div class="question-text">{{ q.question|clean_gap_text }}</div>
                 <div class="question-rationale">
                     <strong>Why it matters:</strong> {{ q.rationale }}
                 </div>
@@ -96,7 +96,7 @@
                     <span class="badge badge-deal">Deal-Type</span>
                     {% endif %}
                 </div>
-                <div class="question-text">{{ q.question }}</div>
+                <div class="question-text">{{ q.question|clean_gap_text }}</div>
                 <div class="question-rationale">
                     <strong>Why it matters:</strong> {{ q.rationale }}
                 </div>
@@ -133,7 +133,7 @@
                     <span class="question-id">Q-{{ '%03d'|format(loop.index + by_priority.critical|length + by_priority.important|length) }}</span>
                     <span class="question-category">{{ q.category|replace('_', ' ')|title }}</span>
                 </div>
-                <div class="question-text">{{ q.question }}</div>
+                <div class="question-text">{{ q.question|clean_gap_text }}</div>
                 <div class="question-rationale">
                     <strong>Why it matters:</strong> {{ q.rationale }}
                 </div>

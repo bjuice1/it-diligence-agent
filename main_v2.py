@@ -138,7 +138,8 @@ def run_discovery(
     domain: str = "infrastructure",
     fact_store: Optional[FactStore] = None,
     target_name: Optional[str] = None,
-    industry: Optional[str] = None
+    industry: Optional[str] = None,
+    document_name: str = ""
 ) -> FactStore:
     """
     Run discovery phase for a domain.
@@ -153,6 +154,7 @@ def run_discovery(
                   aviation_mro, defense_contractor, life_sciences, retail,
                   logistics, energy_utilities, insurance, construction,
                   food_beverage, professional_services, education, hospitality
+        document_name: Source document filename for fact traceability
 
     Returns:
         FactStore with extracted facts
@@ -191,8 +193,8 @@ def run_discovery(
 
     agent = agent_class(**agent_kwargs)
 
-    # Run discovery
-    result = agent.discover(document_text)
+    # Run discovery with document name for traceability
+    result = agent.discover(document_text, document_name=document_name)
 
     # Print summary
     print("\nDiscovery Summary:")

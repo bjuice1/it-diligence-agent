@@ -143,6 +143,10 @@ DISCOVERY_TOOLS = [
                         }
                     },
                     "required": ["exact_quote"]
+                },
+                "source_document": {
+                    "type": "string",
+                    "description": "Filename of the source document this fact was extracted from (e.g., 'IT_Asset_Inventory.xlsx'). IMPORTANT for traceability."
                 }
             },
             "required": ["domain", "category", "item", "entity", "status", "evidence"]
@@ -373,6 +377,7 @@ def _execute_create_inventory_entry(
         status = input_data.get("status", "documented")
         evidence = input_data.get("evidence", {})
         details = input_data.get("details", {})
+        source_document = input_data.get("source_document", "")  # Track source document for traceability
 
         if not all([domain, category, item]):
             return {
@@ -430,7 +435,8 @@ def _execute_create_inventory_entry(
             details=details,
             status=status,
             evidence=evidence,
-            entity=entity
+            entity=entity,
+            source_document=source_document
         )
 
         entity_label = "TARGET" if entity == "target" else "BUYER"

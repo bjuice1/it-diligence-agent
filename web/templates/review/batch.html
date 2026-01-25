@@ -1,0 +1,520 @@
+{% extends "base.html" %}
+{% block title %}Batch Review - Tier 2 Changes{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="header-content">
+        <h1>Batch Review</h1>
+        <p class="subtitle">Quick review of medium-confidence changes ({{ total_count }} pending)</p>
+    </div>
+    <div class="header-actions">
+        <button class="btn btn-secondary" onclick="skipAll()">Skip All for Later</button>
+        <button class="btn btn-primary" onclick="acceptAllVisible()">Accept All Visible</button>
+    </div>
+</div>
+
+<!-- Progress Bar -->
+<div class="review-progress">
+    <div class="progress-info">
+        <span id="reviewed-count">0</span> of {{ total_count }} reviewed
+    </div>
+    <div class="progress-bar-container">
+        <div class="progress-bar-fill" id="progress-fill" style="width: 0%"></div>
+    </div>
+</div>
+
+<!-- Keyboard Shortcuts -->
+<div class="keyboard-hint">
+    <span class="key">Enter</span> Accept
+    <span class="key">S</span> Skip
+    <span class="key">R</span> Reject
+    <span class="key">A</span> Accept All from Doc
+</div>
+
+{% if by_document %}
+<!-- Group by Document View -->
+<div class="document-groups">
+    {% for doc_name, doc_changes in by_document.items() %}
+    <div class="document-group" data-document="{{ doc_name }}">
+        <div class="document-header">
+            <div class="doc-info">
+                <span class="doc-icon">&#128196;</span>
+                <span class="doc-name">{{ doc_name }}</span>
+                <span class="doc-count">{{ doc_changes|length }} changes</span>
+            </div>
+            <div class="doc-actions">
+                <button class="btn btn-sm" onclick="acceptAllFromDocument('{{ doc_name }}')">
+                    Accept All ({{ doc_changes|length }})
+                </button>
+            </div>
+        </div>
+
+        <div class="changes-list">
+            {% for change in doc_changes %}
+            <div class="change-card" data-change-id="{{ change.fact.temp_id }}" data-document="{{ doc_name }}">
+                <div class="change-main">
+                    <div class="change-info">
+                        <span class="domain-badge">{{ change.fact.domain }}</span>
+                        <span class="category-tag">{{ change.fact.category }}</span>
+                        <span class="item-name">{{ change.fact.item }}</span>
+                    </div>
+                    <div class="change-meta">
+                        <span class="confidence" title="Confidence score">
+                            {{ "%.0f"|format(change.fact.confidence_score * 100) }}%
+                        </span>
+                    </div>
+                </div>
+
+                {% if change.fact.evidence and change.fact.evidence.exact_quote %}
+                <div class="evidence-preview">
+                    <span class="evidence-label">Evidence:</span>
+                    <span class="evidence-text">"{{ change.fact.evidence.exact_quote[:150] }}{% if change.fact.evidence.exact_quote|length > 150 %}...{% endif %}"</span>
+                </div>
+                {% endif %}
+
+                {% if change.classification and change.classification.reasons %}
+                <div class="classification-reasons">
+                    {% for reason in change.classification.reasons %}
+                    <span class="reason-tag">{{ reason }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <div class="change-actions">
+                    <button class="btn btn-sm btn-accept" onclick="acceptChange('{{ change.fact.temp_id }}')">
+                        Accept
+                    </button>
+                    <button class="btn btn-sm btn-skip" onclick="skipChange('{{ change.fact.temp_id }}')">
+                        Skip
+                    </button>
+                    <button class="btn btn-sm btn-reject" onclick="rejectChange('{{ change.fact.temp_id }}')">
+                        Reject
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% else %}
+<div class="empty-state">
+    <div class="empty-icon">&#9989;</div>
+    <h3>No Changes to Review</h3>
+    <p>All Tier 2 changes have been processed.</p>
+    <a href="/documents" class="btn btn-primary">Back to Documents</a>
+</div>
+{% endif %}
+
+<style>
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 25px;
+}
+
+.header-content h1 {
+    margin: 0 0 5px 0;
+}
+
+.header-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.review-progress {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    padding: 15px 20px;
+    margin-bottom: 20px;
+}
+
+.progress-info {
+    font-size: 0.9em;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.progress-bar-container {
+    height: 8px;
+    background: var(--bg-surface-sunken);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.keyboard-hint {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    padding: 10px;
+    background: var(--bg-surface-sunken);
+    border-radius: 8px;
+    margin-bottom: 25px;
+    font-size: 0.85em;
+    color: var(--text-secondary);
+}
+
+.keyboard-hint .key {
+    display: inline-block;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-family: monospace;
+    font-weight: 600;
+    margin-right: 5px;
+}
+
+.document-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+}
+
+.document-group {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.document-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    background: var(--bg-surface-sunken);
+    border-bottom: 1px solid var(--border-default);
+}
+
+.doc-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.doc-icon {
+    font-size: 1.3em;
+}
+
+.doc-name {
+    font-weight: 600;
+}
+
+.doc-count {
+    color: var(--text-secondary);
+    font-size: 0.9em;
+}
+
+.changes-list {
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.change-card {
+    background: var(--bg-surface-sunken);
+    border-radius: 8px;
+    padding: 15px;
+    transition: all 0.2s;
+}
+
+.change-card:hover {
+    background: var(--bg-surface);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.change-card.accepted {
+    opacity: 0.5;
+    background: #dcfce7;
+}
+
+.change-card.rejected {
+    opacity: 0.5;
+    background: #fee2e2;
+}
+
+.change-card.skipped {
+    opacity: 0.5;
+}
+
+.change-main {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+}
+
+.change-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.domain-badge {
+    background: var(--accent);
+    color: white;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.category-tag {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    color: var(--text-secondary);
+}
+
+.item-name {
+    font-weight: 500;
+}
+
+.confidence {
+    background: #dbeafe;
+    color: #1e40af;
+    padding: 3px 10px;
+    border-radius: 10px;
+    font-size: 0.8em;
+    font-weight: 600;
+}
+
+.evidence-preview {
+    background: white;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+    font-size: 0.85em;
+}
+
+.evidence-label {
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-right: 5px;
+}
+
+.evidence-text {
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.classification-reasons {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+
+.reason-tag {
+    background: #fef3c7;
+    color: #92400e;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75em;
+}
+
+.change-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.btn-accept {
+    background: #dcfce7;
+    color: #166534;
+    border: 1px solid #bbf7d0;
+}
+
+.btn-accept:hover {
+    background: #bbf7d0;
+}
+
+.btn-skip {
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-default);
+}
+
+.btn-reject {
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+}
+
+.btn-reject:hover {
+    background: #fecaca;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 60px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 12px;
+}
+
+.empty-icon {
+    font-size: 3em;
+    margin-bottom: 15px;
+}
+</style>
+
+<script>
+let reviewedCount = 0;
+const totalCount = {{ total_count }};
+
+function updateProgress() {
+    const percent = totalCount > 0 ? (reviewedCount / totalCount) * 100 : 0;
+    document.getElementById('progress-fill').style.width = percent + '%';
+    document.getElementById('reviewed-count').textContent = reviewedCount;
+}
+
+async function acceptChange(changeId) {
+    const card = document.querySelector(`[data-change-id="${changeId}"]`);
+    if (!card || card.classList.contains('accepted')) return;
+
+    try {
+        const response = await fetch(`/api/changes/${changeId}/accept`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ resolution: 'accept' })
+        });
+
+        const result = await response.json();
+        if (result.status === 'success') {
+            card.classList.add('accepted');
+            reviewedCount++;
+            updateProgress();
+        }
+    } catch (error) {
+        console.error('Accept failed:', error);
+    }
+}
+
+async function rejectChange(changeId) {
+    const card = document.querySelector(`[data-change-id="${changeId}"]`);
+    if (!card || card.classList.contains('rejected')) return;
+
+    try {
+        const response = await fetch(`/api/changes/${changeId}/accept`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ resolution: 'reject' })
+        });
+
+        const result = await response.json();
+        if (result.status === 'success') {
+            card.classList.add('rejected');
+            reviewedCount++;
+            updateProgress();
+        }
+    } catch (error) {
+        console.error('Reject failed:', error);
+    }
+}
+
+function skipChange(changeId) {
+    const card = document.querySelector(`[data-change-id="${changeId}"]`);
+    if (!card) return;
+    card.classList.add('skipped');
+    // Move to end of list
+    card.parentElement.appendChild(card);
+}
+
+async function acceptAllFromDocument(docName) {
+    const cards = document.querySelectorAll(`[data-document="${docName}"] .change-card:not(.accepted):not(.rejected)`);
+    const changeIds = Array.from(cards).map(c => c.dataset.changeId);
+
+    try {
+        const response = await fetch('/api/changes/batch-accept', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ change_ids: changeIds, tier: 'tier2' })
+        });
+
+        const result = await response.json();
+        if (result.status === 'success') {
+            cards.forEach(card => {
+                card.classList.add('accepted');
+                reviewedCount++;
+            });
+            updateProgress();
+        }
+    } catch (error) {
+        console.error('Batch accept failed:', error);
+    }
+}
+
+async function acceptAllVisible() {
+    const cards = document.querySelectorAll('.change-card:not(.accepted):not(.rejected):not(.skipped)');
+    const changeIds = Array.from(cards).map(c => c.dataset.changeId);
+
+    if (changeIds.length === 0) return;
+
+    if (!confirm(`Accept all ${changeIds.length} visible changes?`)) return;
+
+    try {
+        const response = await fetch('/api/changes/batch-accept', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ change_ids: changeIds, tier: 'tier2' })
+        });
+
+        const result = await response.json();
+        if (result.status === 'success') {
+            cards.forEach(card => {
+                card.classList.add('accepted');
+                reviewedCount++;
+            });
+            updateProgress();
+        }
+    } catch (error) {
+        console.error('Accept all failed:', error);
+    }
+}
+
+function skipAll() {
+    window.location.href = '/documents';
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+    // Find first non-processed card
+    const activeCard = document.querySelector('.change-card:not(.accepted):not(.rejected):not(.skipped)');
+    if (!activeCard) return;
+
+    const changeId = activeCard.dataset.changeId;
+
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        acceptChange(changeId);
+    } else if (e.key === 's' || e.key === 'S') {
+        e.preventDefault();
+        skipChange(changeId);
+    } else if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        rejectChange(changeId);
+    } else if (e.key === 'a' || e.key === 'A') {
+        e.preventDefault();
+        const docName = activeCard.dataset.document;
+        acceptAllFromDocument(docName);
+    }
+});
+</script>
+{% endblock %}

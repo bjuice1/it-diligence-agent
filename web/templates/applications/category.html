@@ -1,0 +1,375 @@
+{% extends "base.html" %}
+{% block title %}{{ category.category.display_name }} - Applications{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <a href="{{ url_for('applications_overview') }}" class="back-link">&larr; Applications Inventory</a>
+    <h1>{{ category.category.icon }} {{ category.category.display_name }}</h1>
+    <p class="subtitle">{{ category.total_count }} applications in this category</p>
+</div>
+
+<!-- Category Stats -->
+<div class="summary-stats" style="margin-bottom: 30px;">
+    <div class="stat-card">
+        <span class="stat-value">{{ category.total_count }}</span>
+        <span class="stat-label">Applications</span>
+    </div>
+    {% if category.critical_count > 0 %}
+    <div class="stat-card stat-critical">
+        <span class="stat-value">{{ category.critical_count }}</span>
+        <span class="stat-label">Business Critical</span>
+    </div>
+    {% endif %}
+    {% if category.total_users > 0 %}
+    <div class="stat-card">
+        <span class="stat-value">{{ category.total_users }}</span>
+        <span class="stat-label">Total Users</span>
+    </div>
+    {% endif %}
+    {% if category.total_cost > 0 %}
+    <div class="stat-card">
+        <span class="stat-value">${{ "{:,.0f}".format(category.total_cost) }}</span>
+        <span class="stat-label">Annual Cost</span>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Applications List -->
+{% if category.applications %}
+<div class="items-list">
+    {% for item in category.applications %}
+    <div class="item-card {% if item.criticality.value == 'critical' %}critical-app{% endif %}">
+        <div class="item-header">
+            <div class="app-title">
+                <h3 class="item-name">{{ item.name }}</h3>
+                {% if item.vendor %}
+                <span class="app-vendor">by {{ item.vendor }}</span>
+                {% endif %}
+            </div>
+            <div class="app-badges">
+                {% if item.criticality.value == 'critical' %}
+                <span class="badge badge-critical">Critical</span>
+                {% elif item.criticality.value == 'high' %}
+                <span class="badge badge-warning">High</span>
+                {% endif %}
+                {% if item.deployment.value != 'unknown' %}
+                <span class="badge badge-secondary">{{ item.deployment.value|replace('_', ' ')|title }}</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="item-details">
+            {% if item.deployment.value != 'unknown' %}
+            <div class="detail-row">
+                <span class="detail-label">Deployment:</span>
+                <span class="detail-value">{{ item.deployment.value|replace('_', ' ')|title }}</span>
+            </div>
+            {% endif %}
+
+            {% if item.version %}
+            <div class="detail-row">
+                <span class="detail-label">Version:</span>
+                <span class="detail-value">{{ item.version }}</span>
+            </div>
+            {% endif %}
+
+            {% if item.user_count > 0 %}
+            <div class="detail-row">
+                <span class="detail-label">Users:</span>
+                <span class="detail-value">{{ item.user_count }}</span>
+            </div>
+            {% endif %}
+
+            {% if item.license_type %}
+            <div class="detail-row">
+                <span class="detail-label">License:</span>
+                <span class="detail-value">{{ item.license_type }}</span>
+            </div>
+            {% endif %}
+
+            {% if item.annual_cost > 0 %}
+            <div class="detail-row">
+                <span class="detail-label">Annual Cost:</span>
+                <span class="detail-value">${{ "{:,.0f}".format(item.annual_cost) }}</span>
+            </div>
+            {% endif %}
+
+            {% if item.support_status %}
+            <div class="detail-row">
+                <span class="detail-label">Support:</span>
+                <span class="detail-value">{{ item.support_status }}</span>
+            </div>
+            {% endif %}
+
+            {% if item.modules %}
+            <div class="detail-row">
+                <span class="detail-label">Modules:</span>
+                <span class="detail-value">{{ item.modules|length }}</span>
+            </div>
+            {% endif %}
+        </div>
+
+        {% if item.modules %}
+        <div class="app-modules">
+            <span class="modules-label">Modules:</span>
+            <div class="module-tags">
+                {% for module in item.modules[:5] %}
+                <span class="module-tag">{{ module }}</span>
+                {% endfor %}
+                {% if item.modules|length > 5 %}
+                <span class="module-more">+{{ item.modules|length - 5 }} more</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if item.integrations %}
+        <div class="app-integrations">
+            <span class="integrations-label">Integrates with:</span>
+            <div class="integration-tags">
+                {% for integration in item.integrations[:5] %}
+                <span class="integration-tag">{{ integration }}</span>
+                {% endfor %}
+                {% if item.integrations|length > 5 %}
+                <span class="integration-more">+{{ item.integrations|length - 5 }} more</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if item.notes %}
+        <div class="item-notes">
+            <span class="notes-label">Notes:</span> {{ item.notes }}
+        </div>
+        {% endif %}
+
+        {% if item.evidence %}
+        <div class="item-evidence">
+            <span class="evidence-label">Evidence:</span>
+            <blockquote>"{{ item.evidence[:200] }}{% if item.evidence|length > 200 %}...{% endif %}"</blockquote>
+        </div>
+        {% endif %}
+
+        <div class="item-footer">
+            <span class="fact-ref">{{ item.fact_id }}</span>
+            <span class="entity-badge entity-{{ item.entity }}">{{ item.entity|title }}</span>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <p>No applications found in this category.</p>
+</div>
+{% endif %}
+
+<style>
+.back-link {
+    display: inline-block;
+    margin-bottom: 10px;
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 0.9em;
+}
+
+.back-link:hover {
+    text-decoration: underline;
+}
+
+.stat-critical {
+    border-left: 4px solid #dc2626;
+}
+
+.items-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.item-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    padding: 20px;
+}
+
+.item-card.critical-app {
+    border-left: 4px solid #dc2626;
+}
+
+.item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 15px;
+}
+
+.app-title {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.item-name {
+    margin: 0;
+    font-size: 1.1em;
+}
+
+.app-vendor {
+    font-size: 0.85em;
+    color: var(--text-secondary);
+}
+
+.app-badges {
+    display: flex;
+    gap: 6px;
+}
+
+.item-details {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.detail-row {
+    display: flex;
+    gap: 8px;
+}
+
+.detail-label {
+    font-size: 0.85em;
+    color: var(--text-secondary);
+    min-width: 80px;
+}
+
+.detail-value {
+    font-size: 0.9em;
+    font-weight: 500;
+}
+
+.app-modules, .app-integrations {
+    margin-bottom: 15px;
+}
+
+.modules-label, .integrations-label {
+    font-size: 0.85em;
+    color: var(--text-secondary);
+    display: block;
+    margin-bottom: 6px;
+}
+
+.module-tags, .integration-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.module-tag, .integration-tag {
+    padding: 3px 10px;
+    background: var(--bg-surface-sunken);
+    border-radius: 12px;
+    font-size: 0.8em;
+}
+
+.module-more, .integration-more {
+    padding: 3px 10px;
+    color: var(--text-muted);
+    font-size: 0.8em;
+}
+
+.item-notes {
+    padding: 10px;
+    background: var(--bg-surface-sunken);
+    border-radius: 6px;
+    font-size: 0.9em;
+    margin-bottom: 10px;
+}
+
+.notes-label {
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.item-evidence {
+    margin-bottom: 10px;
+}
+
+.evidence-label {
+    font-size: 0.85em;
+    color: var(--text-secondary);
+    display: block;
+    margin-bottom: 5px;
+}
+
+.item-evidence blockquote {
+    margin: 0;
+    padding: 10px 15px;
+    background: var(--bg-surface-sunken);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 6px 6px 0;
+    font-style: italic;
+    font-size: 0.9em;
+}
+
+.item-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-default);
+}
+
+.fact-ref {
+    font-family: monospace;
+    font-size: 0.8em;
+    color: var(--text-muted);
+}
+
+.entity-badge {
+    font-size: 0.75em;
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+.entity-target {
+    background: rgba(59, 130, 246, 0.15);
+    color: #1d4ed8;
+}
+
+.entity-buyer {
+    background: rgba(34, 197, 94, 0.15);
+    color: #166534;
+}
+
+.badge {
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 500;
+}
+
+.badge-critical {
+    background: rgba(239, 68, 68, 0.15);
+    color: #991b1b;
+}
+
+.badge-warning {
+    background: rgba(245, 158, 11, 0.15);
+    color: #92400e;
+}
+
+.badge-secondary {
+    background: var(--bg-surface-sunken);
+    color: var(--text-secondary);
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px;
+    background: var(--bg-surface);
+    border-radius: 10px;
+    color: var(--text-secondary);
+}
+</style>
+{% endblock %}

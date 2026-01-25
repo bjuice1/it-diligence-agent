@@ -1,0 +1,3438 @@
+{% extends "base.html" %}
+{% block title %}Fact Review Queue{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Fact Review Queue</h1>
+    <p class="subtitle">Validate extracted facts to ensure data accuracy</p>
+</div>
+
+{% if data_source == 'none' %}
+<div class="data-source-banner data-source-demo">
+    <strong>No Data</strong> - Run an analysis to populate facts for review.
+</div>
+{% else %}
+
+<!-- Phase 5: Enhanced Progress Section -->
+<div class="review-dashboard">
+    <!-- Main Progress Panel -->
+    <div class="review-progress">
+        <div class="progress-header">
+            <h3>Review Progress</h3>
+            <span class="completion-rate" id="completion-rate">{{ (stats.completion_rate * 100)|round|int }}% Complete</span>
+        </div>
+        <div class="progress-bar-container">
+            <div class="progress-bar" id="main-progress-bar" style="width: {{ (stats.completion_rate * 100)|round|int }}%"></div>
+        </div>
+        <div class="progress-stats">
+            <div class="progress-stat">
+                <span class="stat-value" id="stat-pending">{{ stats.pending }}</span>
+                <span class="stat-label">Pending</span>
+            </div>
+            <div class="progress-stat confirmed">
+                <span class="stat-value" id="stat-confirmed">{{ stats.confirmed }}</span>
+                <span class="stat-label">Confirmed</span>
+            </div>
+            <div class="progress-stat incorrect">
+                <span class="stat-value" id="stat-incorrect">{{ stats.incorrect }}</span>
+                <span class="stat-label">Incorrect</span>
+            </div>
+            <div class="progress-stat needs-info">
+                <span class="stat-value" id="stat-needs-info">{{ stats.needs_info }}</span>
+                <span class="stat-label">Needs Info</span>
+            </div>
+            <div class="progress-stat skipped">
+                <span class="stat-value" id="stat-skipped">{{ stats.skipped }}</span>
+                <span class="stat-label">Skipped</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Phase 5: Quick Stats Row -->
+    <div class="quick-stats-row">
+        <div class="quick-stat verified-today">
+            <span class="quick-stat-icon">&#9989;</span>
+            <div class="quick-stat-content">
+                <span class="quick-stat-value" id="verified-today">{{ stats.verified_today|default(0) }}</span>
+                <span class="quick-stat-label">Verified Today</span>
+            </div>
+        </div>
+        <div class="quick-stat remaining-critical">
+            <span class="quick-stat-icon">&#9888;</span>
+            <div class="quick-stat-content">
+                <span class="quick-stat-value" id="remaining-critical">{{ stats.remaining_critical|default(0) }}</span>
+                <span class="quick-stat-label">Critical Remaining</span>
+            </div>
+        </div>
+        <div class="quick-stat avg-confidence">
+            <span class="quick-stat-icon">&#128200;</span>
+            <div class="quick-stat-content">
+                <span class="quick-stat-value" id="avg-confidence">{{ (stats.average_confidence|default(0) * 100)|round|int }}%</span>
+                <span class="quick-stat-label">Avg Confidence</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Phase 5: Domain Progress Breakdown -->
+    <div class="domain-breakdown">
+        <h4 class="breakdown-title">Progress by Domain</h4>
+        <div class="domain-bars" id="domain-bars">
+            {% for domain, dstats in stats.by_domain.items() %}
+            <div class="domain-row">
+                <span class="domain-name">{{ domain|replace('_', ' ')|title }}</span>
+                <div class="domain-progress-bar">
+                    <div class="domain-bar confirmed" style="width: {{ ((dstats.confirmed / dstats.total) * 100)|round|int if dstats.total > 0 else 0 }}%"></div>
+                    <div class="domain-bar incorrect" style="width: {{ ((dstats.incorrect / dstats.total) * 100)|round|int if dstats.total > 0 else 0 }}%"></div>
+                </div>
+                <span class="domain-count">{{ dstats.confirmed }}/{{ dstats.total }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Phase 5: Confidence Tier Breakdown -->
+    <div class="confidence-breakdown">
+        <h4 class="breakdown-title">Confidence Distribution</h4>
+        <div class="confidence-tiers" id="confidence-tiers">
+            {% set conf = stats.confidence_breakdown|default({'high': 0, 'medium': 0, 'low': 0}) %}
+            {% set conf_total = conf.high + conf.medium + conf.low %}
+            <div class="conf-tier conf-high">
+                <div class="tier-bar" style="height: {{ ((conf.high / conf_total) * 100)|round|int if conf_total > 0 else 0 }}%"></div>
+                <span class="tier-count">{{ conf.high }}</span>
+                <span class="tier-label">High</span>
+            </div>
+            <div class="conf-tier conf-medium">
+                <div class="tier-bar" style="height: {{ ((conf.medium / conf_total) * 100)|round|int if conf_total > 0 else 0 }}%"></div>
+                <span class="tier-count">{{ conf.medium }}</span>
+                <span class="tier-label">Medium</span>
+            </div>
+            <div class="conf-tier conf-low">
+                <div class="tier-bar" style="height: {{ ((conf.low / conf_total) * 100)|round|int if conf_total > 0 else 0 }}%"></div>
+                <span class="tier-count">{{ conf.low }}</span>
+                <span class="tier-label">Low</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Phase 5: Celebration State (hidden by default) -->
+<div id="celebration-state" class="celebration-state" style="display: none;">
+    <div class="celebration-content">
+        <div class="celebration-icon">&#127881;</div>
+        <h2>All Facts Verified!</h2>
+        <p>Congratulations! You've reviewed all {{ stats.total_facts }} facts.</p>
+        <div class="celebration-stats">
+            <div class="celebration-stat">
+                <span class="value" id="cele-confirmed">{{ stats.confirmed }}</span>
+                <span class="label">Confirmed</span>
+            </div>
+            <div class="celebration-stat">
+                <span class="value" id="cele-incorrect">{{ stats.incorrect }}</span>
+                <span class="label">Flagged</span>
+            </div>
+            <div class="celebration-stat">
+                <span class="value" id="cele-needs-info">{{ stats.needs_info }}</span>
+                <span class="label">Need Info</span>
+            </div>
+        </div>
+        <button class="btn btn-primary" onclick="exportVerificationReport()">Export Report</button>
+    </div>
+</div>
+
+<!-- Priority Breakdown + Keyboard Shortcuts (inline) -->
+<div class="priority-keyboard-row">
+    <div class="priority-breakdown">
+        <span class="priority-item high">{{ stats.priority_breakdown.high }} High Priority</span>
+        <span class="priority-item medium">{{ stats.priority_breakdown.medium }} Medium</span>
+        <span class="priority-item low">{{ stats.priority_breakdown.low }} Low</span>
+    </div>
+    <div class="keyboard-hints">
+        <kbd>C</kbd> Confirm
+        <kbd>I</kbd> Incorrect
+        <kbd>N</kbd> Need Info
+        <kbd>S</kbd> Skip
+        <kbd>Z</kbd> Undo
+    </div>
+</div>
+
+<!-- Filter Presets (Compact) -->
+<div class="filter-presets">
+    <button class="preset-btn active" onclick="applyPreset('all')" data-preset="all">All Pending</button>
+    <button class="preset-btn preset-critical" onclick="applyPreset('critical')" data-preset="critical">Critical</button>
+    <button class="preset-btn preset-noevidence" onclick="applyPreset('noevidence')" data-preset="noevidence">No Evidence</button>
+    <button class="preset-btn preset-lowconf" onclick="applyPreset('lowconf')" data-preset="lowconf">Low Confidence</button>
+</div>
+
+<!-- Compact Filters -->
+<div class="queue-controls">
+    <div class="filter-row">
+        <select id="domain-filter" onchange="filterQueue()" class="filter-select">
+            <option value="">All Domains</option>
+            {% for domain in domains %}
+            <option value="{{ domain }}">{{ domain|replace('_', ' ')|title }}</option>
+            {% endfor %}
+        </select>
+
+        <select id="priority-filter" onchange="filterQueue()" class="filter-select">
+            <option value="">All Priorities</option>
+            <option value="high">High Only</option>
+            <option value="medium">Medium+</option>
+            <option value="low">Low Only</option>
+        </select>
+
+        <select id="confidence-filter" onchange="filterQueue()" class="filter-select">
+            <option value="">Any Confidence</option>
+            <option value="low">Low (&lt;50%)</option>
+            <option value="medium">Medium</option>
+            <option value="high">High (&gt;80%)</option>
+        </select>
+
+        <label class="checkbox-filter">
+            <input type="checkbox" id="no-evidence-only" onchange="filterQueue()">
+            No Evidence
+        </label>
+
+        <label class="checkbox-filter">
+            <input type="checkbox" id="include-skipped" onchange="filterQueue()">
+            +Skipped
+        </label>
+
+        <div class="search-group">
+            <input type="text" id="search-query" placeholder="Search..." oninput="debounceSearch()">
+            <button class="search-clear" onclick="clearSearch()">&times;</button>
+        </div>
+
+        <select id="sort-by" onchange="filterQueue()" class="filter-select">
+            <option value="priority">Sort: Priority</option>
+            <option value="confidence-asc">Sort: Confidence ↑</option>
+            <option value="confidence-desc">Sort: Confidence ↓</option>
+            <option value="domain">Sort: Domain</option>
+        </select>
+
+        <button class="btn btn-sm btn-secondary" onclick="resetFilters()">Reset</button>
+    </div>
+</div>
+
+<!-- Toast Notification Container -->
+<div id="toast-container"></div>
+
+<!-- Undo Bar -->
+<div id="undo-bar" class="undo-bar" style="display: none;">
+    <span class="undo-message"></span>
+    <button class="undo-btn" onclick="undoLastAction()">Undo</button>
+    <button class="undo-dismiss" onclick="dismissUndo()">&times;</button>
+</div>
+
+<!-- Review Queue -->
+<div id="review-queue" class="review-queue">
+    {% if queue|length == 0 %}
+    <div class="empty-queue">
+        <div class="empty-icon">&#10003;</div>
+        <h3>All Caught Up!</h3>
+        <p>No facts pending review. Great job!</p>
+    </div>
+    {% else %}
+    {% for fact in queue %}
+    <div class="fact-card" data-fact-id="{{ fact.fact_id }}" data-priority="{{ fact.review_priority }}">
+        <div class="fact-header">
+            <div class="fact-priority priority-{{ 'high' if fact.review_priority >= 0.7 else ('medium' if fact.review_priority >= 0.4 else 'low') }}">
+                {{ 'HIGH' if fact.review_priority >= 0.7 else ('MEDIUM' if fact.review_priority >= 0.4 else 'LOW') }}
+            </div>
+            <div class="fact-domain">{{ fact.domain|replace('_', ' ')|title }}</div>
+            <div class="fact-id">{{ fact.fact_id }}</div>
+        </div>
+
+        <div class="fact-content">
+            <h4 class="fact-item">{{ fact.item }}</h4>
+
+            {% if fact.details %}
+            <div class="fact-details">
+                {% for key, value in fact.details.items() %}
+                <span class="detail-chip">{{ key }}: {{ value }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Enhanced Evidence Section (Phase 3) -->
+        <div class="evidence-section">
+            <div class="evidence-header">
+                <span class="evidence-label">Evidence</span>
+                {% if fact.evidence and fact.evidence.exact_quote %}
+                {% set quote_len = fact.evidence.exact_quote|length %}
+                <span class="evidence-quality quality-{{ 'good' if quote_len >= 100 else ('fair' if quote_len >= 30 else 'weak') }}">
+                    {{ 'Strong' if quote_len >= 100 else ('Fair' if quote_len >= 30 else 'Weak') }} ({{ quote_len }} chars)
+                </span>
+                <button class="copy-btn" onclick="copyEvidence('{{ fact.fact_id }}')" title="Copy to clipboard">
+                    &#128203; Copy
+                </button>
+                {% endif %}
+            </div>
+            {% if fact.evidence and fact.evidence.exact_quote %}
+            <div class="evidence-content" id="evidence-{{ fact.fact_id }}">
+                <blockquote class="evidence-quote" data-full="{{ fact.evidence.exact_quote|e }}">
+                    "{{ fact.evidence.exact_quote[:200] }}{% if fact.evidence.exact_quote|length > 200 %}<span class="truncated">...</span><span class="full-text" style="display:none;">{{ fact.evidence.exact_quote[200:] }}</span>{% endif %}"
+                </blockquote>
+                {% if fact.evidence.exact_quote|length > 200 %}
+                <button class="show-more-btn" onclick="toggleEvidence('{{ fact.fact_id }}')">Show more</button>
+                {% endif %}
+            </div>
+            {% if fact.evidence.source_section %}
+            <div class="source-section">
+                <span class="source-section-label">Section:</span> {{ fact.evidence.source_section }}
+            </div>
+            {% endif %}
+            {% else %}
+            <div class="no-evidence">
+                <span class="no-evidence-icon">&#9888;</span>
+                <div class="no-evidence-text">
+                    <strong>No evidence captured</strong>
+                    <p>This fact was extracted without a supporting quote. Consider flagging for verification.</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Source Document Section (Phase 3) -->
+        <div class="source-section-panel">
+            {% if fact.source_document %}
+            <div class="source-doc-info">
+                <span class="source-icon">&#128196;</span>
+                <div class="source-details">
+                    <span class="source-filename" title="{{ fact.source_document }}">{{ fact.source_document }}</span>
+                    <div class="source-actions">
+                        <button class="source-btn" onclick="viewRelatedFacts('{{ fact.source_document|e }}')" title="View other facts from this document">
+                            Related Facts
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="no-source-panel">
+                <span class="no-source-icon">&#128194;</span>
+                <div class="no-source-text">
+                    <strong>Source not tracked</strong>
+                    <p>Document origin unknown - verify carefully</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Confidence Explanation (Phase 3) -->
+        <div class="confidence-section">
+            <div class="confidence-header" onclick="toggleConfidence('{{ fact.fact_id }}')">
+                <span class="confidence-toggle">&#9660;</span>
+                <span class="confidence-score confidence-{{ 'high' if fact.confidence_score >= 0.8 else ('medium' if fact.confidence_score >= 0.5 else 'low') }}">
+                    {{ (fact.confidence_score * 100)|round|int }}% confidence
+                </span>
+                <span class="confidence-label">Why this score?</span>
+            </div>
+            <div class="confidence-body" id="confidence-{{ fact.fact_id }}" style="display: none;">
+                <div class="confidence-factors">
+                    <!-- Has Evidence (30%) -->
+                    <div class="factor {{ 'factor-met' if fact.evidence and fact.evidence.exact_quote else 'factor-missing' }}">
+                        <span class="factor-check">{{ '✓' if fact.evidence and fact.evidence.exact_quote else '✗' }}</span>
+                        <span class="factor-name">Has evidence quote</span>
+                        <span class="factor-weight">30%</span>
+                    </div>
+                    <!-- Evidence Length (15%) -->
+                    {% set quote_len = fact.evidence.exact_quote|length if fact.evidence and fact.evidence.exact_quote else 0 %}
+                    <div class="factor {{ 'factor-met' if quote_len >= 50 else ('factor-partial' if quote_len >= 20 else 'factor-missing') }}">
+                        <span class="factor-check">{{ '✓' if quote_len >= 50 else ('◐' if quote_len >= 20 else '✗') }}</span>
+                        <span class="factor-name">Evidence length (50+ chars)</span>
+                        <span class="factor-weight">15%</span>
+                    </div>
+                    <!-- Has Details (20%) -->
+                    {% set detail_count = fact.details|length if fact.details else 0 %}
+                    <div class="factor {{ 'factor-met' if detail_count >= 2 else ('factor-partial' if detail_count >= 1 else 'factor-missing') }}">
+                        <span class="factor-check">{{ '✓' if detail_count >= 2 else ('◐' if detail_count >= 1 else '✗') }}</span>
+                        <span class="factor-name">Has details (2+ fields)</span>
+                        <span class="factor-weight">20%</span>
+                    </div>
+                    <!-- Has Source (15%) -->
+                    <div class="factor {{ 'factor-met' if fact.source_document else 'factor-missing' }}">
+                        <span class="factor-check">{{ '✓' if fact.source_document else '✗' }}</span>
+                        <span class="factor-name">Source document tracked</span>
+                        <span class="factor-weight">15%</span>
+                    </div>
+                    <!-- Is Verified (20%) -->
+                    <div class="factor {{ 'factor-met' if fact.verified else 'factor-missing' }}">
+                        <span class="factor-check">{{ '✓' if fact.verified else '✗' }}</span>
+                        <span class="factor-name">Human verified</span>
+                        <span class="factor-weight">20%</span>
+                    </div>
+                </div>
+                <div class="confidence-tip">
+                    {% if fact.confidence_score < 0.5 %}
+                    <strong>Tip:</strong> This fact needs careful verification due to weak evidence.
+                    {% elif fact.confidence_score < 0.8 %}
+                    <strong>Tip:</strong> Review the evidence and add a note if you can confirm this fact.
+                    {% else %}
+                    <strong>Tip:</strong> High confidence - quick review recommended.
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Notes Section -->
+        <div class="fact-notes">
+            <div class="notes-header" onclick="toggleNotes('{{ fact.fact_id }}')">
+                <span class="notes-toggle">&#9660;</span>
+                <span class="notes-label">Add Note</span>
+                {% if fact.verification_note %}
+                <span class="has-note-indicator">Has note</span>
+                {% endif %}
+            </div>
+            <div class="notes-body" id="notes-{{ fact.fact_id }}" style="display: none;">
+                <textarea
+                    class="note-textarea"
+                    id="note-text-{{ fact.fact_id }}"
+                    placeholder="Add a verification note... (auto-saves)"
+                    maxlength="500"
+                    oninput="autoSaveNote('{{ fact.fact_id }}')"
+                >{{ fact.verification_note or '' }}</textarea>
+                <div class="note-footer">
+                    <span class="char-count" id="char-count-{{ fact.fact_id }}">0/500</span>
+                    <span class="note-saved" id="note-saved-{{ fact.fact_id }}" style="display: none;">Saved</span>
+                </div>
+                <div class="note-templates">
+                    <span class="template-label">Quick:</span>
+                    <button class="template-btn" onclick="insertTemplate('{{ fact.fact_id }}', 'Verified via call with CIO')">Call verified</button>
+                    <button class="template-btn" onclick="insertTemplate('{{ fact.fact_id }}', 'Confirmed in source document')">Doc confirmed</button>
+                    <button class="template-btn" onclick="insertTemplate('{{ fact.fact_id }}', 'Cross-referenced with other sources')">Cross-ref</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="fact-actions">
+            <button class="action-btn confirm" onclick="confirmFact('{{ fact.fact_id }}')" title="Confirm this fact is accurate (C)">
+                &#10003; Confirm
+            </button>
+            <button class="action-btn incorrect" onclick="showIncorrectModal('{{ fact.fact_id }}')" title="Flag as incorrect (I)">
+                &#10007; Incorrect
+            </button>
+            <button class="action-btn needs-info" onclick="showNeedsInfoModal('{{ fact.fact_id }}', '{{ fact.item|e }}')" title="Needs more information (N)">
+                &#63; Need Info
+            </button>
+            <button class="action-btn skip" onclick="skipFact('{{ fact.fact_id }}')" title="Skip for now (S)">
+                &#8594; Skip
+            </button>
+        </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+</div>
+
+<!-- Incorrect Reason Modal -->
+<div id="incorrect-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <h3>Flag as Incorrect</h3>
+        <p>Please provide a reason why this fact is incorrect:</p>
+        <textarea id="incorrect-reason" rows="3" placeholder="What is wrong with this fact?"></textarea>
+        <input type="hidden" id="incorrect-fact-id">
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="closeModal('incorrect-modal')">Cancel</button>
+            <button class="btn btn-danger" onclick="submitIncorrect()">Flag as Incorrect</button>
+        </div>
+    </div>
+</div>
+
+<!-- Needs More Info Modal -->
+<div id="needs-info-modal" class="modal" style="display: none;">
+    <div class="modal-content modal-lg">
+        <h3>Request More Information</h3>
+        <p>This will mark the fact as needing more info and generate a follow-up question.</p>
+
+        <div class="form-group">
+            <label>Fact Being Reviewed:</label>
+            <div class="fact-reference" id="needs-info-fact-ref"></div>
+        </div>
+
+        <div class="form-group">
+            <label for="needs-info-question">Question to Ask:</label>
+            <textarea id="needs-info-question" rows="3" placeholder="What specific information is needed?"></textarea>
+        </div>
+
+        <div class="form-group">
+            <label for="needs-info-recipient">Suggested Recipient:</label>
+            <select id="needs-info-recipient">
+                <option value="Target CIO">Target CIO</option>
+                <option value="Target IT Director">Target IT Director</option>
+                <option value="Target Security Lead">Target Security Lead</option>
+                <option value="Target Infrastructure Lead">Target Infrastructure Lead</option>
+                <option value="Target Applications Lead">Target Applications Lead</option>
+                <option value="IT Operations">IT Operations</option>
+                <option value="Management">Management</option>
+            </select>
+        </div>
+
+        <input type="hidden" id="needs-info-fact-id">
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="closeModal('needs-info-modal')">Cancel</button>
+            <button class="btn btn-primary" onclick="submitNeedsInfo()">Create Question & Mark for Follow-up</button>
+        </div>
+    </div>
+</div>
+
+{% endif %}
+
+<style>
+/* Progress Section */
+.review-progress {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.progress-header h3 {
+    margin: 0;
+    font-size: 1em;
+}
+
+.completion-rate {
+    font-weight: 600;
+    color: var(--accent);
+}
+
+.progress-bar-container {
+    height: 8px;
+    background: var(--bg-surface-sunken);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 15px;
+}
+
+.progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #22c55e, #16a34a);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.progress-stats {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.progress-stat {
+    text-align: center;
+}
+
+.progress-stat .stat-value {
+    display: block;
+    font-size: 1.5em;
+    font-weight: 600;
+}
+
+.progress-stat .stat-label {
+    font-size: 0.8em;
+    color: var(--text-secondary);
+}
+
+.progress-stat.confirmed .stat-value { color: #16a34a; }
+.progress-stat.incorrect .stat-value { color: #dc2626; }
+.progress-stat.needs-info .stat-value { color: #d97706; }
+.progress-stat.skipped .stat-value { color: #6b7280; }
+
+/* Priority + Keyboard Row (inline) */
+.priority-keyboard-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.priority-breakdown {
+    display: flex;
+    gap: 10px;
+}
+
+.priority-item {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    font-weight: 500;
+}
+
+.priority-item.high {
+    background: rgba(239, 68, 68, 0.15);
+    color: #991b1b;
+}
+
+.priority-item.medium {
+    background: rgba(245, 158, 11, 0.15);
+    color: #92400e;
+}
+
+.priority-item.low {
+    background: rgba(34, 197, 94, 0.15);
+    color: #166534;
+}
+
+/* Keyboard Hints (inline with priority) */
+.keyboard-hints {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.75em;
+    color: var(--text-muted);
+}
+
+kbd {
+    display: inline-block;
+    padding: 2px 6px;
+    background: var(--bg-surface-sunken);
+    border: 1px solid var(--border-default);
+    border-radius: 3px;
+    font-family: monospace;
+    font-size: 0.9em;
+}
+
+/* Filter Presets (Compact) */
+.filter-presets {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.preset-btn {
+    padding: 5px 12px;
+    border: 1px solid var(--border-default);
+    border-radius: 15px;
+    background: var(--bg-surface);
+    font-size: 0.8em;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.preset-btn:hover {
+    background: var(--bg-surface-sunken);
+}
+
+.preset-btn.active {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+}
+
+.preset-btn.preset-critical:hover,
+.preset-btn.preset-critical.active {
+    background: #dc2626;
+    color: white;
+    border-color: #dc2626;
+}
+
+.preset-btn.preset-noevidence:hover,
+.preset-btn.preset-noevidence.active {
+    background: #d97706;
+    color: white;
+    border-color: #d97706;
+}
+
+.preset-btn.preset-lowconf:hover,
+.preset-btn.preset-lowconf.active {
+    background: #991b1b;
+    color: white;
+    border-color: #991b1b;
+}
+
+/* Queue Controls (Compact) */
+.queue-controls {
+    margin-bottom: 15px;
+    padding: 10px 12px;
+    background: var(--bg-surface);
+    border-radius: 8px;
+}
+
+.filter-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.filter-select {
+    padding: 5px 8px;
+    border: 1px solid var(--border-default);
+    border-radius: 5px;
+    background: var(--bg-surface);
+    font-size: 0.8em;
+    cursor: pointer;
+}
+
+.checkbox-filter {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.8em;
+    color: var(--text-secondary);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.checkbox-filter input {
+    margin: 0;
+}
+
+.search-group {
+    position: relative;
+    min-width: 120px;
+    max-width: 180px;
+}
+
+.search-group input {
+    width: 100%;
+    padding: 5px 24px 5px 8px;
+    border: 1px solid var(--border-default);
+    border-radius: 5px;
+    font-size: 0.8em;
+}
+
+.search-group input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.search-clear {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1em;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+}
+
+.search-clear:hover {
+    color: var(--text-primary);
+}
+
+.btn-secondary {
+    background: var(--bg-surface-sunken);
+    color: var(--text-secondary);
+}
+
+.btn-secondary:hover {
+    background: var(--border-default);
+}
+
+.btn-sm {
+    padding: 5px 10px;
+    font-size: 0.8em;
+}
+
+/* Review Queue */
+.review-queue {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* Fact Card */
+.fact-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 12px;
+    padding: 20px;
+    transition: all 0.2s;
+}
+
+.fact-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.fact-card.processing {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.fact-card.skipped-card {
+    opacity: 0.7;
+    border-left: 4px solid #9ca3af;
+}
+
+.fact-card.skipped-card::before {
+    content: 'SKIPPED';
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    padding: 2px 8px;
+    background: #e5e7eb;
+    color: #6b7280;
+    font-size: 0.7em;
+    font-weight: 600;
+    border-radius: 4px;
+}
+
+.fact-card {
+    position: relative;
+}
+
+.fact-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.fact-priority {
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 0.75em;
+    font-weight: 700;
+}
+
+.fact-priority.priority-high {
+    background: #fecaca;
+    color: #991b1b;
+}
+
+.fact-priority.priority-medium {
+    background: #fed7aa;
+    color: #92400e;
+}
+
+.fact-priority.priority-low {
+    background: #bbf7d0;
+    color: #166534;
+}
+
+.fact-domain {
+    color: var(--text-secondary);
+    font-size: 0.9em;
+}
+
+.fact-id {
+    margin-left: auto;
+    font-family: monospace;
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+
+.fact-content {
+    margin-bottom: 15px;
+}
+
+.fact-item {
+    margin: 0 0 10px 0;
+    font-size: 1.1em;
+}
+
+.fact-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.detail-chip {
+    background: var(--bg-surface-sunken);
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 0.85em;
+}
+
+.fact-evidence {
+    margin-bottom: 15px;
+}
+
+.evidence-label {
+    font-size: 0.85em;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+}
+
+.evidence-quote {
+    margin: 0;
+    padding: 12px 15px;
+    background: var(--bg-surface-sunken);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 6px 6px 0;
+    font-style: italic;
+    font-size: 0.95em;
+    line-height: 1.5;
+}
+
+.no-evidence {
+    padding: 12px 15px;
+    background: rgba(239, 68, 68, 0.1);
+    border-left: 3px solid #ef4444;
+    border-radius: 0 6px 6px 0;
+    color: #991b1b;
+    font-size: 0.9em;
+}
+
+.fact-meta {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.meta-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.85em;
+    color: var(--text-secondary);
+}
+
+.meta-item.no-source {
+    color: #dc2626;
+}
+
+.meta-item.confidence.confidence-high { color: #16a34a; }
+.meta-item.confidence.confidence-medium { color: #d97706; }
+.meta-item.confidence.confidence-low { color: #dc2626; }
+
+/* Action Buttons */
+.fact-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.action-btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.9em;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.action-btn.confirm {
+    background: #22c55e;
+    color: white;
+}
+
+.action-btn.confirm:hover {
+    background: #16a34a;
+}
+
+.action-btn.incorrect {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.action-btn.incorrect:hover {
+    background: #fecaca;
+}
+
+.action-btn.needs-info {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.action-btn.needs-info:hover {
+    background: #fde68a;
+}
+
+.action-btn.skip {
+    background: var(--bg-surface-sunken);
+    color: var(--text-secondary);
+}
+
+.action-btn.skip:hover {
+    background: var(--border-default);
+}
+
+/* Empty Queue State */
+.empty-queue {
+    text-align: center;
+    padding: 60px 20px;
+    background: var(--bg-surface);
+    border-radius: 12px;
+}
+
+.empty-icon {
+    font-size: 4em;
+    color: #22c55e;
+    margin-bottom: 15px;
+}
+
+.empty-queue h3 {
+    margin: 0 0 10px 0;
+    color: #16a34a;
+}
+
+.empty-queue p {
+    color: var(--text-secondary);
+}
+
+/* Modal */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: var(--bg-surface);
+    padding: 25px;
+    border-radius: 12px;
+    width: 100%;
+    max-width: 450px;
+}
+
+.modal-content h3 {
+    margin: 0 0 15px 0;
+}
+
+.modal-content textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--border-default);
+    border-radius: 6px;
+    margin-bottom: 15px;
+    font-family: inherit;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.btn-danger {
+    background: #dc2626;
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #b91c1c;
+}
+
+.data-source-banner {
+    padding: 12px 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-size: 0.9em;
+}
+
+.data-source-demo {
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    color: #92400e;
+}
+
+
+/* Toast Notifications */
+#toast-container {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    z-index: 1001;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.toast {
+    padding: 12px 20px;
+    border-radius: 8px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: slideIn 0.3s ease;
+    min-width: 250px;
+}
+
+.toast.success {
+    background: #dcfce7;
+    border-color: #86efac;
+    color: #166534;
+}
+
+.toast.error {
+    background: #fee2e2;
+    border-color: #fecaca;
+    color: #991b1b;
+}
+
+.toast.info {
+    background: #dbeafe;
+    border-color: #93c5fd;
+    color: #1e40af;
+}
+
+@keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideOut {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(100%); opacity: 0; }
+}
+
+/* Undo Bar */
+.undo-bar {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1f2937;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    z-index: 1001;
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+    from { transform: translateX(-50%) translateY(100%); opacity: 0; }
+    to { transform: translateX(-50%) translateY(0); opacity: 1; }
+}
+
+.undo-message {
+    font-size: 0.9em;
+}
+
+.undo-btn {
+    background: #3b82f6;
+    color: white;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.undo-btn:hover {
+    background: #2563eb;
+}
+
+.undo-dismiss {
+    background: none;
+    border: none;
+    color: #9ca3af;
+    font-size: 1.2em;
+    cursor: pointer;
+    padding: 0 5px;
+}
+
+.undo-dismiss:hover {
+    color: white;
+}
+
+/* Notes Section */
+.fact-notes {
+    margin-top: 15px;
+    border-top: 1px solid var(--border-default);
+    padding-top: 10px;
+}
+
+.notes-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    padding: 5px 0;
+    color: var(--text-secondary);
+    font-size: 0.9em;
+}
+
+.notes-header:hover {
+    color: var(--text-primary);
+}
+
+.notes-toggle {
+    font-size: 0.7em;
+    transition: transform 0.2s;
+}
+
+.notes-header.open .notes-toggle {
+    transform: rotate(180deg);
+}
+
+.has-note-indicator {
+    background: #dbeafe;
+    color: #1e40af;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.75em;
+}
+
+.notes-body {
+    padding: 10px 0;
+}
+
+.note-textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--border-default);
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 0.9em;
+    resize: vertical;
+    min-height: 60px;
+}
+
+.note-textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.note-footer {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 5px;
+    font-size: 0.8em;
+}
+
+.char-count {
+    color: var(--text-muted);
+}
+
+.note-saved {
+    color: #16a34a;
+}
+
+.note-templates {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+}
+
+.template-label {
+    font-size: 0.8em;
+    color: var(--text-secondary);
+}
+
+.template-btn {
+    padding: 4px 10px;
+    background: var(--bg-surface-sunken);
+    border: 1px solid var(--border-default);
+    border-radius: 4px;
+    font-size: 0.8em;
+    cursor: pointer;
+}
+
+.template-btn:hover {
+    background: var(--border-default);
+}
+
+/* Modal Enhancements */
+.modal-lg {
+    max-width: 550px;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+    font-size: 0.9em;
+}
+
+.form-group textarea,
+.form-group select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--border-default);
+    border-radius: 6px;
+    font-family: inherit;
+}
+
+.fact-reference {
+    padding: 10px;
+    background: var(--bg-surface-sunken);
+    border-radius: 6px;
+    font-size: 0.9em;
+}
+
+/* =============================================================================
+   PHASE 3: Enhanced Evidence Display
+   ============================================================================= */
+
+.evidence-section {
+    background: var(--bg-surface-sunken);
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.evidence-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.evidence-label {
+    font-weight: 600;
+    font-size: 0.9em;
+}
+
+.evidence-quality {
+    font-size: 0.75em;
+    padding: 3px 8px;
+    border-radius: 10px;
+}
+
+.evidence-quality.quality-good {
+    background: rgba(34, 197, 94, 0.15);
+    color: #166534;
+}
+
+.evidence-quality.quality-fair {
+    background: rgba(245, 158, 11, 0.15);
+    color: #92400e;
+}
+
+.evidence-quality.quality-weak {
+    background: rgba(239, 68, 68, 0.15);
+    color: #991b1b;
+}
+
+.copy-btn {
+    margin-left: auto;
+    padding: 4px 10px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 4px;
+    font-size: 0.8em;
+    cursor: pointer;
+}
+
+.copy-btn:hover {
+    background: var(--accent-subtle);
+    border-color: var(--accent);
+}
+
+.copy-btn.copied {
+    background: #dcfce7;
+    border-color: #86efac;
+    color: #166534;
+}
+
+.evidence-content {
+    position: relative;
+}
+
+.evidence-quote {
+    margin: 0;
+    padding: 12px 15px;
+    background: var(--bg-surface);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 6px 6px 0;
+    font-style: italic;
+    font-size: 0.95em;
+    line-height: 1.6;
+}
+
+.show-more-btn {
+    display: block;
+    margin-top: 8px;
+    padding: 4px 12px;
+    background: transparent;
+    border: 1px solid var(--border-default);
+    border-radius: 4px;
+    font-size: 0.8em;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.show-more-btn:hover {
+    background: var(--bg-surface);
+}
+
+.source-section {
+    margin-top: 10px;
+    font-size: 0.85em;
+    color: var(--text-secondary);
+}
+
+.source-section-label {
+    font-weight: 500;
+}
+
+.no-evidence {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 15px;
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 6px;
+}
+
+.no-evidence-icon {
+    font-size: 1.5em;
+    color: #dc2626;
+}
+
+.no-evidence-text strong {
+    display: block;
+    color: #991b1b;
+    margin-bottom: 4px;
+}
+
+.no-evidence-text p {
+    margin: 0;
+    font-size: 0.85em;
+    color: #7f1d1d;
+}
+
+/* =============================================================================
+   PHASE 3: Source Document Panel
+   ============================================================================= */
+
+.source-section-panel {
+    margin-bottom: 15px;
+}
+
+.source-doc-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 15px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 8px;
+}
+
+.source-icon {
+    font-size: 1.5em;
+}
+
+.source-details {
+    flex: 1;
+}
+
+.source-filename {
+    font-weight: 500;
+    font-size: 0.9em;
+    word-break: break-all;
+}
+
+.source-actions {
+    margin-top: 6px;
+}
+
+.source-btn {
+    padding: 4px 10px;
+    background: var(--bg-surface-sunken);
+    border: 1px solid var(--border-default);
+    border-radius: 4px;
+    font-size: 0.8em;
+    cursor: pointer;
+}
+
+.source-btn:hover {
+    background: var(--border-default);
+}
+
+.no-source-panel {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 15px;
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+    border-radius: 8px;
+}
+
+.no-source-icon {
+    font-size: 1.5em;
+    color: #d97706;
+}
+
+.no-source-text strong {
+    display: block;
+    color: #92400e;
+    margin-bottom: 4px;
+}
+
+.no-source-text p {
+    margin: 0;
+    font-size: 0.85em;
+    color: #78350f;
+}
+
+/* =============================================================================
+   PHASE 3: Confidence Explanation
+   ============================================================================= */
+
+.confidence-section {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 8px;
+    margin-bottom: 15px;
+    overflow: hidden;
+}
+
+.confidence-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 15px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.confidence-header:hover {
+    background: var(--bg-surface-sunken);
+}
+
+.confidence-toggle {
+    font-size: 0.7em;
+    transition: transform 0.2s;
+    color: var(--text-muted);
+}
+
+.confidence-header.open .confidence-toggle {
+    transform: rotate(180deg);
+}
+
+.confidence-score {
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 4px;
+}
+
+.confidence-score.confidence-high {
+    background: rgba(34, 197, 94, 0.15);
+    color: #166534;
+}
+
+.confidence-score.confidence-medium {
+    background: rgba(245, 158, 11, 0.15);
+    color: #92400e;
+}
+
+.confidence-score.confidence-low {
+    background: rgba(239, 68, 68, 0.15);
+    color: #991b1b;
+}
+
+.confidence-label {
+    font-size: 0.85em;
+    color: var(--text-secondary);
+}
+
+.confidence-body {
+    padding: 15px;
+    border-top: 1px solid var(--border-default);
+    background: var(--bg-surface-sunken);
+}
+
+.confidence-factors {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.factor {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: var(--bg-surface);
+    border-radius: 6px;
+    font-size: 0.9em;
+}
+
+.factor-check {
+    width: 20px;
+    text-align: center;
+    font-weight: bold;
+}
+
+.factor-met .factor-check { color: #16a34a; }
+.factor-partial .factor-check { color: #d97706; }
+.factor-missing .factor-check { color: #dc2626; }
+
+.factor-name {
+    flex: 1;
+}
+
+.factor-weight {
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+
+.factor-met {
+    border-left: 3px solid #16a34a;
+}
+
+.factor-partial {
+    border-left: 3px solid #d97706;
+}
+
+.factor-missing {
+    border-left: 3px solid #dc2626;
+    opacity: 0.7;
+}
+
+.confidence-tip {
+    margin-top: 12px;
+    padding: 10px;
+    background: var(--bg-surface);
+    border-radius: 6px;
+    font-size: 0.85em;
+    color: var(--text-secondary);
+}
+
+.confidence-tip strong {
+    color: var(--accent);
+}
+
+/* Related Facts Modal */
+.related-facts-modal .modal-content {
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.related-fact-item {
+    padding: 12px;
+    border-bottom: 1px solid var(--border-default);
+}
+
+.related-fact-item:last-child {
+    border-bottom: none;
+}
+
+.related-fact-item h4 {
+    margin: 0 0 5px 0;
+    font-size: 0.95em;
+}
+
+.related-fact-item .fact-domain {
+    font-size: 0.8em;
+    color: var(--text-secondary);
+}
+
+/* =============================================================================
+   PHASE 5: Enhanced Progress Dashboard
+   ============================================================================= */
+
+.review-dashboard {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.review-progress {
+    grid-column: 1 / -1;
+}
+
+.quick-stats-row {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.quick-stat {
+    flex: 1;
+    min-width: 150px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 15px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+}
+
+.quick-stat-icon {
+    font-size: 1.8em;
+}
+
+.quick-stat.verified-today {
+    border-left: 4px solid #16a34a;
+}
+
+.quick-stat.verified-today .quick-stat-icon {
+    color: #16a34a;
+}
+
+.quick-stat.remaining-critical {
+    border-left: 4px solid #dc2626;
+}
+
+.quick-stat.remaining-critical .quick-stat-icon {
+    color: #dc2626;
+}
+
+.quick-stat.avg-confidence {
+    border-left: 4px solid #3b82f6;
+}
+
+.quick-stat.avg-confidence .quick-stat-icon {
+    color: #3b82f6;
+}
+
+.quick-stat-content {
+    display: flex;
+    flex-direction: column;
+}
+
+.quick-stat-value {
+    font-size: 1.5em;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.quick-stat-label {
+    font-size: 0.8em;
+    color: var(--text-secondary);
+}
+
+/* Domain Breakdown */
+.domain-breakdown, .confidence-breakdown {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    padding: 15px;
+}
+
+.breakdown-title {
+    margin: 0 0 12px 0;
+    font-size: 0.9em;
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+.domain-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.domain-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.domain-name {
+    width: 100px;
+    font-size: 0.8em;
+    color: var(--text-secondary);
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.domain-progress-bar {
+    flex: 1;
+    height: 10px;
+    background: var(--bg-surface-sunken);
+    border-radius: 5px;
+    overflow: hidden;
+    display: flex;
+}
+
+.domain-bar {
+    height: 100%;
+    transition: width 0.3s ease;
+}
+
+.domain-bar.confirmed {
+    background: #22c55e;
+}
+
+.domain-bar.incorrect {
+    background: #ef4444;
+}
+
+.domain-count {
+    width: 50px;
+    text-align: right;
+    font-size: 0.8em;
+    color: var(--text-secondary);
+}
+
+/* Confidence Breakdown */
+.confidence-tiers {
+    display: flex;
+    justify-content: space-around;
+    align-items: flex-end;
+    height: 100px;
+    padding: 10px 0;
+}
+
+.conf-tier {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+}
+
+.tier-bar {
+    width: 40px;
+    min-height: 5px;
+    border-radius: 4px 4px 0 0;
+    transition: height 0.3s ease;
+}
+
+.conf-high .tier-bar {
+    background: linear-gradient(to top, #16a34a, #22c55e);
+}
+
+.conf-medium .tier-bar {
+    background: linear-gradient(to top, #d97706, #f59e0b);
+}
+
+.conf-low .tier-bar {
+    background: linear-gradient(to top, #dc2626, #ef4444);
+}
+
+.tier-count {
+    margin-top: 6px;
+    font-size: 1.1em;
+    font-weight: 600;
+}
+
+.tier-label {
+    font-size: 0.75em;
+    color: var(--text-secondary);
+}
+
+/* Celebration State */
+.celebration-state {
+    text-align: center;
+    padding: 60px 30px;
+    background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+    border: 2px solid #22c55e;
+    border-radius: 16px;
+    margin-bottom: 20px;
+}
+
+.celebration-icon {
+    font-size: 4em;
+    margin-bottom: 20px;
+    animation: bounce 1s ease infinite;
+}
+
+@keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+}
+
+.celebration-state h2 {
+    margin: 0 0 10px 0;
+    color: #166534;
+}
+
+.celebration-state p {
+    color: #166534;
+    margin-bottom: 25px;
+}
+
+.celebration-stats {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    margin-bottom: 25px;
+}
+
+.celebration-stat {
+    text-align: center;
+}
+
+.celebration-stat .value {
+    display: block;
+    font-size: 2em;
+    font-weight: 700;
+    color: #166534;
+}
+
+.celebration-stat .label {
+    font-size: 0.9em;
+    color: #15803d;
+}
+
+/* Loading Skeleton */
+.skeleton {
+    background: linear-gradient(90deg, var(--bg-surface-sunken) 25%, var(--bg-surface) 50%, var(--bg-surface-sunken) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 6px;
+}
+
+@keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+.skeleton-card {
+    height: 200px;
+    margin-bottom: 16px;
+}
+
+.skeleton-line {
+    height: 16px;
+    margin-bottom: 8px;
+}
+
+.skeleton-line.short {
+    width: 40%;
+}
+
+.skeleton-line.medium {
+    width: 70%;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .review-dashboard {
+        grid-template-columns: 1fr;
+    }
+
+    .quick-stats-row {
+        flex-direction: column;
+    }
+
+    .quick-stat {
+        min-width: unset;
+    }
+
+    .keyboard-hints {
+        display: none;
+    }
+
+    .fact-actions {
+        flex-direction: column;
+    }
+
+    .action-btn {
+        width: 100%;
+    }
+
+    .filter-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .filter-group {
+        width: 100%;
+    }
+
+    .filter-group select {
+        width: 100%;
+    }
+
+    .search-group {
+        max-width: unset;
+    }
+
+    .filter-presets {
+        overflow-x: auto;
+        padding-bottom: 5px;
+    }
+
+    .domain-name {
+        width: 80px;
+        font-size: 0.75em;
+    }
+
+    .celebration-stats {
+        flex-direction: column;
+        gap: 15px;
+    }
+}
+
+/* Optimistic UI - Processing State Enhancements */
+.fact-card.processing {
+    position: relative;
+}
+
+.fact-card.processing::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255,255,255,0.7);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.fact-card.processing::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 30px;
+    height: 30px;
+    border: 3px solid var(--accent);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    z-index: 2;
+}
+
+@keyframes spin {
+    to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+</style>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// =============================================================================
+// PHASE 4: Enhanced Filtering System
+// =============================================================================
+
+let currentPreset = 'all';
+let searchTimeout = null;
+let allFacts = []; // Cache for client-side filtering
+
+// Fetch all facts and apply filters client-side for better UX
+async function filterQueue() {
+    // Get filter values
+    const domain = document.getElementById('domain-filter').value;
+    const priority = document.getElementById('priority-filter').value;
+    const confidence = document.getElementById('confidence-filter').value;
+    const noEvidenceOnly = document.getElementById('no-evidence-only').checked;
+    const includeSkipped = document.getElementById('include-skipped').checked;
+    const searchQuery = document.getElementById('search-query').value.toLowerCase().trim();
+    const sortBy = document.getElementById('sort-by').value;
+
+    // Fetch from API (with larger limit for client-side filtering)
+    let url = '/api/review/queue?limit=200';
+    if (domain) url += `&domain=${domain}`;
+    if (includeSkipped) url += '&include_skipped=true';
+
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+        let facts = data.facts;
+
+        // Client-side filtering for better UX
+        // Priority filter
+        if (priority === 'high') {
+            facts = facts.filter(f => f.review_priority >= 0.7);
+        } else if (priority === 'medium') {
+            facts = facts.filter(f => f.review_priority >= 0.4);
+        } else if (priority === 'low') {
+            facts = facts.filter(f => f.review_priority < 0.4);
+        }
+
+        // Confidence filter
+        if (confidence === 'low') {
+            facts = facts.filter(f => f.confidence_score < 0.5);
+        } else if (confidence === 'medium') {
+            facts = facts.filter(f => f.confidence_score >= 0.5 && f.confidence_score < 0.8);
+        } else if (confidence === 'high') {
+            facts = facts.filter(f => f.confidence_score >= 0.8);
+        }
+
+        // No evidence filter
+        if (noEvidenceOnly) {
+            facts = facts.filter(f => !f.evidence || !f.evidence.exact_quote);
+        }
+
+        // Search filter
+        if (searchQuery) {
+            facts = facts.filter(f => {
+                const searchableText = [
+                    f.item,
+                    f.domain,
+                    f.category,
+                    f.fact_id,
+                    f.source_document || '',
+                    JSON.stringify(f.details || {}),
+                    f.evidence?.exact_quote || ''
+                ].join(' ').toLowerCase();
+                return searchableText.includes(searchQuery);
+            });
+        }
+
+        // Sorting
+        if (sortBy === 'confidence-asc') {
+            facts.sort((a, b) => a.confidence_score - b.confidence_score);
+        } else if (sortBy === 'confidence-desc') {
+            facts.sort((a, b) => b.confidence_score - a.confidence_score);
+        } else if (sortBy === 'domain') {
+            facts.sort((a, b) => a.domain.localeCompare(b.domain));
+        } else {
+            // Default: priority (already sorted by API)
+            facts.sort((a, b) => b.review_priority - a.review_priority);
+        }
+
+        // Limit to 50 for display
+        facts = facts.slice(0, 50);
+
+        renderQueue(facts);
+        updateFilterCount(facts.length, data.count);
+    } catch (error) {
+        console.error('Error filtering queue:', error);
+        showToast('Error loading queue', 'error');
+    }
+}
+
+function updateFilterCount(shown, total) {
+    // Update a count indicator if exists
+    const countEl = document.getElementById('filter-count');
+    if (countEl) {
+        countEl.textContent = `Showing ${shown} of ${total}`;
+    }
+}
+
+// Filter presets
+function applyPreset(preset) {
+    currentPreset = preset;
+
+    // Update active state
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.preset === preset) {
+            btn.classList.add('active');
+        }
+    });
+
+    // Reset all filters first
+    document.getElementById('domain-filter').value = '';
+    document.getElementById('priority-filter').value = '';
+    document.getElementById('confidence-filter').value = '';
+    document.getElementById('no-evidence-only').checked = false;
+    document.getElementById('include-skipped').checked = false;
+    document.getElementById('search-query').value = '';
+    document.getElementById('sort-by').value = 'priority';
+
+    // Apply preset-specific filters
+    switch (preset) {
+        case 'critical':
+            document.getElementById('priority-filter').value = 'high';
+            document.getElementById('domain-filter').value = 'cybersecurity';
+            break;
+        case 'noevidence':
+            document.getElementById('no-evidence-only').checked = true;
+            break;
+        case 'lowconf':
+            document.getElementById('confidence-filter').value = 'low';
+            document.getElementById('sort-by').value = 'confidence-asc';
+            break;
+        case 'all':
+        default:
+            // All filters already reset - sorted by priority (criticality)
+            break;
+    }
+
+    filterQueue();
+}
+
+// Search with debounce
+function debounceSearch() {
+    if (searchTimeout) clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+        filterQueue();
+    }, 300);
+}
+
+function clearSearch() {
+    document.getElementById('search-query').value = '';
+    filterQueue();
+}
+
+function resetFilters() {
+    applyPreset('all');
+}
+
+// Refresh the queue
+async function refreshQueue() {
+    await filterQueue();
+    await refreshStats();
+}
+
+// Refresh stats
+async function refreshStats() {
+    try {
+        const response = await fetch('/api/review/stats');
+        const stats = await response.json();
+        // Update stats display
+        const completionEl = document.querySelector('.completion-rate');
+        const progressEl = document.querySelector('.progress-bar');
+        if (completionEl) completionEl.textContent = Math.round(stats.completion_rate * 100) + '% Complete';
+        if (progressEl) progressEl.style.width = Math.round(stats.completion_rate * 100) + '%';
+
+        // Update stat values
+        const statUpdates = {
+            'pending': stats.pending,
+            'confirmed': stats.confirmed,
+            'incorrect': stats.incorrect,
+            'needs_info': stats.needs_info,
+            'skipped': stats.skipped
+        };
+
+        document.querySelectorAll('.progress-stat').forEach(stat => {
+            const label = stat.querySelector('.stat-label')?.textContent?.toLowerCase().replace(' ', '_');
+            const value = stat.querySelector('.stat-value');
+            if (label && value && statUpdates[label] !== undefined) {
+                value.textContent = statUpdates[label];
+            }
+        });
+
+        // Update priority breakdown
+        if (stats.priority_breakdown) {
+            document.querySelectorAll('.priority-item').forEach(item => {
+                if (item.classList.contains('high')) {
+                    item.textContent = `${stats.priority_breakdown.high} High Priority`;
+                } else if (item.classList.contains('medium')) {
+                    item.textContent = `${stats.priority_breakdown.medium} Medium`;
+                } else if (item.classList.contains('low')) {
+                    item.textContent = `${stats.priority_breakdown.low} Low`;
+                }
+            });
+        }
+    } catch (error) {
+        console.error('Error refreshing stats:', error);
+    }
+}
+
+// Render queue from API data
+function renderQueue(facts) {
+    const container = document.getElementById('review-queue');
+
+    if (facts.length === 0) {
+        container.innerHTML = `
+            <div class="empty-queue">
+                <div class="empty-icon">&#10003;</div>
+                <h3>All Caught Up!</h3>
+                <p>No facts pending review in this filter.</p>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = facts.map(fact => renderFactCard(fact)).join('');
+}
+
+function renderFactCard(fact) {
+    const priorityClass = fact.review_priority >= 0.7 ? 'high' : (fact.review_priority >= 0.4 ? 'medium' : 'low');
+    const priorityLabel = fact.review_priority >= 0.7 ? 'HIGH' : (fact.review_priority >= 0.4 ? 'MEDIUM' : 'LOW');
+    const confClass = fact.confidence_score >= 0.8 ? 'high' : (fact.confidence_score >= 0.5 ? 'medium' : 'low');
+
+    const hasEvidence = fact.evidence && fact.evidence.exact_quote;
+    const quoteLen = hasEvidence ? fact.evidence.exact_quote.length : 0;
+    const qualityClass = quoteLen >= 100 ? 'good' : (quoteLen >= 30 ? 'fair' : 'weak');
+    const qualityLabel = quoteLen >= 100 ? 'Strong' : (quoteLen >= 30 ? 'Fair' : 'Weak');
+
+    const detailsHtml = fact.details
+        ? Object.entries(fact.details).map(([k, v]) => `<span class="detail-chip">${k}: ${v}</span>`).join('')
+        : '';
+
+    const detailCount = fact.details ? Object.keys(fact.details).length : 0;
+    const hasNote = fact.verification_note && fact.verification_note.length > 0;
+    const escapedItem = fact.item.replace(/'/g, "\\'").replace(/"/g, '\\"');
+    const escapedSource = fact.source_document ? fact.source_document.replace(/'/g, "\\'") : '';
+
+    // Build evidence section HTML
+    let evidenceSectionHtml = '';
+    if (hasEvidence) {
+        const quote = fact.evidence.exact_quote;
+        const truncated = quote.length > 200;
+        evidenceSectionHtml = `
+            <div class="evidence-section">
+                <div class="evidence-header">
+                    <span class="evidence-label">Evidence</span>
+                    <span class="evidence-quality quality-${qualityClass}">${qualityLabel} (${quoteLen} chars)</span>
+                    <button class="copy-btn" onclick="copyEvidence('${fact.fact_id}')" title="Copy to clipboard">&#128203; Copy</button>
+                </div>
+                <div class="evidence-content" id="evidence-${fact.fact_id}">
+                    <blockquote class="evidence-quote" data-full="${quote.replace(/"/g, '&quot;')}">
+                        "${quote.substring(0, 200)}${truncated ? '<span class="truncated">...</span><span class="full-text" style="display:none;">' + quote.substring(200).replace(/"/g, '&quot;') + '</span>' : ''}"
+                    </blockquote>
+                    ${truncated ? '<button class="show-more-btn" onclick="toggleEvidence(\'' + fact.fact_id + '\')">Show more</button>' : ''}
+                </div>
+                ${fact.evidence.source_section ? '<div class="source-section"><span class="source-section-label">Section:</span> ' + fact.evidence.source_section + '</div>' : ''}
+            </div>
+        `;
+    } else {
+        evidenceSectionHtml = `
+            <div class="evidence-section">
+                <div class="no-evidence">
+                    <span class="no-evidence-icon">&#9888;</span>
+                    <div class="no-evidence-text">
+                        <strong>No evidence captured</strong>
+                        <p>This fact was extracted without a supporting quote. Consider flagging for verification.</p>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Build source document section HTML
+    let sourceSectionHtml = '';
+    if (fact.source_document) {
+        sourceSectionHtml = `
+            <div class="source-section-panel">
+                <div class="source-doc-info">
+                    <span class="source-icon">&#128196;</span>
+                    <div class="source-details">
+                        <span class="source-filename" title="${fact.source_document}">${fact.source_document}</span>
+                        <div class="source-actions">
+                            <button class="source-btn" onclick="viewRelatedFacts('${escapedSource}')" title="View other facts from this document">Related Facts</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    } else {
+        sourceSectionHtml = `
+            <div class="source-section-panel">
+                <div class="no-source-panel">
+                    <span class="no-source-icon">&#128194;</span>
+                    <div class="no-source-text">
+                        <strong>Source not tracked</strong>
+                        <p>Document origin unknown - verify carefully</p>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Build confidence section HTML
+    const confScore = Math.round(fact.confidence_score * 100);
+    const confTip = confScore < 50
+        ? 'This fact needs careful verification due to weak evidence.'
+        : confScore < 80
+        ? 'Review the evidence and add a note if you can confirm this fact.'
+        : 'High confidence - quick review recommended.';
+
+    const confidenceSectionHtml = `
+        <div class="confidence-section">
+            <div class="confidence-header" onclick="toggleConfidence('${fact.fact_id}')">
+                <span class="confidence-toggle">&#9660;</span>
+                <span class="confidence-score confidence-${confClass}">${confScore}% confidence</span>
+                <span class="confidence-label">Why this score?</span>
+            </div>
+            <div class="confidence-body" id="confidence-${fact.fact_id}" style="display: none;">
+                <div class="confidence-factors">
+                    <div class="factor ${hasEvidence ? 'factor-met' : 'factor-missing'}">
+                        <span class="factor-check">${hasEvidence ? '✓' : '✗'}</span>
+                        <span class="factor-name">Has evidence quote</span>
+                        <span class="factor-weight">30%</span>
+                    </div>
+                    <div class="factor ${quoteLen >= 50 ? 'factor-met' : (quoteLen >= 20 ? 'factor-partial' : 'factor-missing')}">
+                        <span class="factor-check">${quoteLen >= 50 ? '✓' : (quoteLen >= 20 ? '◐' : '✗')}</span>
+                        <span class="factor-name">Evidence length (50+ chars)</span>
+                        <span class="factor-weight">15%</span>
+                    </div>
+                    <div class="factor ${detailCount >= 2 ? 'factor-met' : (detailCount >= 1 ? 'factor-partial' : 'factor-missing')}">
+                        <span class="factor-check">${detailCount >= 2 ? '✓' : (detailCount >= 1 ? '◐' : '✗')}</span>
+                        <span class="factor-name">Has details (2+ fields)</span>
+                        <span class="factor-weight">20%</span>
+                    </div>
+                    <div class="factor ${fact.source_document ? 'factor-met' : 'factor-missing'}">
+                        <span class="factor-check">${fact.source_document ? '✓' : '✗'}</span>
+                        <span class="factor-name">Source document tracked</span>
+                        <span class="factor-weight">15%</span>
+                    </div>
+                    <div class="factor factor-missing">
+                        <span class="factor-check">✗</span>
+                        <span class="factor-name">Human verified</span>
+                        <span class="factor-weight">20%</span>
+                    </div>
+                </div>
+                <div class="confidence-tip"><strong>Tip:</strong> ${confTip}</div>
+            </div>
+        </div>
+    `;
+
+    return `
+        <div class="fact-card" data-fact-id="${fact.fact_id}">
+            <div class="fact-header">
+                <div class="fact-priority priority-${priorityClass}">${priorityLabel}</div>
+                <div class="fact-domain">${fact.domain.replace('_', ' ')}</div>
+                <div class="fact-id">${fact.fact_id}</div>
+            </div>
+            <div class="fact-content">
+                <h4 class="fact-item">${fact.item}</h4>
+                ${detailsHtml ? `<div class="fact-details">${detailsHtml}</div>` : ''}
+            </div>
+
+            ${evidenceSectionHtml}
+            ${sourceSectionHtml}
+            ${confidenceSectionHtml}
+
+            <!-- Notes Section -->
+            <div class="fact-notes">
+                <div class="notes-header" onclick="toggleNotes('${fact.fact_id}')">
+                    <span class="notes-toggle">&#9660;</span>
+                    <span class="notes-label">Add Note</span>
+                    ${hasNote ? '<span class="has-note-indicator">Has note</span>' : ''}
+                </div>
+                <div class="notes-body" id="notes-${fact.fact_id}" style="display: none;">
+                    <textarea
+                        class="note-textarea"
+                        id="note-text-${fact.fact_id}"
+                        placeholder="Add a verification note... (auto-saves)"
+                        maxlength="500"
+                        oninput="autoSaveNote('${fact.fact_id}')"
+                    >${fact.verification_note || ''}</textarea>
+                    <div class="note-footer">
+                        <span class="char-count" id="char-count-${fact.fact_id}">0/500</span>
+                        <span class="note-saved" id="note-saved-${fact.fact_id}" style="display: none;">Saved</span>
+                    </div>
+                    <div class="note-templates">
+                        <span class="template-label">Quick:</span>
+                        <button class="template-btn" onclick="insertTemplate('${fact.fact_id}', 'Verified via call with CIO')">Call verified</button>
+                        <button class="template-btn" onclick="insertTemplate('${fact.fact_id}', 'Confirmed in source document')">Doc confirmed</button>
+                        <button class="template-btn" onclick="insertTemplate('${fact.fact_id}', 'Cross-referenced with other sources')">Cross-ref</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="fact-actions">
+                <button class="action-btn confirm" onclick="confirmFact('${fact.fact_id}')" title="Confirm (C)">&#10003; Confirm</button>
+                <button class="action-btn incorrect" onclick="showIncorrectModal('${fact.fact_id}')" title="Incorrect (I)">&#10007; Incorrect</button>
+                <button class="action-btn needs-info" onclick="showNeedsInfoModal('${fact.fact_id}', '${escapedItem}')" title="Need Info (N)">&#63; Need Info</button>
+                <button class="action-btn skip" onclick="skipFact('${fact.fact_id}')" title="Skip (S)">&#8594; Skip</button>
+            </div>
+        </div>
+    `;
+}
+
+// Confirm a fact
+async function confirmFact(factId) {
+    const card = document.querySelector(`[data-fact-id="${factId}"]`);
+    card.classList.add('processing');
+
+    try {
+        const response = await fetch(`/api/facts/${factId}/status`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'confirmed', reviewer_id: 'web_user' })
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            // Remove card with animation
+            card.style.transition = 'all 0.3s';
+            card.style.transform = 'translateX(100%)';
+            card.style.opacity = '0';
+            setTimeout(() => {
+                card.remove();
+                refreshStats();
+                checkEmptyQueue();
+            }, 300);
+        } else {
+            alert('Error: ' + result.message);
+            card.classList.remove('processing');
+        }
+    } catch (error) {
+        alert('Error confirming fact: ' + error.message);
+        card.classList.remove('processing');
+    }
+}
+
+// Skip a fact
+async function skipFact(factId) {
+    const card = document.querySelector(`[data-fact-id="${factId}"]`);
+    card.classList.add('processing');
+
+    try {
+        const response = await fetch(`/api/facts/${factId}/skip`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reviewer_id: 'web_user' })
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            card.style.transition = 'all 0.3s';
+            card.style.opacity = '0';
+            setTimeout(() => {
+                card.remove();
+                refreshStats();
+                checkEmptyQueue();
+            }, 300);
+        } else {
+            alert('Error: ' + result.message);
+            card.classList.remove('processing');
+        }
+    } catch (error) {
+        alert('Error skipping fact: ' + error.message);
+        card.classList.remove('processing');
+    }
+}
+
+// Needs more info
+async function needsInfo(factId) {
+    const card = document.querySelector(`[data-fact-id="${factId}"]`);
+    card.classList.add('processing');
+
+    try {
+        const response = await fetch(`/api/facts/${factId}/needs-info`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reviewer_id: 'web_user' })
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            card.style.transition = 'all 0.3s';
+            card.style.opacity = '0';
+            setTimeout(() => {
+                card.remove();
+                refreshStats();
+                checkEmptyQueue();
+            }, 300);
+        } else {
+            alert('Error: ' + result.message);
+            card.classList.remove('processing');
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+        card.classList.remove('processing');
+    }
+}
+
+// Show incorrect modal
+function showIncorrectModal(factId) {
+    document.getElementById('incorrect-fact-id').value = factId;
+    document.getElementById('incorrect-reason').value = '';
+    document.getElementById('incorrect-modal').style.display = 'flex';
+}
+
+function closeModal() {
+    document.getElementById('incorrect-modal').style.display = 'none';
+}
+
+// Submit incorrect flag
+async function submitIncorrect() {
+    const factId = document.getElementById('incorrect-fact-id').value;
+    const reason = document.getElementById('incorrect-reason').value.trim();
+
+    if (!reason) {
+        alert('Please provide a reason');
+        return;
+    }
+
+    closeModal();
+
+    const card = document.querySelector(`[data-fact-id="${factId}"]`);
+    card.classList.add('processing');
+
+    try {
+        const response = await fetch(`/api/facts/${factId}/flag-incorrect`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reviewer_id: 'web_user', reason: reason })
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            card.style.transition = 'all 0.3s';
+            card.style.backgroundColor = '#fee2e2';
+            card.style.opacity = '0';
+            setTimeout(() => {
+                card.remove();
+                refreshStats();
+                checkEmptyQueue();
+            }, 300);
+        } else {
+            alert('Error: ' + result.message);
+            card.classList.remove('processing');
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+        card.classList.remove('processing');
+    }
+}
+
+// Check if queue is empty
+function checkEmptyQueue() {
+    const container = document.getElementById('review-queue');
+    if (container.querySelectorAll('.fact-card').length === 0) {
+        container.innerHTML = `
+            <div class="empty-queue">
+                <div class="empty-icon">&#10003;</div>
+                <h3>All Caught Up!</h3>
+                <p>No more facts to review in this filter.</p>
+            </div>
+        `;
+    }
+}
+
+// =============================================================================
+// PHASE 2: Toast Notifications
+// =============================================================================
+
+function showToast(message, type = 'info', duration = 3000) {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `
+        <span class="toast-icon">${type === 'success' ? '✓' : type === 'error' ? '✗' : 'ℹ'}</span>
+        <span class="toast-message">${message}</span>
+    `;
+    container.appendChild(toast);
+
+    setTimeout(() => {
+        toast.style.animation = 'slideOut 0.3s ease forwards';
+        setTimeout(() => toast.remove(), 300);
+    }, duration);
+}
+
+// =============================================================================
+// PHASE 2: Undo Functionality
+// =============================================================================
+
+let lastAction = null;
+let undoTimeout = null;
+
+function showUndoBar(message, factId, previousStatus) {
+    // Store for undo
+    lastAction = { factId, previousStatus };
+
+    const undoBar = document.getElementById('undo-bar');
+    undoBar.querySelector('.undo-message').textContent = message;
+    undoBar.style.display = 'flex';
+
+    // Auto-dismiss after 5 seconds
+    if (undoTimeout) clearTimeout(undoTimeout);
+    undoTimeout = setTimeout(() => {
+        dismissUndo();
+    }, 5000);
+}
+
+function dismissUndo() {
+    const undoBar = document.getElementById('undo-bar');
+    undoBar.style.display = 'none';
+    lastAction = null;
+    if (undoTimeout) {
+        clearTimeout(undoTimeout);
+        undoTimeout = null;
+    }
+}
+
+async function undoLastAction() {
+    if (!lastAction) return;
+
+    try {
+        const response = await fetch(`/api/facts/${lastAction.factId}/status`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                status: 'pending',
+                reviewer_id: 'web_user',
+                note: 'Action undone'
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            showToast('Action undone', 'info');
+            dismissUndo();
+            refreshQueue();
+            refreshStats();
+        }
+    } catch (error) {
+        showToast('Failed to undo: ' + error.message, 'error');
+    }
+}
+
+// =============================================================================
+// PHASE 2: Keyboard Shortcuts
+// =============================================================================
+
+let selectedCardIndex = 0;
+
+function getFirstCard() {
+    const cards = document.querySelectorAll('.fact-card:not(.processing)');
+    return cards[0];
+}
+
+function getSelectedCard() {
+    const cards = document.querySelectorAll('.fact-card:not(.processing)');
+    if (cards.length === 0) return null;
+    if (selectedCardIndex >= cards.length) selectedCardIndex = 0;
+    return cards[selectedCardIndex];
+}
+
+document.addEventListener('keydown', (e) => {
+    // Don't handle if in input/textarea
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+        if (e.key === 'Escape') {
+            e.target.blur();
+            closeModal('incorrect-modal');
+            closeModal('needs-info-modal');
+        }
+        return;
+    }
+
+    const card = getFirstCard();
+    if (!card) return;
+
+    const factId = card.dataset.factId;
+
+    switch(e.key.toLowerCase()) {
+        case 'c':
+            e.preventDefault();
+            confirmFact(factId);
+            break;
+        case 'i':
+            e.preventDefault();
+            showIncorrectModal(factId);
+            break;
+        case 'n':
+            e.preventDefault();
+            const item = card.querySelector('.fact-item')?.textContent || '';
+            showNeedsInfoModal(factId, item);
+            break;
+        case 's':
+            e.preventDefault();
+            skipFact(factId);
+            break;
+        case 'z':
+            if (e.ctrlKey || e.metaKey) {
+                e.preventDefault();
+                undoLastAction();
+            }
+            break;
+        case 'escape':
+            closeModal('incorrect-modal');
+            closeModal('needs-info-modal');
+            break;
+    }
+});
+
+// =============================================================================
+// PHASE 2: Notes Functionality
+// =============================================================================
+
+let noteSaveTimeouts = {};
+
+function toggleNotes(factId) {
+    const body = document.getElementById(`notes-${factId}`);
+    const header = body.previousElementSibling;
+
+    if (body.style.display === 'none') {
+        body.style.display = 'block';
+        header.classList.add('open');
+        updateCharCount(factId);
+    } else {
+        body.style.display = 'none';
+        header.classList.remove('open');
+    }
+}
+
+function updateCharCount(factId) {
+    const textarea = document.getElementById(`note-text-${factId}`);
+    const counter = document.getElementById(`char-count-${factId}`);
+    if (textarea && counter) {
+        counter.textContent = `${textarea.value.length}/500`;
+    }
+}
+
+function autoSaveNote(factId) {
+    updateCharCount(factId);
+
+    // Debounce save
+    if (noteSaveTimeouts[factId]) {
+        clearTimeout(noteSaveTimeouts[factId]);
+    }
+
+    noteSaveTimeouts[factId] = setTimeout(() => {
+        saveNote(factId);
+    }, 1000);
+}
+
+async function saveNote(factId) {
+    const textarea = document.getElementById(`note-text-${factId}`);
+    const savedIndicator = document.getElementById(`note-saved-${factId}`);
+    const note = textarea.value;
+
+    try {
+        const response = await fetch(`/api/facts/${factId}/status`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                status: 'pending',  // Keep current status
+                reviewer_id: 'web_user',
+                note: note
+            })
+        });
+
+        if (response.ok) {
+            savedIndicator.style.display = 'inline';
+            setTimeout(() => {
+                savedIndicator.style.display = 'none';
+            }, 2000);
+        }
+    } catch (error) {
+        console.error('Error saving note:', error);
+    }
+}
+
+function insertTemplate(factId, template) {
+    const textarea = document.getElementById(`note-text-${factId}`);
+    if (textarea.value) {
+        textarea.value += '\n' + template;
+    } else {
+        textarea.value = template;
+    }
+    autoSaveNote(factId);
+}
+
+// =============================================================================
+// PHASE 2: Enhanced Modals
+// =============================================================================
+
+function closeModal(modalId) {
+    if (modalId) {
+        document.getElementById(modalId).style.display = 'none';
+    } else {
+        // Close all modals
+        document.getElementById('incorrect-modal').style.display = 'none';
+        document.getElementById('needs-info-modal').style.display = 'none';
+    }
+}
+
+function showNeedsInfoModal(factId, factItem) {
+    document.getElementById('needs-info-fact-id').value = factId;
+    document.getElementById('needs-info-fact-ref').textContent = factItem;
+    document.getElementById('needs-info-question').value = `Can you provide more information about: ${factItem}?`;
+    document.getElementById('needs-info-modal').style.display = 'flex';
+
+    // Focus the question textarea
+    setTimeout(() => {
+        document.getElementById('needs-info-question').focus();
+    }, 100);
+}
+
+async function submitNeedsInfo() {
+    const factId = document.getElementById('needs-info-fact-id').value;
+    const question = document.getElementById('needs-info-question').value.trim();
+    const recipient = document.getElementById('needs-info-recipient').value;
+
+    if (!question) {
+        showToast('Please provide a question', 'error');
+        return;
+    }
+
+    closeModal('needs-info-modal');
+
+    const card = document.querySelector(`[data-fact-id="${factId}"]`);
+    if (card) card.classList.add('processing');
+
+    try {
+        const response = await fetch(`/api/facts/${factId}/needs-info`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                reviewer_id: 'web_user',
+                question: question,
+                recipient: recipient
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            showToast('Marked for follow-up', 'success');
+            showUndoBar(`Marked "${card?.querySelector('.fact-item')?.textContent || factId}" as needing info`, factId, 'pending');
+
+            if (card) {
+                card.style.transition = 'all 0.3s';
+                card.style.backgroundColor = '#fef3c7';
+                card.style.opacity = '0';
+                setTimeout(() => {
+                    card.remove();
+                    refreshStats();
+                    checkEmptyQueue();
+                }, 300);
+            }
+        } else {
+            showToast('Error: ' + result.message, 'error');
+            if (card) card.classList.remove('processing');
+        }
+    } catch (error) {
+        showToast('Error: ' + error.message, 'error');
+        if (card) card.classList.remove('processing');
+    }
+}
+
+// =============================================================================
+// PHASE 2: Enhanced Actions with Toast & Undo
+// =============================================================================
+
+// Override confirmFact with toast and undo
+const originalConfirmFact = confirmFact;
+confirmFact = async function(factId) {
+    const card = document.querySelector(`[data-fact-id="${factId}"]`);
+    const factItem = card?.querySelector('.fact-item')?.textContent || factId;
+    card?.classList.add('processing');
+
+    try {
+        const response = await fetch(`/api/facts/${factId}/status`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'confirmed', reviewer_id: 'web_user' })
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            showToast('Fact confirmed', 'success');
+            showUndoBar(`Confirmed "${factItem}"`, factId, 'pending');
+
+            if (card) {
+                card.style.transition = 'all 0.3s';
+                card.style.transform = 'translateX(100%)';
+                card.style.opacity = '0';
+                setTimeout(() => {
+                    card.remove();
+                    refreshStats();
+                    checkEmptyQueue();
+                }, 300);
+            }
+        } else {
+            showToast('Error: ' + result.message, 'error');
+            card?.classList.remove('processing');
+        }
+    } catch (error) {
+        showToast('Error: ' + error.message, 'error');
+        card?.classList.remove('processing');
+    }
+};
+
+// Override skipFact - move to bottom of queue instead of removing
+const originalSkipFact = skipFact;
+skipFact = async function(factId) {
+    const card = document.querySelector(`[data-fact-id="${factId}"]`);
+    const factItem = card?.querySelector('.fact-item')?.textContent || factId;
+    card?.classList.add('processing');
+
+    try {
+        const response = await fetch(`/api/facts/${factId}/skip`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reviewer_id: 'web_user' })
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            showToast('Moved to bottom', 'info');
+            showUndoBar(`Skipped "${factItem}"`, factId, 'pending');
+
+            if (card) {
+                // Animate card moving to bottom
+                card.style.transition = 'all 0.3s';
+                card.style.opacity = '0.5';
+                card.style.transform = 'scale(0.98)';
+
+                setTimeout(() => {
+                    // Move card to bottom of queue
+                    const queue = document.getElementById('review-queue');
+                    queue.appendChild(card);
+
+                    // Add skipped styling
+                    card.classList.add('skipped-card');
+                    card.classList.remove('processing');
+                    card.style.opacity = '1';
+                    card.style.transform = 'scale(1)';
+
+                    refreshStats();
+                }, 300);
+            }
+        } else {
+            showToast('Error: ' + result.message, 'error');
+            card?.classList.remove('processing');
+        }
+    } catch (error) {
+        showToast('Error: ' + error.message, 'error');
+        card?.classList.remove('processing');
+    }
+};
+
+// Override submitIncorrect with toast and undo
+const originalSubmitIncorrect = submitIncorrect;
+submitIncorrect = async function() {
+    const factId = document.getElementById('incorrect-fact-id').value;
+    const reason = document.getElementById('incorrect-reason').value.trim();
+
+    if (!reason) {
+        showToast('Please provide a reason', 'error');
+        return;
+    }
+
+    closeModal('incorrect-modal');
+
+    const card = document.querySelector(`[data-fact-id="${factId}"]`);
+    const factItem = card?.querySelector('.fact-item')?.textContent || factId;
+    card?.classList.add('processing');
+
+    try {
+        const response = await fetch(`/api/facts/${factId}/flag-incorrect`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reviewer_id: 'web_user', reason: reason })
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            showToast('Flagged as incorrect', 'error');
+            showUndoBar(`Flagged "${factItem}" as incorrect`, factId, 'pending');
+
+            if (card) {
+                card.style.transition = 'all 0.3s';
+                card.style.backgroundColor = '#fee2e2';
+                card.style.opacity = '0';
+                setTimeout(() => {
+                    card.remove();
+                    refreshStats();
+                    checkEmptyQueue();
+                }, 300);
+            }
+        } else {
+            showToast('Error: ' + result.message, 'error');
+            card?.classList.remove('processing');
+        }
+    } catch (error) {
+        showToast('Error: ' + error.message, 'error');
+        card?.classList.remove('processing');
+    }
+};
+
+// =============================================================================
+// PHASE 3: Evidence & Source Functions
+// =============================================================================
+
+function copyEvidence(factId) {
+    const quote = document.querySelector(`#evidence-${factId} .evidence-quote`);
+    if (!quote) return;
+
+    const fullText = quote.dataset.full || quote.textContent;
+    navigator.clipboard.writeText(fullText.replace(/^"|"$/g, '')).then(() => {
+        const btn = document.querySelector(`[onclick="copyEvidence('${factId}')"]`);
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '&#10003; Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+            btn.innerHTML = originalText;
+            btn.classList.remove('copied');
+        }, 2000);
+        showToast('Evidence copied to clipboard', 'success');
+    }).catch(() => {
+        showToast('Failed to copy', 'error');
+    });
+}
+
+function toggleEvidence(factId) {
+    const content = document.getElementById(`evidence-${factId}`);
+    const truncated = content.querySelector('.truncated');
+    const fullText = content.querySelector('.full-text');
+    const btn = content.querySelector('.show-more-btn');
+
+    if (fullText.style.display === 'none') {
+        truncated.style.display = 'none';
+        fullText.style.display = 'inline';
+        btn.textContent = 'Show less';
+    } else {
+        truncated.style.display = 'inline';
+        fullText.style.display = 'none';
+        btn.textContent = 'Show more';
+    }
+}
+
+function toggleConfidence(factId) {
+    const body = document.getElementById(`confidence-${factId}`);
+    const header = body.previousElementSibling;
+
+    if (body.style.display === 'none') {
+        body.style.display = 'block';
+        header.classList.add('open');
+    } else {
+        body.style.display = 'none';
+        header.classList.remove('open');
+    }
+}
+
+async function viewRelatedFacts(sourceDocument) {
+    try {
+        // Fetch all facts and filter by source document
+        const response = await fetch('/api/review/queue?limit=100&include_skipped=true');
+        const data = await response.json();
+
+        const relatedFacts = data.facts.filter(f =>
+            f.source_document && f.source_document === sourceDocument
+        );
+
+        if (relatedFacts.length === 0) {
+            showToast('No other facts from this document', 'info');
+            return;
+        }
+
+        // Show modal with related facts
+        showRelatedFactsModal(sourceDocument, relatedFacts);
+    } catch (error) {
+        showToast('Error loading related facts', 'error');
+    }
+}
+
+function showRelatedFactsModal(sourceDocument, facts) {
+    // Create modal if it doesn't exist
+    let modal = document.getElementById('related-facts-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'related-facts-modal';
+        modal.className = 'modal related-facts-modal';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <h3>Facts from Document</h3>
+                <p class="source-name"></p>
+                <div class="related-facts-list"></div>
+                <div class="modal-actions">
+                    <button class="btn btn-secondary" onclick="closeModal('related-facts-modal')">Close</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    // Populate modal
+    modal.querySelector('.source-name').textContent = sourceDocument;
+    const list = modal.querySelector('.related-facts-list');
+    list.innerHTML = facts.map(f => `
+        <div class="related-fact-item">
+            <h4>${f.item}</h4>
+            <span class="fact-domain">${f.domain.replace('_', ' ')} | ${f.fact_id}</span>
+            ${f.verification_status !== 'pending' ?
+                `<span class="badge badge-${f.verification_status}">${f.verification_status}</span>` : ''}
+        </div>
+    `).join('');
+
+    modal.style.display = 'flex';
+}
+
+// Initialize char counts on page load
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.note-textarea').forEach(textarea => {
+        const factId = textarea.id.replace('note-text-', '');
+        updateCharCount(factId);
+    });
+
+    // Check if all facts are verified (celebration state)
+    checkCelebrationState();
+});
+
+// =============================================================================
+// PHASE 5: Enhanced Stats & Progress Tracking
+// =============================================================================
+
+async function refreshStats() {
+    try {
+        const response = await fetch('/api/review/stats');
+        const stats = await response.json();
+
+        // Update main progress
+        const completionRate = Math.round(stats.completion_rate * 100);
+        document.getElementById('completion-rate').textContent = `${completionRate}% Complete`;
+        document.getElementById('main-progress-bar').style.width = `${completionRate}%`;
+
+        // Update stat values
+        document.getElementById('stat-pending').textContent = stats.pending;
+        document.getElementById('stat-confirmed').textContent = stats.confirmed;
+        document.getElementById('stat-incorrect').textContent = stats.incorrect;
+        document.getElementById('stat-needs-info').textContent = stats.needs_info;
+        document.getElementById('stat-skipped').textContent = stats.skipped;
+
+        // Update priority breakdown
+        document.querySelectorAll('.priority-item').forEach(item => {
+            if (item.classList.contains('high')) {
+                item.textContent = `${stats.priority_breakdown.high} High Priority`;
+            } else if (item.classList.contains('medium')) {
+                item.textContent = `${stats.priority_breakdown.medium} Medium`;
+            } else if (item.classList.contains('low')) {
+                item.textContent = `${stats.priority_breakdown.low} Low`;
+            }
+        });
+
+        // Phase 5: Update quick stats
+        const verifiedTodayEl = document.getElementById('verified-today');
+        const criticalEl = document.getElementById('remaining-critical');
+        const avgConfEl = document.getElementById('avg-confidence');
+
+        if (verifiedTodayEl) verifiedTodayEl.textContent = stats.verified_today || 0;
+        if (criticalEl) criticalEl.textContent = stats.remaining_critical || 0;
+        if (avgConfEl) avgConfEl.textContent = `${Math.round((stats.average_confidence || 0) * 100)}%`;
+
+        // Phase 5: Update domain breakdown
+        updateDomainBreakdown(stats.by_domain);
+
+        // Phase 5: Update confidence breakdown
+        updateConfidenceBreakdown(stats.confidence_breakdown);
+
+        // Check for celebration state
+        if (stats.pending === 0 && stats.total_facts > 0) {
+            showCelebration(stats);
+        }
+
+    } catch (error) {
+        console.error('Error refreshing stats:', error);
+    }
+}
+
+function updateDomainBreakdown(byDomain) {
+    const container = document.getElementById('domain-bars');
+    if (!container || !byDomain) return;
+
+    container.innerHTML = '';
+    Object.entries(byDomain).forEach(([domain, dstats]) => {
+        const confPercent = dstats.total > 0 ? (dstats.confirmed / dstats.total) * 100 : 0;
+        const incPercent = dstats.total > 0 ? (dstats.incorrect / dstats.total) * 100 : 0;
+
+        container.innerHTML += `
+            <div class="domain-row">
+                <span class="domain-name">${domain.replace('_', ' ')}</span>
+                <div class="domain-progress-bar">
+                    <div class="domain-bar confirmed" style="width: ${confPercent.toFixed(0)}%"></div>
+                    <div class="domain-bar incorrect" style="width: ${incPercent.toFixed(0)}%"></div>
+                </div>
+                <span class="domain-count">${dstats.confirmed}/${dstats.total}</span>
+            </div>
+        `;
+    });
+}
+
+function updateConfidenceBreakdown(confBreakdown) {
+    if (!confBreakdown) return;
+
+    const total = confBreakdown.high + confBreakdown.medium + confBreakdown.low;
+    if (total === 0) return;
+
+    const tiers = document.querySelectorAll('.conf-tier');
+    tiers.forEach(tier => {
+        const tierBar = tier.querySelector('.tier-bar');
+        const tierCount = tier.querySelector('.tier-count');
+
+        if (tier.classList.contains('conf-high')) {
+            const pct = (confBreakdown.high / total) * 100;
+            tierBar.style.height = `${pct}%`;
+            tierCount.textContent = confBreakdown.high;
+        } else if (tier.classList.contains('conf-medium')) {
+            const pct = (confBreakdown.medium / total) * 100;
+            tierBar.style.height = `${pct}%`;
+            tierCount.textContent = confBreakdown.medium;
+        } else if (tier.classList.contains('conf-low')) {
+            const pct = (confBreakdown.low / total) * 100;
+            tierBar.style.height = `${pct}%`;
+            tierCount.textContent = confBreakdown.low;
+        }
+    });
+}
+
+function checkCelebrationState() {
+    const pendingEl = document.getElementById('stat-pending');
+    if (pendingEl && pendingEl.textContent === '0') {
+        const totalEl = document.querySelector('.review-progress');
+        if (totalEl) {
+            // Fetch current stats for celebration
+            refreshStats();
+        }
+    }
+}
+
+function showCelebration(stats) {
+    const celebrationEl = document.getElementById('celebration-state');
+    const queueEl = document.getElementById('review-queue');
+    const dashboardEl = document.querySelector('.review-dashboard');
+
+    if (celebrationEl) {
+        // Update celebration stats
+        document.getElementById('cele-confirmed').textContent = stats.confirmed;
+        document.getElementById('cele-incorrect').textContent = stats.incorrect;
+        document.getElementById('cele-needs-info').textContent = stats.needs_info;
+
+        celebrationEl.style.display = 'block';
+
+        // Hide queue and controls
+        if (queueEl) queueEl.style.display = 'none';
+        document.querySelectorAll('.queue-controls, .keyboard-hints, .filter-presets').forEach(el => {
+            el.style.display = 'none';
+        });
+
+        // Show confetti effect
+        launchConfetti();
+    }
+}
+
+function launchConfetti() {
+    // Simple confetti animation
+    const colors = ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
+    const confettiContainer = document.createElement('div');
+    confettiContainer.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:9999;overflow:hidden;';
+    document.body.appendChild(confettiContainer);
+
+    for (let i = 0; i < 50; i++) {
+        setTimeout(() => {
+            const confetti = document.createElement('div');
+            confetti.style.cssText = `
+                position: absolute;
+                top: -10px;
+                left: ${Math.random() * 100}%;
+                width: 10px;
+                height: 10px;
+                background: ${colors[Math.floor(Math.random() * colors.length)]};
+                border-radius: ${Math.random() > 0.5 ? '50%' : '0'};
+                transform: rotate(${Math.random() * 360}deg);
+                animation: confetti-fall ${2 + Math.random() * 2}s ease-out forwards;
+            `;
+            confettiContainer.appendChild(confetti);
+        }, i * 50);
+    }
+
+    // Add keyframes dynamically
+    if (!document.getElementById('confetti-style')) {
+        const style = document.createElement('style');
+        style.id = 'confetti-style';
+        style.textContent = `
+            @keyframes confetti-fall {
+                0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+                100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    // Clean up after animation
+    setTimeout(() => confettiContainer.remove(), 5000);
+}
+
+async function exportVerificationReport() {
+    showToast('Generating report...', 'info');
+
+    try {
+        const response = await fetch('/api/review/stats');
+        const stats = await response.json();
+
+        // Generate markdown report
+        const report = generateVerificationReport(stats);
+
+        // Download as file
+        const blob = new Blob([report], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `verification_report_${new Date().toISOString().split('T')[0]}.md`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        showToast('Report downloaded!', 'success');
+    } catch (error) {
+        showToast('Failed to generate report', 'error');
+    }
+}
+
+function generateVerificationReport(stats) {
+    const date = new Date().toLocaleDateString();
+
+    let report = `# Fact Verification Report\n\n`;
+    report += `**Generated:** ${date}\n\n`;
+    report += `## Summary\n\n`;
+    report += `| Metric | Count |\n`;
+    report += `|--------|-------|\n`;
+    report += `| Total Facts | ${stats.total_facts} |\n`;
+    report += `| Confirmed | ${stats.confirmed} |\n`;
+    report += `| Flagged Incorrect | ${stats.incorrect} |\n`;
+    report += `| Needs Information | ${stats.needs_info} |\n`;
+    report += `| Skipped | ${stats.skipped} |\n`;
+    report += `| **Completion Rate** | **${Math.round(stats.completion_rate * 100)}%** |\n\n`;
+
+    report += `## Progress by Domain\n\n`;
+    report += `| Domain | Confirmed | Total | Rate |\n`;
+    report += `|--------|-----------|-------|------|\n`;
+
+    if (stats.by_domain) {
+        Object.entries(stats.by_domain).forEach(([domain, dstats]) => {
+            const rate = dstats.total > 0 ? Math.round((dstats.confirmed / dstats.total) * 100) : 0;
+            report += `| ${domain.replace('_', ' ')} | ${dstats.confirmed} | ${dstats.total} | ${rate}% |\n`;
+        });
+    }
+
+    report += `\n## Confidence Distribution\n\n`;
+    if (stats.confidence_breakdown) {
+        report += `- **High Confidence (80%+):** ${stats.confidence_breakdown.high} facts\n`;
+        report += `- **Medium Confidence (50-80%):** ${stats.confidence_breakdown.medium} facts\n`;
+        report += `- **Low Confidence (<50%):** ${stats.confidence_breakdown.low} facts\n\n`;
+    }
+
+    report += `## Quality Notes\n\n`;
+    report += `- Average confidence score: ${Math.round((stats.average_confidence || 0) * 100)}%\n`;
+    report += `- Critical items remaining: ${stats.remaining_critical || 0}\n`;
+    report += `- Verified today: ${stats.verified_today || 0}\n\n`;
+
+    report += `---\n*Report generated by IT Due Diligence Agent*\n`;
+
+    return report;
+}
+
+// Show loading skeleton while queue loads
+function showLoadingSkeleton() {
+    const container = document.getElementById('review-queue');
+    container.innerHTML = `
+        <div class="skeleton skeleton-card"></div>
+        <div class="skeleton skeleton-card"></div>
+        <div class="skeleton skeleton-card"></div>
+    `;
+}
+
+// Override filterQueue to show loading state
+const originalFilterQueue = filterQueue;
+filterQueue = async function() {
+    showLoadingSkeleton();
+    await originalFilterQueue();
+};
+</script>
+{% endblock %}

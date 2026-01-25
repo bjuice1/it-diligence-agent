@@ -1,0 +1,577 @@
+{% extends "base.html" %}
+{% block title %}Conflict Resolution - Tier 3 Review{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="header-content">
+        <h1>Conflict Resolution</h1>
+        <p class="subtitle">These changes conflict with verified facts and require individual review ({{ total_count }})</p>
+    </div>
+    <a href="/documents" class="btn btn-secondary">Back to Documents</a>
+</div>
+
+{% if conflicts %}
+<div class="conflicts-container">
+    {% for item in conflicts %}
+    <div class="conflict-card" data-change-id="{{ item.change.fact.temp_id }}">
+        <div class="conflict-header">
+            <div class="conflict-badge">
+                <span class="badge-icon">&#9888;</span>
+                Conflict Detected
+            </div>
+            <div class="conflict-meta">
+                <span class="domain">{{ item.change.fact.domain }}</span>
+                <span class="separator">|</span>
+                <span class="category">{{ item.change.fact.category }}</span>
+            </div>
+        </div>
+
+        <div class="conflict-body">
+            <!-- Comparison View -->
+            <div class="comparison">
+                <!-- Existing (Verified) Fact -->
+                <div class="fact-panel existing-panel">
+                    <div class="panel-header">
+                        <span class="panel-title">Current (Verified)</span>
+                        <span class="verified-badge">&#10003; Verified</span>
+                    </div>
+                    {% if item.existing %}
+                    <div class="fact-content">
+                        <div class="fact-field">
+                            <span class="field-label">Item:</span>
+                            <span class="field-value">{{ item.existing.item }}</span>
+                        </div>
+                        <div class="fact-field">
+                            <span class="field-label">Status:</span>
+                            <span class="field-value">{{ item.existing.status }}</span>
+                        </div>
+                        {% if item.existing.details %}
+                        <div class="fact-field">
+                            <span class="field-label">Details:</span>
+                            <div class="field-value details">
+                                {% for key, value in item.existing.details.items() %}
+                                <div class="detail-item">
+                                    <span class="detail-key">{{ key }}:</span>
+                                    <span class="detail-value">{{ value }}</span>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if item.existing.evidence %}
+                        <div class="fact-field">
+                            <span class="field-label">Evidence:</span>
+                            <span class="field-value evidence">"{{ item.existing.evidence.exact_quote[:200] }}"</span>
+                        </div>
+                        {% endif %}
+                        <div class="fact-field">
+                            <span class="field-label">Verified by:</span>
+                            <span class="field-value">{{ item.existing.reviewer_id or 'Unknown' }}</span>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="no-existing">No existing fact data available</div>
+                    {% endif %}
+                </div>
+
+                <!-- Arrow Separator -->
+                <div class="comparison-arrow">&#8594;</div>
+
+                <!-- New Fact -->
+                <div class="fact-panel new-panel">
+                    <div class="panel-header">
+                        <span class="panel-title">New (From Document)</span>
+                        <span class="confidence-badge">{{ "%.0f"|format(item.change.fact.confidence_score * 100) }}% confident</span>
+                    </div>
+                    <div class="fact-content">
+                        <div class="fact-field {% if item.existing and item.change.fact.item != item.existing.item %}changed{% endif %}">
+                            <span class="field-label">Item:</span>
+                            <span class="field-value">{{ item.change.fact.item }}</span>
+                        </div>
+                        <div class="fact-field {% if item.existing and item.change.fact.status != item.existing.status %}changed{% endif %}">
+                            <span class="field-label">Status:</span>
+                            <span class="field-value">{{ item.change.fact.status }}</span>
+                        </div>
+                        {% if item.change.fact.details %}
+                        <div class="fact-field">
+                            <span class="field-label">Details:</span>
+                            <div class="field-value details">
+                                {% for key, value in item.change.fact.details.items() %}
+                                <div class="detail-item {% if item.existing and item.existing.details and item.existing.details.get(key) != value %}changed{% endif %}">
+                                    <span class="detail-key">{{ key }}:</span>
+                                    <span class="detail-value">{{ value }}</span>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if item.change.fact.evidence and item.change.fact.evidence.exact_quote %}
+                        <div class="fact-field">
+                            <span class="field-label">Evidence:</span>
+                            <span class="field-value evidence">"{{ item.change.fact.evidence.exact_quote[:200] }}"</span>
+                        </div>
+                        {% endif %}
+                        <div class="fact-field">
+                            <span class="field-label">Source:</span>
+                            <span class="field-value">{{ item.change.fact.source_document }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Classification Reasons -->
+            {% if item.change.classification and item.change.classification.reasons %}
+            <div class="conflict-reasons">
+                <span class="reasons-label">Why this needs review:</span>
+                {% for reason in item.change.classification.reasons %}
+                <span class="reason-tag">{{ reason }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Resolution Notes -->
+            <div class="resolution-notes">
+                <label for="notes-{{ item.change.fact.temp_id }}">Resolution Notes (optional):</label>
+                <textarea id="notes-{{ item.change.fact.temp_id }}"
+                          placeholder="Explain your decision..."></textarea>
+            </div>
+
+            <!-- Resolution Actions -->
+            <div class="resolution-actions">
+                <button class="btn btn-keep" onclick="resolveConflict('{{ item.change.fact.temp_id }}', 'keep')">
+                    <span class="btn-icon">&#128274;</span>
+                    Keep Current
+                    <span class="btn-hint">Preserve verified fact</span>
+                </button>
+                <button class="btn btn-update" onclick="resolveConflict('{{ item.change.fact.temp_id }}', 'update')">
+                    <span class="btn-icon">&#128260;</span>
+                    Use New
+                    <span class="btn-hint">Replace with new data</span>
+                </button>
+                <button class="btn btn-merge" onclick="showMergeModal('{{ item.change.fact.temp_id }}')">
+                    <span class="btn-icon">&#128279;</span>
+                    Merge
+                    <span class="btn-hint">Combine both values</span>
+                </button>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% else %}
+<div class="empty-state">
+    <div class="empty-icon">&#9989;</div>
+    <h3>No Conflicts to Resolve</h3>
+    <p>All Tier 3 conflicts have been resolved.</p>
+    <a href="/documents" class="btn btn-primary">Back to Documents</a>
+</div>
+{% endif %}
+
+<style>
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 30px;
+}
+
+.header-content h1 {
+    margin: 0 0 5px 0;
+}
+
+.conflicts-container {
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+}
+
+.conflict-card {
+    background: var(--bg-surface);
+    border: 2px solid #fecaca;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.conflict-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    background: #fef2f2;
+    border-bottom: 1px solid #fecaca;
+}
+
+.conflict-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    color: #991b1b;
+}
+
+.badge-icon {
+    font-size: 1.2em;
+}
+
+.conflict-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-secondary);
+    font-size: 0.9em;
+}
+
+.separator {
+    color: var(--border-default);
+}
+
+.conflict-body {
+    padding: 20px;
+}
+
+.comparison {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.fact-panel {
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.existing-panel {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+}
+
+.new-panel {
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+}
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 15px;
+    border-bottom: 1px solid rgba(0,0,0,0.1);
+}
+
+.panel-title {
+    font-weight: 600;
+    font-size: 0.9em;
+}
+
+.verified-badge {
+    background: #dcfce7;
+    color: #166534;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 600;
+}
+
+.confidence-badge {
+    background: #dbeafe;
+    color: #1e40af;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 600;
+}
+
+.fact-content {
+    padding: 15px;
+}
+
+.fact-field {
+    margin-bottom: 12px;
+    padding: 8px 10px;
+    background: rgba(255,255,255,0.5);
+    border-radius: 6px;
+}
+
+.fact-field.changed {
+    background: #fef3c7;
+    border: 1px solid #fcd34d;
+}
+
+.field-label {
+    display: block;
+    font-size: 0.75em;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    margin-bottom: 3px;
+}
+
+.field-value {
+    font-size: 0.95em;
+}
+
+.field-value.details {
+    font-size: 0.85em;
+}
+
+.detail-item {
+    padding: 3px 0;
+}
+
+.detail-item.changed {
+    background: #fef3c7;
+    padding: 3px 6px;
+    border-radius: 4px;
+    margin: 2px 0;
+}
+
+.detail-key {
+    color: var(--text-secondary);
+}
+
+.field-value.evidence {
+    font-style: italic;
+    color: var(--text-secondary);
+    font-size: 0.85em;
+}
+
+.comparison-arrow {
+    display: flex;
+    align-items: center;
+    font-size: 2em;
+    color: var(--text-muted);
+}
+
+.conflict-reasons {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 15px;
+    background: #fef3c7;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.reasons-label {
+    font-size: 0.85em;
+    color: #92400e;
+    font-weight: 500;
+}
+
+.reason-tag {
+    background: white;
+    color: #92400e;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.8em;
+}
+
+.resolution-notes {
+    margin-bottom: 20px;
+}
+
+.resolution-notes label {
+    display: block;
+    font-size: 0.9em;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.resolution-notes textarea {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--border-default);
+    border-radius: 8px;
+    font-size: 0.95em;
+    resize: vertical;
+    min-height: 60px;
+}
+
+.resolution-actions {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+}
+
+.resolution-actions .btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 15px 25px;
+    min-width: 140px;
+    border-radius: 10px;
+}
+
+.btn-icon {
+    font-size: 1.5em;
+    margin-bottom: 5px;
+}
+
+.btn-hint {
+    font-size: 0.75em;
+    color: var(--text-secondary);
+    margin-top: 3px;
+}
+
+.btn-keep {
+    background: #f3f4f6;
+    color: var(--text-primary);
+    border: 2px solid var(--border-default);
+}
+
+.btn-keep:hover {
+    background: #e5e7eb;
+}
+
+.btn-update {
+    background: #dcfce7;
+    color: #166534;
+    border: 2px solid #bbf7d0;
+}
+
+.btn-update:hover {
+    background: #bbf7d0;
+}
+
+.btn-merge {
+    background: #dbeafe;
+    color: #1e40af;
+    border: 2px solid #93c5fd;
+}
+
+.btn-merge:hover {
+    background: #bfdbfe;
+}
+
+.no-existing {
+    padding: 30px;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.empty-state {
+    text-align: center;
+    padding: 60px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 12px;
+}
+
+.empty-icon {
+    font-size: 3em;
+    margin-bottom: 15px;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+    .comparison {
+        grid-template-columns: 1fr;
+    }
+
+    .comparison-arrow {
+        justify-content: center;
+        transform: rotate(90deg);
+        padding: 10px 0;
+    }
+
+    .resolution-actions {
+        flex-direction: column;
+    }
+
+    .resolution-actions .btn {
+        width: 100%;
+    }
+}
+</style>
+
+<script>
+async function resolveConflict(changeId, resolution) {
+    const card = document.querySelector(`[data-change-id="${changeId}"]`);
+    const notesInput = document.getElementById(`notes-${changeId}`);
+    const notes = notesInput ? notesInput.value : '';
+
+    let apiResolution;
+    switch (resolution) {
+        case 'keep':
+            apiResolution = 'reject';  // Reject the new change, keep existing
+            break;
+        case 'update':
+            apiResolution = 'accept';  // Accept the new change
+            break;
+        case 'merge':
+            // Merge handled by modal
+            return;
+    }
+
+    try {
+        const response = await fetch(`/api/changes/${changeId}/accept`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                resolution: apiResolution,
+                notes: notes
+            })
+        });
+
+        const result = await response.json();
+        if (result.status === 'success') {
+            // Animate removal
+            card.style.transition = 'all 0.4s';
+            card.style.opacity = '0';
+            card.style.transform = 'translateX(50px)';
+            setTimeout(() => {
+                card.remove();
+                // Check if all resolved
+                const remaining = document.querySelectorAll('.conflict-card');
+                if (remaining.length === 0) {
+                    window.location.reload();
+                }
+            }, 400);
+        } else {
+            alert('Error: ' + result.message);
+        }
+    } catch (error) {
+        alert('Failed to resolve: ' + error.message);
+    }
+}
+
+function showMergeModal(changeId) {
+    // For MVP, just use accept with a note
+    const notes = prompt('Describe how to merge these values:');
+    if (notes) {
+        resolveConflictWithMerge(changeId, notes);
+    }
+}
+
+async function resolveConflictWithMerge(changeId, notes) {
+    try {
+        const response = await fetch(`/api/changes/${changeId}/accept`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                resolution: 'accept',
+                notes: `[MERGED] ${notes}`
+            })
+        });
+
+        const result = await response.json();
+        if (result.status === 'success') {
+            const card = document.querySelector(`[data-change-id="${changeId}"]`);
+            card.style.transition = 'all 0.4s';
+            card.style.opacity = '0';
+            setTimeout(() => {
+                card.remove();
+                const remaining = document.querySelectorAll('.conflict-card');
+                if (remaining.length === 0) {
+                    window.location.reload();
+                }
+            }, 400);
+        }
+    } catch (error) {
+        alert('Merge failed: ' + error.message);
+    }
+}
+</script>
+{% endblock %}

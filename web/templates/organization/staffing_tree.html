@@ -52,6 +52,12 @@
     <!-- Org Chart View (Mermaid) -->
     <div id="chart-view" class="view-content" style="display: none;">
         <div class="chart-controls">
+            <label for="chart-level">Detail Level:</label>
+            <select id="chart-level" onchange="updateChart()">
+                <option value="1">Level 1 - Departments Only</option>
+                <option value="2" selected>Level 2 - Show Roles</option>
+                <option value="3">Level 3 - Individual Contributors</option>
+            </select>
             <label for="dept-filter">Focus on Department:</label>
             <select id="dept-filter" onchange="updateChart()">
                 <option value="all">All Departments</option>
@@ -118,7 +124,18 @@
                         <div class="tree-person {% if person.is_key_person %}key-person{% endif %}"
                              data-entity="{{ person.entity }}">
                             <span class="person-name">
-                                {{ person.name }}
+                                {% if person.name and person.name.startswith('Staff ') %}
+                                    {# Generic staff - show role title with number #}
+                                    <span class="person-role-title">{{ person.role_title }}</span>
+                                    {% if role.headcount > 1 %}<span class="person-number">#{{ loop.index }}</span>{% endif %}
+                                {% elif person.name == person.role_title or person.name in person.role_title or person.role_title in person.name %}
+                                    {# Name matches role title - just show the name/role #}
+                                    <span class="person-role-title">{{ person.name }}</span>
+                                    {% if role.headcount > 1 and role.members|length > 1 %}<span class="person-number">#{{ loop.index }}</span>{% endif %}
+                                {% else %}
+                                    {# Real name with different role title #}
+                                    {{ person.name }} <span class="person-role-inline">({{ person.role_title }})</span>
+                                {% endif %}
                                 {% if person.is_key_person %}
                                 <span class="key-badge" title="{{ person.key_person_reason }}">&#9888;</span>
                                 {% endif %}
@@ -247,11 +264,31 @@
     max-width: none !important;
     height: auto !important;
 }
+/* Person display enhancements */
+.person-role-title {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+.person-role-inline {
+    color: var(--text-muted);
+    font-weight: normal;
+    font-size: 0.9em;
+}
+.person-number {
+    color: var(--text-muted);
+    font-size: 0.85em;
+    margin-left: 4px;
+    opacity: 0.7;
+}
+/* Chart level selector */
+.chart-controls select {
+    min-width: 180px;
+}
 </style>
 
 <script src="{{ url_for('static', filename='js/staffing_tree.js') }}"></script>
 <script>
-// Org chart data from server
+// Org chart data from server (includes member details for Level 3)
 const orgData = {
     {% for cat_name, category in categories.items() %}
     "{{ cat_name }}": {
@@ -262,7 +299,16 @@ const orgData = {
             {
                 "title": "{{ role.role_title|e }}",
                 "headcount": {{ role.headcount }},
-                "members": {{ role.members|length }}
+                "members": [
+                    {% for member in role.members %}
+                    {
+                        "name": "{{ member.name|e }}",
+                        "role_title": "{{ member.role_title|e }}",
+                        "employment_type": "{{ member.employment_type.value }}",
+                        "compensation": {{ member.base_compensation|default(0) }}
+                    }{% if not loop.last %},{% endif %}
+                    {% endfor %}
+                ]
             }{% if not loop.last %},{% endif %}
             {% endfor %}
         ]
@@ -347,6 +393,7 @@ function applyZoom() {
 
 function updateChart() {
     const filter = document.getElementById('dept-filter').value;
+    const level = document.getElementById('chart-level').value;
     const chartDiv = document.getElementById('org-chart');
 
     // Build mermaid code - use LR (left-right) for wider layout
@@ -366,6 +413,7 @@ function updateChart() {
 
     let deptIndex = 0;
     let deptIds = [];
+    let roleIds = [];
     for (const [catName, catData] of Object.entries(orgData)) {
         if (filter !== 'all' && catName !== filter) continue;
 
@@ -374,13 +422,73 @@ function updateChart() {
         lines.push(`    ${deptId}["📁 ${catData.display_name}<br/><b>${catData.total} FTE</b>"]`);
         lines.push(`    CEO --> ${deptId}`);
 
-        // Add roles (limit to 8 for readability)
-        catData.roles.slice(0, 8).forEach((role, roleIndex) => {
-            const roleId = `R${deptIndex}_${roleIndex}`;
-            const hcText = role.headcount > 1 ? `<br/>(${role.headcount})` : '';
-            lines.push(`    ${roleId}["${role.title}${hcText}"]`);
-            lines.push(`    ${deptId} --> ${roleId}`);
-        });
+        // Level 2: Add roles (limit to 8 for readability)
+        if (level === '2') {
+            catData.roles.slice(0, 8).forEach((role, roleIndex) => {
+                const roleId = `R${deptIndex}_${roleIndex}`;
+                roleIds.push(roleId);
+                const hcText = role.headcount > 1 ? `<br/>(${role.headcount})` : '';
+                lines.push(`    ${roleId}["${role.title}${hcText}"]`);
+                lines.push(`    ${deptId} --> ${roleId}`);
+            });
+
+            // Show "+N more" if there are more roles
+            if (catData.roles.length > 8) {
+                const moreId = `MORE${deptIndex}`;
+                lines.push(`    ${moreId}["... +${catData.roles.length - 8} more roles"]`);
+                lines.push(`    ${deptId} --> ${moreId}`);
+                lines.push(`    style ${moreId} fill:#f1f5f9,stroke:#cbd5e1,stroke-dasharray:5,font-style:italic`);
+            }
+        }
+
+        // Level 3: Add roles AND individual contributors
+        if (level === '3') {
+            // Limit roles shown for manageability
+            const maxRoles = filter === 'all' ? 4 : 8;
+            const maxMembersPerRole = 5;
+
+            catData.roles.slice(0, maxRoles).forEach((role, roleIndex) => {
+                const roleId = `R${deptIndex}_${roleIndex}`;
+                roleIds.push(roleId);
+                const hcText = role.headcount > 1 ? `<br/>(${role.headcount} total)` : '';
+                lines.push(`    ${roleId}["📋 ${role.title}${hcText}"]`);
+                lines.push(`    ${deptId} --> ${roleId}`);
+
+                // Add individual members (limit per role)
+                role.members.slice(0, maxMembersPerRole).forEach((member, memberIndex) => {
+                    const memberId = `M${deptIndex}_${roleIndex}_${memberIndex}`;
+                    // Show name if it's a real name, otherwise show role title + number
+                    let memberLabel;
+                    if (member.name && !member.name.startsWith('Staff ')) {
+                        memberLabel = member.name;
+                    } else {
+                        memberLabel = `${role.title} #${memberIndex + 1}`;
+                    }
+                    const typeIcon = member.employment_type === 'contractor' ? '📝' : '👤';
+                    const compText = member.compensation > 0 ? `<br/>$${(member.compensation/1000).toFixed(0)}k` : '';
+                    lines.push(`    ${memberId}["${typeIcon} ${memberLabel}${compText}"]`);
+                    lines.push(`    ${roleId} --> ${memberId}`);
+                    // Style individual contributors
+                    lines.push(`    style ${memberId} fill:#f0fdf4,stroke:#22c55e,font-size:11px`);
+                });
+
+                // Show "+N more" if there are more members
+                if (role.members.length > maxMembersPerRole) {
+                    const moreMembersId = `MM${deptIndex}_${roleIndex}`;
+                    lines.push(`    ${moreMembersId}["... +${role.members.length - maxMembersPerRole} more"]`);
+                    lines.push(`    ${roleId} --> ${moreMembersId}`);
+                    lines.push(`    style ${moreMembersId} fill:#f1f5f9,stroke:#cbd5e1,stroke-dasharray:3,font-size:10px`);
+                }
+            });
+
+            // Show "+N more roles" if there are more
+            if (catData.roles.length > maxRoles) {
+                const moreId = `MORE${deptIndex}`;
+                lines.push(`    ${moreId}["... +${catData.roles.length - maxRoles} more roles"]`);
+                lines.push(`    ${deptId} --> ${moreId}`);
+                lines.push(`    style ${moreId} fill:#f1f5f9,stroke:#cbd5e1,stroke-dasharray:5,font-style:italic`);
+            }
+        }
 
         deptIndex++;
     }
@@ -408,6 +516,10 @@ function updateChart() {
     deptIds.forEach((deptId, i) => {
         lines.push(`    style ${deptId} fill:#3b82f6,color:#fff,font-size:16px`);
     });
+    // Style roles (Level 2)
+    roleIds.forEach((roleId) => {
+        lines.push(`    style ${roleId} fill:#e0f2fe,stroke:#0ea5e9,font-size:13px`);
+    });
     // Style MSPs differently (purple for external)
     mspData.forEach((msp, idx) => {
         lines.push(`    style MSP${idx} fill:#8b5cf6,color:#fff,font-size:14px`);
@@ -422,20 +534,26 @@ function updateChart() {
     chartDiv.innerHTML = mermaidCode;
     chartDiv.removeAttribute('data-processed');
 
-    // Configure mermaid with compact spacing (Point 7)
+    // Configure mermaid with spacing based on detail level
+    const spacingConfig = {
+        '1': { node: 80, rank: 100 },   // Level 1: Departments only - spacious
+        '2': { node: 50, rank: 70 },    // Level 2: With roles - compact
+        '3': { node: 35, rank: 50 }     // Level 3: With individuals - very compact
+    };
+    const spacing = spacingConfig[level] || spacingConfig['2'];
     mermaid.initialize({
         startOnLoad: false,
         theme: 'neutral',
         flowchart: {
-            nodeSpacing: 50,      // Reduced from 100
-            rankSpacing: 70,      // Reduced from 120
+            nodeSpacing: spacing.node,
+            rankSpacing: spacing.rank,
             curve: 'basis',
-            padding: 15,          // Reduced from 30
+            padding: 15,
             htmlLabels: true,
             useMaxWidth: false
         },
         themeVariables: {
-            fontSize: '14px',     // Slightly smaller for compact view
+            fontSize: '14px',
             fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif'
         }
     });

@@ -13,7 +13,10 @@ Phase 1 Updates:
 
 import sys
 import os
+import logging
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -51,6 +54,36 @@ session_store.configure(
     storage_dir=DATA_DIR / "sessions",
     timeout_hours=24
 )
+
+
+# Custom Jinja filter to clean up Gap object strings in question text
+import re
+
+@app.template_filter('clean_gap_text')
+def clean_gap_text(text):
+    """
+    Clean up Gap object strings that were accidentally serialized into question text.
+
+    Converts: "Can you provide documentation for: Gap(gap_id='G-CYBER-001', ..., description='No explicit...', ...)"
+    To: "Can you provide documentation for: No explicit..."
+    """
+    if not text or 'Gap(' not in text:
+        return text
+
+    # Pattern to extract description from Gap object string
+    # Handles both single quotes and HTML-escaped quotes (&#39;)
+    pattern = r"Gap\([^)]*description=['\"]([^'\"]+)['\"][^)]*\)"
+    pattern_escaped = r"Gap\([^)]*description=(?:&#39;|')([^'&]+)(?:&#39;|')[^)]*\)"
+
+    # Try to extract and replace with just the description
+    match = re.search(pattern_escaped, text) or re.search(pattern, text)
+    if match:
+        description = match.group(1)
+        # Replace the entire Gap(...) with just the description
+        text = re.sub(pattern_escaped, description, text)
+        text = re.sub(pattern, description, text)
+
+    return text
 
 
 def get_session():
@@ -1421,6 +1454,141 @@ def organization_shared_services():
 
 
 # =============================================================================
+# Applications Inventory Routes
+# =============================================================================
+
+@app.route('/applications')
+def applications_overview():
+    """Applications inventory overview."""
+    from services.applications_bridge import build_applications_inventory
+
+    session = get_session()
+
+    if session and session.fact_store:
+        inventory, status = build_applications_inventory(session.fact_store)
+        data_source = "analysis"
+    else:
+        # Return empty inventory
+        from services.applications_bridge import ApplicationsInventory
+        inventory = ApplicationsInventory()
+        status = "no_facts"
+        data_source = "none"
+
+    return render_template('applications/overview.html',
+                          inventory=inventory,
+                          status=status,
+                          data_source=data_source)
+
+
+@app.route('/applications/<category>')
+def applications_category(category):
+    """View applications in a specific category."""
+    from services.applications_bridge import build_applications_inventory
+
+    session = get_session()
+
+    if session and session.fact_store:
+        inventory, status = build_applications_inventory(session.fact_store)
+    else:
+        from services.applications_bridge import ApplicationsInventory
+        inventory = ApplicationsInventory()
+        status = "no_facts"
+
+    # Get category summary
+    cat_summary = inventory.by_category.get(category)
+    if not cat_summary:
+        flash(f'Category "{category}" not found', 'warning')
+        return redirect(url_for('applications_overview'))
+
+    return render_template('applications/category.html',
+                          category=cat_summary,
+                          inventory=inventory)
+
+
+# =============================================================================
+# Infrastructure Inventory Routes
+# =============================================================================
+
+@app.route('/infrastructure')
+def infrastructure_overview():
+    """Infrastructure inventory overview."""
+    from services.infrastructure_bridge import build_infrastructure_inventory
+
+    session = get_session()
+
+    if session and session.fact_store:
+        inventory, status = build_infrastructure_inventory(session.fact_store)
+        data_source = "analysis"
+    else:
+        # Return empty inventory
+        from services.infrastructure_bridge import InfrastructureInventory
+        inventory = InfrastructureInventory()
+        status = "no_facts"
+        data_source = "none"
+
+    return render_template('infrastructure/overview.html',
+                          inventory=inventory,
+                          status=status,
+                          data_source=data_source)
+
+
+@app.route('/infrastructure/<category>')
+def infrastructure_category(category):
+    """View infrastructure in a specific category."""
+    from services.infrastructure_bridge import build_infrastructure_inventory
+
+    session = get_session()
+
+    if session and session.fact_store:
+        inventory, status = build_infrastructure_inventory(session.fact_store)
+    else:
+        from services.infrastructure_bridge import InfrastructureInventory
+        inventory = InfrastructureInventory()
+        status = "no_facts"
+
+    # Get category summary
+    cat_summary = inventory.by_category.get(category)
+    if not cat_summary:
+        flash(f'Category "{category}" not found', 'warning')
+        return redirect(url_for('infrastructure_overview'))
+
+    return render_template('infrastructure/category.html',
+                          category=cat_summary,
+                          inventory=inventory)
+
+
+# =============================================================================
+# Fact Review Queue (Phase 1 - Validation Workflow)
+# =============================================================================
+
+@app.route('/review')
+def review_queue_page():
+    """
+    Fact validation review queue page.
+
+    Displays facts needing human review, prioritized by importance.
+    """
+    s = get_session()
+
+    # Get review queue stats
+    stats = s.fact_store.get_review_stats()
+
+    # Get initial queue (first 50 highest priority)
+    queue = s.fact_store.get_review_queue(limit=50)
+
+    # Get domain list for filtering
+    domains = list(stats.get('by_domain', {}).keys())
+
+    return render_template(
+        'review/queue.html',
+        stats=stats,
+        queue=queue,
+        domains=domains,
+        data_source='analysis' if len(s.fact_store.facts) > 0 else 'none'
+    )
+
+
+# =============================================================================
 # Error Handlers
 # =============================================================================
 
@@ -1637,9 +1805,434 @@ def api_facts():
                 'item': f.item,
                 'details': f.details,
                 'status': f.status,
+                'source_document': f.source_document,
+                'confidence_score': f.confidence_score,
+                'verified': f.verified,
+                'verified_by': f.verified_by,
+                'verified_at': f.verified_at,
             }
             for f in facts
         ]
+    })
+
+
+@app.route('/api/facts/<fact_id>/verify', methods=['POST'])
+def verify_fact(fact_id):
+    """Mark a fact as verified by a human reviewer."""
+    s = get_session()
+
+    # Get the verified_by from request data or default
+    data = request.get_json() or {}
+    verified_by = data.get('verified_by', 'web_user')
+
+    # Attempt to verify the fact
+    success = s.fact_store.verify_fact(fact_id, verified_by)
+
+    if success:
+        # Save the updated fact store
+        from config_v2 import OUTPUT_DIR
+        facts_files = sorted(OUTPUT_DIR.glob("facts_*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
+        if facts_files:
+            s.fact_store.save(str(facts_files[0]))
+
+        return jsonify({
+            'status': 'success',
+            'message': f'Fact {fact_id} verified by {verified_by}',
+            'fact_id': fact_id,
+            'verified': True,
+            'verified_by': verified_by
+        })
+    else:
+        return jsonify({
+            'status': 'error',
+            'message': f'Fact {fact_id} not found'
+        }), 404
+
+
+@app.route('/api/facts/<fact_id>/unverify', methods=['POST'])
+def unverify_fact(fact_id):
+    """Remove verification status from a fact."""
+    s = get_session()
+
+    success = s.fact_store.unverify_fact(fact_id)
+
+    if success:
+        # Save the updated fact store
+        from config_v2 import OUTPUT_DIR
+        facts_files = sorted(OUTPUT_DIR.glob("facts_*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
+        if facts_files:
+            s.fact_store.save(str(facts_files[0]))
+
+        return jsonify({
+            'status': 'success',
+            'message': f'Verification removed from {fact_id}',
+            'fact_id': fact_id,
+            'verified': False
+        })
+    else:
+        return jsonify({
+            'status': 'error',
+            'message': f'Fact {fact_id} not found'
+        }), 404
+
+
+@app.route('/api/facts/verification-stats')
+def verification_stats():
+    """Get verification statistics for all facts."""
+    s = get_session()
+    stats = s.fact_store.get_verification_stats()
+    return jsonify(stats)
+
+
+@app.route('/api/facts/confidence-summary')
+def confidence_summary():
+    """Get confidence score summary for all facts."""
+    s = get_session()
+    summary = s.fact_store.get_confidence_summary()
+    return jsonify(summary)
+
+
+# =============================================================================
+# REVIEW QUEUE API (Phase 1 - Validation Workflow)
+# =============================================================================
+
+@app.route('/api/review/queue')
+def review_queue():
+    """
+    Get facts needing review, sorted by priority.
+
+    Query params:
+        domain: Filter by domain
+        limit: Max facts to return (default 50)
+        include_skipped: Include previously skipped facts (default false)
+    """
+    s = get_session()
+
+    domain = request.args.get('domain')
+    limit = int(request.args.get('limit', 50))
+    include_skipped = request.args.get('include_skipped', 'false').lower() == 'true'
+
+    facts = s.fact_store.get_review_queue(
+        domain=domain,
+        limit=limit,
+        include_skipped=include_skipped
+    )
+
+    return jsonify({
+        'count': len(facts),
+        'facts': [
+            {
+                'fact_id': f.fact_id,
+                'domain': f.domain,
+                'category': f.category,
+                'item': f.item,
+                'details': f.details,
+                'evidence': f.evidence,
+                'source_document': f.source_document,
+                'confidence_score': f.confidence_score,
+                'review_priority': f.review_priority,
+                'verification_status': f.verification_status,
+                'verification_note': f.verification_note,
+                'entity': f.entity
+            }
+            for f in facts
+        ]
+    })
+
+
+@app.route('/api/review/stats')
+def review_stats():
+    """Get comprehensive review queue statistics."""
+    s = get_session()
+    stats = s.fact_store.get_review_stats()
+    return jsonify(stats)
+
+
+@app.route('/api/review/export-report')
+def export_verification_report():
+    """Export verification report as markdown."""
+    s = get_session()
+    stats = s.fact_store.get_review_stats()
+
+    from datetime import datetime
+    date = datetime.now().strftime("%Y-%m-%d")
+
+    report = f"""# Fact Verification Report
+
+**Generated:** {date}
+
+## Summary
+
+| Metric | Count |
+|--------|-------|
+| Total Facts | {stats['total_facts']} |
+| Confirmed | {stats['confirmed']} |
+| Flagged Incorrect | {stats['incorrect']} |
+| Needs Information | {stats['needs_info']} |
+| Skipped | {stats['skipped']} |
+| **Completion Rate** | **{int(stats['completion_rate'] * 100)}%** |
+
+## Progress by Domain
+
+| Domain | Confirmed | Total | Rate |
+|--------|-----------|-------|------|
+"""
+    for domain, dstats in stats.get('by_domain', {}).items():
+        rate = int((dstats['confirmed'] / dstats['total']) * 100) if dstats['total'] > 0 else 0
+        report += f"| {domain.replace('_', ' ')} | {dstats['confirmed']} | {dstats['total']} | {rate}% |\n"
+
+    conf = stats.get('confidence_breakdown', {})
+    report += f"""
+## Confidence Distribution
+
+- **High Confidence (80%+):** {conf.get('high', 0)} facts
+- **Medium Confidence (50-80%):** {conf.get('medium', 0)} facts
+- **Low Confidence (<50%):** {conf.get('low', 0)} facts
+
+## Quality Notes
+
+- Average confidence score: {int((stats.get('average_confidence', 0)) * 100)}%
+- Critical items remaining: {stats.get('remaining_critical', 0)}
+- Verified today: {stats.get('verified_today', 0)}
+
+---
+*Report generated by IT Due Diligence Agent*
+"""
+
+    from flask import Response
+    return Response(
+        report,
+        mimetype='text/markdown',
+        headers={'Content-Disposition': f'attachment; filename=verification_report_{date}.md'}
+    )
+
+
+@app.route('/api/facts/<fact_id>/status', methods=['POST'])
+def update_fact_status(fact_id):
+    """
+    Update verification status for a fact.
+
+    JSON body:
+        status: pending, confirmed, incorrect, needs_info, skipped
+        reviewer_id: Who is making this update
+        note: Optional verification note
+    """
+    s = get_session()
+    data = request.get_json() or {}
+
+    status = data.get('status')
+    reviewer_id = data.get('reviewer_id', 'web_user')
+    note = data.get('note', '')
+
+    if not status:
+        return jsonify({
+            'status': 'error',
+            'message': 'status field is required'
+        }), 400
+
+    try:
+        success = s.fact_store.update_verification_status(
+            fact_id=fact_id,
+            status=status,
+            reviewer_id=reviewer_id,
+            note=note
+        )
+    except ValueError as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 400
+
+    if success:
+        # Save the updated fact store
+        from config_v2 import OUTPUT_DIR
+        facts_files = sorted(OUTPUT_DIR.glob("facts_*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
+        if facts_files:
+            s.fact_store.save(str(facts_files[0]))
+
+        # Get updated fact for response
+        fact = s.fact_store.get_fact(fact_id)
+
+        return jsonify({
+            'status': 'success',
+            'message': f'Fact {fact_id} status updated to {status}',
+            'fact_id': fact_id,
+            'verification_status': fact.verification_status,
+            'confidence_score': fact.confidence_score,
+            'verified': fact.verified
+        })
+    else:
+        return jsonify({
+            'status': 'error',
+            'message': f'Fact {fact_id} not found'
+        }), 404
+
+
+@app.route('/api/facts/<fact_id>/skip', methods=['POST'])
+def skip_fact(fact_id):
+    """Mark a fact as skipped (will revisit later)."""
+    s = get_session()
+    data = request.get_json() or {}
+    reviewer_id = data.get('reviewer_id', 'web_user')
+
+    success = s.fact_store.update_verification_status(
+        fact_id=fact_id,
+        status='skipped',
+        reviewer_id=reviewer_id,
+        note=data.get('note', 'Skipped for later review')
+    )
+
+    if success:
+        from config_v2 import OUTPUT_DIR
+        facts_files = sorted(OUTPUT_DIR.glob("facts_*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
+        if facts_files:
+            s.fact_store.save(str(facts_files[0]))
+
+        return jsonify({
+            'status': 'success',
+            'message': f'Fact {fact_id} skipped',
+            'fact_id': fact_id
+        })
+    else:
+        return jsonify({
+            'status': 'error',
+            'message': f'Fact {fact_id} not found'
+        }), 404
+
+
+@app.route('/api/facts/<fact_id>/flag-incorrect', methods=['POST'])
+def flag_incorrect(fact_id):
+    """Mark a fact as incorrect."""
+    s = get_session()
+    data = request.get_json() or {}
+    reviewer_id = data.get('reviewer_id', 'web_user')
+    reason = data.get('reason', '')
+
+    if not reason:
+        return jsonify({
+            'status': 'error',
+            'message': 'reason field is required when flagging as incorrect'
+        }), 400
+
+    success = s.fact_store.update_verification_status(
+        fact_id=fact_id,
+        status='incorrect',
+        reviewer_id=reviewer_id,
+        note=f"INCORRECT: {reason}"
+    )
+
+    if success:
+        from config_v2 import OUTPUT_DIR
+        facts_files = sorted(OUTPUT_DIR.glob("facts_*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
+        if facts_files:
+            s.fact_store.save(str(facts_files[0]))
+
+        return jsonify({
+            'status': 'success',
+            'message': f'Fact {fact_id} flagged as incorrect',
+            'fact_id': fact_id
+        })
+    else:
+        return jsonify({
+            'status': 'error',
+            'message': f'Fact {fact_id} not found'
+        }), 404
+
+
+@app.route('/api/facts/<fact_id>/needs-info', methods=['POST'])
+def needs_more_info(fact_id):
+    """Mark a fact as needing more information and optionally create a question."""
+    s = get_session()
+    data = request.get_json() or {}
+    reviewer_id = data.get('reviewer_id', 'web_user')
+    question = data.get('question', '')
+    recipient = data.get('recipient', '')
+
+    # Build the note
+    note_parts = ["NEEDS INFO"]
+    if question:
+        note_parts.append(f"Question: {question}")
+    if recipient:
+        note_parts.append(f"Ask: {recipient}")
+    note = " | ".join(note_parts)
+
+    success = s.fact_store.update_verification_status(
+        fact_id=fact_id,
+        status='needs_info',
+        reviewer_id=reviewer_id,
+        note=note
+    )
+
+    if success:
+        from config_v2 import OUTPUT_DIR
+        facts_files = sorted(OUTPUT_DIR.glob("facts_*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
+        if facts_files:
+            s.fact_store.save(str(facts_files[0]))
+
+        # Create an OpenQuestion if we have a question (Phase 2 integration)
+        question_id = None
+        if question:
+            try:
+                from tools_v2.open_questions import OpenQuestionsStore
+                fact = s.fact_store.get_fact(fact_id)
+                if fact:
+                    questions_store = OpenQuestionsStore()
+                    question_id = questions_store.add_question(
+                        domain=fact.domain,
+                        question=question,
+                        context=f"Generated from fact review. Fact: {fact.item}",
+                        suggested_recipient=recipient,
+                        source_fact_id=fact_id
+                    )
+            except Exception as e:
+                # Don't fail the whole operation if question creation fails
+                import logging
+                logging.getLogger(__name__).warning(f"Could not create OpenQuestion: {e}")
+
+        return jsonify({
+            'status': 'success',
+            'message': f'Fact {fact_id} marked as needing more info',
+            'fact_id': fact_id,
+            'question_id': question_id
+        })
+    else:
+        return jsonify({
+            'status': 'error',
+            'message': f'Fact {fact_id} not found'
+        }), 404
+
+
+@app.route('/api/facts/<fact_id>/note', methods=['PATCH'])
+def update_fact_note(fact_id):
+    """Update just the note for a fact without changing status."""
+    s = get_session()
+    data = request.get_json() or {}
+    note = data.get('note', '')
+    reviewer_id = data.get('reviewer_id', 'web_user')
+
+    fact = s.fact_store.get_fact(fact_id)
+    if not fact:
+        return jsonify({
+            'status': 'error',
+            'message': f'Fact {fact_id} not found'
+        }), 404
+
+    # Update just the note
+    fact.verification_note = note
+    fact.reviewer_id = reviewer_id
+    from tools_v2.fact_store import _generate_timestamp
+    fact.updated_at = _generate_timestamp()
+
+    # Save
+    from config_v2 import OUTPUT_DIR
+    facts_files = sorted(OUTPUT_DIR.glob("facts_*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
+    if facts_files:
+        s.fact_store.save(str(facts_files[0]))
+
+    return jsonify({
+        'status': 'success',
+        'message': f'Note updated for {fact_id}',
+        'fact_id': fact_id
     })
 
 
@@ -1820,6 +2413,888 @@ def export_excel():
         as_attachment=True,
         download_name=filename
     )
+
+
+# =============================================================================
+# Document Management & Incremental Updates
+# =============================================================================
+
+@app.route('/documents')
+def documents_page():
+    """Document management and incremental update page."""
+    s = get_session()
+
+    # Get or create document registry
+    if not hasattr(s, 'document_registry'):
+        from tools_v2.document_registry import DocumentRegistry
+        s.document_registry = DocumentRegistry()
+
+    docs = s.document_registry.get_all_documents()
+    stats = s.document_registry.get_stats()
+    runs = s.document_registry.get_analysis_runs()
+
+    # Get "What's New" data if we have a fact merger
+    whats_new = {"new": [], "updated": [], "conflicts": []}
+    pending_conflicts = []
+    if hasattr(s, 'fact_merger'):
+        whats_new = s.fact_merger.get_whats_new()
+        pending_conflicts = s.fact_merger.get_pending_conflicts()
+
+    # Get pending changes from document processor
+    pending_changes = getattr(s, 'pending_changes', {"tier1": [], "tier2": [], "tier3": []})
+
+    # Also check document processor for pending changes
+    if hasattr(s, 'document_processor'):
+        for tier in ["tier1", "tier2", "tier3"]:
+            proc_changes = s.document_processor.pending_changes.get(tier, [])
+            if proc_changes:
+                if tier not in pending_changes:
+                    pending_changes[tier] = []
+                pending_changes[tier].extend(proc_changes)
+        # Sync back to session
+        s.pending_changes = pending_changes
+
+    tier_stats = {
+        "tier1": len(pending_changes.get("tier1", [])),
+        "tier2": len(pending_changes.get("tier2", [])),
+        "tier3": len(pending_changes.get("tier3", [])),
+        "total": sum(len(pending_changes.get(t, [])) for t in ["tier1", "tier2", "tier3"])
+    }
+
+    return render_template('documents/manage.html',
+                          documents=docs,
+                          stats=stats,
+                          analysis_runs=runs,
+                          whats_new=whats_new,
+                          pending_conflicts=pending_conflicts,
+                          tier_stats=tier_stats,
+                          data_source='analysis' if docs else 'none')
+
+
+@app.route('/api/documents')
+def api_documents():
+    """Get all registered documents."""
+    from tools_v2.document_registry import DocumentRegistry
+    from config_v2 import OUTPUT_DIR
+
+    s = get_session()
+
+    # Load document registry from file if not in session
+    if not hasattr(s, 'document_registry'):
+        registry_file = OUTPUT_DIR / "document_registry.json"
+        if registry_file.exists():
+            try:
+                s.document_registry = DocumentRegistry()
+                s.document_registry.load_from_file(str(registry_file))
+            except Exception as e:
+                logger.warning(f"Failed to load document registry: {e}")
+                return jsonify({"documents": [], "stats": {}})
+        else:
+            return jsonify({"documents": [], "stats": {}})
+
+    docs = [d.to_dict() for d in s.document_registry.get_all_documents()]
+    stats = s.document_registry.get_stats()
+
+    return jsonify({"documents": docs, "stats": stats})
+
+
+@app.route('/api/documents/upload', methods=['POST'])
+def api_upload_documents():
+    """Upload new documents for incremental analysis."""
+    from tools_v2.document_registry import DocumentRegistry, ChangeType
+    from tools_v2.fact_merger import FactMerger
+    from tools_v2.document_processor import DocumentProcessor, ProcessingPriority
+    from config_v2 import OUTPUT_DIR
+
+    s = get_session()
+
+    # Registry file path for persistence
+    registry_file = OUTPUT_DIR / "document_registry.json"
+
+    # Initialize document registry - load from file if exists
+    if not hasattr(s, 'document_registry'):
+        s.document_registry = DocumentRegistry()
+        if registry_file.exists():
+            try:
+                s.document_registry.load_from_file(str(registry_file))
+                logger.info(f"Loaded document registry with {len(s.document_registry.documents)} documents")
+            except Exception as e:
+                logger.warning(f"Failed to load document registry: {e}")
+
+    if not hasattr(s, 'fact_merger'):
+        s.fact_merger = FactMerger(s.fact_store)
+
+    if not hasattr(s, 'document_processor'):
+        s.document_processor = DocumentProcessor(
+            document_registry=s.document_registry,
+            fact_store=s.fact_store,
+            fact_merger=s.fact_merger
+        )
+        # Load pending changes from file
+        s.document_processor.load_pending_changes()
+        # Start background worker
+        s.document_processor.start_worker()
+
+    if 'files' not in request.files:
+        return jsonify({"status": "error", "message": "No files provided"}), 400
+
+    files = request.files.getlist('files')
+    results = []
+
+    # Create uploads directory if needed
+    uploads_dir = DATA_DIR / "uploads"
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+
+    for file in files:
+        if file.filename:
+            # Save file to disk
+            safe_filename = file.filename.replace('/', '_').replace('\\', '_')
+            file_path = uploads_dir / safe_filename
+            file.save(str(file_path))
+
+            # Read content for hash
+            with open(file_path, 'rb') as f:
+                content = f.read()
+            content_text = content.decode('utf-8', errors='ignore')
+
+            # Register document
+            record, change_type = s.document_registry.register_document(
+                filename=file.filename,
+                content=content_text,
+                file_path=str(file_path),
+                file_size=len(content)
+            )
+
+            # Queue for processing if new or updated
+            if change_type in [ChangeType.NEW, ChangeType.UPDATED]:
+                priority = ProcessingPriority.NORMAL
+                s.document_processor.queue_document(
+                    doc_id=record.doc_id,
+                    filename=file.filename,
+                    file_path=str(file_path),
+                    priority=priority
+                )
+
+            results.append({
+                "filename": file.filename,
+                "doc_id": record.doc_id,
+                "change_type": change_type.value,
+                "version": record.version,
+                "queued": change_type in [ChangeType.NEW, ChangeType.UPDATED]
+            })
+
+    # Save document registry to file for persistence
+    try:
+        s.document_registry.save_to_file(str(registry_file))
+    except Exception as e:
+        logger.error(f"Failed to save document registry: {e}")
+
+    return jsonify({
+        "status": "success",
+        "documents": results,
+        "message": f"Registered {len(results)} documents"
+    })
+
+
+@app.route('/api/documents/processing/status')
+def processing_status():
+    """Get processing status for all documents in queue."""
+    s = get_session()
+
+    if not hasattr(s, 'document_processor'):
+        return jsonify({"queue": [], "stats": {}})
+
+    all_status = s.document_processor.get_all_status()
+    stats = s.document_processor.get_queue_stats()
+
+    return jsonify({
+        "queue": all_status,
+        "stats": stats
+    })
+
+
+@app.route('/api/documents/<doc_id>/processing-status')
+def document_processing_status(doc_id):
+    """Get processing status for a specific document."""
+    s = get_session()
+
+    if not hasattr(s, 'document_processor'):
+        return jsonify({"status": "error", "message": "No processor initialized"}), 400
+
+    status = s.document_processor.get_status(doc_id)
+    if not status:
+        return jsonify({"status": "not_found", "message": "Document not in processing queue"})
+
+    return jsonify({"status": "success", "processing": status})
+
+
+@app.route('/api/documents/<doc_id>/process', methods=['POST'])
+def process_document_now(doc_id):
+    """Manually trigger processing for a document."""
+    from tools_v2.document_processor import ProcessingPriority
+
+    s = get_session()
+
+    if not hasattr(s, 'document_registry'):
+        return jsonify({"status": "error", "message": "No documents registered"}), 400
+
+    doc = s.document_registry.get_document(doc_id)
+    if not doc:
+        return jsonify({"status": "error", "message": "Document not found"}), 404
+
+    # Initialize processor if needed
+    if not hasattr(s, 'document_processor'):
+        from tools_v2.document_processor import DocumentProcessor
+        from tools_v2.fact_merger import FactMerger
+        if not hasattr(s, 'fact_merger'):
+            s.fact_merger = FactMerger(s.fact_store)
+        s.document_processor = DocumentProcessor(
+            document_registry=s.document_registry,
+            fact_store=s.fact_store,
+            fact_merger=s.fact_merger
+        )
+        s.document_processor.start_worker()
+
+    # Get priority from request
+    data = request.get_json() or {}
+    priority_str = data.get('priority', 'normal').upper()
+    priority = getattr(ProcessingPriority, priority_str, ProcessingPriority.NORMAL)
+
+    # Queue document
+    s.document_processor.queue_document(
+        doc_id=doc.doc_id,
+        filename=doc.filename,
+        file_path=doc.file_path,
+        priority=priority
+    )
+
+    return jsonify({
+        "status": "success",
+        "message": f"Document queued for processing",
+        "doc_id": doc_id
+    })
+
+
+@app.route('/api/documents/<doc_id>')
+def get_document(doc_id):
+    """Get document details."""
+    s = get_session()
+
+    if not hasattr(s, 'document_registry'):
+        return jsonify({"status": "error", "message": "No documents registered"}), 404
+
+    doc = s.document_registry.get_document(doc_id)
+    if not doc:
+        return jsonify({"status": "error", "message": "Document not found"}), 404
+
+    return jsonify({"status": "success", "document": doc.to_dict()})
+
+
+@app.route('/api/documents/<doc_id>/facts')
+def get_document_facts(doc_id):
+    """Get all facts linked to a document."""
+    s = get_session()
+
+    if not hasattr(s, 'document_registry'):
+        return jsonify({"facts": []})
+
+    fact_ids = s.document_registry.get_facts_for_document(doc_id)
+    facts = [s.fact_store.get_fact(fid).to_dict() for fid in fact_ids if s.fact_store.get_fact(fid)]
+
+    return jsonify({"facts": facts, "count": len(facts)})
+
+
+@app.route('/api/documents/whats-new')
+def whats_new():
+    """Get facts that are new or changed since last review."""
+    s = get_session()
+
+    if not hasattr(s, 'fact_merger'):
+        return jsonify({"new": [], "updated": [], "conflicts": []})
+
+    data = s.fact_merger.get_whats_new()
+
+    return jsonify({
+        "new": [f.to_dict() for f in data["new"]],
+        "updated": [f.to_dict() for f in data["updated"]],
+        "conflicts": [f.to_dict() for f in data["conflicts"]],
+        "new_count": len(data["new"]),
+        "updated_count": len(data["updated"]),
+        "conflict_count": len(data["conflicts"])
+    })
+
+
+@app.route('/api/documents/conflicts')
+def get_conflicts():
+    """Get pending merge conflicts."""
+    s = get_session()
+
+    if not hasattr(s, 'fact_merger'):
+        return jsonify({"conflicts": []})
+
+    conflicts = s.fact_merger.get_pending_conflicts()
+    return jsonify({
+        "conflicts": [c.to_dict() for c in conflicts],
+        "count": len(conflicts)
+    })
+
+
+@app.route('/api/documents/conflicts/<conflict_id>/resolve', methods=['POST'])
+def resolve_conflict(conflict_id):
+    """Resolve a merge conflict."""
+    s = get_session()
+
+    if not hasattr(s, 'fact_merger'):
+        return jsonify({"status": "error", "message": "No merger initialized"}), 400
+
+    data = request.get_json() or {}
+    resolution = data.get('resolution')  # keep_existing, use_new, merge
+    resolved_by = data.get('resolved_by', 'web_user')
+    notes = data.get('notes', '')
+
+    if not resolution:
+        return jsonify({"status": "error", "message": "resolution is required"}), 400
+
+    success = s.fact_merger.resolve_conflict(conflict_id, resolution, resolved_by, notes)
+
+    if success:
+        return jsonify({"status": "success", "message": "Conflict resolved"})
+    else:
+        return jsonify({"status": "error", "message": "Failed to resolve conflict"}), 400
+
+
+@app.route('/api/documents/clear-markers', methods=['POST'])
+def clear_change_markers():
+    """Clear [NEW] and [UPDATED] markers after user has reviewed."""
+    s = get_session()
+
+    if hasattr(s, 'fact_merger'):
+        s.fact_merger.clear_change_markers()
+        return jsonify({"status": "success", "message": "Change markers cleared"})
+
+    return jsonify({"status": "error", "message": "No merger initialized"}), 400
+
+
+@app.route('/api/documents/analysis-runs')
+def get_analysis_runs():
+    """Get history of analysis runs."""
+    s = get_session()
+
+    if not hasattr(s, 'document_registry'):
+        return jsonify({"runs": []})
+
+    runs = s.document_registry.get_analysis_runs()
+    return jsonify({"runs": runs})
+
+
+# === Tiered Review API Endpoints (Phase 3) ===
+
+@app.route('/api/changes/pending')
+def get_pending_changes():
+    """Get all pending changes organized by tier."""
+    from config_v2 import OUTPUT_DIR
+    import json as json_module
+
+    s = get_session()
+
+    # Load pending changes from file (primary source of truth)
+    pending_file = OUTPUT_DIR / "pending_changes.json"
+    if pending_file.exists():
+        try:
+            with open(pending_file, 'r') as f:
+                changes = json_module.load(f)
+        except Exception as e:
+            logger.error(f"Failed to load pending changes: {e}")
+            changes = {"tier1": [], "tier2": [], "tier3": []}
+    else:
+        changes = {"tier1": [], "tier2": [], "tier3": []}
+
+    stats = {
+        "total": len(changes.get("tier1", [])) + len(changes.get("tier2", [])) + len(changes.get("tier3", [])),
+        "tier1": len(changes.get("tier1", [])),
+        "tier2": len(changes.get("tier2", [])),
+        "tier3": len(changes.get("tier3", []))
+    }
+
+    return jsonify({
+        "tier1": changes.get("tier1", []),
+        "tier2": changes.get("tier2", []),
+        "tier3": changes.get("tier3", []),
+        "stats": stats
+    })
+
+
+@app.route('/api/changes/auto-apply', methods=['POST'])
+def auto_apply_changes():
+    """Auto-apply all Tier 1 eligible changes."""
+    s = get_session()
+
+    if not hasattr(s, 'pending_changes') or not hasattr(s, 'fact_merger'):
+        return jsonify({"status": "error", "message": "No pending changes"}), 400
+
+    tier1_changes = s.pending_changes.get("tier1", [])
+    auto_eligible = [c for c in tier1_changes if c.get("classification", {}).get("auto_apply_eligible")]
+
+    applied = []
+    for change in auto_eligible:
+        fact_data = change.get("fact", {})
+        try:
+            from tools_v2.fact_merger import MergeAction
+            action, fact_id = s.fact_merger.merge_fact(fact_data, fact_data.get("source_document", ""))
+            if action in [MergeAction.ADD, MergeAction.UPDATE]:
+                applied.append({
+                    "fact_id": fact_id,
+                    "item": fact_data.get("item"),
+                    "action": action.value
+                })
+        except Exception as e:
+            logger.error(f"Auto-apply failed for fact: {e}")
+
+    # Remove applied changes from pending
+    remaining = [c for c in tier1_changes if c not in auto_eligible or c.get("fact", {}).get("temp_id") not in [a.get("temp_id") for a in applied]]
+    s.pending_changes["tier1"] = remaining
+
+    # Save fact store
+    if hasattr(s, 'fact_store'):
+        facts_files = sorted(OUTPUT_DIR.glob("facts_*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
+        if facts_files:
+            s.fact_store.save(str(facts_files[0]))
+
+    return jsonify({
+        "status": "success",
+        "applied_count": len(applied),
+        "applied": applied
+    })
+
+
+@app.route('/api/changes/batch-accept', methods=['POST'])
+def batch_accept_changes():
+    """Accept multiple changes at once (Tier 2 batch review)."""
+    from config_v2 import OUTPUT_DIR
+    import json as json_module
+    from tools_v2.fact_merger import FactMerger, MergeAction
+
+    s = get_session()
+
+    data = request.get_json() or {}
+    change_ids = data.get("change_ids", [])
+    tier = data.get("tier", "tier2")
+
+    # Load pending changes from file
+    pending_file = OUTPUT_DIR / "pending_changes.json"
+    if not pending_file.exists():
+        return jsonify({"status": "error", "message": "No pending changes file"}), 404
+
+    try:
+        with open(pending_file, 'r') as f:
+            pending_changes = json_module.load(f)
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Failed to load pending changes: {e}"}), 500
+
+    # Initialize fact_merger if needed
+    if not hasattr(s, 'fact_merger') and hasattr(s, 'fact_store'):
+        s.fact_merger = FactMerger(s.fact_store)
+
+    if not hasattr(s, 'fact_merger'):
+        return jsonify({"status": "error", "message": "Cannot initialize merger"}), 400
+
+    tier_changes = pending_changes.get(tier, [])
+
+    accepted = []
+    rejected_ids = set()
+
+    for change in tier_changes:
+        fact_data = change.get("fact", {})
+        temp_id = fact_data.get("temp_id")
+
+        if not change_ids or temp_id in change_ids:
+            try:
+                action, fact_id = s.fact_merger.merge_fact(fact_data, fact_data.get("source_document", ""))
+                if action in [MergeAction.ADD, MergeAction.UPDATE]:
+                    accepted.append({
+                        "fact_id": fact_id,
+                        "temp_id": temp_id,
+                        "item": fact_data.get("item"),
+                        "action": action.value
+                    })
+            except Exception as e:
+                logger.error(f"Batch accept failed: {e}")
+                rejected_ids.add(temp_id)
+
+    # Remove accepted changes from pending
+    accepted_temp_ids = {a["temp_id"] for a in accepted}
+    pending_changes[tier] = [
+        c for c in tier_changes
+        if c.get("fact", {}).get("temp_id") not in accepted_temp_ids
+    ]
+
+    # Save updated pending changes to file
+    with open(pending_file, 'w') as f:
+        json_module.dump(pending_changes, f, indent=2, default=str)
+
+    # Save fact store
+    if hasattr(s, 'fact_store'):
+        facts_files = sorted(OUTPUT_DIR.glob("facts_*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
+        if facts_files:
+            s.fact_store.save(str(facts_files[0]))
+
+    return jsonify({
+        "status": "success",
+        "accepted_count": len(accepted),
+        "accepted": accepted
+    })
+
+
+@app.route('/api/changes/<change_id>/accept', methods=['POST'])
+def accept_single_change(change_id):
+    """Accept a single change (Tier 3 individual review)."""
+    from config_v2 import OUTPUT_DIR
+    import json as json_module
+    from tools_v2.fact_merger import FactMerger, MergeAction
+
+    s = get_session()
+
+    data = request.get_json() or {}
+    resolution = data.get("resolution", "accept")  # accept, reject, modify
+    modifications = data.get("modifications", {})
+    notes = data.get("notes", "")
+
+    # Load pending changes from file (primary source of truth)
+    pending_file = OUTPUT_DIR / "pending_changes.json"
+    if not pending_file.exists():
+        return jsonify({"status": "error", "message": "No pending changes file"}), 404
+
+    try:
+        with open(pending_file, 'r') as f:
+            pending_changes = json_module.load(f)
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Failed to load pending changes: {e}"}), 500
+
+    # Find the change across all tiers
+    change = None
+    change_tier = None
+    for tier in ["tier1", "tier2", "tier3"]:
+        for c in pending_changes.get(tier, []):
+            if c.get("fact", {}).get("temp_id") == change_id:
+                change = c
+                change_tier = tier
+                break
+        if change:
+            break
+
+    if not change:
+        return jsonify({"status": "error", "message": "Change not found"}), 404
+
+    fact_data = change.get("fact", {})
+
+    # Remove from pending changes file
+    pending_changes[change_tier] = [
+        c for c in pending_changes[change_tier]
+        if c.get("fact", {}).get("temp_id") != change_id
+    ]
+
+    if resolution == "reject":
+        # Save updated pending changes
+        with open(pending_file, 'w') as f:
+            json_module.dump(pending_changes, f, indent=2, default=str)
+        return jsonify({"status": "success", "action": "rejected"})
+
+    # Apply modifications if any
+    if modifications:
+        fact_data.update(modifications)
+
+    # Initialize fact_merger
+    if not hasattr(s, 'fact_merger') and hasattr(s, 'fact_store'):
+        s.fact_merger = FactMerger(s.fact_store)
+
+    if not hasattr(s, 'fact_merger'):
+        return jsonify({"status": "error", "message": "Cannot initialize merger"}), 400
+
+    # Merge the fact
+    try:
+        action, fact_id = s.fact_merger.merge_fact(fact_data, fact_data.get("source_document", ""))
+
+        # Add review note
+        if notes and fact_id and hasattr(s, 'fact_store'):
+            fact = s.fact_store.get_fact(fact_id)
+            if fact:
+                fact.verification_note = f"{fact.verification_note or ''} [Review: {notes}]"
+
+        # Save updated pending changes to file
+        with open(pending_file, 'w') as f:
+            json_module.dump(pending_changes, f, indent=2, default=str)
+
+        # Save fact store
+        if hasattr(s, 'fact_store'):
+            facts_files = sorted(OUTPUT_DIR.glob("facts_*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
+            if facts_files:
+                s.fact_store.save(str(facts_files[0]))
+
+        return jsonify({
+            "status": "success",
+            "action": action.value,
+            "fact_id": fact_id
+        })
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/review/batch')
+def batch_review_page():
+    """Batch review page for Tier 2 changes."""
+    from config_v2 import OUTPUT_DIR
+    import json as json_module
+
+    s = get_session()
+
+    # Load pending changes from file
+    pending_file = OUTPUT_DIR / "pending_changes.json"
+    if pending_file.exists():
+        try:
+            with open(pending_file, 'r') as f:
+                pending = json_module.load(f)
+        except Exception:
+            pending = {"tier1": [], "tier2": [], "tier3": []}
+    else:
+        pending = {"tier1": [], "tier2": [], "tier3": []}
+
+    tier2_changes = pending.get("tier2", [])
+
+    # Group by source document
+    by_document = {}
+    for change in tier2_changes:
+        doc = change.get("fact", {}).get("source_document", "Unknown")
+        if doc not in by_document:
+            by_document[doc] = []
+        by_document[doc].append(change)
+
+    return render_template('review/batch.html',
+                          changes=tier2_changes,
+                          by_document=by_document,
+                          total_count=len(tier2_changes))
+
+
+@app.route('/review/conflicts')
+def conflicts_review_page():
+    """Individual review page for Tier 3 conflicts."""
+    from config_v2 import OUTPUT_DIR
+    import json as json_module
+
+    s = get_session()
+
+    # Load pending changes from file
+    pending_file = OUTPUT_DIR / "pending_changes.json"
+    if pending_file.exists():
+        try:
+            with open(pending_file, 'r') as f:
+                pending = json_module.load(f)
+        except Exception:
+            pending = {"tier1": [], "tier2": [], "tier3": []}
+    else:
+        pending = {"tier1": [], "tier2": [], "tier3": []}
+
+    tier3_changes = pending.get("tier3", [])
+
+    # Get existing facts for comparison
+    conflicts_with_existing = []
+    for change in tier3_changes:
+        existing_id = change.get("existing_fact_id")
+        existing_fact = None
+        if existing_id and hasattr(s, 'fact_store'):
+            existing_fact = s.fact_store.get_fact(existing_id)
+
+        conflicts_with_existing.append({
+            "change": change,
+            "existing": existing_fact.to_dict() if existing_fact else None
+        })
+
+    return render_template('review/conflicts.html',
+                          conflicts=conflicts_with_existing,
+                          total_count=len(tier3_changes))
+
+
+# === Stale Items API (Phase 4) ===
+
+@app.route('/api/stale-items')
+def get_stale_items():
+    """Get all stale items that need review."""
+    from tools_v2.dependency_tracker import DependencyTracker
+    from tools_v2.inventory_updater import InventoryUpdater
+
+    s = get_session()
+
+    if not hasattr(s, 'dependency_tracker'):
+        s.dependency_tracker = DependencyTracker()
+
+    updater = InventoryUpdater(
+        fact_store=s.fact_store if hasattr(s, 'fact_store') else None,
+        dependency_tracker=s.dependency_tracker,
+        session=s
+    )
+
+    dashboard = updater.get_stale_dashboard()
+    return jsonify(dashboard)
+
+
+@app.route('/api/stale-items/<item_type>/<item_id>/review', methods=['POST'])
+def review_stale_item(item_type, item_id):
+    """Mark a stale item as reviewed."""
+    from tools_v2.dependency_tracker import DependencyTracker, DependentItemType
+
+    s = get_session()
+
+    if not hasattr(s, 'dependency_tracker'):
+        return jsonify({"status": "error", "message": "No tracker initialized"}), 400
+
+    data = request.get_json() or {}
+    reviewer = data.get("reviewer", "web_user")
+    notes = data.get("notes", "")
+
+    try:
+        item_type_enum = DependentItemType(item_type)
+    except ValueError:
+        return jsonify({"status": "error", "message": f"Invalid item type: {item_type}"}), 400
+
+    success = s.dependency_tracker.mark_reviewed(
+        item_type=item_type_enum,
+        item_id=item_id,
+        reviewed_by=reviewer,
+        notes=notes
+    )
+
+    if success:
+        return jsonify({"status": "success", "message": "Item marked as reviewed"})
+    else:
+        return jsonify({"status": "error", "message": "Item not found"}), 404
+
+
+@app.route('/api/stale-items/bulk-revalidate', methods=['POST'])
+def bulk_revalidate_stale():
+    """Bulk revalidate stale items."""
+    from tools_v2.dependency_tracker import DependencyTracker, DependentItemType
+    from tools_v2.inventory_updater import InventoryUpdater
+
+    s = get_session()
+
+    if not hasattr(s, 'dependency_tracker'):
+        s.dependency_tracker = DependencyTracker()
+
+    data = request.get_json() or {}
+    item_type_str = data.get("item_type")  # Optional filter
+    reviewer = data.get("reviewer", "web_user")
+    notes = data.get("notes", "Bulk revalidation")
+
+    updater = InventoryUpdater(
+        fact_store=s.fact_store if hasattr(s, 'fact_store') else None,
+        dependency_tracker=s.dependency_tracker,
+        session=s
+    )
+
+    item_type = None
+    if item_type_str:
+        try:
+            item_type = DependentItemType(item_type_str)
+        except ValueError:
+            return jsonify({"status": "error", "message": f"Invalid item type: {item_type_str}"}), 400
+
+    count = updater.bulk_revalidate(item_type, reviewer, notes) if item_type else 0
+
+    # If no type specified, do all types
+    if not item_type:
+        for t in DependentItemType:
+            count += updater.bulk_revalidate(t, reviewer, notes)
+
+    return jsonify({
+        "status": "success",
+        "revalidated_count": count
+    })
+
+
+@app.route('/api/propagate-changes', methods=['POST'])
+def propagate_fact_changes():
+    """Propagate fact changes to downstream items."""
+    from tools_v2.dependency_tracker import DependencyTracker
+    from tools_v2.inventory_updater import InventoryUpdater
+
+    s = get_session()
+
+    data = request.get_json() or {}
+    fact_ids = data.get("fact_ids", [])
+    change_type = data.get("change_type", "updated")
+
+    if not fact_ids:
+        return jsonify({"status": "error", "message": "No fact_ids provided"}), 400
+
+    if not hasattr(s, 'dependency_tracker'):
+        s.dependency_tracker = DependencyTracker()
+
+    updater = InventoryUpdater(
+        fact_store=s.fact_store if hasattr(s, 'fact_store') else None,
+        dependency_tracker=s.dependency_tracker,
+        session=s
+    )
+
+    result = updater.propagate_changes(fact_ids, change_type)
+
+    return jsonify({
+        "status": "success",
+        "result": result.to_dict()
+    })
+
+
+# === Settings API (Phase 5) ===
+
+@app.route('/api/settings/incremental')
+def get_incremental_settings():
+    """Get incremental update settings."""
+    s = get_session()
+
+    # Get or initialize settings
+    if not hasattr(s, 'incremental_settings'):
+        s.incremental_settings = {
+            "auto_apply_enabled": True,
+            "auto_apply_min_confidence": 0.9,
+            "critical_domains": ["security", "compliance", "data"],
+            "batch_review_threshold": 0.6,
+            "auto_propagate": False
+        }
+
+    return jsonify(s.incremental_settings)
+
+
+@app.route('/api/settings/incremental', methods=['POST'])
+def update_incremental_settings():
+    """Update incremental update settings."""
+    s = get_session()
+
+    data = request.get_json() or {}
+
+    if not hasattr(s, 'incremental_settings'):
+        s.incremental_settings = {}
+
+    # Update settings
+    valid_keys = [
+        "auto_apply_enabled",
+        "auto_apply_min_confidence",
+        "critical_domains",
+        "batch_review_threshold",
+        "auto_propagate"
+    ]
+
+    for key in valid_keys:
+        if key in data:
+            s.incremental_settings[key] = data[key]
+
+    # Apply to tier classifier if exists
+    if hasattr(s, 'document_processor'):
+        from tools_v2.tier_classifier import TierClassifier
+        # Classifier settings will be read on next classification
+
+    return jsonify({
+        "status": "success",
+        "settings": s.incremental_settings
+    })
 
 
 if __name__ == '__main__':

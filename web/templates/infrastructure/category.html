@@ -1,0 +1,285 @@
+{% extends "base.html" %}
+{% block title %}{{ category.category.display_name }} - Infrastructure{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <a href="{{ url_for('infrastructure_overview') }}" class="back-link">&larr; Infrastructure Inventory</a>
+    <h1>{{ category.category.icon }} {{ category.category.display_name }}</h1>
+    <p class="subtitle">{{ category.total_count }} items in this category</p>
+</div>
+
+<!-- Category Stats -->
+<div class="summary-stats" style="margin-bottom: 30px;">
+    <div class="stat-card">
+        <span class="stat-value">{{ category.total_count }}</span>
+        <span class="stat-label">Total Items</span>
+    </div>
+    {% if category.total_cost > 0 %}
+    <div class="stat-card">
+        <span class="stat-value">${{ "{:,.0f}".format(category.total_cost) }}</span>
+        <span class="stat-label">Annual Cost</span>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Items List -->
+{% if category.items %}
+<div class="items-list">
+    {% for item in category.items %}
+    <div class="item-card">
+        <div class="item-header">
+            <h3 class="item-name">{{ item.name }}</h3>
+            {% if item.status.value != 'unknown' %}
+            <span class="badge badge-{{ 'success' if item.status.value == 'active' else ('warning' if item.status.value == 'deprecated' else 'danger') }}">
+                {{ item.status.value|title }}
+            </span>
+            {% endif %}
+        </div>
+
+        <div class="item-details">
+            {% if item.item_type %}
+            <div class="detail-row">
+                <span class="detail-label">Type:</span>
+                <span class="detail-value">{{ item.item_type }}</span>
+            </div>
+            {% endif %}
+
+            {% if item.vendor %}
+            <div class="detail-row">
+                <span class="detail-label">Vendor:</span>
+                <span class="detail-value">{{ item.vendor }}</span>
+            </div>
+            {% endif %}
+
+            {% if item.model %}
+            <div class="detail-row">
+                <span class="detail-label">Model:</span>
+                <span class="detail-value">{{ item.model }}</span>
+            </div>
+            {% endif %}
+
+            {% if item.location %}
+            <div class="detail-row">
+                <span class="detail-label">Location:</span>
+                <span class="detail-value">{{ item.location }}</span>
+            </div>
+            {% endif %}
+
+            {% if item.hosting_type.value != 'unknown' %}
+            <div class="detail-row">
+                <span class="detail-label">Hosting:</span>
+                <span class="detail-value">{{ item.hosting_type.value|replace('_', ' ')|title }}</span>
+            </div>
+            {% endif %}
+
+            {% if item.capacity %}
+            <div class="detail-row">
+                <span class="detail-label">Capacity:</span>
+                <span class="detail-value">{{ item.capacity }}</span>
+            </div>
+            {% endif %}
+
+            {% if item.count > 0 %}
+            <div class="detail-row">
+                <span class="detail-label">Count:</span>
+                <span class="detail-value">{{ item.count }}</span>
+            </div>
+            {% endif %}
+
+            {% if item.annual_cost > 0 %}
+            <div class="detail-row">
+                <span class="detail-label">Annual Cost:</span>
+                <span class="detail-value">${{ "{:,.0f}".format(item.annual_cost) }}</span>
+            </div>
+            {% endif %}
+
+            {% if item.support_status %}
+            <div class="detail-row">
+                <span class="detail-label">Support:</span>
+                <span class="detail-value">{{ item.support_status }}</span>
+            </div>
+            {% endif %}
+        </div>
+
+        {% if item.notes %}
+        <div class="item-notes">
+            <span class="notes-label">Notes:</span> {{ item.notes }}
+        </div>
+        {% endif %}
+
+        {% if item.evidence %}
+        <div class="item-evidence">
+            <span class="evidence-label">Evidence:</span>
+            <blockquote>"{{ item.evidence[:200] }}{% if item.evidence|length > 200 %}...{% endif %}"</blockquote>
+        </div>
+        {% endif %}
+
+        <div class="item-footer">
+            <span class="fact-ref">{{ item.fact_id }}</span>
+            <span class="entity-badge entity-{{ item.entity }}">{{ item.entity|title }}</span>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <p>No items found in this category.</p>
+</div>
+{% endif %}
+
+<style>
+.back-link {
+    display: inline-block;
+    margin-bottom: 10px;
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 0.9em;
+}
+
+.back-link:hover {
+    text-decoration: underline;
+}
+
+.items-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.item-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    padding: 20px;
+}
+
+.item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 15px;
+}
+
+.item-name {
+    margin: 0;
+    font-size: 1.1em;
+}
+
+.item-details {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.detail-row {
+    display: flex;
+    gap: 8px;
+}
+
+.detail-label {
+    font-size: 0.85em;
+    color: var(--text-secondary);
+    min-width: 80px;
+}
+
+.detail-value {
+    font-size: 0.9em;
+    font-weight: 500;
+}
+
+.item-notes {
+    padding: 10px;
+    background: var(--bg-surface-sunken);
+    border-radius: 6px;
+    font-size: 0.9em;
+    margin-bottom: 10px;
+}
+
+.notes-label {
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.item-evidence {
+    margin-bottom: 10px;
+}
+
+.evidence-label {
+    font-size: 0.85em;
+    color: var(--text-secondary);
+    display: block;
+    margin-bottom: 5px;
+}
+
+.item-evidence blockquote {
+    margin: 0;
+    padding: 10px 15px;
+    background: var(--bg-surface-sunken);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 6px 6px 0;
+    font-style: italic;
+    font-size: 0.9em;
+}
+
+.item-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-default);
+}
+
+.fact-ref {
+    font-family: monospace;
+    font-size: 0.8em;
+    color: var(--text-muted);
+}
+
+.entity-badge {
+    font-size: 0.75em;
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+.entity-target {
+    background: rgba(59, 130, 246, 0.15);
+    color: #1d4ed8;
+}
+
+.entity-buyer {
+    background: rgba(34, 197, 94, 0.15);
+    color: #166534;
+}
+
+.badge {
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 500;
+}
+
+.badge-success {
+    background: rgba(34, 197, 94, 0.15);
+    color: #166534;
+}
+
+.badge-warning {
+    background: rgba(245, 158, 11, 0.15);
+    color: #92400e;
+}
+
+.badge-danger {
+    background: rgba(239, 68, 68, 0.15);
+    color: #991b1b;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px;
+    background: var(--bg-surface);
+    border-radius: 10px;
+    color: var(--text-secondary);
+}
+</style>
+{% endblock %}

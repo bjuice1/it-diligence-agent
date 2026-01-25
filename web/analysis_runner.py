@@ -156,6 +156,9 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable) -> Dict[str, A
         for doc in documents
     ])
 
+    # Track document names for fact traceability
+    document_names = ", ".join([doc.get('filename', 'Unknown') for doc in documents])
+
     # Determine which domains to analyze
     domains_to_analyze = task.domains if task.domains else DOMAINS
 
@@ -178,7 +181,7 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable) -> Dict[str, A
         progress_callback({"phase": phase})
 
         try:
-            facts, gaps = run_discovery_for_domain(domain, combined_content, session)
+            facts, gaps = run_discovery_for_domain(domain, combined_content, session, document_names)
             discovery_results[domain] = {"facts": facts, "gaps": gaps}
 
             # Update counts
@@ -268,8 +271,15 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable) -> Dict[str, A
     return result
 
 
-def run_discovery_for_domain(domain: str, content: str, session) -> tuple:
-    """Run discovery agent for a specific domain."""
+def run_discovery_for_domain(domain: str, content: str, session, document_names: str = "") -> tuple:
+    """Run discovery agent for a specific domain.
+
+    Args:
+        domain: Domain to analyze (infrastructure, network, etc.)
+        content: Combined document content
+        session: Analysis session with fact_store
+        document_names: Comma-separated list of source document filenames for traceability
+    """
     from tools_v2.fact_store import FactStore
     from config_v2 import ANTHROPIC_API_KEY
 
@@ -325,7 +335,7 @@ def run_discovery_for_domain(domain: str, content: str, session) -> tuple:
         )
 
         logger.info(f"Running {domain} discovery agent...")
-        result = agent.discover(content)
+        result = agent.discover(content, document_name=document_names)
         logger.info(f"Discovery complete for {domain}: {len(session.fact_store.facts)} facts, {len(session.fact_store.gaps)} gaps")
 
         # Facts and gaps are stored directly in the fact_store by the agent

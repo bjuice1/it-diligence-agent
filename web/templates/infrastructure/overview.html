@@ -1,0 +1,584 @@
+{% extends "base.html" %}
+{% block title %}Infrastructure Inventory{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Infrastructure Inventory</h1>
+    <p class="subtitle">{{ inventory.total_count }} infrastructure items identified</p>
+</div>
+
+{% if data_source == 'none' or status != 'success' %}
+<div class="data-source-banner data-source-demo">
+    <strong>No Data</strong> - Run an analysis with documents containing infrastructure information to populate this inventory.
+</div>
+{% else %}
+<div class="data-source-banner data-source-analysis">
+    <strong>Analysis Data</strong> - Showing infrastructure extracted from your documents.
+</div>
+{% endif %}
+
+<!-- Summary Stats -->
+<div class="summary-stats" style="margin-bottom: 30px;">
+    <div class="stat-card">
+        <span class="stat-value">{{ inventory.total_count }}</span>
+        <span class="stat-label">Total Items</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-value">{{ inventory.data_centers|length }}</span>
+        <span class="stat-label">Data Centers</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-value">{{ inventory.cloud_count }}</span>
+        <span class="stat-label">Cloud Platforms</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-value">{{ inventory.on_prem_count }}</span>
+        <span class="stat-label">On-Premise</span>
+    </div>
+    {% if inventory.total_cost > 0 %}
+    <div class="stat-card">
+        <span class="stat-value">${{ "{:,.0f}".format(inventory.total_cost / 1000) }}K</span>
+        <span class="stat-label">Annual Cost</span>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Categories Grid -->
+<div class="categories-grid">
+    {% for cat_name, cat_summary in inventory.by_category.items() %}
+    <a href="{{ url_for('infrastructure_category', category=cat_name) }}" class="category-card">
+        <div class="category-icon">{{ cat_summary.category.icon }}</div>
+        <div class="category-info">
+            <h3>{{ cat_summary.category.display_name }}</h3>
+            <div class="category-stats">
+                <span class="category-count">{{ cat_summary.total_count }} items</span>
+            </div>
+            {% if cat_summary.total_cost > 0 %}
+            <div class="category-cost">${{ "{:,.0f}".format(cat_summary.total_cost) }}/yr</div>
+            {% endif %}
+        </div>
+        <div class="category-arrow">&rarr;</div>
+    </a>
+    {% else %}
+    <div class="empty-state">
+        <p>No infrastructure items found in the analysis.</p>
+        <p>Upload documents containing infrastructure information to see the inventory.</p>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Data Centers Section -->
+{% if inventory.data_centers %}
+<h2 style="margin-top: 40px; margin-bottom: 20px;">Data Centers & Hosting</h2>
+<div class="dc-grid">
+    {% for dc in inventory.data_centers %}
+    <div class="dc-card">
+        <div class="dc-icon">🏢</div>
+        <div class="dc-info">
+            <h4>{{ dc.name }}</h4>
+            <div class="dc-details">
+                <span class="dc-location">{{ dc.location or 'Location not specified' }}</span>
+                {% if dc.hosting_type.value != 'unknown' %}
+                <span class="badge badge-secondary">{{ dc.hosting_type.value|replace('_', ' ')|title }}</span>
+                {% endif %}
+            </div>
+            {% if dc.capacity %}
+            <div class="dc-capacity">{{ dc.capacity }}</div>
+            {% endif %}
+            {% if dc.annual_cost > 0 %}
+            <div class="dc-cost">${{ "{:,.0f}".format(dc.annual_cost) }}/yr</div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Cloud Platforms Section -->
+{% if inventory.cloud_platforms %}
+<h2 style="margin-top: 40px; margin-bottom: 20px;">Cloud Infrastructure</h2>
+<div class="cloud-grid">
+    {% for cloud in inventory.cloud_platforms %}
+    <div class="cloud-card">
+        <div class="cloud-provider">
+            {% if 'aws' in cloud.name|lower or 'amazon' in cloud.name|lower %}
+            <span class="cloud-logo">☁️ AWS</span>
+            {% elif 'azure' in cloud.name|lower or 'microsoft' in cloud.name|lower %}
+            <span class="cloud-logo">☁️ Azure</span>
+            {% elif 'gcp' in cloud.name|lower or 'google' in cloud.name|lower %}
+            <span class="cloud-logo">☁️ GCP</span>
+            {% else %}
+            <span class="cloud-logo">☁️</span>
+            {% endif %}
+        </div>
+        <div class="cloud-info">
+            <h4>{{ cloud.name }}</h4>
+            {% if cloud.location %}
+            <div class="cloud-region">Region: {{ cloud.location }}</div>
+            {% endif %}
+            {% if cloud.capacity %}
+            <div class="cloud-accounts">{{ cloud.capacity }}</div>
+            {% endif %}
+            {% if cloud.annual_cost > 0 %}
+            <div class="cloud-cost">${{ "{:,.0f}".format(cloud.annual_cost) }}/yr</div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Full Infrastructure List -->
+{% if inventory.items %}
+<h2 style="margin-top: 40px; margin-bottom: 20px;">All Infrastructure Items</h2>
+<div class="table-container">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Item</th>
+                <th>Category</th>
+                <th>Type</th>
+                <th>Vendor/Provider</th>
+                <th>Location</th>
+                <th>Annual Cost</th>
+                <th>Source</th>
+                <th>Confidence</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in inventory.items %}
+            <tr data-id="{{ item.id }}"
+                data-name="{{ item.name|e }}"
+                data-category="{{ item.category.value }}"
+                data-type="{{ item.item_type|e }}"
+                data-vendor="{{ item.vendor|e }}"
+                data-location="{{ item.location|e }}"
+                data-capacity="{{ item.capacity|e }}"
+                data-cost="{{ item.annual_cost }}"
+                data-evidence="{{ item.evidence|e }}"
+                data-fact-id="{{ item.fact_id }}"
+                data-source="{{ item.source_document|e }}"
+                data-confidence="{{ item.confidence_score }}"
+                data-verified="{{ item.verified|string|lower }}">
+                <td>
+                    <strong>{{ item.name }}</strong>
+                    {% if item.model %}<span class="text-muted text-sm"> ({{ item.model }})</span>{% endif %}
+                </td>
+                <td><span class="badge badge-category">{{ item.category.display_name }}</span></td>
+                <td>{{ item.item_type or '-' }}</td>
+                <td>{{ item.vendor or '-' }}</td>
+                <td>{{ item.location or '-' }}</td>
+                <td>
+                    {% if item.annual_cost > 0 %}
+                    ${{ "{:,.0f}".format(item.annual_cost) }}
+                    {% else %}
+                    <span class="text-muted">-</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if item.source_document %}
+                    <span class="source-doc text-sm" title="{{ item.source_document }}">{{ item.source_document[:20] }}{% if item.source_document|length > 20 %}...{% endif %}</span>
+                    {% else %}
+                    <span class="text-muted text-sm">-</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% set conf = (item.confidence_score * 100)|int %}
+                    {% if conf >= 80 %}
+                    <span class="confidence-badge confidence-high" title="{{ conf }}% confidence">{{ conf }}%</span>
+                    {% elif conf >= 50 %}
+                    <span class="confidence-badge confidence-medium" title="{{ conf }}% confidence">{{ conf }}%</span>
+                    {% elif conf > 0 %}
+                    <span class="confidence-badge confidence-low" title="{{ conf }}% confidence">{{ conf }}%</span>
+                    {% else %}
+                    <span class="text-muted text-sm">-</span>
+                    {% endif %}
+                    {% if item.verified %}
+                    <span class="verified-badge" title="Verified">✓</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<style>
+.categories-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+    margin-bottom: 40px;
+}
+
+.category-card {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 20px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 12px;
+    text-decoration: none;
+    color: inherit;
+    transition: all 0.2s;
+}
+
+.category-card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+}
+
+.category-icon {
+    font-size: 2.2em;
+    width: 55px;
+    height: 55px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-surface-sunken);
+    border-radius: 10px;
+}
+
+.category-info {
+    flex: 1;
+}
+
+.category-info h3 {
+    margin: 0 0 5px 0;
+    font-size: 1em;
+}
+
+.category-stats {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.category-count {
+    color: var(--text-secondary);
+    font-size: 0.9em;
+}
+
+.category-cost {
+    color: var(--text-muted);
+    font-size: 0.85em;
+    margin-top: 4px;
+}
+
+.category-arrow {
+    color: var(--text-muted);
+    font-size: 1.5em;
+}
+
+/* Data Center Cards */
+.dc-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.dc-card {
+    display: flex;
+    gap: 15px;
+    padding: 20px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 12px;
+}
+
+.dc-icon {
+    font-size: 2em;
+}
+
+.dc-info h4 {
+    margin: 0 0 8px 0;
+}
+
+.dc-details {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.dc-location {
+    color: var(--text-secondary);
+    font-size: 0.9em;
+}
+
+.dc-capacity, .dc-cost {
+    color: var(--text-muted);
+    font-size: 0.85em;
+}
+
+/* Cloud Cards */
+.cloud-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 20px;
+}
+
+.cloud-card {
+    display: flex;
+    gap: 15px;
+    padding: 20px;
+    background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+    border: 1px solid #bae6fd;
+    border-radius: 12px;
+}
+
+.cloud-logo {
+    font-size: 1.5em;
+    font-weight: bold;
+    color: #0284c7;
+}
+
+.cloud-info h4 {
+    margin: 0 0 8px 0;
+    color: #0369a1;
+}
+
+.cloud-region, .cloud-accounts, .cloud-cost {
+    font-size: 0.85em;
+    color: #0c4a6e;
+}
+
+.badge-category {
+    background: var(--bg-surface-sunken);
+    color: var(--text-secondary);
+    font-size: 0.75em;
+}
+
+.data-source-banner {
+    padding: 12px 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-size: 0.9em;
+}
+
+.data-source-analysis {
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    color: #166534;
+}
+
+.data-source-demo {
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    color: #92400e;
+}
+
+/* Confidence badges */
+.confidence-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 600;
+}
+
+.confidence-high {
+    background: rgba(34, 197, 94, 0.15);
+    color: #166534;
+}
+
+.confidence-medium {
+    background: rgba(245, 158, 11, 0.15);
+    color: #92400e;
+}
+
+.confidence-low {
+    background: rgba(239, 68, 68, 0.15);
+    color: #991b1b;
+}
+
+.verified-badge {
+    display: inline-block;
+    margin-left: 4px;
+    color: #166534;
+    font-weight: bold;
+}
+
+.source-doc {
+    color: var(--text-secondary);
+    font-family: monospace;
+    font-size: 0.8em;
+}
+
+/* Verification section in drawer */
+.verification-section {
+    margin-top: 20px;
+    padding: 15px;
+    background: var(--bg-surface-sunken);
+    border-radius: 8px;
+    border: 1px solid var(--border-default);
+}
+
+.verification-section h4 {
+    margin: 0 0 10px 0;
+    font-size: 0.9em;
+    color: var(--text-secondary);
+}
+
+.verification-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.verified-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 6px;
+}
+
+.verified-indicator.is-verified {
+    background: rgba(34, 197, 94, 0.15);
+    color: #166534;
+}
+
+.verified-indicator.not-verified {
+    background: rgba(245, 158, 11, 0.15);
+    color: #92400e;
+}
+</style>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('rowSelected', function(e) {
+    const row = e.detail.row;
+    const data = row.dataset;
+    const confidence = Math.round(parseFloat(data.confidence || 0) * 100);
+    const isVerified = data.verified === 'true';
+
+    // Determine confidence level class
+    let confClass = 'confidence-low';
+    if (confidence >= 80) confClass = 'confidence-high';
+    else if (confidence >= 50) confClass = 'confidence-medium';
+
+    openDrawer(
+        data.name,
+        `
+        <div class="drawer-section">
+            <div class="drawer-section-title">Category</div>
+            <div class="drawer-section-content">${data.category.replace('_', ' ')}</div>
+        </div>
+        <div class="drawer-section">
+            <div class="drawer-section-title">Type</div>
+            <div class="drawer-section-content">${data.type || 'Not specified'}</div>
+        </div>
+        <div class="drawer-section">
+            <div class="drawer-section-title">Vendor/Provider</div>
+            <div class="drawer-section-content">${data.vendor || 'Not specified'}</div>
+        </div>
+        <div class="drawer-section">
+            <div class="drawer-section-title">Location</div>
+            <div class="drawer-section-content">${data.location || 'Not specified'}</div>
+        </div>
+        <div class="drawer-section">
+            <div class="drawer-section-title">Capacity</div>
+            <div class="drawer-section-content">${data.capacity || 'Not specified'}</div>
+        </div>
+        <div class="drawer-section">
+            <div class="drawer-section-title">Annual Cost</div>
+            <div class="drawer-section-content">${parseFloat(data.cost) > 0 ? '$' + parseFloat(data.cost).toLocaleString() : 'Not specified'}</div>
+        </div>
+
+        <!-- Evidence Traceability Section -->
+        <div class="verification-section">
+            <h4>📋 Evidence & Traceability</h4>
+            <div class="drawer-section">
+                <div class="drawer-section-title">Source Document</div>
+                <div class="drawer-section-content font-mono" style="font-size: 0.85em;">
+                    ${data.source || '<span class="text-muted">Source not tracked</span>'}
+                </div>
+            </div>
+            <div class="drawer-section">
+                <div class="drawer-section-title">Evidence Quote</div>
+                <div class="drawer-section-content" style="font-style: italic; background: var(--bg-surface); padding: 10px; border-radius: 6px; border-left: 3px solid var(--accent);">
+                    ${data.evidence ? '"' + data.evidence + '"' : '<span class="text-muted">No evidence quote captured</span>'}
+                </div>
+            </div>
+            <div class="drawer-section">
+                <div class="drawer-section-title">Confidence Score</div>
+                <div class="drawer-section-content">
+                    <span class="confidence-badge ${confClass}">${confidence}%</span>
+                    <span class="text-muted text-sm" style="margin-left: 8px;">
+                        ${confidence >= 80 ? 'High confidence - strong evidence' :
+                          confidence >= 50 ? 'Medium confidence - partial evidence' :
+                          'Low confidence - needs verification'}
+                    </span>
+                </div>
+            </div>
+            <div class="drawer-section">
+                <div class="drawer-section-title">Verification Status</div>
+                <div class="verification-status">
+                    <span class="verified-indicator ${isVerified ? 'is-verified' : 'not-verified'}">
+                        ${isVerified ? '✓ Verified' : '○ Not Verified'}
+                    </span>
+                </div>
+                ${!isVerified ? `
+                <div class="text-sm text-muted">
+                    This fact has not been human-verified. Review the evidence and source document before relying on this information.
+                </div>
+                ` : ''}
+            </div>
+        </div>
+
+        <div class="drawer-section" style="margin-top: 15px;">
+            <div class="drawer-section-title">Fact ID</div>
+            <div class="drawer-section-content font-mono">
+                <a href="{{ url_for('facts') }}?q=${data.factId}" class="fact-link">${data.factId}</a>
+            </div>
+        </div>
+        `,
+        `
+        ${!isVerified ? `<button class="btn btn-primary" onclick="verifyFact('${data.factId}')">✓ Verify This Fact</button>` : ''}
+        <button class="btn btn-secondary" onclick="closeDrawer()">Close</button>
+        `
+    );
+});
+
+async function verifyFact(factId) {
+    try {
+        const response = await fetch(`/api/facts/${factId}/verify`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({verified_by: 'web_user'})
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            // Update the row's data attribute
+            const row = document.querySelector(`tr[data-fact-id="${factId}"]`);
+            if (row) {
+                row.dataset.verified = 'true';
+                // Add verified badge to confidence cell
+                const confCell = row.querySelector('td:last-child');
+                if (confCell && !confCell.querySelector('.verified-badge')) {
+                    confCell.innerHTML += '<span class="verified-badge" title="Verified">✓</span>';
+                }
+            }
+            // Close drawer
+            closeDrawer();
+            alert('Fact verified successfully!');
+        } else {
+            alert('Failed to verify fact: ' + result.message);
+        }
+    } catch (error) {
+        alert('Error verifying fact: ' + error.message);
+    }
+}
+</script>
+{% endblock %}

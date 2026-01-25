@@ -363,9 +363,9 @@ class OpenQuestionGenerator:
         questions = []
 
         for gap in gaps:
-            # Extract gap details
-            gap_text = getattr(gap, 'item', str(gap)) if hasattr(gap, 'item') else str(gap)
-            gap_id = getattr(gap, 'id', None)
+            # Extract gap details - Gap class has 'description' not 'item'
+            gap_text = getattr(gap, 'description', None) or getattr(gap, 'item', None) or str(gap)
+            gap_id = getattr(gap, 'gap_id', None) or getattr(gap, 'id', None)
             domain = getattr(gap, 'domain', 'unknown')
 
             # Generate a question from the gap
