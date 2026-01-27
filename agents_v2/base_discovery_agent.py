@@ -20,6 +20,7 @@ from dataclasses import dataclass
 
 from tools_v2.fact_store import FactStore
 from tools_v2.discovery_tools import DISCOVERY_TOOLS, execute_discovery_tool
+from tools_v2.discovery_logger import DiscoveryLogger
 
 # Import cost estimation, rate limiter, circuit breaker, and temperature
 try:
@@ -108,7 +109,15 @@ class BaseDiscoveryAgent(ABC):
 
         # Logging
         self.logger = logging.getLogger(f"discovery.{self.domain}")
-        
+
+        # Audit logger for .md trail
+        try:
+            from config_v2 import OUTPUT_DIR
+            log_dir = OUTPUT_DIR / "logs"
+        except ImportError:
+            log_dir = None
+        self.audit_logger = DiscoveryLogger(domain=self.domain, output_dir=log_dir)
+
         # Rate limiting
         if APIRateLimiter:
             self.rate_limiter = APIRateLimiter.get_instance(
@@ -118,17 +127,24 @@ class BaseDiscoveryAgent(ABC):
         else:
             self.rate_limiter = None
         
-        # Circuit breaker for API failures
-        if CircuitBreaker:
-            from config_v2 import CIRCUIT_BREAKER_FAILURE_THRESHOLD, CIRCUIT_BREAKER_TIMEOUT
-            self.circuit_breaker = CircuitBreaker(
-                config=CircuitBreakerConfig(
-                    failure_threshold=CIRCUIT_BREAKER_FAILURE_THRESHOLD,
-                    timeout=CIRCUIT_BREAKER_TIMEOUT,
-                    expected_exception=anthropic.APIError
-                )
+        # Circuit breaker for API failures (can be disabled in config)
+        try:
+            from config_v2 import (
+                CIRCUIT_BREAKER_ENABLED,
+                CIRCUIT_BREAKER_FAILURE_THRESHOLD,
+                CIRCUIT_BREAKER_TIMEOUT
             )
-        else:
+            if CircuitBreaker and CIRCUIT_BREAKER_ENABLED:
+                self.circuit_breaker = CircuitBreaker(
+                    config=CircuitBreakerConfig(
+                        failure_threshold=CIRCUIT_BREAKER_FAILURE_THRESHOLD,
+                        timeout=CIRCUIT_BREAKER_TIMEOUT,
+                        expected_exception=anthropic.APIError
+                    )
+                )
+            else:
+                self.circuit_breaker = None
+        except ImportError:
             self.circuit_breaker = None
 
     @property
@@ -169,6 +185,12 @@ class BaseDiscoveryAgent(ABC):
         print(f"Discovery: {self.domain.upper()}")
         print(f"{'='*60}")
 
+        # Start audit logging
+        self.audit_logger.start(
+            document_name=document_name or "unknown",
+            document_length=len(document_text)
+        )
+
         try:
             # Build initial user message
             user_message = self._build_user_message(document_text)
@@ -179,6 +201,7 @@ class BaseDiscoveryAgent(ABC):
             while not self.discovery_complete and iteration < self.max_iterations:
                 iteration += 1
                 self.metrics.iterations = iteration
+                self.audit_logger.set_iteration(iteration)
                 print(f"\n--- Iteration {iteration} ---")
 
                 try:
@@ -220,6 +243,12 @@ class BaseDiscoveryAgent(ABC):
             print(f"  Tokens: {self.metrics.input_tokens} in, {self.metrics.output_tokens} out")
             print(f"  Estimated cost: ${self.metrics.estimated_cost:.4f}")
             print(f"  Time: {self.metrics.execution_time:.1f}s")
+
+            # Finalize and save audit log
+            self.audit_logger.finish(metrics=self.metrics)
+            log_path = self.audit_logger.save()
+            if log_path:
+                print(f"  Audit log: {log_path}")
 
             return {
                 "domain": self.domain,
@@ -398,6 +427,13 @@ class BaseDiscoveryAgent(ABC):
                         tool_name=tool_name,
                         tool_input=tool_input,
                         fact_store=self.fact_store
+                    )
+
+                    # Log to audit trail
+                    self.audit_logger.log_tool_call(
+                        tool_name=tool_name,
+                        tool_input=tool_input,
+                        result=result
                     )
 
                     # Log result

@@ -60,6 +60,25 @@ OUTPUT_DIR = BASE_DIR / "output"  # Note: different from v1's data/output
 # V2-specific output directories
 FACTS_DIR = OUTPUT_DIR / "facts"
 FINDINGS_DIR = OUTPUT_DIR / "findings"
+LOGS_DIR = OUTPUT_DIR / "logs"
+
+# =============================================================================
+# DOCUMENT STORAGE (Phase 1: Document Layer)
+# =============================================================================
+
+# Document storage root
+DOCUMENTS_DIR = OUTPUT_DIR / "documents"
+
+# Entity-specific document directories
+TARGET_DOCS_DIR = DOCUMENTS_DIR / "target"
+BUYER_DOCS_DIR = DOCUMENTS_DIR / "buyer"
+
+# Authority level subdirectories (created within entity dirs)
+AUTHORITY_FOLDERS = {
+    1: "data_room",        # Highest authority - official data room documents
+    2: "correspondence",   # Medium authority - formal correspondence
+    3: "notes"             # Lowest authority - discussion notes
+}
 
 
 def ensure_directories():
@@ -68,6 +87,21 @@ def ensure_directories():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     FACTS_DIR.mkdir(parents=True, exist_ok=True)
     FINDINGS_DIR.mkdir(parents=True, exist_ok=True)
+    LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Document storage directories
+    DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Entity directories with authority subfolders
+    for entity_dir in [TARGET_DOCS_DIR, BUYER_DOCS_DIR]:
+        entity_dir.mkdir(parents=True, exist_ok=True)
+        for folder in AUTHORITY_FOLDERS.values():
+            (entity_dir / folder).mkdir(exist_ok=True)
+        (entity_dir / "extracted").mkdir(exist_ok=True)
+
+    # Validation system directories
+    VALIDATION_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+    AUDIT_LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # =============================================================================
@@ -160,10 +194,11 @@ API_TIMEOUT_SECONDS = 300  # 5 minute timeout per API call
 API_RETRY_BACKOFF_BASE = 2  # Exponential backoff base (2^attempt seconds)
 API_RATE_LIMITER_TIMEOUT = 60  # Max wait time for rate limiter slot (seconds)
 
-# Circuit Breaker Configuration
-CIRCUIT_BREAKER_FAILURE_THRESHOLD = 5  # Open circuit after N failures
-CIRCUIT_BREAKER_SUCCESS_THRESHOLD = 2  # Close circuit after N successes (half-open)
-CIRCUIT_BREAKER_TIMEOUT = 60.0  # Seconds before trying half-open
+# Circuit Breaker Configuration - made more resilient to prevent blocking analysis
+CIRCUIT_BREAKER_ENABLED = True          # Set to False to disable circuit breaker entirely
+CIRCUIT_BREAKER_FAILURE_THRESHOLD = 15  # Open circuit after N consecutive failures (was 5)
+CIRCUIT_BREAKER_SUCCESS_THRESHOLD = 1   # Close circuit after N successes in half-open (was 2)
+CIRCUIT_BREAKER_TIMEOUT = 10.0          # Seconds before retrying (was 60 - too long)
 
 
 # =============================================================================
@@ -204,6 +239,79 @@ MAX_PAGE_SIZE = 200             # Maximum items per page
 
 # Analysis timeouts
 ANALYSIS_TIMEOUT_SECONDS = 1800 # 30 minutes max for analysis
+
+
+# =============================================================================
+# VALIDATION SYSTEM CONFIGURATION (Phase 14)
+# =============================================================================
+
+# Master switch for validation system
+VALIDATION_ENABLED = True
+
+# Model selection for validation
+VALIDATION_MODEL = "claude-sonnet-4-20250514"  # Sonnet for thorough validation
+CATEGORY_VALIDATION_MODEL = "claude-3-5-haiku-20241022"  # Haiku for category checkpoints
+
+# Evidence verification thresholds
+EVIDENCE_MATCH_THRESHOLD = 0.85  # Minimum fuzzy match score for "verified"
+EVIDENCE_PARTIAL_THRESHOLD = 0.50  # Minimum for "partial_match"
+
+# Confidence thresholds for review
+CONFIDENCE_THRESHOLD_FOR_REVIEW = 0.70  # Below this triggers human review
+CONFIDENCE_HIGH = 0.80  # Above this is "high confidence"
+CONFIDENCE_CRITICAL = 0.40  # Below this is "critical" - likely wrong
+
+# Re-extraction loop settings
+MAX_REEXTRACTION_ATTEMPTS = 3  # Max automatic retries before escalation
+REEXTRACTION_IMPROVEMENT_THRESHOLD = 0.10  # Min improvement required to continue
+
+# Adversarial review settings
+ADVERSARIAL_REVIEW_ENABLED = True
+ADVERSARIAL_WEIGHT = 0.5  # Weight for adversarial findings (vs. direct validation)
+
+# Category-specific expected ranges
+MIN_EXPECTED_TEAMS = 5  # Minimum IT teams expected in organization
+MAX_EXPECTED_TEAMS = 15  # Maximum reasonable teams
+
+# Expected salary ranges per category (USD annual)
+EXPECTED_SALARY_RANGES = {
+    "leadership": (150000, 300000),
+    "applications": (90000, 160000),
+    "infrastructure": (80000, 140000),
+    "security": (100000, 180000),
+    "cybersecurity": (100000, 180000),
+    "service_desk": (50000, 90000),
+    "pmo": (90000, 150000),
+    "data_analytics": (95000, 170000),
+    "network": (85000, 150000),
+    "default": (70000, 150000),
+}
+
+# Cross-domain consistency check thresholds
+CONSISTENCY_CHECK_THRESHOLDS = {
+    "headcount_vs_endpoints": (20, 200),  # Endpoints per IT person
+    "headcount_vs_apps": (0.5, 30),  # Applications per IT person
+    "cost_per_head": (50000, 300000),  # Total IT cost per IT headcount
+    "apps_per_integration": (2, 20),  # Applications per integration point
+}
+
+# Validation flag severity mappings
+FLAG_SEVERITY_WEIGHTS = {
+    "critical": 1.0,  # Full impact on confidence
+    "error": 0.7,     # High impact
+    "warning": 0.3,   # Moderate impact
+    "info": 0.0,      # No impact on confidence
+}
+
+# Validation storage settings
+VALIDATION_STORAGE_DIR = OUTPUT_DIR / "validation"
+AUDIT_LOG_DIR = OUTPUT_DIR / "audit"
+VALIDATION_CACHE_TTL = 3600  # Cache validation results for 1 hour
+
+# Human review queue settings
+REVIEW_QUEUE_PAGE_SIZE = 20
+REVIEW_QUEUE_SORT_ORDER = ["critical", "error", "warning", "info"]
+AUTO_ESCALATE_AFTER_DAYS = 3  # Auto-escalate if not reviewed in N days
 
 
 # =============================================================================
@@ -281,4 +389,48 @@ def get_config_summary() -> dict:
         'api_key_set': bool(ANTHROPIC_API_KEY),
         'parallel_enabled': PARALLEL_DISCOVERY and PARALLEL_REASONING,
         'max_parallel_agents': MAX_PARALLEL_AGENTS,
+        # Validation settings
+        'validation_enabled': VALIDATION_ENABLED,
+        'validation_model': VALIDATION_MODEL,
+        'evidence_threshold': EVIDENCE_MATCH_THRESHOLD,
+        'confidence_review_threshold': CONFIDENCE_THRESHOLD_FOR_REVIEW,
+        'max_reextraction_attempts': MAX_REEXTRACTION_ATTEMPTS,
+        'adversarial_review_enabled': ADVERSARIAL_REVIEW_ENABLED,
+    }
+
+
+def get_validation_config() -> dict:
+    """Get validation-specific configuration."""
+    return {
+        'enabled': VALIDATION_ENABLED,
+        'model': VALIDATION_MODEL,
+        'category_model': CATEGORY_VALIDATION_MODEL,
+        'thresholds': {
+            'evidence_match': EVIDENCE_MATCH_THRESHOLD,
+            'evidence_partial': EVIDENCE_PARTIAL_THRESHOLD,
+            'confidence_review': CONFIDENCE_THRESHOLD_FOR_REVIEW,
+            'confidence_high': CONFIDENCE_HIGH,
+            'confidence_critical': CONFIDENCE_CRITICAL,
+        },
+        'reextraction': {
+            'max_attempts': MAX_REEXTRACTION_ATTEMPTS,
+            'improvement_threshold': REEXTRACTION_IMPROVEMENT_THRESHOLD,
+        },
+        'adversarial': {
+            'enabled': ADVERSARIAL_REVIEW_ENABLED,
+            'weight': ADVERSARIAL_WEIGHT,
+        },
+        'consistency_thresholds': CONSISTENCY_CHECK_THRESHOLDS,
+        'salary_ranges': EXPECTED_SALARY_RANGES,
+        'flag_weights': FLAG_SEVERITY_WEIGHTS,
+        'storage': {
+            'validation_dir': str(VALIDATION_STORAGE_DIR),
+            'audit_dir': str(AUDIT_LOG_DIR),
+            'cache_ttl': VALIDATION_CACHE_TTL,
+        },
+        'review_queue': {
+            'page_size': REVIEW_QUEUE_PAGE_SIZE,
+            'sort_order': REVIEW_QUEUE_SORT_ORDER,
+            'auto_escalate_days': AUTO_ESCALATE_AFTER_DAYS,
+        },
     }
