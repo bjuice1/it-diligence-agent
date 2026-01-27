@@ -13,6 +13,7 @@ Tool Functions:
 from typing import Dict, List, Any, Optional, TYPE_CHECKING
 from difflib import SequenceMatcher
 import logging
+import json
 
 if TYPE_CHECKING:
     from tools_v2.fact_store import FactStore
@@ -65,7 +66,8 @@ DOMAIN_CATEGORIES = {
         "directory", "authentication", "privileged_access", "provisioning", "sso", "mfa", "governance"
     ],
     "organization": [
-        "structure", "staffing", "vendors", "skills", "processes", "budget", "roadmap"
+        "leadership", "central_it", "roles", "app_teams", "outsourcing",
+        "embedded_it", "shadow_it", "key_individuals", "skills", "budget"
     ]
 }
 
@@ -74,6 +76,118 @@ STATUS_VALUES = ["documented", "partial", "gap"]
 
 # Gap importance levels
 GAP_IMPORTANCE = ["critical", "high", "medium", "low"]
+
+
+# =============================================================================
+# APPLICATION NAME VALIDATION
+# =============================================================================
+
+# Field label patterns that indicate parsing errors (item contains a label, not a name)
+FIELD_LABEL_PATTERNS = [
+    r'^\*{0,2}name\*{0,2}\s*:',        # **Name**: or Name:
+    r'^\*{0,2}vendor\*{0,2}\s*:',      # **Vendor**: or Vendor:
+    r'^\*{0,2}version\*{0,2}\s*:',     # **Version**: or Version:
+    r'^\*{0,2}users?\*{0,2}\s*:',      # **Users**: or User:
+    r'^\*{0,2}criticality\*{0,2}\s*:', # **Criticality**:
+    r'^\*{0,2}deployment\*{0,2}\s*:',  # **Deployment**:
+    r'^\*{0,2}license\*{0,2}\s*:',     # **License**:
+    r'^\*{0,2}contract\*{0,2}\s*:',    # **Contract**:
+    r'^\*{0,2}status\*{0,2}\s*:',      # **Status**:
+    r'^\*{0,2}type\*{0,2}\s*:',        # **Type**:
+    r'^\*{0,2}category\*{0,2}\s*:',    # **Category**:
+    r'^\*{0,2}description\*{0,2}\s*:', # **Description**:
+    r'^\*{0,2}technology\*{0,2}\s*:',  # **Technology**:
+    r'^\*{0,2}deployed\*{0,2}\s*:',    # **Deployed**:
+    r'^\*{0,2}modules?\*{0,2}\s*:',    # **Modules**:
+    r'^\*{0,2}integrations?\*{0,2}\s*:', # **Integrations**:
+]
+
+# Minimum required details for applications domain
+# Must have item (name) + at least one of these detail fields
+APPLICATION_MINIMUM_DETAIL_FIELDS = [
+    'vendor', 'version', 'deployment', 'user_count', 'users',
+    'criticality', 'license_type', 'modules', 'technology_stack'
+]
+
+
+def validate_application_name(item: str) -> tuple[bool, str]:
+    """
+    Validate that an application name is actually an application name,
+    not a field label that was incorrectly parsed.
+
+    Args:
+        item: The item/name field from the inventory entry
+
+    Returns:
+        Tuple of (is_valid, rejection_reason)
+        - (True, "") if valid
+        - (False, "reason") if invalid
+    """
+    import re
+
+    if not item:
+        return False, "Item name is empty"
+
+    item_lower = item.lower().strip()
+
+    # Check against field label patterns
+    for pattern in FIELD_LABEL_PATTERNS:
+        if re.match(pattern, item_lower, re.IGNORECASE):
+            return False, f"Item appears to be a field label, not an application name: '{item}'"
+
+    # Check for common field label keywords at the start
+    label_keywords = ['name', 'vendor', 'version', 'users', 'user', 'criticality',
+                      'deployment', 'license', 'contract', 'status', 'type',
+                      'category', 'description', 'technology', 'deployed', 'modules']
+
+    # If item starts with a label keyword followed by : or -, it's likely a field label
+    for keyword in label_keywords:
+        if item_lower.startswith(keyword) and len(item_lower) > len(keyword):
+            next_char = item_lower[len(keyword)]
+            if next_char in [':', '-', ' ']:
+                # Check if there's actual content after
+                rest = item_lower[len(keyword):].lstrip(':- ')
+                if rest:
+                    return False, f"Item appears to be a field label with value: '{item}'. Use the value '{rest}' as the item name instead."
+
+    # Check minimum length (after stripping markdown)
+    clean_name = re.sub(r'[\*\#\-\_]', '', item).strip()
+    if len(clean_name) < 2:
+        return False, f"Item name too short after cleanup: '{clean_name}'"
+
+    return True, ""
+
+
+def validate_application_completeness(item: str, details: dict) -> tuple[bool, str, bool]:
+    """
+    Check if an application entry has sufficient details to be useful.
+
+    Args:
+        item: The application name
+        details: The details dictionary
+
+    Returns:
+        Tuple of (is_valid, message, needs_review)
+        - is_valid: Whether to accept the entry
+        - message: Validation message
+        - needs_review: Whether to flag for human review
+    """
+    if not details:
+        # No details at all - flag for review but accept
+        return True, "No details provided - flagged for review", True
+
+    # Check if at least one meaningful detail field is present
+    has_meaningful_detail = False
+    for field in APPLICATION_MINIMUM_DETAIL_FIELDS:
+        if field in details and details[field]:
+            has_meaningful_detail = True
+            break
+
+    if not has_meaningful_detail:
+        # Accept but flag for review
+        return True, f"Application '{item}' has no vendor, version, or deployment info - flagged for review", True
+
+    return True, "", False
 
 
 # =============================================================================
@@ -350,6 +464,24 @@ def execute_discovery_tool(
     Returns:
         Dict with result status and any generated IDs
     """
+    # Handle case where tool_input is a string (sometimes happens with LLM responses)
+    if isinstance(tool_input, str):
+        try:
+            tool_input = json.loads(tool_input)
+        except json.JSONDecodeError:
+            logger.error(f"Tool input is a string and not valid JSON: {tool_input[:100]}")
+            return {
+                "status": "error",
+                "message": "Tool input must be a dictionary, not a string. Please provide structured parameters."
+            }
+
+    if not isinstance(tool_input, dict):
+        logger.error(f"Tool input is not a dictionary: {type(tool_input)}")
+        return {
+            "status": "error",
+            "message": f"Tool input must be a dictionary, got {type(tool_input).__name__}"
+        }
+
     if tool_name == "create_inventory_entry":
         return _execute_create_inventory_entry(tool_input, fact_store)
     elif tool_name == "flag_gap":
@@ -379,16 +511,63 @@ def _execute_create_inventory_entry(
         details = input_data.get("details", {})
         source_document = input_data.get("source_document", "")  # Track source document for traceability
 
+        # Handle case where evidence/details are strings instead of dicts
+        if isinstance(evidence, str):
+            try:
+                evidence = json.loads(evidence)
+            except json.JSONDecodeError:
+                # If it's a plain string, treat it as the exact_quote
+                evidence = {"exact_quote": evidence}
+
+        if isinstance(details, str):
+            try:
+                details = json.loads(details)
+            except json.JSONDecodeError:
+                details = {"raw": details}
+
         if not all([domain, category, item]):
             return {
                 "status": "error",
                 "message": "Missing required fields: domain, category, item"
             }
 
-        # Validate entity
+        # Validate entity - CRITICAL: No silent defaults
+        # Entity confusion corrupts the entire analysis
         if entity not in ("target", "buyer"):
-            logger.warning(f"Invalid entity '{entity}', defaulting to 'target'")
-            entity = "target"
+            logger.error(f"REJECTED: Invalid entity '{entity}'. Must be 'target' or 'buyer'.")
+            return {
+                "status": "error",
+                "reason": "invalid_entity",
+                "message": f"Invalid entity '{entity}'. Must be exactly 'target' or 'buyer'. "
+                           f"Entity is determined by document upload location, not inference. "
+                           f"Check the source document's entity designation."
+            }
+
+        # =================================================================
+        # APPLICATION NAME VALIDATION (for applications domain)
+        # =================================================================
+        needs_review = False
+
+        if domain == "applications":
+            # Check if item looks like a field label instead of an app name
+            is_valid_name, rejection_reason = validate_application_name(item)
+            if not is_valid_name:
+                logger.warning(f"REJECTED application entry: {rejection_reason}")
+                return {
+                    "status": "rejected",
+                    "reason": "invalid_name",
+                    "message": f"REJECTED: {rejection_reason}. Please extract the actual application name, not the field label."
+                }
+
+            # Check if entry has sufficient details
+            is_complete, completeness_msg, flag_for_review = validate_application_completeness(item, details)
+            if flag_for_review:
+                needs_review = True
+                logger.info(f"Application flagged for review: {completeness_msg}")
+
+        # =================================================================
+        # END APPLICATION VALIDATION
+        # =================================================================
 
         # Validate evidence
         exact_quote = evidence.get("exact_quote", "")
@@ -397,7 +576,7 @@ def _execute_create_inventory_entry(
                 "status": "error",
                 "message": f"Evidence exact_quote must be at least {MIN_EVIDENCE_QUOTE_LENGTH} characters for documented facts"
             }
-        
+
         # Optional: Validate quote exists in source document (if source available)
         # Note: This requires source document text, which may not always be available
         # during discovery. Validation can be done later during review phase.
@@ -427,7 +606,7 @@ def _execute_create_inventory_entry(
                     "message": f"Similar fact already exists: {duplicate['fact_id']} - {duplicate['item']}"
                 }
 
-        # Add fact to store
+        # Add fact to store (with needs_review flag if applicable)
         fact_id = fact_store.add_fact(
             domain=domain,
             category=category,
@@ -436,18 +615,25 @@ def _execute_create_inventory_entry(
             status=status,
             evidence=evidence,
             entity=entity,
-            source_document=source_document
+            source_document=source_document,
+            needs_review=needs_review
         )
 
         entity_label = "TARGET" if entity == "target" else "BUYER"
-        logger.debug(f"Created inventory entry: {fact_id} - {item} [{entity_label}]")
+        logger.debug(f"Created inventory entry: {fact_id} - {item} [{entity_label}]" + (" [NEEDS REVIEW]" if needs_review else ""))
 
-        return {
+        result = {
             "status": "success",
             "fact_id": fact_id,
             "entity": entity,
             "message": f"Recorded [{entity_label}]: {item} ({category})"
         }
+
+        if needs_review:
+            result["needs_review"] = True
+            result["message"] += " [FLAGGED FOR REVIEW - sparse details]"
+
+        return result
 
     except Exception as e:
         logger.error(f"Error in create_inventory_entry: {e}")
@@ -525,6 +711,51 @@ def _execute_complete_discovery(
                 "message": "Missing required field: domain"
             }
 
+        # Get stats for this domain BEFORE marking complete
+        domain_data = fact_store.get_domain_facts(domain)
+
+        # =================================================================
+        # COMPLETENESS VALIDATION FOR ORGANIZATION DOMAIN
+        # =================================================================
+        warnings = []
+        if domain == "organization":
+            # Count central_it (team) entries
+            central_it_facts = [f for f in domain_data.get("facts", [])
+                               if f.get("category") == "central_it"]
+            team_count = len(central_it_facts)
+
+            # Typical Team Summary tables have 5-7 teams
+            # Warn if fewer than 5 teams extracted
+            if team_count < 5:
+                warnings.append(
+                    f"WARNING: Only {team_count} central_it teams extracted. "
+                    f"Most Team Summary tables have 5-7 teams (Applications, Infrastructure, "
+                    f"Security & Compliance, Service Desk, Data & Analytics, PMO, IT Leadership). "
+                    f"Did you extract ALL teams?"
+                )
+                logger.warning(f"Organization completeness check: only {team_count} teams")
+
+            # Check if common teams are present
+            extracted_team_names = {f.get("item", "").lower() for f in central_it_facts}
+            expected_teams = ["applications", "infrastructure", "security", "service desk",
+                            "data", "pmo", "it leadership"]
+            missing_common_teams = [t for t in expected_teams
+                                   if not any(t in name for name in extracted_team_names)]
+            if missing_common_teams:
+                warnings.append(
+                    f"NOTE: Common teams that may be missing: {', '.join(missing_common_teams)}. "
+                    f"Check if these exist in the Team Summary table."
+                )
+
+            # Count roles entries
+            roles_facts = [f for f in domain_data.get("facts", [])
+                          if f.get("category") == "roles"]
+            if len(roles_facts) == 0:
+                warnings.append(
+                    "NOTE: No 'roles' category facts extracted. "
+                    "If there's a Role & Compensation Breakdown table, extract those rows."
+                )
+
         # Mark discovery complete for this domain
         fact_store.mark_discovery_complete(
             domain=domain,
@@ -532,12 +763,9 @@ def _execute_complete_discovery(
             categories_missing=categories_missing
         )
 
-        # Get stats for this domain
-        domain_data = fact_store.get_domain_facts(domain)
-
         logger.info(f"Discovery complete for {domain}: {domain_data['fact_count']} facts, {domain_data['gap_count']} gaps")
 
-        return {
+        result = {
             "status": "success",
             "domain": domain,
             "fact_count": domain_data["fact_count"],
@@ -545,6 +773,13 @@ def _execute_complete_discovery(
             "categories_covered": categories_covered,
             "message": f"Discovery complete: {domain_data['fact_count']} facts, {domain_data['gap_count']} gaps"
         }
+
+        # Add warnings if any
+        if warnings:
+            result["warnings"] = warnings
+            result["message"] += "\n\n" + "\n".join(warnings)
+
+        return result
 
     except Exception as e:
         logger.error(f"Error in complete_discovery: {e}")
@@ -600,3 +835,112 @@ def validate_discovery_input(tool_name: str, tool_input: Dict) -> Optional[str]:
             return "Missing required field: domain"
 
     return None
+
+
+def get_application_validation_summary(fact_store: "FactStore") -> Dict[str, Any]:
+    """
+    Get a summary of application validation results.
+
+    Args:
+        fact_store: FactStore containing application facts
+
+    Returns:
+        Dictionary with validation statistics:
+        - total: Total application entries
+        - high_confidence: Entries with confidence >= 0.6
+        - needs_review: Entries flagged for review
+        - low_confidence: Entries with low confidence
+        - by_category: Breakdown by application category
+    """
+    summary = {
+        "total": 0,
+        "high_confidence": 0,
+        "needs_review": 0,
+        "low_confidence": 0,
+        "by_category": {},
+        "review_reasons": [],
+    }
+
+    if not fact_store or not fact_store.facts:
+        return summary
+
+    # Filter to applications domain
+    app_facts = [f for f in fact_store.facts if f.domain == "applications"]
+
+    for fact in app_facts:
+        summary["total"] += 1
+        category = fact.category or "other"
+
+        # Initialize category if needed
+        if category not in summary["by_category"]:
+            summary["by_category"][category] = {
+                "total": 0,
+                "high_confidence": 0,
+                "needs_review": 0,
+            }
+
+        summary["by_category"][category]["total"] += 1
+
+        # Check confidence and review status
+        needs_review = getattr(fact, 'needs_review', False)
+        confidence = getattr(fact, 'confidence_score', 0.0)
+
+        if needs_review:
+            summary["needs_review"] += 1
+            summary["by_category"][category]["needs_review"] += 1
+            reason = getattr(fact, 'needs_review_reason', '')
+            if reason:
+                summary["review_reasons"].append({
+                    "item": fact.item,
+                    "fact_id": fact.fact_id,
+                    "reason": reason,
+                })
+        elif confidence >= 0.6:
+            summary["high_confidence"] += 1
+            summary["by_category"][category]["high_confidence"] += 1
+        else:
+            summary["low_confidence"] += 1
+
+    return summary
+
+
+def format_validation_summary(summary: Dict[str, Any]) -> str:
+    """
+    Format validation summary as a readable string.
+
+    Args:
+        summary: Validation summary from get_application_validation_summary
+
+    Returns:
+        Formatted string for display
+    """
+    lines = [
+        "=" * 50,
+        "APPLICATION INVENTORY VALIDATION SUMMARY",
+        "=" * 50,
+        "",
+        f"Total Applications: {summary['total']}",
+        f"  ✅ High Confidence: {summary['high_confidence']}",
+        f"  ⚠️  Needs Review:   {summary['needs_review']}",
+        f"  ❓ Low Confidence:  {summary['low_confidence']}",
+        "",
+    ]
+
+    if summary['by_category']:
+        lines.append("By Category:")
+        for cat, stats in sorted(summary['by_category'].items()):
+            review_flag = f" (⚠️{stats['needs_review']})" if stats['needs_review'] > 0 else ""
+            lines.append(f"  - {cat}: {stats['total']}{review_flag}")
+        lines.append("")
+
+    if summary['review_reasons']:
+        lines.append("Items Needing Review:")
+        for item in summary['review_reasons'][:10]:  # Show first 10
+            lines.append(f"  - {item['item']} ({item['fact_id']}): {item['reason']}")
+        if len(summary['review_reasons']) > 10:
+            lines.append(f"  ... and {len(summary['review_reasons']) - 10} more")
+        lines.append("")
+
+    lines.append("=" * 50)
+
+    return "\n".join(lines)
