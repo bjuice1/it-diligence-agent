@@ -1316,6 +1316,425 @@ class CSVExporter:
 
 
 # =============================================================================
+# FINDINGS & SUMMARY EXPORTERS
+# =============================================================================
+
+class FindingsExporter:
+    """Exports risks and work items to various formats."""
+
+    @staticmethod
+    def export_work_items_markdown(work_items: List[Dict], output_path: Path) -> Path:
+        """Export work items to Markdown format."""
+        lines = [
+            "# Work Items Summary",
+            "",
+            f"*Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}*",
+            "",
+            f"**Total Work Items: {len(work_items)}**",
+            "",
+        ]
+
+        # Group by phase
+        by_phase = {}
+        for wi in work_items:
+            phase = wi.get('phase', 'Unassigned')
+            if phase not in by_phase:
+                by_phase[phase] = []
+            by_phase[phase].append(wi)
+
+        # Phase order
+        phase_order = ['Day_1', 'Day_100', 'Post_100', 'Unassigned']
+
+        # Summary table
+        lines.extend([
+            "## Summary by Phase",
+            "",
+            "| Phase | Count | Est. Cost Range |",
+            "|-------|-------|-----------------|",
+        ])
+
+        for phase in phase_order:
+            if phase in by_phase:
+                items = by_phase[phase]
+                # Estimate costs (simplified)
+                lines.append(f"| {phase.replace('_', ' ')} | {len(items)} | See details |")
+
+        lines.extend(["", "---", ""])
+
+        # Detail by phase
+        for phase in phase_order:
+            if phase not in by_phase:
+                continue
+
+            items = by_phase[phase]
+            phase_display = phase.replace('_', ' ')
+
+            lines.extend([
+                f"## {phase_display} Work Items ({len(items)})",
+                "",
+            ])
+
+            for wi in items:
+                wi_id = wi.get('finding_id', 'N/A')
+                title = wi.get('title', 'Untitled')
+                domain = wi.get('domain', 'general').replace('_', ' ').title()
+                description = wi.get('description', 'No description')
+                owner = wi.get('owner_type', 'TBD')
+                cost = wi.get('cost_estimate', 'TBD')
+                priority = wi.get('priority', 'medium')
+
+                lines.extend([
+                    f"### {wi_id}: {title}",
+                    "",
+                    f"**Domain:** {domain} | **Owner:** {owner} | **Priority:** {priority} | **Cost:** {cost}",
+                    "",
+                    description[:500] + ('...' if len(description) > 500 else ''),
+                    "",
+                    "---",
+                    "",
+                ])
+
+        output_path.write_text('\n'.join(lines))
+        return output_path
+
+    @staticmethod
+    def export_risks_markdown(risks: List[Dict], output_path: Path) -> Path:
+        """Export risks to Markdown format."""
+        lines = [
+            "# Risk Register",
+            "",
+            f"*Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}*",
+            "",
+            f"**Total Risks: {len(risks)}**",
+            "",
+        ]
+
+        # Group by severity
+        by_severity = {'critical': [], 'high': [], 'medium': [], 'low': []}
+        for risk in risks:
+            severity = risk.get('severity', 'medium').lower()
+            if severity in by_severity:
+                by_severity[severity].append(risk)
+            else:
+                by_severity['medium'].append(risk)
+
+        # Summary
+        lines.extend([
+            "## Summary by Severity",
+            "",
+            "| Severity | Count |",
+            "|----------|-------|",
+            f"| Critical | {len(by_severity['critical'])} |",
+            f"| High | {len(by_severity['high'])} |",
+            f"| Medium | {len(by_severity['medium'])} |",
+            f"| Low | {len(by_severity['low'])} |",
+            "",
+            "---",
+            "",
+        ])
+
+        # Detail by severity
+        for severity in ['critical', 'high', 'medium', 'low']:
+            items = by_severity[severity]
+            if not items:
+                continue
+
+            lines.extend([
+                f"## {severity.upper()} Risks ({len(items)})",
+                "",
+            ])
+
+            for risk in items:
+                risk_id = risk.get('finding_id', 'N/A')
+                title = risk.get('title', 'Untitled')
+                domain = risk.get('domain', 'general').replace('_', ' ').title()
+                description = risk.get('description', 'No description')
+                mitigation = risk.get('mitigation', 'No mitigation specified')
+
+                lines.extend([
+                    f"### {risk_id}: {title}",
+                    "",
+                    f"**Domain:** {domain} | **Severity:** {severity.upper()}",
+                    "",
+                    "**Description:**",
+                    description[:500] + ('...' if len(description) > 500 else ''),
+                    "",
+                    "**Mitigation:**",
+                    mitigation[:300] + ('...' if len(mitigation) > 300 else ''),
+                    "",
+                    "---",
+                    "",
+                ])
+
+        output_path.write_text('\n'.join(lines))
+        return output_path
+
+    @staticmethod
+    def export_vdr_requests_markdown(gaps: List[Dict], output_path: Path) -> Path:
+        """Export VDR/information requests to Markdown format."""
+        lines = [
+            "# VDR Information Requests",
+            "",
+            f"*Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}*",
+            "",
+            f"**Total Requests: {len(gaps)}**",
+            "",
+            "These items represent information gaps identified during the IT due diligence analysis.",
+            "Please provide documentation or clarification for each request.",
+            "",
+            "---",
+            "",
+        ]
+
+        # Group by domain
+        by_domain = {}
+        for gap in gaps:
+            domain = gap.get('domain', 'general')
+            if domain not in by_domain:
+                by_domain[domain] = []
+            by_domain[domain].append(gap)
+
+        # Summary
+        lines.extend([
+            "## Summary by Domain",
+            "",
+            "| Domain | Requests |",
+            "|--------|----------|",
+        ])
+        for domain, items in sorted(by_domain.items()):
+            lines.append(f"| {domain.replace('_', ' ').title()} | {len(items)} |")
+
+        lines.extend(["", "---", ""])
+
+        # Detail by domain
+        for domain, items in sorted(by_domain.items()):
+            domain_display = domain.replace('_', ' ').title()
+            lines.extend([
+                f"## {domain_display} ({len(items)} requests)",
+                "",
+            ])
+
+            for i, gap in enumerate(items, 1):
+                gap_id = gap.get('gap_id', f'GAP-{i}')
+                category = gap.get('category', 'General')
+                description = gap.get('description', 'No description')
+                importance = gap.get('importance', 'medium')
+
+                lines.extend([
+                    f"### {gap_id}: {category}",
+                    "",
+                    f"**Importance:** {importance.upper()}",
+                    "",
+                    description,
+                    "",
+                    "---",
+                    "",
+                ])
+
+        output_path.write_text('\n'.join(lines))
+        return output_path
+
+
+class ExecutiveSummaryExporter:
+    """Generates executive summary reports."""
+
+    @staticmethod
+    def export_executive_summary(
+        facts: List[Dict],
+        risks: List[Dict],
+        work_items: List[Dict],
+        gaps: List[Dict],
+        deal_context: Dict = None,
+        output_path: Path = None
+    ) -> str:
+        """
+        Generate an executive summary of the IT due diligence findings.
+
+        Returns markdown string (and writes to file if output_path provided).
+        """
+        deal_context = deal_context or {}
+
+        # Calculate metrics
+        total_facts = len(facts)
+        total_risks = len(risks)
+        total_work_items = len(work_items)
+        total_gaps = len(gaps)
+
+        # Risk breakdown
+        critical_risks = len([r for r in risks if r.get('severity', '').lower() == 'critical'])
+        high_risks = len([r for r in risks if r.get('severity', '').lower() == 'high'])
+        medium_risks = len([r for r in risks if r.get('severity', '').lower() == 'medium'])
+
+        # Work item breakdown by phase
+        day1_items = len([w for w in work_items if w.get('phase') == 'Day_1'])
+        day100_items = len([w for w in work_items if w.get('phase') == 'Day_100'])
+
+        # Domain coverage
+        domains_covered = set(f.get('domain') for f in facts if f.get('domain'))
+
+        lines = [
+            "# IT Due Diligence Executive Summary",
+            "",
+            f"*Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}*",
+            "",
+        ]
+
+        # Deal context if available
+        if deal_context:
+            target = deal_context.get('target_name', 'Target Company')
+            lines.extend([
+                f"**Target:** {target}",
+                "",
+            ])
+
+        lines.extend([
+            "---",
+            "",
+            "## Key Metrics",
+            "",
+            "| Metric | Value |",
+            "|--------|-------|",
+            f"| Facts Documented | {total_facts} |",
+            f"| Risks Identified | {total_risks} |",
+            f"| Work Items | {total_work_items} |",
+            f"| Information Gaps | {total_gaps} |",
+            f"| Domains Analyzed | {len(domains_covered)} |",
+            "",
+            "---",
+            "",
+            "## Risk Summary",
+            "",
+        ])
+
+        if critical_risks > 0:
+            lines.append(f"**{critical_risks} CRITICAL** risks require immediate attention.")
+            lines.append("")
+
+        if high_risks > 0:
+            lines.append(f"**{high_risks} HIGH** severity risks identified.")
+            lines.append("")
+
+        lines.extend([
+            "| Severity | Count |",
+            "|----------|-------|",
+            f"| Critical | {critical_risks} |",
+            f"| High | {high_risks} |",
+            f"| Medium | {medium_risks} |",
+            f"| Low | {total_risks - critical_risks - high_risks - medium_risks} |",
+            "",
+        ])
+
+        # Top risks
+        top_risks = [r for r in risks if r.get('severity', '').lower() in ['critical', 'high']][:5]
+        if top_risks:
+            lines.extend([
+                "### Top Risks",
+                "",
+            ])
+            for risk in top_risks:
+                severity = risk.get('severity', 'medium').upper()
+                title = risk.get('title', 'Untitled')
+                lines.append(f"- **[{severity}]** {title}")
+            lines.append("")
+
+        lines.extend([
+            "---",
+            "",
+            "## Integration Work Items",
+            "",
+            f"**Day 1 (Critical):** {day1_items} items",
+            "",
+            f"**First 100 Days:** {day100_items} items",
+            "",
+            f"**Post-100 Days:** {total_work_items - day1_items - day100_items} items",
+            "",
+        ])
+
+        # Day 1 items
+        day1_list = [w for w in work_items if w.get('phase') == 'Day_1'][:5]
+        if day1_list:
+            lines.extend([
+                "### Day 1 Priorities",
+                "",
+            ])
+            for wi in day1_list:
+                title = wi.get('title', 'Untitled')
+                lines.append(f"- {title}")
+            lines.append("")
+
+        lines.extend([
+            "---",
+            "",
+            "## Domain Coverage",
+            "",
+        ])
+
+        # Facts by domain
+        facts_by_domain = {}
+        for f in facts:
+            domain = f.get('domain', 'general')
+            facts_by_domain[domain] = facts_by_domain.get(domain, 0) + 1
+
+        lines.extend([
+            "| Domain | Facts | Status |",
+            "|--------|-------|--------|",
+        ])
+
+        all_domains = ['applications', 'infrastructure', 'network', 'cybersecurity', 'identity_access', 'organization']
+        for domain in all_domains:
+            count = facts_by_domain.get(domain, 0)
+            status = "Analyzed" if count > 0 else "No data"
+            lines.append(f"| {domain.replace('_', ' ').title()} | {count} | {status} |")
+
+        lines.extend([
+            "",
+            "---",
+            "",
+            "## Information Gaps",
+            "",
+            f"**{total_gaps}** information gaps identified requiring VDR follow-up.",
+            "",
+        ])
+
+        if total_gaps > 0:
+            # Group gaps by domain
+            gaps_by_domain = {}
+            for g in gaps:
+                domain = g.get('domain', 'general')
+                gaps_by_domain[domain] = gaps_by_domain.get(domain, 0) + 1
+
+            lines.extend([
+                "| Domain | Gap Count |",
+                "|--------|-----------|",
+            ])
+            for domain, count in sorted(gaps_by_domain.items(), key=lambda x: -x[1]):
+                lines.append(f"| {domain.replace('_', ' ').title()} | {count} |")
+
+        lines.extend([
+            "",
+            "---",
+            "",
+            "## Recommendations",
+            "",
+            "1. Address all **Critical** and **High** severity risks before close",
+            "2. Establish TSA agreements for critical systems identified",
+            "3. Complete Day 1 work items to ensure business continuity",
+            "4. Request additional documentation for identified information gaps",
+            "",
+            "---",
+            "",
+            "*This summary was generated by the IT Due Diligence Agent.*",
+        ])
+
+        content = '\n'.join(lines)
+
+        if output_path:
+            output_path.write_text(content)
+
+        return content
+
+
+# =============================================================================
 # MAIN EXPORT SERVICE
 # =============================================================================
 
@@ -1525,6 +1944,54 @@ class ExportService:
             if csv_path.exists():
                 return csv_path.read_text()
         return ""
+
+    def export_work_items_markdown(self) -> str:
+        """Export work items to Markdown string."""
+        work_items = [f for f in self.findings if f.get('type') == 'work_item' or f.get('phase')]
+        if not work_items:
+            return "# Work Items\n\nNo work items found."
+
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "work_items.md"
+            FindingsExporter.export_work_items_markdown(work_items, output_path)
+            return output_path.read_text()
+
+    def export_risks_markdown(self) -> str:
+        """Export risks to Markdown string."""
+        risks = [f for f in self.findings if f.get('type') == 'risk' or f.get('severity')]
+        if not risks:
+            return "# Risk Register\n\nNo risks found."
+
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "risks.md"
+            FindingsExporter.export_risks_markdown(risks, output_path)
+            return output_path.read_text()
+
+    def export_vdr_requests_markdown(self, gaps: List[Dict]) -> str:
+        """Export VDR requests to Markdown string."""
+        if not gaps:
+            return "# VDR Information Requests\n\nNo information gaps found."
+
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "vdr_requests.md"
+            FindingsExporter.export_vdr_requests_markdown(gaps, output_path)
+            return output_path.read_text()
+
+    def export_executive_summary(self, gaps: List[Dict] = None, deal_context: Dict = None) -> str:
+        """Generate executive summary as Markdown string."""
+        risks = [f for f in self.findings if f.get('type') == 'risk' or f.get('severity')]
+        work_items = [f for f in self.findings if f.get('type') == 'work_item' or f.get('phase')]
+
+        return ExecutiveSummaryExporter.export_executive_summary(
+            facts=self.facts,
+            risks=risks,
+            work_items=work_items,
+            gaps=gaps or [],
+            deal_context=deal_context
+        )
 
 
 # =============================================================================

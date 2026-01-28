@@ -125,6 +125,66 @@
     </div>
 </div>
 
+<!-- Findings & Reports Section -->
+<div class="card mb-4">
+    <div class="card-header">
+        <span class="card-title">Findings & Reports</span>
+        <span class="text-muted text-sm">Risks, work items, and executive summaries</span>
+    </div>
+    <div class="card-body">
+        <div class="grid grid-2 gap-4">
+            <div class="export-card">
+                <div class="export-card-header">
+                    <span class="export-card-icon" style="background: var(--critical-bg); color: var(--critical);">!</span>
+                    <div>
+                        <h4>Risk Register</h4>
+                        <p class="text-muted text-sm">All identified risks by severity</p>
+                    </div>
+                </div>
+                <a href="/api/export/risks" class="btn btn-secondary btn-sm" style="margin-top: 12px;">
+                    Download Markdown
+                </a>
+            </div>
+            <div class="export-card">
+                <div class="export-card-header">
+                    <span class="export-card-icon" style="background: var(--medium-bg); color: var(--medium);">W</span>
+                    <div>
+                        <h4>Work Items</h4>
+                        <p class="text-muted text-sm">Integration tasks by phase</p>
+                    </div>
+                </div>
+                <a href="/api/export/work-items" class="btn btn-secondary btn-sm" style="margin-top: 12px;">
+                    Download Markdown
+                </a>
+            </div>
+            <div class="export-card">
+                <div class="export-card-header">
+                    <span class="export-card-icon" style="background: var(--info-bg); color: var(--info);">?</span>
+                    <div>
+                        <h4>VDR Requests</h4>
+                        <p class="text-muted text-sm">Information gaps for follow-up</p>
+                    </div>
+                </div>
+                <a href="/api/export/vdr-requests" class="btn btn-secondary btn-sm" style="margin-top: 12px;">
+                    Download Markdown
+                </a>
+            </div>
+            <div class="export-card" style="background: var(--accent-subtle);">
+                <div class="export-card-header">
+                    <span class="export-card-icon" style="background: var(--accent); color: white;">E</span>
+                    <div>
+                        <h4>Executive Summary</h4>
+                        <p class="text-muted text-sm">High-level overview for leadership</p>
+                    </div>
+                </div>
+                <a href="/api/export/executive-summary" class="btn btn-primary btn-sm" style="margin-top: 12px;">
+                    Download Markdown
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Export Formats Explanation -->
 <div class="card">
     <div class="card-header">
@@ -236,6 +296,38 @@
     background: var(--bg-surface-sunken);
     border-radius: 4px;
     color: var(--text-muted);
+}
+.export-card {
+    padding: 16px;
+    background: var(--bg-surface-sunken);
+    border-radius: 8px;
+}
+.export-card-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+.export-card-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 1.1em;
+    flex-shrink: 0;
+}
+.export-card h4 {
+    margin: 0 0 4px 0;
+    font-size: 1em;
+}
+.grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+}
+.gap-4 {
+    gap: 16px;
 }
 </style>
 {% endblock %}

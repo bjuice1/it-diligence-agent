@@ -3557,6 +3557,240 @@ def export_inventory(domain):
     )
 
 
+@app.route('/api/export/work-items')
+def export_work_items():
+    """Export work items as Markdown."""
+    from flask import send_file
+    from io import BytesIO
+    from datetime import datetime
+
+    try:
+        from services.export_service import ExportService
+    except ImportError as e:
+        return jsonify({'error': f'Export service not available: {e}'}), 500
+
+    s = get_session()
+
+    # Build data
+    facts_list = [
+        {
+            'fact_id': fact.fact_id,
+            'domain': fact.domain,
+            'category': fact.category,
+            'item': fact.item,
+            'details': fact.details,
+        }
+        for fact in s.fact_store.facts
+    ]
+
+    findings_list = []
+    for wi in s.reasoning_store.work_items:
+        findings_list.append({
+            'finding_id': wi.finding_id,
+            'domain': wi.domain,
+            'title': wi.title,
+            'description': wi.description,
+            'phase': wi.phase,
+            'priority': wi.priority,
+            'cost_estimate': wi.cost_estimate,
+            'owner_type': wi.owner_type,
+            'based_on_facts': wi.based_on_facts,
+            'type': 'work_item',
+        })
+
+    export_service = ExportService(facts_list, findings_list)
+    content = export_service.export_work_items_markdown()
+
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    buffer = BytesIO(content.encode('utf-8'))
+    buffer.seek(0)
+
+    return send_file(
+        buffer,
+        mimetype='text/markdown',
+        as_attachment=True,
+        download_name=f"work_items_{timestamp}.md"
+    )
+
+
+@app.route('/api/export/risks')
+def export_risks():
+    """Export risks as Markdown."""
+    from flask import send_file
+    from io import BytesIO
+    from datetime import datetime
+
+    try:
+        from services.export_service import ExportService
+    except ImportError as e:
+        return jsonify({'error': f'Export service not available: {e}'}), 500
+
+    s = get_session()
+
+    facts_list = [
+        {
+            'fact_id': fact.fact_id,
+            'domain': fact.domain,
+            'category': fact.category,
+            'item': fact.item,
+            'details': fact.details,
+        }
+        for fact in s.fact_store.facts
+    ]
+
+    findings_list = []
+    for r in s.reasoning_store.risks:
+        findings_list.append({
+            'finding_id': r.finding_id,
+            'domain': r.domain,
+            'title': r.title,
+            'description': r.description,
+            'severity': r.severity,
+            'mitigation': r.mitigation,
+            'based_on_facts': r.based_on_facts,
+            'type': 'risk',
+        })
+
+    export_service = ExportService(facts_list, findings_list)
+    content = export_service.export_risks_markdown()
+
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    buffer = BytesIO(content.encode('utf-8'))
+    buffer.seek(0)
+
+    return send_file(
+        buffer,
+        mimetype='text/markdown',
+        as_attachment=True,
+        download_name=f"risks_{timestamp}.md"
+    )
+
+
+@app.route('/api/export/vdr-requests')
+def export_vdr_requests():
+    """Export VDR/information gap requests as Markdown."""
+    from flask import send_file
+    from io import BytesIO
+    from datetime import datetime
+
+    try:
+        from services.export_service import ExportService
+    except ImportError as e:
+        return jsonify({'error': f'Export service not available: {e}'}), 500
+
+    s = get_session()
+
+    # Build gaps list from fact_store
+    gaps_list = [
+        {
+            'gap_id': gap.gap_id,
+            'domain': gap.domain,
+            'category': gap.category,
+            'description': gap.description,
+            'importance': gap.importance,
+        }
+        for gap in s.fact_store.gaps
+    ]
+
+    export_service = ExportService([], [])
+    content = export_service.export_vdr_requests_markdown(gaps_list)
+
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    buffer = BytesIO(content.encode('utf-8'))
+    buffer.seek(0)
+
+    return send_file(
+        buffer,
+        mimetype='text/markdown',
+        as_attachment=True,
+        download_name=f"vdr_requests_{timestamp}.md"
+    )
+
+
+@app.route('/api/export/executive-summary')
+def export_executive_summary():
+    """Export executive summary as Markdown."""
+    from flask import send_file
+    from io import BytesIO
+    from datetime import datetime
+
+    try:
+        from services.export_service import ExportService
+    except ImportError as e:
+        return jsonify({'error': f'Export service not available: {e}'}), 500
+
+    s = get_session()
+
+    # Build facts list
+    facts_list = [
+        {
+            'fact_id': fact.fact_id,
+            'domain': fact.domain,
+            'category': fact.category,
+            'item': fact.item,
+            'details': fact.details,
+        }
+        for fact in s.fact_store.facts
+    ]
+
+    # Build findings list
+    findings_list = []
+    for r in s.reasoning_store.risks:
+        findings_list.append({
+            'finding_id': r.finding_id,
+            'domain': r.domain,
+            'title': r.title,
+            'description': r.description,
+            'severity': r.severity,
+            'mitigation': r.mitigation,
+            'type': 'risk',
+        })
+    for wi in s.reasoning_store.work_items:
+        findings_list.append({
+            'finding_id': wi.finding_id,
+            'domain': wi.domain,
+            'title': wi.title,
+            'description': wi.description,
+            'phase': wi.phase,
+            'priority': wi.priority,
+            'type': 'work_item',
+        })
+
+    # Build gaps list
+    gaps_list = [
+        {
+            'gap_id': gap.gap_id,
+            'domain': gap.domain,
+            'category': gap.category,
+            'description': gap.description,
+            'importance': gap.importance,
+        }
+        for gap in s.fact_store.gaps
+    ]
+
+    # Get deal context if available
+    deal_context = {}
+    if hasattr(s, 'deal_context') and s.deal_context:
+        deal_context = {
+            'target_name': getattr(s.deal_context, 'target_name', ''),
+            'buyer_name': getattr(s.deal_context, 'buyer_name', ''),
+        }
+
+    export_service = ExportService(facts_list, findings_list)
+    content = export_service.export_executive_summary(gaps_list, deal_context)
+
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    buffer = BytesIO(content.encode('utf-8'))
+    buffer.seek(0)
+
+    return send_file(
+        buffer,
+        mimetype='text/markdown',
+        as_attachment=True,
+        download_name=f"executive_summary_{timestamp}.md"
+    )
+
+
 @app.route('/exports')
 def exports_page():
     """Export center page with all export options."""
