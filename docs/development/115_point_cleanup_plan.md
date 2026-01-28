@@ -96,9 +96,9 @@ Comprehensive plan to polish the IT Due Diligence Agent codebase, organizing out
 - [x] 63. Add hyperlinks in MD exports (via anchor links in dossiers)
 - [x] 64. Add table of contents to MD exports (quick reference tables)
 - [ ] 65. Call exports automatically after analysis
-- [ ] 66. Add "Export" button to web UI
-- [ ] 67. Add export format selector
-- [ ] 68. Add download endpoint for exports
+- [x] 66. Add "Export" button to web UI
+- [x] 67. Add export format selector
+- [x] 68. Add download endpoint for exports
 - [x] 69. Test all export formats
 - [ ] 70. Commit export feature
 
@@ -181,13 +181,13 @@ Comprehensive plan to polish the IT Due Diligence Agent codebase, organizing out
 |-------|--------|----------|--------|
 | A: Archive & Cleanup | 1-20 | 20/20 | COMPLETE |
 | B: Output Reorganization | 21-40 | 0/20 | NOT STARTED |
-| C: Human Exports | 41-70 | 24/30 | IN PROGRESS |
+| C: Human Exports | 41-70 | 27/30 | IN PROGRESS |
 | C+: Dossier System | BONUS | 6/6 | COMPLETE |
 | D: Upload Rename | 71-85 | 0/15 | NOT STARTED |
 | E: Store Consolidation | 86-100 | 0/15 | NOT STARTED |
 | F: Documentation | 101-115 | 1/15 | NOT STARTED |
 
-**Overall: 51/121 points complete (42%)**
+**Overall: 54/121 points complete (45%)**
 
 ---
 

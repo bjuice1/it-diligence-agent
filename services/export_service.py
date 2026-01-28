@@ -1466,6 +1466,66 @@ class ExportService:
 
         return results
 
+    def export_domain_excel(self, domain: str) -> 'BytesIO':
+        """
+        Export a single domain as Excel and return as BytesIO buffer.
+
+        Args:
+            domain: Domain to export
+
+        Returns:
+            BytesIO buffer with Excel data
+        """
+        from io import BytesIO
+        import tempfile
+        import os
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self.export_domain(domain, Path(tmpdir), formats=['xlsx'])
+            xlsx_path = Path(tmpdir) / f"{domain}.xlsx"
+            if xlsx_path.exists():
+                buffer = BytesIO(xlsx_path.read_bytes())
+                return buffer
+        return BytesIO()
+
+    def export_domain_markdown(self, domain: str) -> str:
+        """
+        Export a single domain as Markdown and return as string.
+
+        Args:
+            domain: Domain to export
+
+        Returns:
+            Markdown string
+        """
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self.export_domain(domain, Path(tmpdir), formats=['md'])
+            md_path = Path(tmpdir) / f"{domain}.md"
+            if md_path.exists():
+                return md_path.read_text()
+        return ""
+
+    def export_domain_csv(self, domain: str) -> str:
+        """
+        Export a single domain as CSV and return as string.
+
+        Args:
+            domain: Domain to export
+
+        Returns:
+            CSV string
+        """
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self.export_domain(domain, Path(tmpdir), formats=['csv'])
+            csv_path = Path(tmpdir) / f"{domain}.csv"
+            if csv_path.exists():
+                return csv_path.read_text()
+        return ""
+
 
 # =============================================================================
 # CONVENIENCE FUNCTION

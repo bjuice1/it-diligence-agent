@@ -3315,6 +3315,284 @@ def export_excel():
     )
 
 
+@app.route('/api/export/dossiers/<domain>')
+def export_dossiers(domain):
+    """Export comprehensive dossiers for a specific domain."""
+    from flask import send_file, request
+    from io import BytesIO
+    from datetime import datetime
+
+    format_type = request.args.get('format', 'html')  # html, md, json
+
+    try:
+        from services.inventory_dossier import DossierBuilder, DossierMarkdownExporter, DossierJSONExporter, DossierHTMLExporter
+    except ImportError as e:
+        return jsonify({'error': f'Dossier service not available: {e}'}), 500
+
+    s = get_session()
+
+    # Build facts and findings data
+    facts_data = {}
+    for fact in s.fact_store.facts:
+        if fact.domain not in facts_data:
+            facts_data[fact.domain] = []
+        facts_data[fact.domain].append({
+            'fact_id': fact.fact_id,
+            'domain': fact.domain,
+            'category': fact.category,
+            'item': fact.item,
+            'details': fact.details,
+            'status': fact.status,
+            'evidence': getattr(fact, 'evidence', ''),
+            'entity': getattr(fact, 'entity', 'target'),
+        })
+
+    findings_data = {
+        'risks': [
+            {
+                'finding_id': r.finding_id,
+                'domain': r.domain,
+                'title': r.title,
+                'description': r.description,
+                'severity': r.severity,
+                'category': r.category,
+                'mitigation': r.mitigation,
+                'based_on_facts': r.based_on_facts,
+            }
+            for r in s.reasoning_store.risks
+        ],
+        'work_items': [
+            {
+                'finding_id': wi.finding_id,
+                'domain': wi.domain,
+                'title': wi.title,
+                'description': wi.description,
+                'phase': wi.phase,
+                'priority': wi.priority,
+                'cost_estimate': wi.cost_estimate,
+                'owner_type': wi.owner_type,
+                'based_on_facts': wi.based_on_facts,
+            }
+            for wi in s.reasoning_store.work_items
+        ]
+    }
+
+    # Build dossiers
+    builder = DossierBuilder(facts_data, findings_data)
+
+    # Map domain names
+    domain_map = {
+        'applications': 'applications',
+        'infrastructure': 'infrastructure',
+        'cybersecurity': 'cybersecurity',
+        'network': 'network',
+        'identity': 'identity_access',
+        'identity_access': 'identity_access',
+        'organization': 'organization',
+        'all': 'all'
+    }
+
+    actual_domain = domain_map.get(domain.lower(), domain)
+
+    if actual_domain == 'all':
+        # Export all domains
+        all_dossiers = {}
+        for d in ['applications', 'infrastructure', 'cybersecurity', 'network', 'identity_access', 'organization']:
+            all_dossiers[d] = builder.build_domain_dossiers(d)
+    else:
+        all_dossiers = {actual_domain: builder.build_domain_dossiers(actual_domain)}
+
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+    if format_type == 'md':
+        exporter = DossierMarkdownExporter()
+        content_parts = []
+        for d, dossiers in all_dossiers.items():
+            content_parts.append(exporter.export(dossiers, d))
+        content = '\n\n---\n\n'.join(content_parts)
+
+        buffer = BytesIO(content.encode('utf-8'))
+        filename = f"dossiers_{domain}_{timestamp}.md"
+        mimetype = 'text/markdown'
+
+    elif format_type == 'json':
+        exporter = DossierJSONExporter()
+        import json
+        all_data = {}
+        for d, dossiers in all_dossiers.items():
+            all_data[d] = json.loads(exporter.export(dossiers, d))
+        content = json.dumps(all_data, indent=2)
+
+        buffer = BytesIO(content.encode('utf-8'))
+        filename = f"dossiers_{domain}_{timestamp}.json"
+        mimetype = 'application/json'
+
+    else:  # html
+        exporter = DossierHTMLExporter()
+        content_parts = []
+        for d, dossiers in all_dossiers.items():
+            content_parts.append(exporter.export(dossiers, d))
+        # Combine HTML exports
+        if len(content_parts) == 1:
+            content = content_parts[0]
+        else:
+            # Create a combined HTML with navigation
+            content = f"""<!DOCTYPE html>
+<html><head><title>IT Due Diligence - All Dossiers</title>
+<style>
+body {{ font-family: -apple-system, sans-serif; margin: 20px; }}
+.domain-nav {{ background: #f5f5f5; padding: 10px; margin-bottom: 20px; border-radius: 8px; }}
+.domain-nav a {{ margin-right: 15px; color: #0066cc; text-decoration: none; }}
+.domain-section {{ margin-bottom: 40px; padding-top: 20px; border-top: 2px solid #ddd; }}
+</style></head><body>
+<h1>IT Due Diligence - Complete Dossiers</h1>
+<div class="domain-nav">
+{''.join(f'<a href="#domain-{d}">{d.replace("_", " ").title()}</a>' for d in all_dossiers.keys())}
+</div>
+{''.join(f'<div id="domain-{d}" class="domain-section">{html}</div>' for d, html in zip(all_dossiers.keys(), content_parts))}
+</body></html>"""
+
+        buffer = BytesIO(content.encode('utf-8'))
+        filename = f"dossiers_{domain}_{timestamp}.html"
+        mimetype = 'text/html'
+
+    buffer.seek(0)
+    return send_file(
+        buffer,
+        mimetype=mimetype,
+        as_attachment=True,
+        download_name=filename
+    )
+
+
+@app.route('/api/export/inventory/<domain>')
+def export_inventory(domain):
+    """Export inventory for a specific domain using the export service."""
+    from flask import send_file, request
+    from io import BytesIO
+    from datetime import datetime
+
+    format_type = request.args.get('format', 'excel')  # excel, md, csv
+
+    try:
+        from services.export_service import ExportService
+    except ImportError as e:
+        return jsonify({'error': f'Export service not available: {e}'}), 500
+
+    s = get_session()
+
+    # Build facts and findings data
+    facts_data = {}
+    for fact in s.fact_store.facts:
+        if fact.domain not in facts_data:
+            facts_data[fact.domain] = []
+        facts_data[fact.domain].append({
+            'fact_id': fact.fact_id,
+            'domain': fact.domain,
+            'category': fact.category,
+            'item': fact.item,
+            'details': fact.details,
+            'status': fact.status,
+            'evidence': getattr(fact, 'evidence', ''),
+            'entity': getattr(fact, 'entity', 'target'),
+        })
+
+    findings_data = {
+        'risks': [
+            {
+                'finding_id': r.finding_id,
+                'domain': r.domain,
+                'title': r.title,
+                'description': r.description,
+                'severity': r.severity,
+                'mitigation': r.mitigation,
+                'based_on_facts': r.based_on_facts,
+            }
+            for r in s.reasoning_store.risks
+        ],
+        'work_items': [
+            {
+                'finding_id': wi.finding_id,
+                'domain': wi.domain,
+                'title': wi.title,
+                'description': wi.description,
+                'phase': wi.phase,
+                'based_on_facts': wi.based_on_facts,
+            }
+            for wi in s.reasoning_store.work_items
+        ]
+    }
+
+    export_service = ExportService(facts_data, findings_data)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+    domain_map = {
+        'applications': 'applications',
+        'infrastructure': 'infrastructure',
+        'cybersecurity': 'cybersecurity',
+        'network': 'network',
+        'organization': 'organization',
+    }
+
+    actual_domain = domain_map.get(domain.lower())
+    if not actual_domain:
+        return jsonify({'error': f'Unknown domain: {domain}'}), 400
+
+    if format_type == 'excel':
+        buffer = export_service.export_domain_excel(actual_domain)
+        filename = f"{actual_domain}_inventory_{timestamp}.xlsx"
+        mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    elif format_type == 'md':
+        content = export_service.export_domain_markdown(actual_domain)
+        buffer = BytesIO(content.encode('utf-8'))
+        filename = f"{actual_domain}_inventory_{timestamp}.md"
+        mimetype = 'text/markdown'
+    elif format_type == 'csv':
+        content = export_service.export_domain_csv(actual_domain)
+        buffer = BytesIO(content.encode('utf-8'))
+        filename = f"{actual_domain}_inventory_{timestamp}.csv"
+        mimetype = 'text/csv'
+    else:
+        return jsonify({'error': f'Unknown format: {format_type}'}), 400
+
+    buffer.seek(0)
+    return send_file(
+        buffer,
+        mimetype=mimetype,
+        as_attachment=True,
+        download_name=filename
+    )
+
+
+@app.route('/exports')
+def exports_page():
+    """Export center page with all export options."""
+    s = get_session()
+    summary = s.get_summary()
+
+    # Get domain stats
+    domain_stats = {}
+    for fact in s.fact_store.facts:
+        domain = fact.domain
+        if domain not in domain_stats:
+            domain_stats[domain] = {'facts': 0, 'risks': 0, 'work_items': 0}
+        domain_stats[domain]['facts'] += 1
+
+    for risk in s.reasoning_store.risks:
+        domain = risk.domain
+        if domain in domain_stats:
+            domain_stats[domain]['risks'] += 1
+
+    for wi in s.reasoning_store.work_items:
+        domain = wi.domain
+        if domain in domain_stats:
+            domain_stats[domain]['work_items'] += 1
+
+    return render_template('exports.html',
+                         summary=summary,
+                         domain_stats=domain_stats)
+
+
 # =============================================================================
 # Document Management & Incremental Updates
 # =============================================================================

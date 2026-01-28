@@ -1,0 +1,264 @@
+{% extends "base.html" %}
+
+{% block title %}Export Center - IT Due Diligence{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="flex justify-between items-start">
+        <div>
+            <h1>Export Center</h1>
+            <p>Download analysis results in various formats</p>
+        </div>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-sm">
+            Back to Dashboard
+        </a>
+    </div>
+</div>
+
+{% if summary.facts == 0 %}
+<!-- Empty State -->
+<div class="card" style="text-align: center; padding: 60px 40px;">
+    <div style="font-size: 4em; margin-bottom: 20px;">📊</div>
+    <h2 style="margin-bottom: 10px;">No Data to Export</h2>
+    <p class="text-muted" style="margin-bottom: 30px; max-width: 400px; margin-left: auto; margin-right: auto;">
+        Run an analysis first to generate exportable data.
+    </p>
+    <a href="{{ url_for('upload_documents') }}" class="btn btn-primary btn-lg">
+        Start Analysis
+    </a>
+</div>
+{% else %}
+
+<!-- Quick Exports Section -->
+<div class="card mb-4">
+    <div class="card-header">
+        <span class="card-title">Quick Exports</span>
+        <span class="text-muted text-sm">Full analysis export</span>
+    </div>
+    <div class="card-body">
+        <div class="flex gap-3 flex-wrap">
+            <a href="/api/export/excel" class="btn btn-primary">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                </svg>
+                Export Excel (All Data)
+            </a>
+            <a href="/api/export/json" class="btn btn-secondary">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                </svg>
+                Export JSON (All Data)
+            </a>
+            <a href="/api/export/dossiers/all?format=html" class="btn btn-secondary">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                </svg>
+                Complete Dossiers (HTML)
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Dossier Exports Section -->
+<div class="card mb-4">
+    <div class="card-header">
+        <span class="card-title">Comprehensive Dossiers</span>
+        <span class="text-muted text-sm">Full detail view per item with evidence, risks, and recommendations</span>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        <div class="table-container" style="border: none; border-radius: 0; box-shadow: none;">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Domain</th>
+                        <th>Facts</th>
+                        <th>Risks</th>
+                        <th>Work Items</th>
+                        <th style="text-align: right;">Export</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for domain, stats in domain_stats.items() %}
+                    <tr style="cursor: default;">
+                        <td>
+                            <strong>{{ domain|replace('_', ' ')|title }}</strong>
+                        </td>
+                        <td>{{ stats.facts }}</td>
+                        <td>{{ stats.risks }}</td>
+                        <td>{{ stats.work_items }}</td>
+                        <td style="text-align: right;">
+                            <div class="export-dropdown">
+                                <button class="btn btn-sm btn-secondary export-dropdown-trigger" onclick="toggleDropdown(this)">
+                                    Download
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="6 9 12 15 18 9"></polyline>
+                                    </svg>
+                                </button>
+                                <div class="export-dropdown-menu">
+                                    <a href="/api/export/dossiers/{{ domain }}?format=html" class="export-dropdown-item">
+                                        <span class="format-icon">HTML</span> Interactive Dossier
+                                    </a>
+                                    <a href="/api/export/dossiers/{{ domain }}?format=md" class="export-dropdown-item">
+                                        <span class="format-icon">MD</span> Markdown Dossier
+                                    </a>
+                                    <a href="/api/export/dossiers/{{ domain }}?format=json" class="export-dropdown-item">
+                                        <span class="format-icon">JSON</span> JSON Export
+                                    </a>
+                                    <div class="export-dropdown-divider"></div>
+                                    <a href="/api/export/inventory/{{ domain }}?format=excel" class="export-dropdown-item">
+                                        <span class="format-icon">XLS</span> Inventory Excel
+                                    </a>
+                                    <a href="/api/export/inventory/{{ domain }}?format=csv" class="export-dropdown-item">
+                                        <span class="format-icon">CSV</span> Inventory CSV
+                                    </a>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Export Formats Explanation -->
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">Export Format Guide</span>
+    </div>
+    <div class="card-body">
+        <div class="grid grid-2 gap-4">
+            <div class="format-card">
+                <h4>Dossier Exports</h4>
+                <p class="text-muted text-sm">Comprehensive per-item view with all related data</p>
+                <ul class="format-list">
+                    <li><strong>HTML</strong> - Interactive view with filters, collapsible sections</li>
+                    <li><strong>Markdown</strong> - Documentation-ready format for reports</li>
+                    <li><strong>JSON</strong> - Programmatic access for further processing</li>
+                </ul>
+            </div>
+            <div class="format-card">
+                <h4>Inventory Exports</h4>
+                <p class="text-muted text-sm">Tabular inventory data for analysis</p>
+                <ul class="format-list">
+                    <li><strong>Excel</strong> - Formatted spreadsheet with filters</li>
+                    <li><strong>CSV</strong> - Raw data for import into other tools</li>
+                </ul>
+            </div>
+        </div>
+        <div class="format-card mt-4" style="background: var(--accent-subtle); padding: 16px; border-radius: 8px;">
+            <h4 style="color: var(--accent);">What's in a Dossier?</h4>
+            <p class="text-sm">Each dossier is a complete view of an inventory item including:</p>
+            <div class="flex gap-4 flex-wrap mt-2">
+                <span class="badge badge-info">Attributes & Facts</span>
+                <span class="badge badge-info">Source Evidence</span>
+                <span class="badge badge-high">Related Risks</span>
+                <span class="badge badge-medium">Work Items</span>
+                <span class="badge badge-low">AI Recommendations</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endif %}
+
+<style>
+.format-card {
+    padding: 16px;
+    background: var(--bg-surface-sunken);
+    border-radius: 8px;
+}
+.format-card h4 {
+    margin-bottom: 8px;
+    font-size: 1em;
+}
+.format-list {
+    margin: 12px 0 0 20px;
+    font-size: 0.9em;
+}
+.format-list li {
+    margin-bottom: 6px;
+}
+.export-dropdown {
+    position: relative;
+    display: inline-block;
+}
+.export-dropdown-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    min-width: 200px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 8px;
+    box-shadow: var(--shadow-lg);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-8px);
+    transition: all 0.15s ease;
+    z-index: 100;
+}
+.export-dropdown.open .export-dropdown-menu {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(4px);
+}
+.export-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    color: var(--text-primary);
+    text-decoration: none;
+    font-size: 0.9em;
+    transition: background 0.1s;
+}
+.export-dropdown-item:hover {
+    background: var(--bg-surface-sunken);
+}
+.export-dropdown-divider {
+    height: 1px;
+    background: var(--border-default);
+    margin: 4px 0;
+}
+.format-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 20px;
+    font-size: 0.7em;
+    font-weight: 600;
+    background: var(--bg-surface-sunken);
+    border-radius: 4px;
+    color: var(--text-muted);
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleDropdown(trigger) {
+    // Close all other dropdowns first
+    document.querySelectorAll('.export-dropdown.open').forEach(d => {
+        if (d !== trigger.parentElement) {
+            d.classList.remove('open');
+        }
+    });
+    trigger.parentElement.classList.toggle('open');
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.export-dropdown')) {
+        document.querySelectorAll('.export-dropdown.open').forEach(d => {
+            d.classList.remove('open');
+        });
+    }
+});
+</script>
+{% endblock %}

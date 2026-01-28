@@ -446,21 +446,46 @@
 
 <!-- Quick Actions -->
 <div class="flex gap-3 mt-4 flex-wrap">
-    <a href="/api/export/excel" class="btn btn-primary">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="7 10 12 15 17 10"></polyline>
-            <line x1="12" y1="15" x2="12" y2="3"></line>
-        </svg>
-        Export to Excel
-    </a>
-    <a href="/api/export/json" class="btn btn-secondary" target="_blank">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-        </svg>
-        Export JSON
-    </a>
+    <!-- Export Dropdown -->
+    <div class="export-dropdown-container">
+        <button class="btn btn-primary" onclick="toggleExportDropdown(this)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            Export
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+        </button>
+        <div class="export-dropdown-menu">
+            <div class="export-dropdown-header">Quick Exports</div>
+            <a href="/api/export/excel" class="export-dropdown-item">
+                <span class="format-badge">XLS</span> Full Analysis Excel
+            </a>
+            <a href="/api/export/json" class="export-dropdown-item">
+                <span class="format-badge">JSON</span> Full Analysis JSON
+            </a>
+            <div class="export-dropdown-divider"></div>
+            <div class="export-dropdown-header">Dossiers (Complete Detail)</div>
+            <a href="/api/export/dossiers/all?format=html" class="export-dropdown-item">
+                <span class="format-badge">HTML</span> All Dossiers (Interactive)
+            </a>
+            <a href="/api/export/dossiers/all?format=md" class="export-dropdown-item">
+                <span class="format-badge">MD</span> All Dossiers (Markdown)
+            </a>
+            <div class="export-dropdown-divider"></div>
+            <a href="{{ url_for('exports_page') }}" class="export-dropdown-item export-dropdown-more">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="16"></line>
+                    <line x1="8" y1="12" x2="16" y2="12"></line>
+                </svg>
+                Export Center (More Options)
+            </a>
+        </div>
+    </div>
     <a href="{{ url_for('gaps') }}" class="btn btn-secondary">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="12" cy="12" r="10"></circle>
@@ -479,6 +504,76 @@
         Generate VDR Request
     </a>
 </div>
+
+<style>
+.export-dropdown-container {
+    position: relative;
+    display: inline-block;
+}
+.export-dropdown-container .export-dropdown-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    min-width: 260px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 8px;
+    box-shadow: var(--shadow-lg);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-8px);
+    transition: all 0.15s ease;
+    z-index: 100;
+    margin-top: 4px;
+}
+.export-dropdown-container.open .export-dropdown-menu {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+.export-dropdown-header {
+    padding: 8px 14px 4px;
+    font-size: 0.7em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+}
+.export-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    color: var(--text-primary);
+    text-decoration: none;
+    font-size: 0.9em;
+    transition: background 0.1s;
+}
+.export-dropdown-item:hover {
+    background: var(--bg-surface-sunken);
+}
+.export-dropdown-divider {
+    height: 1px;
+    background: var(--border-default);
+    margin: 6px 0;
+}
+.export-dropdown-more {
+    color: var(--accent);
+    font-weight: 500;
+}
+.format-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    height: 20px;
+    font-size: 0.7em;
+    font-weight: 600;
+    background: var(--bg-surface-sunken);
+    border-radius: 4px;
+    color: var(--text-muted);
+}
+</style>
 {% endif %}
 {% endblock %}
 
@@ -574,6 +669,27 @@
                 `,
                 `<a href="{{ url_for('work_item_detail', wi_id='') }}${w.id}" class="btn btn-primary">View Full Details</a>`
             );
+        }
+    });
+
+    // Export dropdown toggle
+    function toggleExportDropdown(trigger) {
+        const container = trigger.closest('.export-dropdown-container');
+        // Close all other dropdowns first
+        document.querySelectorAll('.export-dropdown-container.open').forEach(d => {
+            if (d !== container) {
+                d.classList.remove('open');
+            }
+        });
+        container.classList.toggle('open');
+    }
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.export-dropdown-container')) {
+            document.querySelectorAll('.export-dropdown-container.open').forEach(d => {
+                d.classList.remove('open');
+            });
         }
     });
 </script>
