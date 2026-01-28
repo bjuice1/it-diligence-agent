@@ -40,6 +40,7 @@ services:
       # Mount data directories for persistence
       - ./data:/app/data
       - ./output:/app/output
+      - ./uploads:/app/uploads  # Phase D: User document uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -76,6 +77,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./output:/app/output
+      - ./uploads:/app/uploads  # Phase D: User document uploads
     depends_on:
       postgres:
         condition: service_healthy

@@ -18,7 +18,8 @@ RUN pip install gunicorn
 COPY . .
 
 # Create directories for data persistence
-RUN mkdir -p /app/data /app/output /app/output/documents /app/output/tasks /app/output/logs
+# Phase D: uploads/ is now separate from output/
+RUN mkdir -p /app/data /app/output /app/uploads /app/output/tasks /app/output/logs
 
 # Environment
 ENV FLASK_ENV=production

@@ -42,6 +42,9 @@ env/
 output/
 data/output/
 
+# User document uploads (Phase D)
+uploads/
+
 # Archive (old runs and test outputs)
 archive/old_runs/
 archive/test_outputs/

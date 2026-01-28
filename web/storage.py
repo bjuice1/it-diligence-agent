@@ -107,8 +107,8 @@ class LocalStorage(StorageBackend):
 
     def __init__(self, base_path: Optional[Path] = None):
         if base_path is None:
-            from config_v2 import OUTPUT_DIR
-            base_path = OUTPUT_DIR / 'documents'
+            from config_v2 import UPLOADS_DIR
+            base_path = UPLOADS_DIR
         self.base_path = Path(base_path)
         self.base_path.mkdir(parents=True, exist_ok=True)
 

@@ -66,12 +66,14 @@ LOGS_DIR = OUTPUT_DIR / "logs"
 # DOCUMENT STORAGE (Phase 1: Document Layer)
 # =============================================================================
 
-# Document storage root
-DOCUMENTS_DIR = OUTPUT_DIR / "documents"
+# Document storage root - Uploads directory for user-provided documents
+# Phase D: Renamed from output/documents to uploads/ for clarity
+UPLOADS_DIR = BASE_DIR / "uploads"
+DOCUMENTS_DIR = UPLOADS_DIR  # Alias for backward compatibility
 
 # Entity-specific document directories
-TARGET_DOCS_DIR = DOCUMENTS_DIR / "target"
-BUYER_DOCS_DIR = DOCUMENTS_DIR / "buyer"
+TARGET_DOCS_DIR = UPLOADS_DIR / "target"
+BUYER_DOCS_DIR = UPLOADS_DIR / "buyer"
 
 # Authority level subdirectories (created within entity dirs)
 AUTHORITY_FOLDERS = {
@@ -89,8 +91,8 @@ def ensure_directories():
     FINDINGS_DIR.mkdir(parents=True, exist_ok=True)
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Document storage directories
-    DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
+    # Document storage directories (Phase D: uploads/ directory)
+    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
     # Entity directories with authority subfolders
     for entity_dir in [TARGET_DOCS_DIR, BUYER_DOCS_DIR]:

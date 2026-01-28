@@ -127,23 +127,32 @@ Comprehensive plan to polish the IT Due Diligence Agent codebase, organizing out
 ---
 
 ## Phase D: Upload Directory Rename (Points 71-85)
-**Status: NOT STARTED**
+**Status: COMPLETE**
 
-- [ ] 71. Create `uploads/` directory
-- [ ] 72. Update `config_v2.py` DOCUMENTS_DIR
-- [ ] 73. Update `config_v2.py` TARGET_DOCS_DIR
-- [ ] 74. Update `config_v2.py` BUYER_DOCS_DIR
-- [ ] 75. Update `document_store.py` paths
-- [ ] 76. Update `web/storage.py` paths
-- [ ] 77. Update manifest.json path references
-- [ ] 78. Migrate existing documents
-- [ ] 79. Update all hardcoded paths in web/app.py
-- [ ] 80. Update Docker volume mounts
-- [ ] 81. Update `.gitignore`
-- [ ] 82. Test document upload flow
-- [ ] 83. Test document reading in analysis
-- [ ] 84. Remove old `output/documents/`
-- [ ] 85. Commit upload directory change
+- [x] 71. Create `uploads/` directory
+- [x] 72. Update `config_v2.py` DOCUMENTS_DIR
+- [x] 73. Update `config_v2.py` TARGET_DOCS_DIR
+- [x] 74. Update `config_v2.py` BUYER_DOCS_DIR
+- [x] 75. Update `document_store.py` paths (uses config, auto-updated)
+- [x] 76. Update `web/storage.py` paths
+- [x] 77. Update manifest.json path references
+- [x] 78. Migrate existing documents
+- [x] 79. Update all hardcoded paths in web/app.py (none found - uses config)
+- [x] 80. Update Docker volume mounts
+- [x] 81. Update `.gitignore`
+- [x] 82. Test document upload flow
+- [x] 83. Test document reading in analysis
+- [x] 84. Remove old `output/documents/`
+- [x] 85. Commit upload directory change
+
+**Completed:** 2026-01-28
+
+**Files Modified:**
+- `config_v2.py` - Added UPLOADS_DIR, updated DOCUMENTS_DIR as alias
+- `web/storage.py` - LocalStorage uses UPLOADS_DIR
+- `Dockerfile` - Creates /app/uploads instead of /app/output/documents
+- `docker-compose.yml` - Added uploads volume mount for app and celery-worker
+- `.gitignore` - Added uploads/ directory
 
 ---
 
@@ -197,18 +206,20 @@ Comprehensive plan to polish the IT Due Diligence Agent codebase, organizing out
 | B: Output Reorganization | 21-40 | 20/20 | COMPLETE |
 | C: Human Exports | 41-70 | 30/30 | COMPLETE |
 | C+: Dossier System | BONUS | 6/6 | COMPLETE |
-| D: Upload Rename | 71-85 | 0/15 | NOT STARTED |
+| D: Upload Rename | 71-85 | 15/15 | COMPLETE |
 | E: Store Consolidation | 86-100 | 0/15 | NOT STARTED |
 | F: Documentation | 101-115 | 1/15 | NOT STARTED |
 
-**Overall: 77/121 points complete (64%)**
+**Overall: 92/121 points complete (76%)**
 
 ---
 
 ## Notes
 
 - Phase A completed 2026-01-28
+- Phase B completed 2026-01-28
 - Phase C export service created with enhanced AI fields
+- Phase D completed 2026-01-28 - Renamed document storage from `output/documents/` to `uploads/`
 - **Phase C+ (Dossier System)** - Major enhancement creating comprehensive per-item dossiers with:
   - Fact_id chain tracing to link findings to inventory items
   - Full evidence, risks, work items, and recommendations per item
