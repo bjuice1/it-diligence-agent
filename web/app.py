@@ -1596,11 +1596,11 @@ def get_organization_analysis():
         logger.error(f"Could not build org from facts: {e}")
         logger.error(traceback.format_exc())
 
-    # Fall back to demo data only if we have nothing
+    # Fall back to empty result (no demo data) if we have nothing
     if _org_analysis_result is None:
-        logger.warning("Falling back to DEMO data - no real org data available")
-        _org_analysis_result = _create_demo_organization_data()
-        _org_data_source = "demo"
+        logger.info("No organization data available - showing empty state")
+        _org_analysis_result = _create_empty_organization_result()
+        _org_data_source = "no_data"
         _org_cache_session_id = None
         _org_facts_count = 0
 
@@ -1949,6 +1949,63 @@ def _create_demo_organization_data():
     # Store the data store reference as a custom attribute for template access
     result.data_store = store
 
+    return result
+
+
+def _create_empty_organization_result():
+    """Create an empty organization result for when no data is available."""
+    from models.organization_stores import (
+        OrganizationDataStore, StaffingComparisonResult,
+        MSPSummary, SharedServicesSummary, OrganizationAnalysisResult
+    )
+    from datetime import datetime
+
+    # Create empty data store
+    store = OrganizationDataStore()
+
+    # Create empty comparison
+    comparison = StaffingComparisonResult(
+        benchmark_profile_id="none",
+        benchmark_profile_name="No Data",
+        comparison_date=datetime.now().isoformat(),
+        total_actual=0,
+        total_expected_min=0,
+        total_expected_typical=0,
+        total_expected_max=0,
+        overall_status="no_data"
+    )
+
+    # Create empty summaries
+    msp_summary = MSPSummary(
+        total_msp_count=0,
+        total_fte_equivalent=0,
+        total_annual_cost=0,
+        high_risk_count=0,
+        critical_services_count=0,
+        services_without_backup=0
+    )
+
+    ss_summary = SharedServicesSummary(
+        total_dependencies=0,
+        total_fte_equivalent=0,
+        transferring_fte=0,
+        non_transferring_fte=0,
+        hidden_headcount_need=0,
+        hidden_cost_annual=0,
+        tsa_candidate_count=0,
+        critical_dependencies=0
+    )
+
+    # Create empty result
+    result = OrganizationAnalysisResult(
+        benchmark_comparison=comparison,
+        msp_summary=msp_summary,
+        shared_services_summary=ss_summary,
+        tsa_recommendations=[],
+        hiring_recommendations=[]
+    )
+
+    result.data_store = store
     return result
 
 

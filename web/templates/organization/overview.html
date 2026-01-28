@@ -7,10 +7,10 @@
 
 {% block content %}
 <!-- Data Source Indicator -->
-{% if data_source == 'demo' %}
+{% if data_source == 'no_data' or data_source == 'demo' %}
 <div class="data-source-banner data-source-demo">
-    <span class="banner-icon">&#9888;</span>
-    <span class="banner-text"><strong>Demo Data</strong> - No analysis data found. Run an analysis to see real organization data.</span>
+    <span class="banner-icon">&#128269;</span>
+    <span class="banner-text"><strong>No Data Yet</strong> - Upload documents and run an analysis to see organization data.</span>
     <a href="{{ url_for('upload_documents') }}" class="btn btn-sm">Upload Documents</a>
 </div>
 {% elif data_source == 'analysis_no_org' %}
