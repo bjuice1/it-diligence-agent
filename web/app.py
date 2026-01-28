@@ -3331,12 +3331,9 @@ def export_dossiers(domain):
 
     s = get_session()
 
-    # Build facts and findings data
-    facts_data = {}
-    for fact in s.fact_store.facts:
-        if fact.domain not in facts_data:
-            facts_data[fact.domain] = []
-        facts_data[fact.domain].append({
+    # Build facts as flat list (DossierBuilder expects List[Dict], not Dict[str, List])
+    facts_list = [
+        {
             'fact_id': fact.fact_id,
             'domain': fact.domain,
             'category': fact.category,
@@ -3345,7 +3342,9 @@ def export_dossiers(domain):
             'status': fact.status,
             'evidence': getattr(fact, 'evidence', ''),
             'entity': getattr(fact, 'entity', 'target'),
-        })
+        }
+        for fact in s.fact_store.facts
+    ]
 
     findings_data = {
         'risks': [
@@ -3378,7 +3377,7 @@ def export_dossiers(domain):
     }
 
     # Build dossiers
-    builder = DossierBuilder(facts_data, findings_data)
+    builder = DossierBuilder(facts_list, findings_data)
 
     # Map domain names
     domain_map = {
@@ -3405,10 +3404,9 @@ def export_dossiers(domain):
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
     if format_type == 'md':
-        exporter = DossierMarkdownExporter()
         content_parts = []
         for d, dossiers in all_dossiers.items():
-            content_parts.append(exporter.export(dossiers, d))
+            content_parts.append(DossierMarkdownExporter.export_to_string(dossiers, d))
         content = '\n\n---\n\n'.join(content_parts)
 
         buffer = BytesIO(content.encode('utf-8'))
@@ -3416,11 +3414,10 @@ def export_dossiers(domain):
         mimetype = 'text/markdown'
 
     elif format_type == 'json':
-        exporter = DossierJSONExporter()
         import json
         all_data = {}
         for d, dossiers in all_dossiers.items():
-            all_data[d] = json.loads(exporter.export(dossiers, d))
+            all_data[d] = json.loads(DossierJSONExporter.export_to_string(dossiers, d))
         content = json.dumps(all_data, indent=2)
 
         buffer = BytesIO(content.encode('utf-8'))
@@ -3428,10 +3425,9 @@ def export_dossiers(domain):
         mimetype = 'application/json'
 
     else:  # html
-        exporter = DossierHTMLExporter()
         content_parts = []
         for d, dossiers in all_dossiers.items():
-            content_parts.append(exporter.export(dossiers, d))
+            content_parts.append(DossierHTMLExporter.export_to_string(dossiers, d))
         # Combine HTML exports
         if len(content_parts) == 1:
             content = content_parts[0]
@@ -3481,12 +3477,9 @@ def export_inventory(domain):
 
     s = get_session()
 
-    # Build facts and findings data
-    facts_data = {}
-    for fact in s.fact_store.facts:
-        if fact.domain not in facts_data:
-            facts_data[fact.domain] = []
-        facts_data[fact.domain].append({
+    # Build facts as flat list
+    facts_list = [
+        {
             'fact_id': fact.fact_id,
             'domain': fact.domain,
             'category': fact.category,
@@ -3495,35 +3488,35 @@ def export_inventory(domain):
             'status': fact.status,
             'evidence': getattr(fact, 'evidence', ''),
             'entity': getattr(fact, 'entity', 'target'),
+        }
+        for fact in s.fact_store.facts
+    ]
+
+    # Build findings as flat list (ExportService expects List[Dict], not Dict)
+    findings_list = []
+    for r in s.reasoning_store.risks:
+        findings_list.append({
+            'finding_id': r.finding_id,
+            'domain': r.domain,
+            'title': r.title,
+            'description': r.description,
+            'severity': r.severity,
+            'mitigation': r.mitigation,
+            'based_on_facts': r.based_on_facts,
+            'type': 'risk',
+        })
+    for wi in s.reasoning_store.work_items:
+        findings_list.append({
+            'finding_id': wi.finding_id,
+            'domain': wi.domain,
+            'title': wi.title,
+            'description': wi.description,
+            'phase': wi.phase,
+            'based_on_facts': wi.based_on_facts,
+            'type': 'work_item',
         })
 
-    findings_data = {
-        'risks': [
-            {
-                'finding_id': r.finding_id,
-                'domain': r.domain,
-                'title': r.title,
-                'description': r.description,
-                'severity': r.severity,
-                'mitigation': r.mitigation,
-                'based_on_facts': r.based_on_facts,
-            }
-            for r in s.reasoning_store.risks
-        ],
-        'work_items': [
-            {
-                'finding_id': wi.finding_id,
-                'domain': wi.domain,
-                'title': wi.title,
-                'description': wi.description,
-                'phase': wi.phase,
-                'based_on_facts': wi.based_on_facts,
-            }
-            for wi in s.reasoning_store.work_items
-        ]
-    }
-
-    export_service = ExportService(facts_data, findings_data)
+    export_service = ExportService(facts_list, findings_list)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
     domain_map = {

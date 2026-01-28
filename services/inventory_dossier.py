@@ -713,6 +713,15 @@ class DossierMarkdownExporter:
         output_path.write_text('\n'.join(lines))
         return output_path
 
+    @staticmethod
+    def export_to_string(dossiers: List[ItemDossier], domain: str) -> str:
+        """Export domain dossiers to Markdown string (no file)."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "temp.md"
+            DossierMarkdownExporter.export_domain(dossiers, domain, output_path)
+            return output_path.read_text()
+
 
 class DossierJSONExporter:
     """Export dossiers to JSON format for programmatic access."""
@@ -736,6 +745,22 @@ class DossierJSONExporter:
             json.dump(data, f, indent=2, default=str)
 
         return output_path
+
+    @staticmethod
+    def export_to_string(dossiers: List[ItemDossier], domain: str) -> str:
+        """Export domain dossiers to JSON string (no file)."""
+        data = {
+            "domain": domain,
+            "generated_at": datetime.now().isoformat(),
+            "total_items": len(dossiers),
+            "summary": {
+                "red": len([d for d in dossiers if d.overall_status == 'red']),
+                "yellow": len([d for d in dossiers if d.overall_status == 'yellow']),
+                "green": len([d for d in dossiers if d.overall_status == 'green']),
+            },
+            "dossiers": [d.to_dict() for d in dossiers]
+        }
+        return json.dumps(data, indent=2, default=str)
 
 
 class DossierHTMLExporter:
@@ -1019,6 +1044,15 @@ class DossierHTMLExporter:
 
         output_path.write_text(html)
         return output_path
+
+    @staticmethod
+    def export_to_string(dossiers: List[ItemDossier], domain: str) -> str:
+        """Export domain dossiers to HTML string (no file)."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "temp.html"
+            DossierHTMLExporter.export_domain(dossiers, domain, output_path)
+            return output_path.read_text()
 
 
 # =============================================================================
