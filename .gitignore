@@ -41,7 +41,14 @@ env/
 # Output files (generated during analysis)
 output/
 data/output/
+
+# Archive (old runs and test outputs)
+archive/old_runs/
+archive/test_outputs/
+
+# Database files
 *.db
+data/diligence.db
 
 # Logs
 *.log
