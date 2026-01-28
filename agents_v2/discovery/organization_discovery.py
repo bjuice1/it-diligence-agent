@@ -34,12 +34,21 @@ class OrganizationDiscoveryAgent(BaseDiscoveryAgent):
 
     @property
     def inventory_categories(self) -> List[str]:
+        """Categories that match the v2_organization_discovery_prompt.
+
+        These must align with:
+        1. The prompt categories given to the LLM
+        2. The categories expected by organization_bridge.py
+        """
         return [
-            "structure",
-            "staffing",
-            "vendors",
-            "skills",
-            "processes",
-            "budget",
-            "roadmap"
+            "leadership",      # IT Leadership (CIO, VPs, Directors)
+            "central_it",      # Central IT Teams (from Team Summary table)
+            "roles",           # IT Roles (from Role & Compensation table)
+            "app_teams",       # Application-specific teams
+            "outsourcing",     # MSP/Vendor relationships
+            "embedded_it",     # Business unit IT staff
+            "shadow_it",       # Shadow IT instances
+            "key_individuals", # Key persons with unique knowledge
+            "skills",          # Skills and capabilities
+            "budget"           # IT Budget and costs
         ]

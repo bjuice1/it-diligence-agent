@@ -1,0 +1,386 @@
+{#
+Review Card Component
+Displays a single fact in the review queue with its flags and confidence score.
+
+Usage:
+{% include 'validation/components/review_card.html' with context %}
+
+Required variables:
+- item: Object with fact_id, item, domain, category, highest_severity, flags, ai_confidence, etc.
+#}
+
+<div class="review-card"
+     data-fact-id="{{ item.fact_id }}"
+     onclick="selectFact('{{ item.fact_id }}')"
+     role="button"
+     tabindex="0"
+     aria-label="Review {{ item.item or item.fact_id }}">
+
+    <div class="review-card-header">
+        <div>
+            <div class="review-card-title">{{ item.item or item.fact_id }}</div>
+            <div class="review-card-meta">
+                <span class="domain-tag">{{ item.domain }}</span>
+                <span class="separator">/</span>
+                <span class="category-tag">{{ item.category }}</span>
+            </div>
+        </div>
+        <div class="review-card-badges">
+            {% if item.highest_severity %}
+            <span class="badge badge-{{ item.highest_severity }}" title="Highest severity flag">
+                {{ item.highest_severity }}
+            </span>
+            {% endif %}
+            {% if item.human_reviewed %}
+            <span class="badge badge-info" title="Previously reviewed">
+                Reviewed
+            </span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="review-card-body">
+        {# Flags summary #}
+        {% if item.flags and item.flags|length > 0 %}
+        <div class="review-card-flags">
+            {% for flag in item.flags[:3] %}
+            <span class="flag-badge badge-{{ flag.severity }}" title="{{ flag.message }}">
+                <span class="flag-icon">
+                    {% if flag.severity == 'critical' %}
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                    </svg>
+                    {% elif flag.severity == 'error' %}
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                    </svg>
+                    {% else %}
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
+                    </svg>
+                    {% endif %}
+                </span>
+                <span class="flag-text">{{ flag.message[:40] }}{% if flag.message|length > 40 %}...{% endif %}</span>
+            </span>
+            {% endfor %}
+            {% if item.flags_count > 3 %}
+            <span class="flag-badge flag-more" title="{{ item.flags_count - 3 }} more flags">
+                +{{ item.flags_count - 3 }} more
+            </span>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {# Evidence preview #}
+        {% if item.evidence_matched_text %}
+        <div class="review-card-evidence">
+            <span class="evidence-icon" aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                </svg>
+            </span>
+            <span class="evidence-text">
+                "{{ item.evidence_matched_text[:120] }}{% if item.evidence_matched_text|length > 120 %}...{% endif %}"
+            </span>
+        </div>
+        {% endif %}
+
+        {# Extracted values preview #}
+        {% if item.details %}
+        <div class="review-card-details">
+            {% for key, value in item.details.items()|list[:3] %}
+            <div class="detail-preview">
+                <span class="detail-key">{{ key }}:</span>
+                <span class="detail-value">{{ value }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="review-card-footer">
+        {# Confidence indicator #}
+        <div class="confidence-indicator" title="AI confidence: {{ (item.ai_confidence * 100)|int }}%">
+            <div class="confidence-bar">
+                <div class="confidence-fill confidence-{{ 'high' if item.ai_confidence >= 0.8 else ('medium' if item.ai_confidence >= 0.6 else 'low') }}"
+                     style="width: {{ (item.ai_confidence * 100)|int }}%"
+                     role="progressbar"
+                     aria-valuenow="{{ (item.ai_confidence * 100)|int }}"
+                     aria-valuemin="0"
+                     aria-valuemax="100"></div>
+            </div>
+            <span class="confidence-value">{{ (item.ai_confidence * 100)|int }}%</span>
+        </div>
+
+        {# Evidence match indicator #}
+        {% if item.evidence_match_score is defined %}
+        <div class="evidence-indicator" title="Evidence match: {{ (item.evidence_match_score * 100)|int }}%">
+            {% if item.evidence_verified %}
+            <span class="evidence-verified">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                Verified
+            </span>
+            {% else %}
+            <span class="evidence-unverified">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                Unverified
+            </span>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {# Quick actions #}
+        <div class="review-card-actions">
+            <button class="btn-icon btn-quick-confirm"
+                    onclick="event.stopPropagation(); quickConfirm('{{ item.fact_id }}')"
+                    title="Quick confirm (C)"
+                    aria-label="Confirm this fact">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+            </button>
+            <button class="btn-icon btn-quick-skip"
+                    onclick="event.stopPropagation(); quickSkip('{{ item.fact_id }}')"
+                    title="Skip (S)"
+                    aria-label="Skip this fact">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="13 17 18 12 13 7"></polyline>
+                    <polyline points="6 17 11 12 6 7"></polyline>
+                </svg>
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+    .review-card {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-lg);
+        margin-bottom: var(--space-3);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+    }
+
+    .review-card:hover {
+        border-color: var(--accent);
+        box-shadow: var(--shadow-md);
+    }
+
+    .review-card:focus-visible {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-subtle);
+    }
+
+    .review-card.selected {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px var(--accent-subtle);
+    }
+
+    .review-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        padding: var(--space-4);
+        border-bottom: 1px solid var(--border-default);
+    }
+
+    .review-card-title {
+        font-weight: var(--font-semibold);
+        color: var(--text-primary);
+        margin-bottom: var(--space-1);
+    }
+
+    .review-card-meta {
+        font-size: var(--text-xs);
+        color: var(--text-muted);
+        display: flex;
+        align-items: center;
+        gap: var(--space-1);
+    }
+
+    .separator {
+        color: var(--border-muted);
+    }
+
+    .review-card-badges {
+        display: flex;
+        gap: var(--space-2);
+    }
+
+    .review-card-body {
+        padding: var(--space-4);
+    }
+
+    .review-card-flags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-2);
+        margin-bottom: var(--space-3);
+    }
+
+    .flag-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-1);
+        padding: var(--space-1) var(--space-2);
+        border-radius: var(--radius-md);
+        font-size: var(--text-xs);
+    }
+
+    .flag-more {
+        background: var(--bg-surface-sunken);
+        color: var(--text-muted);
+    }
+
+    .review-card-evidence {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--space-2);
+        font-size: var(--text-sm);
+        color: var(--text-secondary);
+        background: var(--bg-surface-sunken);
+        padding: var(--space-3);
+        border-radius: var(--radius-md);
+        border-left: 3px solid var(--border-muted);
+    }
+
+    .evidence-icon {
+        color: var(--text-muted);
+        flex-shrink: 0;
+        margin-top: 2px;
+    }
+
+    .evidence-text {
+        font-style: italic;
+    }
+
+    .review-card-details {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-3);
+        margin-top: var(--space-3);
+    }
+
+    .detail-preview {
+        font-size: var(--text-xs);
+    }
+
+    .detail-key {
+        color: var(--text-muted);
+    }
+
+    .detail-value {
+        color: var(--text-primary);
+        font-weight: var(--font-medium);
+    }
+
+    .review-card-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: var(--space-3) var(--space-4);
+        border-top: 1px solid var(--border-default);
+        background: var(--bg-surface-sunken);
+    }
+
+    .confidence-indicator {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        font-size: var(--text-sm);
+    }
+
+    .confidence-bar {
+        width: 60px;
+        height: 6px;
+        background: var(--bg-surface);
+        border-radius: var(--radius-full);
+        overflow: hidden;
+    }
+
+    .confidence-fill {
+        height: 100%;
+        border-radius: var(--radius-full);
+        transition: width var(--transition-base);
+    }
+
+    .confidence-high { background: var(--low); }
+    .confidence-medium { background: var(--medium); }
+    .confidence-low { background: var(--high); }
+
+    .confidence-value {
+        font-weight: var(--font-medium);
+        min-width: 32px;
+    }
+
+    .evidence-indicator {
+        font-size: var(--text-xs);
+        display: flex;
+        align-items: center;
+        gap: var(--space-1);
+    }
+
+    .evidence-verified {
+        color: var(--low);
+        display: flex;
+        align-items: center;
+        gap: var(--space-1);
+    }
+
+    .evidence-unverified {
+        color: var(--text-muted);
+        display: flex;
+        align-items: center;
+        gap: var(--space-1);
+    }
+
+    .review-card-actions {
+        display: flex;
+        gap: var(--space-1);
+        opacity: 0;
+        transition: opacity var(--transition-fast);
+    }
+
+    .review-card:hover .review-card-actions {
+        opacity: 1;
+    }
+
+    .btn-icon {
+        width: 28px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-md);
+        border: none;
+        background: transparent;
+        color: var(--text-muted);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+    }
+
+    .btn-icon:hover {
+        background: var(--bg-surface);
+    }
+
+    .btn-quick-confirm:hover {
+        color: var(--low);
+        background: var(--low-bg);
+    }
+
+    .btn-quick-skip:hover {
+        color: var(--text-secondary);
+        background: var(--bg-surface);
+    }
+</style>

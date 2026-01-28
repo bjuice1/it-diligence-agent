@@ -74,9 +74,77 @@ def check_pipeline_availability() -> Dict[str, Any]:
     return status
 
 
+def _separate_documents_by_entity(documents: List[Dict], deal_context: Dict) -> tuple:
+    """
+    Separate parsed documents into TARGET and BUYER lists.
+
+    Args:
+        documents: List of parsed document dicts
+        deal_context: Deal context with doc counts
+
+    Returns:
+        Tuple of (target_documents, buyer_documents)
+    """
+    target_doc_count = deal_context.get('target_doc_count', 0)
+    buyer_doc_count = deal_context.get('buyer_doc_count', 0)
+
+    target_docs = []
+    buyer_docs = []
+
+    for i, doc in enumerate(documents):
+        filename = doc.get('filename', '').lower()
+        filepath = doc.get('filepath', '').lower() if 'filepath' in doc else ''
+
+        # Check filename/path prefix
+        if 'buyer_' in filename or 'buyer_' in filepath or '/buyer/' in filepath:
+            buyer_docs.append(doc)
+        elif 'target_' in filename or 'target_' in filepath or '/target/' in filepath:
+            target_docs.append(doc)
+        # Fallback: first N docs are target (based on upload order)
+        elif target_doc_count > 0 and i < target_doc_count:
+            target_docs.append(doc)
+        elif buyer_doc_count > 0 and i >= target_doc_count:
+            buyer_docs.append(doc)
+        else:
+            target_docs.append(doc)  # Default to target
+
+    return target_docs, buyer_docs
+
+
+def _combine_documents_for_entity(documents: List[Dict], entity: str) -> str:
+    """
+    Combine documents into a single content string for a specific entity.
+
+    Args:
+        documents: List of document dicts
+        entity: "target" or "buyer"
+
+    Returns:
+        Combined content string with clear entity markers
+    """
+    entity_label = entity.upper()
+    content_parts = []
+
+    for doc in documents:
+        content_parts.append(
+            f"# ENTITY: {entity_label}\n"
+            f"## Document: {doc.get('filename', 'Unknown')}\n"
+            f"Source Entity: {entity_label} COMPANY\n\n"
+            f"{doc.get('content', '')}"
+        )
+
+    return "\n\n---\n\n".join(content_parts)
+
+
 def run_analysis(task: AnalysisTask, progress_callback: Callable) -> Dict[str, Any]:
     """
-    Run the full analysis pipeline.
+    Run the full TWO-PHASE analysis pipeline.
+
+    Phase 1: Analyze TARGET documents only (clean extraction)
+    Phase 2: Analyze BUYER documents with TARGET facts as context
+
+    This prevents entity contamination by ensuring the LLM only sees
+    one entity's documents at a time.
 
     Args:
         task: The analysis task with file paths and configuration
@@ -116,6 +184,7 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable) -> Dict[str, A
     session.deal_context = {
         'deal_type': deal_context.get('deal_type', 'bolt_on'),
         'target_name': deal_context.get('target_name', 'Target Company'),
+        'buyer_name': deal_context.get('buyer_name', ''),
         'industry': deal_context.get('industry', ''),
         'sub_industry': deal_context.get('sub_industry', ''),
         'employee_count': deal_context.get('employee_count', ''),
@@ -130,11 +199,9 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable) -> Dict[str, A
         sub_industry=deal_context.get('sub_industry') or None,
         industry_confirmed=True,  # User selected it
     )
-    # Add the formatted prompt context for reasoning agents
-    # This includes both deal_type and industry context in text form
     session.deal_context['_prompt_context'] = dc.to_prompt_context()
 
-    # Phase 1: Parse documents
+    # Parse all documents
     progress_callback({
         "phase": AnalysisPhase.PARSING_DOCUMENTS,
     })
@@ -142,55 +209,116 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable) -> Dict[str, A
     file_paths = [Path(f) for f in task.file_paths]
     documents = parse_documents(file_paths)
 
+    if not documents:
+        raise ValueError("No documents could be parsed from the uploaded files.")
+
+    # CRITICAL: Separate documents by entity BEFORE analysis
+    target_docs, buyer_docs = _separate_documents_by_entity(documents, deal_context)
+
+    logger.info(f"Document separation: {len(target_docs)} TARGET, {len(buyer_docs)} BUYER")
+
     progress_callback({
         "documents_processed": len(documents),
         "total_documents": len(documents),
     })
 
-    if not documents:
-        raise ValueError("No documents could be parsed from the uploaded files.")
-
-    # Combine document content for analysis
-    combined_content = "\n\n---\n\n".join([
-        f"## Document: {doc.get('filename', 'Unknown')}\n\n{doc.get('content', '')}"
-        for doc in documents
-    ])
-
-    # Track document names for fact traceability
-    document_names = ", ".join([doc.get('filename', 'Unknown') for doc in documents])
-
     # Determine which domains to analyze
     domains_to_analyze = task.domains if task.domains else DOMAINS
 
-    # Phase 2: Run Discovery Agents
-    discovery_results = {}
-    discovery_phases = {
-        "infrastructure": AnalysisPhase.DISCOVERY_INFRASTRUCTURE,
-        "network": AnalysisPhase.DISCOVERY_NETWORK,
-        "cybersecurity": AnalysisPhase.DISCOVERY_CYBERSECURITY,
-        "applications": AnalysisPhase.DISCOVERY_APPLICATIONS,
-        "identity_access": AnalysisPhase.DISCOVERY_IDENTITY,
-        "organization": AnalysisPhase.DISCOVERY_ORGANIZATION,
-    }
+    # =========================================================================
+    # PHASE 1: TARGET COMPANY ANALYSIS (Clean Extraction)
+    # =========================================================================
+    progress_callback({"phase": AnalysisPhase.TARGET_ANALYSIS_START})
 
-    for domain in domains_to_analyze:
-        if task._cancelled:
-            return {}
+    if target_docs:
+        target_content = _combine_documents_for_entity(target_docs, "target")
+        target_doc_names = ", ".join([doc.get('filename', 'Unknown') for doc in target_docs])
 
-        phase = discovery_phases.get(domain, AnalysisPhase.DISCOVERY_INFRASTRUCTURE)
-        progress_callback({"phase": phase})
+        logger.info(f"Starting Phase 1: TARGET analysis with {len(target_docs)} documents")
 
-        try:
-            facts, gaps = run_discovery_for_domain(domain, combined_content, session, document_names)
-            discovery_results[domain] = {"facts": facts, "gaps": gaps}
+        discovery_phases = {
+            "infrastructure": AnalysisPhase.DISCOVERY_INFRASTRUCTURE,
+            "network": AnalysisPhase.DISCOVERY_NETWORK,
+            "cybersecurity": AnalysisPhase.DISCOVERY_CYBERSECURITY,
+            "applications": AnalysisPhase.DISCOVERY_APPLICATIONS,
+            "identity_access": AnalysisPhase.DISCOVERY_IDENTITY,
+            "organization": AnalysisPhase.DISCOVERY_ORGANIZATION,
+        }
 
-            # Update counts
-            progress_callback({
-                "facts_extracted": len(session.fact_store.facts),
-            })
-        except Exception as e:
-            # Log error but continue with other domains
-            logger.error(f"Error in {domain} discovery: {e}")
+        for domain in domains_to_analyze:
+            if task._cancelled:
+                return {}
+
+            phase = discovery_phases.get(domain, AnalysisPhase.DISCOVERY_INFRASTRUCTURE)
+            progress_callback({"phase": phase})
+
+            try:
+                # Phase 1: Only TARGET content, entity forced to "target"
+                facts, gaps = run_discovery_for_domain(
+                    domain, target_content, session, target_doc_names,
+                    entity="target", analysis_phase="target_extraction"
+                )
+
+                progress_callback({
+                    "facts_extracted": len(session.fact_store.facts),
+                })
+            except Exception as e:
+                logger.error(f"Error in TARGET {domain} discovery: {e}")
+
+    # Lock TARGET facts before Phase 2
+    progress_callback({"phase": AnalysisPhase.TARGET_ANALYSIS_COMPLETE})
+    target_fact_count = session.fact_store.lock_entity_facts("target")
+    logger.info(f"Phase 1 complete: Locked {target_fact_count} TARGET facts")
+
+    # Create snapshot of TARGET facts for Phase 2 context
+    target_snapshot = session.fact_store.create_snapshot("target")
+
+    # =========================================================================
+    # PHASE 2: BUYER COMPANY ANALYSIS (With Target Context)
+    # =========================================================================
+    if buyer_docs:
+        progress_callback({"phase": AnalysisPhase.BUYER_ANALYSIS_START})
+
+        buyer_content = _combine_documents_for_entity(buyer_docs, "buyer")
+        buyer_doc_names = ", ".join([doc.get('filename', 'Unknown') for doc in buyer_docs])
+
+        logger.info(f"Starting Phase 2: BUYER analysis with {len(buyer_docs)} documents")
+        logger.info(f"Providing {len(target_snapshot.facts)} TARGET facts as read-only context")
+
+        buyer_discovery_phases = {
+            "infrastructure": AnalysisPhase.BUYER_DISCOVERY_INFRASTRUCTURE,
+            "network": AnalysisPhase.BUYER_DISCOVERY_NETWORK,
+            "cybersecurity": AnalysisPhase.BUYER_DISCOVERY_CYBERSECURITY,
+            "applications": AnalysisPhase.BUYER_DISCOVERY_APPLICATIONS,
+            "identity_access": AnalysisPhase.BUYER_DISCOVERY_IDENTITY,
+            "organization": AnalysisPhase.BUYER_DISCOVERY_ORGANIZATION,
+        }
+
+        for domain in domains_to_analyze:
+            if task._cancelled:
+                return {}
+
+            phase = buyer_discovery_phases.get(domain, AnalysisPhase.BUYER_DISCOVERY_INFRASTRUCTURE)
+            progress_callback({"phase": phase})
+
+            try:
+                # Phase 2: Only BUYER content, with TARGET context, entity forced to "buyer"
+                facts, gaps = run_discovery_for_domain(
+                    domain, buyer_content, session, buyer_doc_names,
+                    entity="buyer", analysis_phase="buyer_extraction",
+                    target_context=target_snapshot
+                )
+
+                progress_callback({
+                    "facts_extracted": len(session.fact_store.facts),
+                })
+            except Exception as e:
+                logger.error(f"Error in BUYER {domain} discovery: {e}")
+
+        progress_callback({"phase": AnalysisPhase.BUYER_ANALYSIS_COMPLETE})
+        logger.info(f"Phase 2 complete: {len(session.fact_store.get_entity_facts('buyer'))} BUYER facts")
+    else:
+        logger.info("No BUYER documents - skipping Phase 2")
 
     # Phase 3: Run Reasoning Agents
     progress_callback({"phase": AnalysisPhase.REASONING})
@@ -250,7 +378,10 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable) -> Dict[str, A
     facts_file = saved_files.get('facts')
     findings_file = saved_files.get('findings')
 
-    # Create result summary
+    # Get entity breakdown for summary
+    phase_summary = session.fact_store.get_phase_summary()
+
+    # Create result summary with entity breakdown
     result = {
         "facts_file": str(facts_file) if facts_file else None,
         "findings_file": str(findings_file) if findings_file else None,
@@ -263,6 +394,22 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable) -> Dict[str, A
             "risks_count": len(session.reasoning_store.risks),
             "work_items_count": len(session.reasoning_store.work_items),
             "open_questions_count": len(open_questions),
+        },
+        # Two-Phase Analysis breakdown
+        "entity_breakdown": {
+            "target": {
+                "facts_count": phase_summary["target"]["fact_count"],
+                "locked": phase_summary["target"]["locked"],
+                "domains": phase_summary["target"]["domains"]
+            },
+            "buyer": {
+                "facts_count": phase_summary["buyer"]["fact_count"],
+                "locked": phase_summary["buyer"]["locked"],
+                "domains": phase_summary["buyer"]["domains"]
+            },
+            "integration_insights": {
+                "count": phase_summary["integration_insights"]["count"]
+            }
         }
     }
 
@@ -271,20 +418,33 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable) -> Dict[str, A
     return result
 
 
-def run_discovery_for_domain(domain: str, content: str, session, document_names: str = "") -> tuple:
+def run_discovery_for_domain(
+    domain: str,
+    content: str,
+    session,
+    document_names: str = "",
+    entity: str = "target",
+    analysis_phase: str = "target_extraction",
+    target_context: Optional[Any] = None
+) -> tuple:
     """Run discovery agent for a specific domain.
 
     Args:
         domain: Domain to analyze (infrastructure, network, etc.)
-        content: Combined document content
+        content: Combined document content (for ONE entity only)
         session: Analysis session with fact_store
         document_names: Comma-separated list of source document filenames for traceability
+        entity: "target" or "buyer" - which entity we're extracting facts for
+        analysis_phase: "target_extraction" or "buyer_extraction"
+        target_context: FactStoreSnapshot of TARGET facts (for Phase 2 only)
+
+    Returns:
+        Tuple of (facts, gaps) extracted in this run
     """
     from tools_v2.fact_store import FactStore
     from config_v2 import ANTHROPIC_API_KEY
 
     # Import the appropriate discovery agent
-    # Note: Support both "identity" and "identity_access" for compatibility
     agent_map = {
         "infrastructure": "agents_v2.discovery.infrastructure_discovery",
         "network": "agents_v2.discovery.network_discovery",
@@ -312,43 +472,73 @@ def run_discovery_for_domain(domain: str, content: str, session, document_names:
         logger.warning(f"Unknown domain '{domain}' - skipping discovery")
         return [], []
 
-    logger.info(f"Starting discovery for domain: {domain}")
+    entity_label = entity.upper()
+    logger.info(f"Starting {entity_label} discovery for domain: {domain}")
+
+    # Track facts before this run to calculate delta
+    facts_before = len(session.fact_store.facts)
+    gaps_before = len(session.fact_store.gaps)
 
     try:
         import importlib
         module = importlib.import_module(module_name)
         agent_class = getattr(module, class_name)
 
-        # Get target name from deal context (handle both dict and string)
-        target_name = 'Target Company'
-        if session.deal_context:
-            if isinstance(session.deal_context, dict):
-                target_name = session.deal_context.get('target_name', 'Target Company')
-            elif isinstance(session.deal_context, str):
-                target_name = session.deal_context
+        # Get company name from deal context based on entity
+        if session.deal_context and isinstance(session.deal_context, dict):
+            if entity == "target":
+                company_name = session.deal_context.get('target_name', 'Target Company')
+            else:
+                company_name = session.deal_context.get('buyer_name', 'Buyer Company')
+        else:
+            company_name = 'Target Company' if entity == 'target' else 'Buyer Company'
 
-        # Create and run agent with required arguments
+        # Create agent with entity-specific configuration
         agent = agent_class(
             fact_store=session.fact_store,
             api_key=ANTHROPIC_API_KEY,
-            target_name=target_name
+            target_name=company_name  # This is the company being analyzed
         )
 
-        logger.info(f"Running {domain} discovery agent...")
-        result = agent.discover(content, document_name=document_names)
-        logger.info(f"Discovery complete for {domain}: {len(session.fact_store.facts)} facts, {len(session.fact_store.gaps)} gaps")
+        # Prepare content with optional TARGET context for Phase 2
+        analysis_content = content
+        if target_context and entity == "buyer":
+            # Prepend TARGET facts as read-only context
+            context_str = target_context.to_context_string(include_evidence=False)
+            analysis_content = f"{context_str}\n\n---\n\nNow analyze the BUYER documents below:\n\n{content}"
+            logger.info(f"Injected {len(target_context.facts)} TARGET facts as context for BUYER analysis")
 
-        # Facts and gaps are stored directly in the fact_store by the agent
-        facts = list(session.fact_store.facts)
-        gaps = list(session.fact_store.gaps)
+        # Run discovery with entity enforcement
+        logger.info(f"Running {entity_label} {domain} discovery agent...")
+        result = agent.discover(
+            analysis_content,
+            document_name=document_names,
+            # Pass entity info for fact tagging
+            # Note: This requires agent to support these params or we handle in tools
+        )
 
-        return facts, gaps
+        # Calculate what was added in this run
+        facts_added = len(session.fact_store.facts) - facts_before
+        gaps_added = len(session.fact_store.gaps) - gaps_before
+
+        logger.info(
+            f"{entity_label} discovery complete for {domain}: "
+            f"+{facts_added} facts, +{gaps_added} gaps"
+        )
+
+        # Return only facts from this entity
+        entity_facts = session.fact_store.get_entity_facts(entity)
+        entity_gaps = [g for g in session.fact_store.gaps if getattr(g, 'entity', 'target') == entity]
+
+        return entity_facts, entity_gaps
 
     except ImportError as e:
         logger.warning(f"Could not import discovery agent for {domain}: {e}")
         return [], []
     except Exception as e:
-        logger.error(f"Error running discovery for {domain}: {e}")
+        logger.error(f"Error running {entity_label} discovery for {domain}: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return [], []
 
 

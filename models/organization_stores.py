@@ -364,6 +364,10 @@ class OrganizationDataStore:
     total_compensation: float = 0.0
     hidden_headcount_need: float = 0.0
 
+    # Authoritative headcount from IT Budget fact (when available)
+    # This takes precedence over len(staff_members) since it's the stated official count
+    authoritative_headcount: Optional[int] = None
+
     # Summaries
     msp_summary: Optional[MSPSummary] = None
     shared_services_summary: Optional[SharedServicesSummary] = None
@@ -476,7 +480,13 @@ class OrganizationDataStore:
         return [s for s in self.staff_members if s.is_key_person]
 
     def get_target_headcount(self) -> int:
-        """Get total headcount for target entity."""
+        """Get total headcount for target entity.
+
+        Uses authoritative_headcount from IT Budget fact if available,
+        otherwise falls back to counting staff_members.
+        """
+        if self.authoritative_headcount is not None:
+            return self.authoritative_headcount
         return sum(1 for s in self.staff_members if s.entity == 'target')
 
     def to_dict(self) -> Dict[str, Any]:

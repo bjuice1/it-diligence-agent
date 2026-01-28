@@ -715,10 +715,55 @@ def _execute_complete_discovery(
         domain_data = fact_store.get_domain_facts(domain)
 
         # =================================================================
-        # COMPLETENESS VALIDATION FOR ORGANIZATION DOMAIN
+        # COMPLETENESS VALIDATION
         # =================================================================
         warnings = []
-        if domain == "organization":
+
+        # =================================================================
+        # APPLICATIONS DOMAIN VALIDATION
+        # =================================================================
+        if domain == "applications":
+            app_facts = [f for f in domain_data.get("facts", [])
+                        if f.get("domain") == "applications"]
+            app_count = len(app_facts)
+
+            # Add verification reminder - the key is extracting EVERYTHING in the document
+            # not hitting an arbitrary number
+            warnings.append(
+                f"✓ Extracted {app_count} applications. "
+                f"VERIFY: Did you extract EVERY application from the document? "
+                f"Check 'Complete Application List' tables and ensure ALL rows were captured. "
+                f"If the document states 'Total Applications: XX', your count should match."
+            )
+
+            # Check category coverage to identify potential gaps
+            categories_found = set(f.get("category") for f in app_facts if f.get("category"))
+
+            # Common application categories that should typically be present
+            common_categories = {
+                "erp": "ERP (Oracle, SAP, NetSuite)",
+                "crm": "CRM (Salesforce, Dynamics)",
+                "hcm": "HR/HCM (Workday, ADP)",
+                "vertical": "Industry/Vertical apps",
+                "collaboration": "Collaboration (M365, Slack)",
+                "finance": "Finance (BlackLine, Coupa)"
+            }
+
+            missing_categories = []
+            for cat, desc in common_categories.items():
+                if cat not in categories_found:
+                    missing_categories.append(desc)
+
+            if missing_categories:
+                warnings.append(
+                    f"Categories not found: {', '.join(missing_categories)}. "
+                    f"If the document mentions applications in these categories, go back and extract them."
+                )
+
+        # =================================================================
+        # ORGANIZATION DOMAIN VALIDATION
+        # =================================================================
+        elif domain == "organization":
             # Count central_it (team) entries
             central_it_facts = [f for f in domain_data.get("facts", [])
                                if f.get("category") == "central_it"]

@@ -1,0 +1,369 @@
+{#
+Fact Detail Panel Component
+Expandable panel showing full fact details including evidence and validation history.
+
+Usage:
+{% include 'validation/components/fact_detail_panel.html' %}
+
+Required variables:
+- fact: Full fact object
+- validation_state: Optional validation state for this fact
+#}
+
+<div class="fact-detail-panel" id="fact-detail-{{ fact.fact_id }}">
+    {# Evidence Section #}
+    <div class="detail-section">
+        <div class="detail-section-header">
+            <h4>Evidence</h4>
+            {% if fact.evidence %}
+            <span class="evidence-status evidence-{{ 'verified' if validation_state and validation_state.evidence_verified else 'unverified' }}">
+                {% if validation_state and validation_state.evidence_verified %}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                {{ (validation_state.evidence_match_score * 100)|int }}% match
+                {% else %}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="16" x2="12" y2="12"></line>
+                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                </svg>
+                Unverified
+                {% endif %}
+            </span>
+            {% endif %}
+        </div>
+
+        {% if fact.evidence %}
+        <blockquote class="evidence-quote">
+            "{{ fact.evidence.exact_quote or fact.evidence.get('exact_quote', 'No quote available') }}"
+        </blockquote>
+        {% if fact.source_document %}
+        <div class="evidence-source">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+            </svg>
+            {{ fact.source_document }}
+        </div>
+        {% endif %}
+        {% else %}
+        <p class="no-evidence">No evidence recorded</p>
+        {% endif %}
+    </div>
+
+    {# Validation History Section #}
+    {% if validation_state %}
+    <div class="detail-section">
+        <div class="detail-section-header">
+            <h4>Validation Status</h4>
+            <span class="badge badge-{{ validation_state.status.value if validation_state.status else 'default' }}">
+                {{ validation_state.status.value if validation_state.status else 'Not validated' }}
+            </span>
+        </div>
+
+        <div class="validation-details">
+            <div class="validation-row">
+                <span class="label">AI Confidence:</span>
+                <span class="value">{{ (validation_state.ai_confidence * 100)|int }}%</span>
+            </div>
+            {% if validation_state.ai_validated_at %}
+            <div class="validation-row">
+                <span class="label">Validated:</span>
+                <span class="value">{{ validation_state.ai_validated_at.strftime('%Y-%m-%d %H:%M') }}</span>
+            </div>
+            {% endif %}
+            {% if validation_state.human_reviewed %}
+            <div class="validation-row">
+                <span class="label">Reviewed by:</span>
+                <span class="value">{{ validation_state.human_reviewer or 'Anonymous' }}</span>
+            </div>
+            <div class="validation-row">
+                <span class="label">Reviewed:</span>
+                <span class="value">{{ validation_state.human_reviewed_at.strftime('%Y-%m-%d %H:%M') if validation_state.human_reviewed_at else 'N/A' }}</span>
+            </div>
+            {% endif %}
+        </div>
+
+        {# Flags #}
+        {% if validation_state.ai_flags %}
+        <div class="flags-section">
+            <h5>Validation Flags</h5>
+            {% for flag in validation_state.ai_flags %}
+            <div class="flag-item flag-{{ flag.severity.value if hasattr(flag.severity, 'value') else flag.severity }} {{ 'flag-resolved' if flag.resolved else '' }}">
+                <div class="flag-header">
+                    <span class="flag-severity">{{ flag.severity.value if hasattr(flag.severity, 'value') else flag.severity }}</span>
+                    {% if flag.resolved %}
+                    <span class="flag-resolved-badge">Resolved</span>
+                    {% endif %}
+                </div>
+                <div class="flag-message">{{ flag.message }}</div>
+                {% if flag.suggestion %}
+                <div class="flag-suggestion">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="16" x2="12" y2="12"></line>
+                        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                    </svg>
+                    {{ flag.suggestion }}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {# Correction History Section #}
+    {% if corrections %}
+    <div class="detail-section">
+        <div class="detail-section-header">
+            <h4>Correction History</h4>
+        </div>
+
+        {% for correction in corrections %}
+        <div class="correction-item">
+            <div class="correction-header">
+                <span class="correction-by">{{ correction.corrected_by }}</span>
+                <span class="correction-date">{{ correction.timestamp.strftime('%Y-%m-%d %H:%M') }}</span>
+            </div>
+            <div class="correction-changes">
+                {% for field, values in correction.changes.items() %}
+                <div class="correction-change">
+                    <span class="field-name">{{ field }}:</span>
+                    <span class="old-value">{{ values.original }}</span>
+                    <span class="arrow">→</span>
+                    <span class="new-value">{{ values.corrected }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% if correction.reason %}
+            <div class="correction-reason">
+                <strong>Reason:</strong> {{ correction.reason }}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {# Actions #}
+    <div class="detail-actions">
+        {% if not validation_state or not validation_state.human_reviewed %}
+        <button class="btn btn-sm btn-primary" onclick="window.location.href='{{ url_for('validation_review_queue') }}?fact={{ fact.fact_id }}'">
+            Review This Fact
+        </button>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+    .fact-detail-panel {
+        background: var(--bg-surface-sunken);
+        border-top: 1px solid var(--border-default);
+        padding: var(--space-4);
+    }
+
+    .detail-section {
+        margin-bottom: var(--space-4);
+        padding-bottom: var(--space-4);
+        border-bottom: 1px solid var(--border-default);
+    }
+
+    .detail-section:last-of-type {
+        border-bottom: none;
+        margin-bottom: 0;
+    }
+
+    .detail-section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: var(--space-3);
+    }
+
+    .detail-section-header h4 {
+        font-size: var(--text-sm);
+        font-weight: var(--font-semibold);
+        color: var(--text-primary);
+        margin: 0;
+    }
+
+    .evidence-status {
+        display: flex;
+        align-items: center;
+        gap: var(--space-1);
+        font-size: var(--text-xs);
+    }
+
+    .evidence-status.evidence-verified {
+        color: var(--low);
+    }
+
+    .evidence-status.evidence-unverified {
+        color: var(--text-muted);
+    }
+
+    .evidence-quote {
+        margin: 0;
+        padding: var(--space-3);
+        background: var(--bg-surface);
+        border-left: 3px solid var(--accent);
+        border-radius: var(--radius-md);
+        font-size: var(--text-sm);
+        font-style: italic;
+        color: var(--text-secondary);
+    }
+
+    .evidence-source {
+        display: flex;
+        align-items: center;
+        gap: var(--space-1);
+        margin-top: var(--space-2);
+        font-size: var(--text-xs);
+        color: var(--text-muted);
+    }
+
+    .no-evidence {
+        font-size: var(--text-sm);
+        color: var(--text-muted);
+        font-style: italic;
+    }
+
+    .validation-details {
+        display: grid;
+        gap: var(--space-2);
+    }
+
+    .validation-row {
+        display: flex;
+        font-size: var(--text-sm);
+    }
+
+    .validation-row .label {
+        color: var(--text-muted);
+        width: 120px;
+        flex-shrink: 0;
+    }
+
+    .validation-row .value {
+        color: var(--text-primary);
+    }
+
+    .flags-section {
+        margin-top: var(--space-3);
+    }
+
+    .flags-section h5 {
+        font-size: var(--text-xs);
+        font-weight: var(--font-semibold);
+        color: var(--text-muted);
+        text-transform: uppercase;
+        margin-bottom: var(--space-2);
+    }
+
+    .flag-item {
+        padding: var(--space-2) var(--space-3);
+        margin-bottom: var(--space-2);
+        border-radius: var(--radius-md);
+        font-size: var(--text-sm);
+    }
+
+    .flag-item.flag-critical { background: var(--critical-bg); }
+    .flag-item.flag-error { background: var(--high-bg); }
+    .flag-item.flag-warning { background: var(--medium-bg); }
+    .flag-item.flag-info { background: var(--info-bg); }
+
+    .flag-item.flag-resolved {
+        opacity: 0.6;
+        text-decoration: line-through;
+    }
+
+    .flag-header {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: var(--space-1);
+    }
+
+    .flag-severity {
+        font-weight: var(--font-semibold);
+        text-transform: uppercase;
+        font-size: var(--text-xs);
+    }
+
+    .flag-resolved-badge {
+        font-size: var(--text-xs);
+        color: var(--low);
+    }
+
+    .flag-message {
+        color: var(--text-primary);
+    }
+
+    .flag-suggestion {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--space-1);
+        margin-top: var(--space-1);
+        font-size: var(--text-xs);
+        color: var(--text-muted);
+    }
+
+    .correction-item {
+        padding: var(--space-3);
+        background: var(--bg-surface);
+        border-radius: var(--radius-md);
+        margin-bottom: var(--space-2);
+    }
+
+    .correction-header {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: var(--space-2);
+        font-size: var(--text-xs);
+    }
+
+    .correction-by {
+        font-weight: var(--font-semibold);
+        color: var(--text-primary);
+    }
+
+    .correction-date {
+        color: var(--text-muted);
+    }
+
+    .correction-change {
+        font-size: var(--text-sm);
+        margin-bottom: var(--space-1);
+    }
+
+    .field-name {
+        color: var(--text-muted);
+    }
+
+    .old-value {
+        text-decoration: line-through;
+        color: var(--critical);
+    }
+
+    .arrow {
+        color: var(--text-muted);
+        margin: 0 var(--space-1);
+    }
+
+    .new-value {
+        color: var(--low);
+        font-weight: var(--font-medium);
+    }
+
+    .correction-reason {
+        margin-top: var(--space-2);
+        font-size: var(--text-xs);
+        color: var(--text-muted);
+    }
+
+    .detail-actions {
+        margin-top: var(--space-3);
+    }
+</style>

@@ -92,6 +92,32 @@ from tools_v2.reasoning_orchestrator import (
     quick_analyze,
 )
 
+# Validation components
+from tools_v2.evidence_verifier import (
+    EvidenceVerifier,
+    VerificationResult,
+    verify_quote_exists,
+)
+from tools_v2.category_validator import (
+    CategoryValidator,
+    CategoryValidationResult,
+)
+from tools_v2.domain_validator import (
+    DomainValidator,
+    DomainValidationResult,
+)
+from tools_v2.cross_domain_validator import (
+    CrossDomainValidator,
+    CrossDomainValidationResult,
+    ConsistencyCheck,
+)
+from tools_v2.adversarial_reviewer import (
+    AdversarialReviewer,
+    AdversarialReviewResult,
+    AdversarialFinding,
+    FindingType,
+)
+
 __all__ = [
     # Fact Store
     'FactStore',
@@ -160,4 +186,23 @@ __all__ = [
     'ReasoningOrchestrator',
     'OrchestratorConfig',
     'quick_analyze',
+    # Validation - Evidence Verifier
+    'EvidenceVerifier',
+    'VerificationResult',
+    'verify_quote_exists',
+    # Validation - Category Validator
+    'CategoryValidator',
+    'CategoryValidationResult',
+    # Validation - Domain Validator
+    'DomainValidator',
+    'DomainValidationResult',
+    # Validation - Cross-Domain Validator
+    'CrossDomainValidator',
+    'CrossDomainValidationResult',
+    'ConsistencyCheck',
+    # Validation - Adversarial Reviewer
+    'AdversarialReviewer',
+    'AdversarialReviewResult',
+    'AdversarialFinding',
+    'FindingType',
 ]

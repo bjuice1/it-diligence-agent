@@ -17,6 +17,31 @@
 </div>
 {% endif %}
 
+<!-- View Toggle and Entity Filter -->
+<div class="controls-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
+    <div class="view-toggle-container">
+        <div class="tabs" style="max-width: 300px;">
+            <button class="tab active" data-view="inventory">Inventory</button>
+            <button class="tab" data-view="report">Report</button>
+        </div>
+    </div>
+
+    <!-- Entity Filter -->
+    <div class="entity-filter" id="entity-filter">
+        <span class="filter-label">Show:</span>
+        <button class="entity-btn active" data-entity="all">All</button>
+        <button class="entity-btn entity-target" data-entity="target">
+            <span class="entity-icon">🎯</span> TARGET
+        </button>
+        <button class="entity-btn entity-buyer" data-entity="buyer">
+            <span class="entity-icon">🏢</span> BUYER
+        </button>
+    </div>
+</div>
+
+<!-- Inventory View -->
+<div id="inventory-view">
+
 <!-- Summary Stats -->
 <div class="summary-stats" style="margin-bottom: 30px;">
     <div class="stat-card">
@@ -159,7 +184,8 @@
                 data-fact-id="{{ item.fact_id }}"
                 data-source="{{ item.source_document|e }}"
                 data-confidence="{{ item.confidence_score }}"
-                data-verified="{{ item.verified|string|lower }}">
+                data-verified="{{ item.verified|string|lower }}"
+                data-entity="{{ item.entity|default('target') }}">
                 <td>
                     <strong>{{ item.name }}</strong>
                     {% if item.model %}<span class="text-muted text-sm"> ({{ item.model }})</span>{% endif %}
@@ -203,6 +229,24 @@
     </table>
 </div>
 {% endif %}
+
+</div><!-- End inventory-view -->
+
+<!-- Report View -->
+<div id="report-view" style="display: none;">
+    <div class="report-container">
+        <div class="report-content">
+            <div class="report-loading">
+                <div class="loading-spinner"></div>
+                <p>Generating report narrative...</p>
+            </div>
+        </div>
+        <div class="report-actions" style="display: none;">
+            <button class="btn btn-secondary" onclick="regenerateNarrative()">Regenerate Narrative</button>
+            <button class="btn btn-outline" onclick="copyNarrative()">Copy to Clipboard</button>
+        </div>
+    </div>
+</div>
 
 <style>
 .categories-grid {
@@ -447,12 +491,300 @@
     background: rgba(245, 158, 11, 0.15);
     color: #92400e;
 }
+
+/* Entity Filter Styles */
+.entity-filter {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.filter-label {
+    font-size: 0.85em;
+    color: var(--text-muted);
+    margin-right: 4px;
+}
+
+.entity-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid var(--border-default);
+    border-radius: 6px;
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    font-size: 0.85em;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.entity-btn:hover {
+    border-color: var(--accent);
+}
+
+.entity-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+}
+
+.entity-btn.entity-target.active {
+    background: #10b981;
+    border-color: #10b981;
+}
+
+.entity-btn.entity-buyer.active {
+    background: #3b82f6;
+    border-color: #3b82f6;
+}
+
+.entity-icon {
+    font-size: 1em;
+}
+
+/* Entity indicator in table */
+tr[data-entity="target"] td:first-child::before {
+    content: "🎯";
+    margin-right: 6px;
+    font-size: 0.85em;
+}
+
+tr[data-entity="buyer"] td:first-child::before {
+    content: "🏢";
+    margin-right: 6px;
+    font-size: 0.85em;
+}
+
+/* Row filtering */
+tr.entity-hidden {
+    display: none !important;
+}
+
+@media (max-width: 768px) {
+    .controls-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .entity-filter {
+        width: 100%;
+        justify-content: flex-start;
+    }
+}
 </style>
 
 {% endblock %}
 
 {% block scripts %}
 <script>
+// View Toggle Functionality
+let narrativeLoaded = false;
+const domain = 'infrastructure';
+
+// Entity Filter Functionality
+let currentEntityFilter = 'all';
+
+document.querySelectorAll('.entity-filter .entity-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const entity = this.dataset.entity;
+        currentEntityFilter = entity;
+
+        // Update active button
+        document.querySelectorAll('.entity-filter .entity-btn').forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+
+        // Filter table rows
+        filterByEntity(entity);
+    });
+});
+
+function filterByEntity(entity) {
+    const rows = document.querySelectorAll('table.table tbody tr');
+
+    rows.forEach(row => {
+        const rowEntity = row.dataset.entity || 'target';
+
+        if (entity === 'all' || rowEntity === entity) {
+            row.classList.remove('entity-hidden');
+        } else {
+            row.classList.add('entity-hidden');
+        }
+    });
+}
+
+document.querySelectorAll('.view-toggle-container .tab').forEach(tab => {
+    tab.addEventListener('click', function() {
+        const view = this.dataset.view;
+
+        // Update active tab
+        document.querySelectorAll('.view-toggle-container .tab').forEach(t => t.classList.remove('active'));
+        this.classList.add('active');
+
+        // Toggle views
+        document.getElementById('inventory-view').style.display = view === 'inventory' ? 'block' : 'none';
+        document.getElementById('report-view').style.display = view === 'report' ? 'block' : 'none';
+
+        // Load narrative if switching to report view and not already loaded
+        if (view === 'report' && !narrativeLoaded) {
+            loadNarrative();
+        }
+    });
+});
+
+async function loadNarrative() {
+    const container = document.querySelector('.report-content');
+    const actions = document.querySelector('.report-actions');
+
+    container.innerHTML = `
+        <div class="report-loading">
+            <div class="loading-spinner"></div>
+            <p>Generating report narrative...</p>
+        </div>
+    `;
+    actions.style.display = 'none';
+
+    try {
+        const response = await fetch(`/api/narrative/${domain}`);
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            renderNarrative(data);
+            narrativeLoaded = true;
+            actions.style.display = 'flex';
+        } else if (data.status === 'placeholder') {
+            renderPlaceholder(data);
+        } else {
+            container.innerHTML = `
+                <div class="report-error">
+                    <p><strong>Error generating narrative:</strong></p>
+                    <p>${data.error || 'Unknown error'}</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        container.innerHTML = `
+            <div class="report-error">
+                <p><strong>Failed to load narrative:</strong></p>
+                <p>${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+function renderNarrative(narrative) {
+    const container = document.querySelector('.report-content');
+    container.innerHTML = `
+        <div class="report-section">
+            <h3>Key Takeaway</h3>
+            <p class="report-so-what report-editable" contenteditable="true">${narrative.so_what || 'No summary available'}</p>
+        </div>
+
+        ${narrative.considerations && narrative.considerations.length > 0 ? `
+        <div class="report-section">
+            <h3>Key Considerations</h3>
+            <ul class="report-considerations">
+                ${narrative.considerations.map(c => `<li class="report-editable" contenteditable="true">${c}</li>`).join('')}
+            </ul>
+        </div>
+        ` : ''}
+
+        <div class="report-section">
+            <h3>Narrative</h3>
+            <div class="report-narrative report-editable" contenteditable="true">${narrative.narrative || 'No detailed narrative available'}</div>
+        </div>
+
+        ${narrative.cost_summary ? `
+        <div class="report-section">
+            <h3>Cost Summary</h3>
+            <div class="report-cost-summary report-editable" contenteditable="true">${narrative.cost_summary}</div>
+        </div>
+        ` : ''}
+
+        ${narrative.key_facts && narrative.key_facts.length > 0 ? `
+        <div class="report-section">
+            <h3>Supporting Facts</h3>
+            <ul class="report-key-facts">
+                ${narrative.key_facts.map(f => `<li>${f}</li>`).join('')}
+            </ul>
+        </div>
+        ` : ''}
+
+        <div class="report-meta">
+            <span class="confidence-badge confidence-${narrative.confidence === 'high' ? 'high' : narrative.confidence === 'medium' ? 'medium' : 'low'}">
+                Confidence: ${narrative.confidence || 'medium'}
+            </span>
+        </div>
+    `;
+}
+
+function renderPlaceholder(data) {
+    const container = document.querySelector('.report-content');
+    container.innerHTML = `
+        <div class="report-placeholder">
+            <h3>${data.so_what}</h3>
+            <ul>
+                ${data.considerations.map(c => `<li>${c}</li>`).join('')}
+            </ul>
+            <p class="text-muted">${data.narrative}</p>
+        </div>
+    `;
+}
+
+async function regenerateNarrative() {
+    narrativeLoaded = false;
+    const container = document.querySelector('.report-content');
+    const actions = document.querySelector('.report-actions');
+
+    container.innerHTML = `
+        <div class="report-loading">
+            <div class="loading-spinner"></div>
+            <p>Regenerating narrative...</p>
+        </div>
+    `;
+    actions.style.display = 'none';
+
+    try {
+        const response = await fetch(`/api/narrative/${domain}/regenerate`, { method: 'POST' });
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            renderNarrative(data);
+            narrativeLoaded = true;
+            actions.style.display = 'flex';
+        } else {
+            container.innerHTML = `
+                <div class="report-error">
+                    <p><strong>Error regenerating narrative:</strong></p>
+                    <p>${data.error || 'Unknown error'}</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        container.innerHTML = `
+            <div class="report-error">
+                <p><strong>Failed to regenerate narrative:</strong></p>
+                <p>${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+function copyNarrative() {
+    const soWhat = document.querySelector('.report-so-what')?.innerText || '';
+    const narrative = document.querySelector('.report-narrative')?.innerText || '';
+    const considerations = Array.from(document.querySelectorAll('.report-considerations li'))
+        .map(li => '- ' + li.innerText).join('\n');
+
+    const fullText = `KEY TAKEAWAY:\n${soWhat}\n\nKEY CONSIDERATIONS:\n${considerations}\n\nNARRATIVE:\n${narrative}`;
+
+    navigator.clipboard.writeText(fullText).then(() => {
+        alert('Narrative copied to clipboard!');
+    }).catch(err => {
+        alert('Failed to copy: ' + err.message);
+    });
+}
+
+// Row Selection for Inventory View
 document.addEventListener('rowSelected', function(e) {
     const row = e.detail.row;
     const data = row.dataset;

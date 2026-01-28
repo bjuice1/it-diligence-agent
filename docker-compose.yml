@@ -1,0 +1,164 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5001:8080"
+    environment:
+      - FLASK_ENV=development
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:-dev-secret-key-change-in-prod}
+      - LOG_LEVEL=debug
+      # Phase 3: Database configuration
+      - USE_DATABASE=true
+      - DATABASE_URL=postgresql://diligence:localdev@postgres:5432/diligence
+      # Phase 4: Redis and Celery configuration
+      - USE_REDIS_SESSIONS=true
+      - USE_CELERY=true
+      - REDIS_URL=redis://redis:6379/0
+      # Phase 5: Cloud Storage configuration
+      - STORAGE_TYPE=${STORAGE_TYPE:-local}
+      - S3_ENDPOINT=http://minio:9000
+      - S3_BUCKET=diligence-documents
+      - S3_REGION=us-east-1
+      - S3_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
+      - S3_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
+      # Phase 6: Multi-tenancy
+      - USE_MULTI_TENANCY=${USE_MULTI_TENANCY:-false}
+      # Phase 7: Enterprise features
+      - USE_STRUCTURED_LOGGING=${USE_STRUCTURED_LOGGING:-true}
+      - USE_ERROR_TRACKING=${USE_ERROR_TRACKING:-false}
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-development}
+      - USE_RATE_LIMITING=${USE_RATE_LIMITING:-true}
+      - RATELIMIT_STORAGE_URL=redis://redis:6379/1
+      - USE_AUDIT_LOGGING=${USE_AUDIT_LOGGING:-true}
+    volumes:
+      # Mount data directories for persistence
+      - ./data:/app/data
+      - ./output:/app/output
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # Celery Worker (Phase 4)
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A web.celery_app:celery worker --loglevel=info --concurrency=2
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:-dev-secret-key-change-in-prod}
+      # Phase 3: Database configuration
+      - USE_DATABASE=true
+      - DATABASE_URL=postgresql://diligence:localdev@postgres:5432/diligence
+      # Phase 4: Redis configuration
+      - REDIS_URL=redis://redis:6379/0
+      # Phase 5: Cloud Storage configuration
+      - STORAGE_TYPE=${STORAGE_TYPE:-local}
+      - S3_ENDPOINT=http://minio:9000
+      - S3_BUCKET=diligence-documents
+      - S3_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
+      - S3_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
+    volumes:
+      - ./data:/app/data
+      - ./output:/app/output
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Celery Beat Scheduler (Phase 4 - for periodic tasks)
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A web.celery_app:celery beat --loglevel=info
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # PostgreSQL Database (Phase 3)
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: diligence
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-localdev}
+      POSTGRES_DB: diligence
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U diligence"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Redis for Sessions and Tasks (Phase 4)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # MinIO S3-Compatible Storage (Phase 5)
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"   # API
+      - "9001:9001"   # Console
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # MinIO bucket initialization (Phase 5)
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set myminio http://minio:9000 minioadmin minioadmin;
+      mc mb myminio/diligence-documents --ignore-existing;
+      exit 0;
+      "
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:

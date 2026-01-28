@@ -1,0 +1,676 @@
+{% extends "base.html" %}
+
+{% block title %}Review Queue - IT Due Diligence{% endblock %}
+
+{% block head %}
+<style>
+    .review-layout {
+        display: grid;
+        grid-template-columns: 1fr 400px;
+        gap: var(--space-6);
+    }
+
+    @media (max-width: 1024px) {
+        .review-layout {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .queue-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: var(--space-4);
+    }
+
+    .queue-count {
+        font-size: var(--text-sm);
+        color: var(--text-muted);
+    }
+
+    .review-card {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-lg);
+        margin-bottom: var(--space-3);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+    }
+
+    .review-card:hover {
+        border-color: var(--accent);
+        box-shadow: var(--shadow-md);
+    }
+
+    .review-card.selected {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px var(--accent-subtle);
+    }
+
+    .review-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        padding: var(--space-4);
+        border-bottom: 1px solid var(--border-default);
+    }
+
+    .review-card-title {
+        font-weight: var(--font-semibold);
+        color: var(--text-primary);
+        margin-bottom: var(--space-1);
+    }
+
+    .review-card-meta {
+        font-size: var(--text-xs);
+        color: var(--text-muted);
+    }
+
+    .review-card-body {
+        padding: var(--space-4);
+    }
+
+    .review-card-flags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-2);
+        margin-bottom: var(--space-3);
+    }
+
+    .flag-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-1);
+        padding: var(--space-1) var(--space-2);
+        border-radius: var(--radius-md);
+        font-size: var(--text-xs);
+    }
+
+    .review-card-evidence {
+        font-size: var(--text-sm);
+        color: var(--text-secondary);
+        background: var(--bg-surface-sunken);
+        padding: var(--space-3);
+        border-radius: var(--radius-md);
+        border-left: 3px solid var(--border-muted);
+    }
+
+    .review-card-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: var(--space-3) var(--space-4);
+        border-top: 1px solid var(--border-default);
+        background: var(--bg-surface-sunken);
+    }
+
+    .confidence-indicator {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        font-size: var(--text-sm);
+    }
+
+    .confidence-bar {
+        width: 60px;
+        height: 6px;
+        background: var(--bg-surface);
+        border-radius: var(--radius-full);
+        overflow: hidden;
+    }
+
+    .confidence-fill {
+        height: 100%;
+        border-radius: var(--radius-full);
+    }
+
+    .confidence-high { background: var(--low); }
+    .confidence-medium { background: var(--medium); }
+    .confidence-low { background: var(--high); }
+
+    /* Detail Panel */
+    .detail-panel {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-lg);
+        position: sticky;
+        top: calc(var(--nav-height) + var(--space-6));
+        max-height: calc(100vh - var(--nav-height) - var(--space-12));
+        overflow-y: auto;
+    }
+
+    .detail-header {
+        padding: var(--space-4) var(--space-5);
+        border-bottom: 1px solid var(--border-default);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .detail-title {
+        font-weight: var(--font-semibold);
+        color: var(--text-primary);
+    }
+
+    .detail-body {
+        padding: var(--space-5);
+    }
+
+    .detail-section {
+        margin-bottom: var(--space-5);
+    }
+
+    .detail-section-title {
+        font-size: var(--text-xs);
+        font-weight: var(--font-semibold);
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: var(--space-2);
+    }
+
+    .detail-field {
+        margin-bottom: var(--space-3);
+    }
+
+    .detail-field-label {
+        font-size: var(--text-xs);
+        color: var(--text-muted);
+        margin-bottom: var(--space-1);
+    }
+
+    .detail-field-value {
+        font-size: var(--text-sm);
+        color: var(--text-primary);
+    }
+
+    .detail-field-value.editable {
+        padding: var(--space-2);
+        background: var(--bg-surface-sunken);
+        border-radius: var(--radius-md);
+        cursor: text;
+    }
+
+    .detail-field-value.editable:hover {
+        background: var(--bg-surface);
+        outline: 1px solid var(--border-muted);
+    }
+
+    .detail-actions {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: var(--space-2);
+        padding: var(--space-4) var(--space-5);
+        border-top: 1px solid var(--border-default);
+    }
+
+    .btn-confirm {
+        background: var(--low);
+        color: white;
+    }
+
+    .btn-confirm:hover {
+        background: #15803d;
+    }
+
+    .btn-correct {
+        background: var(--medium);
+        color: white;
+    }
+
+    .btn-correct:hover {
+        background: #d97706;
+    }
+
+    .btn-reject {
+        background: var(--critical);
+        color: white;
+    }
+
+    .btn-reject:hover {
+        background: #b91c1c;
+    }
+
+    .btn-skip {
+        background: var(--bg-surface-sunken);
+        color: var(--text-secondary);
+    }
+
+    .empty-detail {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: var(--space-12);
+        color: var(--text-muted);
+        text-align: center;
+    }
+
+    .empty-detail-icon {
+        font-size: var(--text-4xl);
+        margin-bottom: var(--space-4);
+    }
+
+    .keyboard-hint {
+        margin-top: var(--space-4);
+        padding: var(--space-3);
+        background: var(--bg-surface-sunken);
+        border-radius: var(--radius-md);
+        font-size: var(--text-xs);
+    }
+
+    .keyboard-hint kbd {
+        display: inline-block;
+        padding: var(--space-1) var(--space-2);
+        background: var(--bg-surface);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-sm);
+        font-family: var(--font-mono);
+        margin: 0 var(--space-1);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Review Queue</h1>
+    <p>Review and validate extracted facts</p>
+</div>
+
+<!-- Filters -->
+<div class="filters-bar">
+    <div class="filter-group">
+        <label class="filter-label">Domain</label>
+        <select class="filter-select" id="filter-domain" onchange="applyFilters()">
+            <option value="">All Domains</option>
+            <option value="organization" {{ 'selected' if filter_domain == 'organization' }}>Organization</option>
+            <option value="infrastructure" {{ 'selected' if filter_domain == 'infrastructure' }}>Infrastructure</option>
+            <option value="applications" {{ 'selected' if filter_domain == 'applications' }}>Applications</option>
+            <option value="network" {{ 'selected' if filter_domain == 'network' }}>Network</option>
+            <option value="security" {{ 'selected' if filter_domain == 'security' }}>Security</option>
+        </select>
+    </div>
+    <div class="filter-group">
+        <label class="filter-label">Severity</label>
+        <select class="filter-select" id="filter-severity" onchange="applyFilters()">
+            <option value="">All Severities</option>
+            <option value="critical" {{ 'selected' if filter_severity == 'critical' }}>Critical</option>
+            <option value="error" {{ 'selected' if filter_severity == 'error' }}>Error</option>
+            <option value="warning" {{ 'selected' if filter_severity == 'warning' }}>Warning</option>
+            <option value="info" {{ 'selected' if filter_severity == 'info' }}>Info</option>
+        </select>
+    </div>
+    <div class="filter-group filter-search">
+        <label class="filter-label">Search</label>
+        <input type="text" class="filter-input" id="filter-search" placeholder="Search facts..." onkeyup="applyFilters()">
+    </div>
+    <div class="filters-actions">
+        <span class="queue-count">{{ items|length }} items</span>
+    </div>
+</div>
+
+<div class="review-layout">
+    <!-- Queue List -->
+    <div class="queue-list">
+        {% for item in items %}
+        <div class="review-card" data-fact-id="{{ item.fact_id }}" onclick="selectFact('{{ item.fact_id }}')">
+            <div class="review-card-header">
+                <div>
+                    <div class="review-card-title">{{ item.item or item.fact_id }}</div>
+                    <div class="review-card-meta">{{ item.domain }} / {{ item.category }}</div>
+                </div>
+                <span class="badge badge-{{ item.highest_severity }}">{{ item.highest_severity }}</span>
+            </div>
+            <div class="review-card-body">
+                <div class="review-card-flags">
+                    {% for flag in item.flags[:3] %}
+                    <span class="flag-badge badge-{{ flag.severity }}">{{ flag.message[:50] }}{% if flag.message|length > 50 %}...{% endif %}</span>
+                    {% endfor %}
+                    {% if item.flags_count > 3 %}
+                    <span class="flag-badge" style="background: var(--bg-surface-sunken);">+{{ item.flags_count - 3 }} more</span>
+                    {% endif %}
+                </div>
+                {% if item.evidence_matched_text %}
+                <div class="review-card-evidence">
+                    "{{ item.evidence_matched_text[:150] }}{% if item.evidence_matched_text|length > 150 %}...{% endif %}"
+                </div>
+                {% endif %}
+            </div>
+            <div class="review-card-footer">
+                <div class="confidence-indicator">
+                    <div class="confidence-bar">
+                        <div class="confidence-fill confidence-{{ 'high' if item.ai_confidence >= 0.8 else ('medium' if item.ai_confidence >= 0.6 else 'low') }}"
+                             style="width: {{ (item.ai_confidence * 100)|int }}%"></div>
+                    </div>
+                    <span>{{ (item.ai_confidence * 100)|int }}%</span>
+                </div>
+                {% if item.human_reviewed %}
+                <span class="badge badge-info">Reviewed</span>
+                {% endif %}
+            </div>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-state-icon">&#10003;</div>
+            <div class="empty-state-title">All Clear!</div>
+            <div class="empty-state-text">No facts currently need review.</div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Detail Panel -->
+    <div class="detail-panel" id="detail-panel">
+        <div class="empty-detail" id="empty-detail">
+            <div class="empty-detail-icon">&#8592;</div>
+            <div>Select a fact to review</div>
+            <div class="keyboard-hint">
+                <kbd>&#8593;</kbd><kbd>&#8595;</kbd> Navigate
+                <kbd>C</kbd> Confirm
+                <kbd>E</kbd> Edit
+                <kbd>R</kbd> Reject
+                <kbd>S</kbd> Skip
+            </div>
+        </div>
+        <div id="detail-content" style="display: none;">
+            <div class="detail-header">
+                <span class="detail-title" id="detail-title">Fact Details</span>
+                <button class="btn btn-ghost btn-sm" onclick="closeSidebar()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="detail-body">
+                <div class="detail-section">
+                    <div class="detail-section-title">Extracted Value</div>
+                    <div class="detail-field">
+                        <div class="detail-field-label">Item</div>
+                        <div class="detail-field-value editable" id="detail-item" contenteditable="true"></div>
+                    </div>
+                    <div id="detail-fields"></div>
+                </div>
+
+                <div class="detail-section">
+                    <div class="detail-section-title">Evidence</div>
+                    <div class="detail-field">
+                        <div class="detail-field-label">Source Quote</div>
+                        <div class="detail-field-value" id="detail-evidence" style="font-style: italic;"></div>
+                    </div>
+                    <div class="detail-field">
+                        <div class="detail-field-label">Match Score</div>
+                        <div class="detail-field-value" id="detail-match-score"></div>
+                    </div>
+                </div>
+
+                <div class="detail-section">
+                    <div class="detail-section-title">Flags</div>
+                    <div id="detail-flags"></div>
+                </div>
+
+                <div class="detail-section">
+                    <div class="detail-section-title">Notes</div>
+                    <textarea class="form-textarea" id="detail-notes" placeholder="Add notes about this review..."></textarea>
+                </div>
+            </div>
+            <div class="detail-actions">
+                <button class="btn btn-confirm" onclick="confirmFact()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                    Confirm
+                </button>
+                <button class="btn btn-correct" onclick="openCorrectionModal()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                    Correct
+                </button>
+                <button class="btn btn-reject" onclick="rejectFact()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                    Reject
+                </button>
+                <button class="btn btn-skip" onclick="skipFact()">
+                    Skip
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include 'validation/components/correction_modal.html' %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let currentFactId = null;
+    let currentFact = null;
+    const reviewerName = '{{ reviewer_name or "anonymous" }}';
+
+    // Select a fact and load its details
+    async function selectFact(factId) {
+        // Update selection UI
+        document.querySelectorAll('.review-card').forEach(card => {
+            card.classList.remove('selected');
+        });
+        const card = document.querySelector(`[data-fact-id="${factId}"]`);
+        if (card) card.classList.add('selected');
+
+        currentFactId = factId;
+
+        // Fetch full details
+        try {
+            const response = await fetch(`/api/review/queue/${factId}`);
+            const data = await response.json();
+            currentFact = data;
+            renderFactDetails(data);
+        } catch (error) {
+            console.error('Error loading fact:', error);
+        }
+    }
+
+    function renderFactDetails(data) {
+        document.getElementById('empty-detail').style.display = 'none';
+        document.getElementById('detail-content').style.display = 'block';
+
+        document.getElementById('detail-title').textContent = data.fact?.item || data.fact_id;
+        document.getElementById('detail-item').textContent = data.fact?.item || '';
+
+        // Render dynamic fields
+        const fieldsContainer = document.getElementById('detail-fields');
+        fieldsContainer.innerHTML = '';
+        if (data.fact?.details) {
+            for (const [key, value] of Object.entries(data.fact.details)) {
+                const fieldDiv = document.createElement('div');
+                fieldDiv.className = 'detail-field';
+                fieldDiv.innerHTML = `
+                    <div class="detail-field-label">${key}</div>
+                    <div class="detail-field-value editable" data-field="${key}" contenteditable="true">${value || ''}</div>
+                `;
+                fieldsContainer.appendChild(fieldDiv);
+            }
+        }
+
+        // Evidence
+        document.getElementById('detail-evidence').textContent =
+            data.evidence?.matched_text || data.fact?.evidence?.exact_quote || 'No evidence found';
+        document.getElementById('detail-match-score').textContent =
+            data.evidence?.match_score ? `${(data.evidence.match_score * 100).toFixed(0)}%` : 'N/A';
+
+        // Flags
+        const flagsContainer = document.getElementById('detail-flags');
+        flagsContainer.innerHTML = '';
+        if (data.flags && data.flags.length > 0) {
+            data.flags.forEach(flag => {
+                const flagDiv = document.createElement('div');
+                flagDiv.className = 'flag-badge badge-' + flag.severity;
+                flagDiv.style.marginBottom = 'var(--space-2)';
+                flagDiv.style.display = 'block';
+                flagDiv.innerHTML = `
+                    <strong>${flag.category}:</strong> ${flag.message}
+                    ${flag.suggestion ? `<br><em>Suggestion: ${flag.suggestion}</em>` : ''}
+                `;
+                flagsContainer.appendChild(flagDiv);
+            });
+        } else {
+            flagsContainer.innerHTML = '<span class="text-muted">No flags</span>';
+        }
+    }
+
+    function closeSidebar() {
+        document.getElementById('empty-detail').style.display = 'flex';
+        document.getElementById('detail-content').style.display = 'none';
+        currentFactId = null;
+        currentFact = null;
+        document.querySelectorAll('.review-card').forEach(card => {
+            card.classList.remove('selected');
+        });
+    }
+
+    async function confirmFact() {
+        if (!currentFactId) return;
+        const notes = document.getElementById('detail-notes').value;
+
+        try {
+            await fetch(`/api/review/${currentFactId}/confirm`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reviewer: reviewerName, notes })
+            });
+            removeCurrentCard();
+        } catch (error) {
+            console.error('Error confirming:', error);
+            alert('Error confirming fact');
+        }
+    }
+
+    async function rejectFact() {
+        if (!currentFactId) return;
+        const reason = prompt('Reason for rejection:');
+        if (!reason) return;
+
+        try {
+            await fetch(`/api/review/${currentFactId}/reject`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reviewer: reviewerName, reason })
+            });
+            removeCurrentCard();
+        } catch (error) {
+            console.error('Error rejecting:', error);
+            alert('Error rejecting fact');
+        }
+    }
+
+    async function skipFact() {
+        if (!currentFactId) return;
+
+        try {
+            await fetch(`/api/review/${currentFactId}/skip`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            selectNextCard();
+        } catch (error) {
+            console.error('Error skipping:', error);
+        }
+    }
+
+    function removeCurrentCard() {
+        const card = document.querySelector(`[data-fact-id="${currentFactId}"]`);
+        if (card) {
+            card.remove();
+        }
+        closeSidebar();
+        // Update count
+        const countEl = document.querySelector('.queue-count');
+        const currentCount = parseInt(countEl.textContent) - 1;
+        countEl.textContent = `${currentCount} items`;
+    }
+
+    function selectNextCard() {
+        const cards = document.querySelectorAll('.review-card');
+        let currentIndex = -1;
+        cards.forEach((card, index) => {
+            if (card.dataset.factId === currentFactId) {
+                currentIndex = index;
+            }
+        });
+        if (currentIndex < cards.length - 1) {
+            selectFact(cards[currentIndex + 1].dataset.factId);
+        } else if (cards.length > 0) {
+            selectFact(cards[0].dataset.factId);
+        }
+    }
+
+    function applyFilters() {
+        const domain = document.getElementById('filter-domain').value;
+        const severity = document.getElementById('filter-severity').value;
+        const search = document.getElementById('filter-search').value.toLowerCase();
+
+        const params = new URLSearchParams();
+        if (domain) params.set('domain', domain);
+        if (severity) params.set('severity', severity);
+        if (search) params.set('q', search);
+
+        window.location.href = '{{ url_for("review_queue_page") }}?' + params.toString();
+    }
+
+    // Keyboard navigation
+    document.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.contentEditable === 'true') {
+            return;
+        }
+
+        const cards = Array.from(document.querySelectorAll('.review-card'));
+        const currentIndex = cards.findIndex(c => c.dataset.factId === currentFactId);
+
+        switch(e.key.toLowerCase()) {
+            case 'arrowdown':
+            case 'j':
+                e.preventDefault();
+                if (currentIndex < cards.length - 1) {
+                    selectFact(cards[currentIndex + 1].dataset.factId);
+                }
+                break;
+            case 'arrowup':
+            case 'k':
+                e.preventDefault();
+                if (currentIndex > 0) {
+                    selectFact(cards[currentIndex - 1].dataset.factId);
+                }
+                break;
+            case 'c':
+                e.preventDefault();
+                confirmFact();
+                break;
+            case 'e':
+                e.preventDefault();
+                openCorrectionModal();
+                break;
+            case 'r':
+                e.preventDefault();
+                rejectFact();
+                break;
+            case 's':
+                e.preventDefault();
+                skipFact();
+                break;
+            case 'escape':
+                closeSidebar();
+                closeCorrectionModal();
+                break;
+        }
+    });
+
+    // Auto-select first item
+    const firstCard = document.querySelector('.review-card');
+    if (firstCard) {
+        selectFact(firstCard.dataset.factId);
+    }
+</script>
+{% endblock %}

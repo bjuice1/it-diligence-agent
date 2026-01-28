@@ -35,12 +35,25 @@ class AnalysisPhase(Enum):
     """Analysis pipeline phases."""
     INITIALIZING = "initializing"
     PARSING_DOCUMENTS = "parsing_documents"
+    # Phase 1: Target Company Analysis (clean extraction)
+    TARGET_ANALYSIS_START = "target_analysis_start"
     DISCOVERY_INFRASTRUCTURE = "discovery_infrastructure"
     DISCOVERY_NETWORK = "discovery_network"
     DISCOVERY_CYBERSECURITY = "discovery_cybersecurity"
     DISCOVERY_APPLICATIONS = "discovery_applications"
     DISCOVERY_IDENTITY = "discovery_identity"
     DISCOVERY_ORGANIZATION = "discovery_organization"
+    TARGET_ANALYSIS_COMPLETE = "target_analysis_complete"
+    # Phase 2: Buyer Company Analysis (with Target context)
+    BUYER_ANALYSIS_START = "buyer_analysis_start"
+    BUYER_DISCOVERY_INFRASTRUCTURE = "buyer_discovery_infrastructure"
+    BUYER_DISCOVERY_NETWORK = "buyer_discovery_network"
+    BUYER_DISCOVERY_CYBERSECURITY = "buyer_discovery_cybersecurity"
+    BUYER_DISCOVERY_APPLICATIONS = "buyer_discovery_applications"
+    BUYER_DISCOVERY_IDENTITY = "buyer_discovery_identity"
+    BUYER_DISCOVERY_ORGANIZATION = "buyer_discovery_organization"
+    BUYER_ANALYSIS_COMPLETE = "buyer_analysis_complete"
+    # Final phases
     REASONING = "reasoning"
     SYNTHESIS = "synthesis"
     FINALIZING = "finalizing"
@@ -50,12 +63,25 @@ class AnalysisPhase(Enum):
 PHASE_DISPLAY_NAMES = {
     AnalysisPhase.INITIALIZING: "Initializing analysis...",
     AnalysisPhase.PARSING_DOCUMENTS: "Parsing documents...",
-    AnalysisPhase.DISCOVERY_INFRASTRUCTURE: "Analyzing infrastructure...",
-    AnalysisPhase.DISCOVERY_NETWORK: "Analyzing network...",
-    AnalysisPhase.DISCOVERY_CYBERSECURITY: "Analyzing cybersecurity...",
-    AnalysisPhase.DISCOVERY_APPLICATIONS: "Analyzing applications...",
-    AnalysisPhase.DISCOVERY_IDENTITY: "Analyzing identity & access...",
-    AnalysisPhase.DISCOVERY_ORGANIZATION: "Analyzing organization...",
+    # Phase 1: Target
+    AnalysisPhase.TARGET_ANALYSIS_START: "Starting TARGET company analysis...",
+    AnalysisPhase.DISCOVERY_INFRASTRUCTURE: "Analyzing TARGET infrastructure...",
+    AnalysisPhase.DISCOVERY_NETWORK: "Analyzing TARGET network...",
+    AnalysisPhase.DISCOVERY_CYBERSECURITY: "Analyzing TARGET cybersecurity...",
+    AnalysisPhase.DISCOVERY_APPLICATIONS: "Analyzing TARGET applications...",
+    AnalysisPhase.DISCOVERY_IDENTITY: "Analyzing TARGET identity & access...",
+    AnalysisPhase.DISCOVERY_ORGANIZATION: "Analyzing TARGET organization...",
+    AnalysisPhase.TARGET_ANALYSIS_COMPLETE: "TARGET analysis complete - locking facts...",
+    # Phase 2: Buyer
+    AnalysisPhase.BUYER_ANALYSIS_START: "Starting BUYER company analysis...",
+    AnalysisPhase.BUYER_DISCOVERY_INFRASTRUCTURE: "Analyzing BUYER infrastructure...",
+    AnalysisPhase.BUYER_DISCOVERY_NETWORK: "Analyzing BUYER network...",
+    AnalysisPhase.BUYER_DISCOVERY_CYBERSECURITY: "Analyzing BUYER cybersecurity...",
+    AnalysisPhase.BUYER_DISCOVERY_APPLICATIONS: "Analyzing BUYER applications...",
+    AnalysisPhase.BUYER_DISCOVERY_IDENTITY: "Analyzing BUYER identity & access...",
+    AnalysisPhase.BUYER_DISCOVERY_ORGANIZATION: "Analyzing BUYER organization...",
+    AnalysisPhase.BUYER_ANALYSIS_COMPLETE: "BUYER analysis complete...",
+    # Final
     AnalysisPhase.REASONING: "Generating findings...",
     AnalysisPhase.SYNTHESIS: "Synthesizing results...",
     AnalysisPhase.FINALIZING: "Finalizing analysis...",
@@ -155,10 +181,12 @@ class AnalysisTaskManager:
 
     Thread-safe singleton that handles:
     - Task creation and queuing
-    - Background execution
+    - Background execution (threading or Celery)
     - Progress tracking
     - Result storage
     - Cleanup
+
+    Phase 4: Supports both threading (fallback) and Celery (when available).
     """
 
     _instance = None
@@ -177,19 +205,32 @@ class AnalysisTaskManager:
             return
 
         self._tasks: Dict[str, AnalysisTask] = {}
+        self._celery_tasks: Dict[str, str] = {}  # task_id -> celery_task_id mapping
         self._tasks_lock = threading.Lock()
         self._max_concurrent = 2
         self._running_count = 0
         self._task_timeout = 1800  # 30 minutes
         self._results_dir: Optional[Path] = None
+        self._use_celery = False
         self._initialized = True
 
-    def configure(self, results_dir: Path, max_concurrent: int = 2, timeout: int = 1800):
+    def configure(self, results_dir: Path, max_concurrent: int = 2, timeout: int = 1800, use_celery: bool = False):
         """Configure the task manager."""
         self._results_dir = results_dir
         self._results_dir.mkdir(parents=True, exist_ok=True)
         self._max_concurrent = max_concurrent
         self._task_timeout = timeout
+        self._use_celery = use_celery
+
+        if use_celery:
+            try:
+                from web.celery_app import is_celery_available
+                if is_celery_available():
+                    self._use_celery = True
+                else:
+                    self._use_celery = False
+            except Exception:
+                self._use_celery = False
 
     def create_task(
         self,
@@ -212,8 +253,12 @@ class AnalysisTaskManager:
 
         return task
 
-    def start_task(self, task_id: str, run_analysis_fn: Callable) -> bool:
-        """Start a task in background thread."""
+    def start_task(self, task_id: str, run_analysis_fn: Callable, deal_id: str = None) -> bool:
+        """
+        Start a task in background.
+
+        Uses Celery if available and configured, otherwise falls back to threading.
+        """
         with self._tasks_lock:
             task = self._tasks.get(task_id)
             if not task:
@@ -222,6 +267,41 @@ class AnalysisTaskManager:
             if task.status != TaskStatus.PENDING:
                 return False
 
+        # Try Celery first if configured
+        if self._use_celery and deal_id:
+            return self._start_task_celery(task, deal_id)
+
+        # Fall back to threading
+        return self._start_task_threaded(task, run_analysis_fn)
+
+    def _start_task_celery(self, task: AnalysisTask, deal_id: str) -> bool:
+        """Start task using Celery."""
+        try:
+            from web.tasks import run_analysis_task
+
+            # Submit to Celery
+            celery_result = run_analysis_task.delay(
+                deal_id=deal_id,
+                domains=task.domains,
+                entity=task.deal_context.get('entity', 'target'),
+                user_id=task.deal_context.get('user_id')
+            )
+
+            # Store mapping
+            with self._tasks_lock:
+                self._celery_tasks[task.task_id] = celery_result.id
+                task.status = TaskStatus.RUNNING
+                task.started_at = datetime.now().isoformat()
+
+            return True
+
+        except Exception as e:
+            # Fall back to threading if Celery fails
+            return False
+
+    def _start_task_threaded(self, task: AnalysisTask, run_analysis_fn: Callable) -> bool:
+        """Start task using threading (fallback)."""
+        with self._tasks_lock:
             if self._running_count >= self._max_concurrent:
                 # Queue it - will be started when a slot opens
                 return True
@@ -311,6 +391,14 @@ class AnalysisTaskManager:
         if not task:
             return None
 
+        # Check Celery task status if applicable
+        celery_task_id = self._celery_tasks.get(task_id)
+        if celery_task_id and self._use_celery:
+            celery_status = self._get_celery_task_status(celery_task_id)
+            if celery_status:
+                # Update local task with Celery status
+                self._sync_celery_status(task, celery_status)
+
         return {
             "task_id": task.task_id,
             "status": task.status.value,
@@ -323,6 +411,42 @@ class AnalysisTaskManager:
             "findings_file": task.findings_file,
         }
 
+    def _get_celery_task_status(self, celery_task_id: str) -> Optional[Dict[str, Any]]:
+        """Get status from Celery task."""
+        try:
+            from web.celery_app import get_task_status
+            return get_task_status(celery_task_id)
+        except Exception:
+            return None
+
+    def _sync_celery_status(self, task: AnalysisTask, celery_status: Dict[str, Any]):
+        """Sync local task with Celery status."""
+        status_map = {
+            'pending': TaskStatus.PENDING,
+            'started': TaskStatus.RUNNING,
+            'progress': TaskStatus.RUNNING,
+            'completed': TaskStatus.COMPLETED,
+            'failed': TaskStatus.FAILED,
+            'cancelled': TaskStatus.CANCELLED,
+        }
+
+        celery_state = celery_status.get('status', 'pending')
+        task.status = status_map.get(celery_state, TaskStatus.RUNNING)
+
+        # Update progress
+        progress = celery_status.get('progress', 0)
+        task.progress.percent_complete = progress
+
+        if celery_status.get('message'):
+            task.progress.phase_display = celery_status['message']
+
+        if celery_status.get('error'):
+            task.error_message = celery_status['error']
+
+        if celery_state == 'completed':
+            task.completed_at = datetime.now().isoformat()
+            task.progress.update_phase(AnalysisPhase.COMPLETE)
+
     def cancel_task(self, task_id: str) -> bool:
         """Cancel a running task."""
         with self._tasks_lock:
@@ -330,8 +454,19 @@ class AnalysisTaskManager:
             if not task:
                 return False
 
+            # Cancel Celery task if applicable
+            celery_task_id = self._celery_tasks.get(task_id)
+            if celery_task_id and self._use_celery:
+                try:
+                    from web.celery_app import cancel_task as celery_cancel
+                    celery_cancel(celery_task_id)
+                except Exception:
+                    pass
+
             if task.status == TaskStatus.RUNNING:
                 task._cancelled = True
+                task.status = TaskStatus.CANCELLED
+                task.completed_at = datetime.now().isoformat()
                 return True
             elif task.status == TaskStatus.PENDING:
                 task.status = TaskStatus.CANCELLED

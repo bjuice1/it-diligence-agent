@@ -4,135 +4,200 @@
 {% block content %}
 <div class="page-header">
     <h1>Upload Documents for Analysis</h1>
-    <p>Upload VDR documents, census data, and other materials for AI-powered analysis</p>
+    <p>Upload documents for AI-powered IT due diligence analysis</p>
 </div>
 
 <div class="upload-container">
-    <!-- Main Upload Area -->
-    <div class="upload-section">
-        <form action="{{ url_for('process_upload') }}" method="post" enctype="multipart/form-data" id="upload-form">
-            <div class="upload-dropzone" id="dropzone">
-                <div class="dropzone-content">
-                    <div class="dropzone-icon">&#128194;</div>
-                    <h3>Drag & Drop Files Here</h3>
-                    <p>or click to browse</p>
-                    <input type="file" name="documents" id="file-input" multiple accept=".pdf,.xlsx,.xls,.csv,.docx,.doc,.pptx,.ppt,.txt,.json,.md,.markdown">
-                    <div class="file-types">Supported: PDF, Excel, CSV, Word, PowerPoint, Text, JSON, Markdown</div>
+    <form action="{{ url_for('process_upload') }}" method="post" enctype="multipart/form-data" id="upload-form">
+
+        <!-- Entity Upload Section - TWO SEPARATE ZONES -->
+        <div class="entity-upload-section">
+            <h3>Document Upload</h3>
+            <p class="section-description">
+                <strong>Important:</strong> Upload documents to the correct entity zone.
+                This determines how facts are attributed in the analysis.
+            </p>
+
+            <div class="dual-upload-grid">
+                <!-- TARGET Upload Zone -->
+                <div class="entity-upload-zone" data-entity="target">
+                    <div class="entity-header target-header">
+                        <span class="entity-icon">🎯</span>
+                        <div class="entity-info">
+                            <h4>TARGET Company</h4>
+                            <span class="entity-subtitle">Company being acquired</span>
+                        </div>
+                    </div>
+                    <div class="upload-dropzone" id="target-dropzone" data-entity="target">
+                        <div class="dropzone-content">
+                            <div class="dropzone-icon">📂</div>
+                            <p class="dropzone-main">Drop TARGET documents here</p>
+                            <p class="dropzone-sub">or click to browse</p>
+                            <input type="file" name="target_documents" id="target-file-input" multiple
+                                   accept=".pdf,.xlsx,.xls,.csv,.docx,.doc,.pptx,.ppt,.txt,.json,.md,.markdown">
+                        </div>
+                    </div>
+                    <div class="selected-files" id="target-selected-files" style="display: none;">
+                        <h5>Target Files</h5>
+                        <ul id="target-file-list"></ul>
+                    </div>
+                    <!-- Authority Level for Target -->
+                    <div class="authority-select">
+                        <label>Document Authority:</label>
+                        <select name="target_authority" id="target-authority">
+                            <option value="1">Data Room (Highest)</option>
+                            <option value="2">Correspondence</option>
+                            <option value="3">Discussion Notes (Lowest)</option>
+                        </select>
+                    </div>
                 </div>
-            </div>
 
-            <!-- Selected Files List -->
-            <div class="selected-files" id="selected-files" style="display: none;">
-                <h4>Selected Files</h4>
-                <ul id="file-list"></ul>
-            </div>
-
-            <!-- Analysis Options -->
-            <div class="analysis-options">
-                <h4>Analysis Options</h4>
-                <div class="options-grid">
-                    <label class="option-card">
-                        <input type="checkbox" name="domains" value="applications" checked>
-                        <span class="option-icon">&#128187;</span>
-                        <span class="option-label">Applications</span>
-                    </label>
-                    <label class="option-card">
-                        <input type="checkbox" name="domains" value="infrastructure" checked>
-                        <span class="option-icon">&#127760;</span>
-                        <span class="option-label">Infrastructure</span>
-                    </label>
-                    <label class="option-card">
-                        <input type="checkbox" name="domains" value="cybersecurity" checked>
-                        <span class="option-icon">&#128274;</span>
-                        <span class="option-label">Cybersecurity</span>
-                    </label>
-                    <label class="option-card">
-                        <input type="checkbox" name="domains" value="network" checked>
-                        <span class="option-icon">&#128225;</span>
-                        <span class="option-label">Network</span>
-                    </label>
-                    <label class="option-card">
-                        <input type="checkbox" name="domains" value="identity" checked>
-                        <span class="option-icon">&#128100;</span>
-                        <span class="option-label">Identity & Access</span>
-                    </label>
-                    <label class="option-card">
-                        <input type="checkbox" name="domains" value="organization" checked>
-                        <span class="option-icon">&#128101;</span>
-                        <span class="option-label">Organization</span>
-                    </label>
-                </div>
-            </div>
-
-            <!-- Deal Context -->
-            <div class="deal-context">
-                <h4>Deal Context (Optional)</h4>
-                <div class="context-fields">
-                    <div class="field-group">
-                        <label for="deal_type">Deal Type</label>
-                        <select name="deal_type" id="deal_type">
-                            <option value="bolt_on">Acquisition (Bolt-on)</option>
-                            <option value="carve_out">Carve-out / Divestiture</option>
+                <!-- BUYER Upload Zone -->
+                <div class="entity-upload-zone" data-entity="buyer">
+                    <div class="entity-header buyer-header">
+                        <span class="entity-icon">🏢</span>
+                        <div class="entity-info">
+                            <h4>BUYER Company</h4>
+                            <span class="entity-subtitle">Acquiring company (for integration context)</span>
+                        </div>
+                    </div>
+                    <div class="upload-dropzone" id="buyer-dropzone" data-entity="buyer">
+                        <div class="dropzone-content">
+                            <div class="dropzone-icon">📂</div>
+                            <p class="dropzone-main">Drop BUYER documents here</p>
+                            <p class="dropzone-sub">or click to browse</p>
+                            <input type="file" name="buyer_documents" id="buyer-file-input" multiple
+                                   accept=".pdf,.xlsx,.xls,.csv,.docx,.doc,.pptx,.ppt,.txt,.json,.md,.markdown">
+                        </div>
+                    </div>
+                    <div class="selected-files" id="buyer-selected-files" style="display: none;">
+                        <h5>Buyer Files</h5>
+                        <ul id="buyer-file-list"></ul>
+                    </div>
+                    <!-- Authority Level for Buyer -->
+                    <div class="authority-select">
+                        <label>Document Authority:</label>
+                        <select name="buyer_authority" id="buyer-authority">
+                            <option value="1">Data Room (Highest)</option>
+                            <option value="2">Correspondence</option>
+                            <option value="3">Discussion Notes (Lowest)</option>
                         </select>
-                    </div>
-                    <div class="field-group">
-                        <label for="target_name">Target Company</label>
-                        <input type="text" name="target_name" id="target_name" placeholder="Company name">
-                    </div>
-                    <div class="field-group">
-                        <label for="industry">Industry</label>
-                        <select name="industry" id="industry">
-                            <option value="">Select industry...</option>
-                            <option value="financial_services">Financial Services</option>
-                            <option value="healthcare">Healthcare</option>
-                            <option value="manufacturing">Manufacturing</option>
-                            <option value="retail">Retail</option>
-                            <option value="insurance">Insurance</option>
-                            <option value="aviation_mro">Aviation / Aerospace MRO</option>
-                            <option value="defense_contractor">Defense Contractor</option>
-                            <option value="life_sciences">Life Sciences / Pharmaceutical</option>
-                            <option value="logistics">Logistics / Distribution</option>
-                            <option value="energy_utilities">Energy / Utilities</option>
-                            <option value="construction">Construction / Engineering</option>
-                            <option value="food_beverage">Food & Beverage Manufacturing</option>
-                            <option value="professional_services">Professional Services</option>
-                            <option value="education">Education</option>
-                            <option value="hospitality">Hospitality</option>
-                        </select>
-                    </div>
-                    <div class="field-group" id="sub-industry-group" style="display: none;">
-                        <label for="sub_industry">Sub-Industry</label>
-                        <select name="sub_industry" id="sub_industry">
-                            <option value="">Select sub-industry...</option>
-                        </select>
-                    </div>
-                    <div class="field-group">
-                        <label for="employee_count">Employee Count</label>
-                        <input type="number" name="employee_count" id="employee_count" placeholder="e.g., 500">
                     </div>
                 </div>
             </div>
 
-            <div class="submit-section">
-                <button type="submit" class="btn btn-primary btn-lg" id="submit-btn" disabled>
-                    <span>&#9654;</span> Start Analysis
-                </button>
-                <p class="submit-note">Analysis typically takes 2-5 minutes depending on document volume</p>
-            </div>
-        </form>
-    </div>
+            <!-- Upload Error Display -->
+            <div id="upload-error" class="upload-error" style="display: none;"></div>
 
-    <!-- Recent Analyses -->
+            <!-- Upload Summary -->
+            <div id="upload-summary" class="upload-summary" style="display: none;">
+                <div class="summary-row">
+                    <span class="summary-label">🎯 Target Documents:</span>
+                    <span id="target-count">0 files</span>
+                </div>
+                <div class="summary-row">
+                    <span class="summary-label">🏢 Buyer Documents:</span>
+                    <span id="buyer-count">0 files</span>
+                </div>
+                <div class="summary-row summary-total">
+                    <span class="summary-label">Total Size:</span>
+                    <span id="total-size">0 MB</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analysis Options -->
+        <div class="analysis-options">
+            <h4>Analysis Domains</h4>
+            <div class="options-grid">
+                <label class="option-card">
+                    <input type="checkbox" name="domains" value="applications" checked>
+                    <span class="option-icon">💻</span>
+                    <span class="option-label">Applications</span>
+                </label>
+                <label class="option-card">
+                    <input type="checkbox" name="domains" value="infrastructure" checked>
+                    <span class="option-icon">🌐</span>
+                    <span class="option-label">Infrastructure</span>
+                </label>
+                <label class="option-card">
+                    <input type="checkbox" name="domains" value="cybersecurity" checked>
+                    <span class="option-icon">🔐</span>
+                    <span class="option-label">Cybersecurity</span>
+                </label>
+                <label class="option-card">
+                    <input type="checkbox" name="domains" value="network" checked>
+                    <span class="option-icon">📡</span>
+                    <span class="option-label">Network</span>
+                </label>
+                <label class="option-card">
+                    <input type="checkbox" name="domains" value="identity" checked>
+                    <span class="option-icon">👤</span>
+                    <span class="option-label">Identity & Access</span>
+                </label>
+                <label class="option-card">
+                    <input type="checkbox" name="domains" value="organization" checked>
+                    <span class="option-icon">👥</span>
+                    <span class="option-label">Organization</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Deal Context -->
+        <div class="deal-context">
+            <h4>Deal Context</h4>
+            <div class="context-fields">
+                <div class="field-group">
+                    <label for="deal_type">Deal Type</label>
+                    <select name="deal_type" id="deal_type">
+                        <option value="bolt_on">Acquisition (Bolt-on)</option>
+                        <option value="carve_out">Carve-out / Divestiture</option>
+                    </select>
+                </div>
+                <div class="field-group">
+                    <label for="target_name">Target Company Name <span class="required">*</span></label>
+                    <input type="text" name="target_name" id="target_name" placeholder="Company name" required>
+                </div>
+                <div class="field-group">
+                    <label for="buyer_name">Buyer Company Name</label>
+                    <input type="text" name="buyer_name" id="buyer_name" placeholder="Acquiring company (optional)">
+                </div>
+                <div class="field-group">
+                    <label for="industry">Industry</label>
+                    <select name="industry" id="industry">
+                        <option value="">Select industry...</option>
+                        <option value="financial_services">Financial Services</option>
+                        <option value="healthcare">Healthcare</option>
+                        <option value="manufacturing">Manufacturing</option>
+                        <option value="retail">Retail</option>
+                        <option value="insurance">Insurance</option>
+                        <option value="technology">Technology</option>
+                        <option value="professional_services">Professional Services</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="submit-section">
+            <button type="submit" class="btn btn-primary btn-lg" id="submit-btn" disabled>
+                <span>▶</span> Start Analysis
+            </button>
+            <p class="submit-note">Analysis typically takes 2-5 minutes depending on document volume</p>
+        </div>
+    </form>
+
+    <!-- Quick Actions -->
     <div class="recent-section">
         <h4>Quick Actions</h4>
         <div class="quick-actions-grid">
             <a href="{{ url_for('dashboard') }}" class="quick-action-card">
-                <span class="qa-icon">&#128200;</span>
+                <span class="qa-icon">📊</span>
                 <span class="qa-label">View Dashboard</span>
                 <span class="qa-desc">Current analysis results</span>
             </a>
             <a href="{{ url_for('risks') }}" class="quick-action-card">
-                <span class="qa-icon">&#9888;</span>
+                <span class="qa-icon">⚠️</span>
                 <span class="qa-label">Review Risks</span>
                 <span class="qa-desc">Identified issues</span>
             </a>
@@ -142,11 +207,11 @@
 
 <style>
 .upload-container {
-    max-width: 900px;
+    max-width: 1100px;
     margin: 0 auto;
 }
 
-.upload-section {
+.entity-upload-section {
     background: var(--bg-surface);
     border: 1px solid var(--border-default);
     border-radius: 12px;
@@ -154,14 +219,74 @@
     margin-bottom: 30px;
 }
 
+.entity-upload-section h3 {
+    margin-bottom: 8px;
+}
+
+.section-description {
+    color: var(--text-muted);
+    margin-bottom: 24px;
+    font-size: 0.95em;
+}
+
+.dual-upload-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+}
+
+@media (max-width: 768px) {
+    .dual-upload-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.entity-upload-zone {
+    border: 2px solid var(--border-default);
+    border-radius: 12px;
+    padding: 20px;
+    background: var(--bg-surface-sunken);
+}
+
+.entity-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-default);
+}
+
+.target-header {
+    border-bottom-color: #10b981;
+}
+
+.buyer-header {
+    border-bottom-color: #3b82f6;
+}
+
+.entity-icon {
+    font-size: 2em;
+}
+
+.entity-info h4 {
+    margin: 0;
+    font-size: 1.1em;
+}
+
+.entity-subtitle {
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+
 .upload-dropzone {
     border: 2px dashed var(--border-default);
-    border-radius: 12px;
-    padding: 60px 30px;
+    border-radius: 8px;
+    padding: 40px 20px;
     text-align: center;
     cursor: pointer;
     transition: all 0.3s;
-    background: var(--bg-surface-sunken);
+    background: var(--bg-surface);
 }
 
 .upload-dropzone:hover,
@@ -170,79 +295,148 @@
     background: var(--accent-subtle);
 }
 
+#target-dropzone:hover,
+#target-dropzone.dragover {
+    border-color: #10b981;
+    background: rgba(16, 185, 129, 0.1);
+}
+
+#buyer-dropzone:hover,
+#buyer-dropzone.dragover {
+    border-color: #3b82f6;
+    background: rgba(59, 130, 246, 0.1);
+}
+
 .dropzone-icon {
-    font-size: 4em;
-    margin-bottom: 15px;
+    font-size: 2.5em;
+    margin-bottom: 10px;
     opacity: 0.6;
 }
 
-.dropzone-content h3 {
-    margin-bottom: 5px;
-    color: var(--text-primary);
+.dropzone-main {
+    font-weight: 600;
+    margin-bottom: 4px;
 }
 
-.dropzone-content p {
+.dropzone-sub {
     color: var(--text-muted);
-    margin-bottom: 15px;
+    font-size: 0.9em;
 }
 
-#file-input {
+.entity-upload-zone input[type="file"] {
     display: none;
 }
 
-.file-types {
-    font-size: 0.85em;
-    color: var(--text-muted);
-    margin-top: 15px;
-}
-
 .selected-files {
-    margin-top: 20px;
-    padding: 15px;
-    background: var(--bg-surface-sunken);
+    margin-top: 16px;
+    padding: 12px;
+    background: var(--bg-surface);
     border-radius: 8px;
 }
 
-.selected-files h4 {
-    margin-bottom: 10px;
-    font-size: 0.9em;
+.selected-files h5 {
+    margin: 0 0 10px 0;
+    font-size: 0.85em;
     color: var(--text-muted);
 }
 
-#file-list {
+.selected-files ul {
     list-style: none;
     padding: 0;
+    margin: 0;
 }
 
-#file-list li {
+.selected-files li {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 8px 12px;
-    background: var(--bg-surface);
-    border-radius: 6px;
-    margin-bottom: 5px;
+    padding: 8px 10px;
+    background: var(--bg-surface-sunken);
+    border-radius: 4px;
+    margin-bottom: 4px;
     font-size: 0.9em;
 }
 
 .file-remove {
     color: var(--critical);
     cursor: pointer;
-    padding: 2px 8px;
+    padding: 2px 6px;
+    font-size: 0.9em;
+}
+
+.file-remove:hover {
+    background: var(--critical-bg);
+    border-radius: 4px;
+}
+
+.authority-select {
+    margin-top: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.authority-select label {
+    font-size: 0.85em;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.authority-select select {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid var(--border-default);
+    border-radius: 6px;
+    font-size: 0.9em;
+    background: var(--bg-surface);
+}
+
+.upload-error {
+    background: var(--critical-bg);
+    color: var(--critical);
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-top: 20px;
+    font-size: 0.9em;
+    white-space: pre-line;
+}
+
+.upload-summary {
+    margin-top: 20px;
+    padding: 16px;
+    background: var(--bg-surface-sunken);
+    border-radius: 8px;
+}
+
+.summary-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    font-size: 0.95em;
+}
+
+.summary-total {
+    border-top: 1px solid var(--border-default);
+    margin-top: 8px;
+    padding-top: 12px;
+    font-weight: 600;
 }
 
 .analysis-options {
-    margin-top: 30px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
 }
 
 .analysis-options h4 {
-    margin-bottom: 15px;
-    font-size: 1em;
+    margin-bottom: 16px;
 }
 
 .options-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
     gap: 10px;
 }
 
@@ -250,7 +444,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 15px;
+    padding: 14px;
     border: 1px solid var(--border-default);
     border-radius: 8px;
     cursor: pointer;
@@ -266,23 +460,14 @@
     display: none;
 }
 
-.option-card input:checked + .option-icon {
-    color: var(--accent);
-}
-
-.option-card input:checked ~ .option-label {
-    color: var(--accent);
-    font-weight: 600;
-}
-
 .option-card:has(input:checked) {
     border-color: var(--accent);
     background: var(--accent-subtle);
 }
 
 .option-icon {
-    font-size: 1.5em;
-    margin-bottom: 5px;
+    font-size: 1.4em;
+    margin-bottom: 6px;
 }
 
 .option-label {
@@ -290,26 +475,32 @@
 }
 
 .deal-context {
-    margin-top: 30px;
-    padding-top: 20px;
-    border-top: 1px solid var(--border-default);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
 }
 
 .deal-context h4 {
-    margin-bottom: 15px;
+    margin-bottom: 16px;
 }
 
 .context-fields {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 15px;
+    gap: 16px;
 }
 
 .field-group label {
     display: block;
     font-size: 0.85em;
     color: var(--text-muted);
-    margin-bottom: 5px;
+    margin-bottom: 6px;
+}
+
+.required {
+    color: var(--critical);
 }
 
 .field-group input,
@@ -323,35 +514,39 @@
 }
 
 .submit-section {
-    margin-top: 30px;
     text-align: center;
+    padding: 20px 0;
 }
 
 .btn-lg {
-    padding: 15px 40px;
-    font-size: 1.1em;
+    padding: 14px 36px;
+    font-size: 1.05em;
 }
 
 .submit-note {
-    margin-top: 10px;
+    margin-top: 12px;
     font-size: 0.85em;
     color: var(--text-muted);
 }
 
+.recent-section {
+    margin-top: 30px;
+}
+
 .recent-section h4 {
-    margin-bottom: 15px;
+    margin-bottom: 16px;
 }
 
 .quick-actions-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 15px;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
 }
 
 .quick-action-card {
     display: flex;
     flex-direction: column;
-    padding: 20px;
+    padding: 18px;
     background: var(--bg-surface);
     border: 1px solid var(--border-default);
     border-radius: 8px;
@@ -366,7 +561,7 @@
 }
 
 .qa-icon {
-    font-size: 1.5em;
+    font-size: 1.4em;
     margin-bottom: 8px;
 }
 
@@ -379,56 +574,76 @@
     font-size: 0.85em;
     color: var(--text-muted);
 }
+
+.spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid transparent;
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 8px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
 </style>
 
 <script>
-const dropzone = document.getElementById('dropzone');
-const fileInput = document.getElementById('file-input');
-const fileList = document.getElementById('file-list');
-const selectedFiles = document.getElementById('selected-files');
-const submitBtn = document.getElementById('submit-btn');
-let files = [];
+// File tracking per entity
+const files = {
+    target: [],
+    buyer: []
+};
 
 // Configuration
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB per file
 const MAX_TOTAL_SIZE = 200 * 1024 * 1024; // 200MB total
 const ALLOWED_EXTENSIONS = ['.pdf', '.xlsx', '.xls', '.csv', '.docx', '.doc', '.pptx', '.ppt', '.txt', '.json', '.md', '.markdown'];
 
-// Click to upload
-dropzone.addEventListener('click', () => fileInput.click());
+// Setup dropzones
+['target', 'buyer'].forEach(entity => {
+    const dropzone = document.getElementById(`${entity}-dropzone`);
+    const fileInput = document.getElementById(`${entity}-file-input`);
 
-// Drag and drop
-dropzone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    dropzone.classList.add('dragover');
-});
+    // Click to upload
+    dropzone.addEventListener('click', () => fileInput.click());
 
-dropzone.addEventListener('dragleave', () => {
-    dropzone.classList.remove('dragover');
-});
+    // Drag and drop
+    dropzone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropzone.classList.add('dragover');
+    });
 
-dropzone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dropzone.classList.remove('dragover');
-    handleFiles(e.dataTransfer.files);
-});
+    dropzone.addEventListener('dragleave', () => {
+        dropzone.classList.remove('dragover');
+    });
 
-// File input change
-fileInput.addEventListener('change', (e) => {
-    handleFiles(e.target.files);
+    dropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
+        handleFiles(e.dataTransfer.files, entity);
+    });
+
+    // File input change
+    fileInput.addEventListener('change', (e) => {
+        handleFiles(e.target.files, entity);
+    });
 });
 
 function getFileExtension(filename) {
     return '.' + filename.split('.').pop().toLowerCase();
 }
 
-function handleFiles(newFiles) {
+function handleFiles(newFiles, entity) {
     let errors = [];
 
     for (let file of newFiles) {
-        // Check for duplicates
-        if (files.some(f => f.name === file.name)) {
-            errors.push(`"${file.name}" is already added`);
+        // Check for duplicates in this entity
+        if (files[entity].some(f => f.name === file.name)) {
+            errors.push(`"${file.name}" is already added to ${entity}`);
             continue;
         }
 
@@ -445,11 +660,11 @@ function handleFiles(newFiles) {
             continue;
         }
 
-        files.push(file);
+        files[entity].push(file);
     }
 
-    // Check total size
-    const totalSize = files.reduce((sum, f) => sum + f.size, 0);
+    // Check total size across both entities
+    const totalSize = getTotalSize();
     if (totalSize > MAX_TOTAL_SIZE) {
         errors.push(`Total size (${formatSize(totalSize)}) exceeds 200MB limit`);
     }
@@ -458,60 +673,74 @@ function handleFiles(newFiles) {
         showError(errors.join('\n'));
     }
 
-    updateFileList();
+    updateFileList(entity);
+    updateSummary();
+}
+
+function getTotalSize() {
+    return files.target.reduce((sum, f) => sum + f.size, 0) +
+           files.buyer.reduce((sum, f) => sum + f.size, 0);
 }
 
 function showError(message) {
-    // Create or update error display
-    let errorDiv = document.getElementById('upload-error');
-    if (!errorDiv) {
-        errorDiv = document.createElement('div');
-        errorDiv.id = 'upload-error';
-        errorDiv.style.cssText = 'background: var(--critical-bg); color: var(--critical); padding: 12px 16px; border-radius: 8px; margin-top: 15px; font-size: 0.9em; white-space: pre-line;';
-        selectedFiles.parentNode.insertBefore(errorDiv, selectedFiles);
-    }
+    const errorDiv = document.getElementById('upload-error');
     errorDiv.textContent = message;
     errorDiv.style.display = 'block';
 
-    // Auto-hide after 5 seconds
     setTimeout(() => {
         errorDiv.style.display = 'none';
     }, 5000);
 }
 
-function updateFileList() {
-    const totalSize = files.reduce((sum, f) => sum + f.size, 0);
+function updateFileList(entity) {
+    const fileList = document.getElementById(`${entity}-file-list`);
+    const container = document.getElementById(`${entity}-selected-files`);
 
-    if (files.length > 0) {
-        selectedFiles.style.display = 'block';
-        fileList.innerHTML = files.map((file, i) => {
+    if (files[entity].length > 0) {
+        container.style.display = 'block';
+        fileList.innerHTML = files[entity].map((file, i) => {
             const ext = getFileExtension(file.name);
             const icon = getFileIcon(ext);
             return `
             <li>
                 <span>
-                    <span style="margin-right: 8px;">${icon}</span>
+                    <span style="margin-right: 6px;">${icon}</span>
                     ${file.name}
-                    <span style="color: var(--text-muted); margin-left: 8px;">(${formatSize(file.size)})</span>
+                    <span style="color: var(--text-muted); margin-left: 6px;">(${formatSize(file.size)})</span>
                 </span>
-                <span class="file-remove" onclick="removeFile(${i})">✕</span>
+                <span class="file-remove" onclick="removeFile('${entity}', ${i})">✕</span>
             </li>
         `}).join('');
-
-        // Add total summary
-        fileList.innerHTML += `
-            <li style="background: var(--bg-surface-sunken); font-weight: 500; margin-top: 10px;">
-                <span>Total: ${files.length} file(s)</span>
-                <span>${formatSize(totalSize)}</span>
-            </li>
-        `;
-
-        submitBtn.disabled = totalSize > MAX_TOTAL_SIZE;
-        submitBtn.innerHTML = totalSize > MAX_TOTAL_SIZE
-            ? '<span>⚠</span> Total size exceeds limit'
-            : '<span>▶</span> Start Analysis';
     } else {
-        selectedFiles.style.display = 'none';
+        container.style.display = 'none';
+    }
+}
+
+function updateSummary() {
+    const summary = document.getElementById('upload-summary');
+    const submitBtn = document.getElementById('submit-btn');
+    const totalFiles = files.target.length + files.buyer.length;
+    const totalSize = getTotalSize();
+
+    if (totalFiles > 0) {
+        summary.style.display = 'block';
+        document.getElementById('target-count').textContent = `${files.target.length} file(s)`;
+        document.getElementById('buyer-count').textContent = `${files.buyer.length} file(s)`;
+        document.getElementById('total-size').textContent = formatSize(totalSize);
+
+        // Must have at least target documents
+        if (files.target.length === 0) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span>⚠</span> Add TARGET documents to analyze';
+        } else if (totalSize > MAX_TOTAL_SIZE) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span>⚠</span> Total size exceeds limit';
+        } else {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<span>▶</span> Start Analysis';
+        }
+    } else {
+        summary.style.display = 'none';
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<span>▶</span> Start Analysis';
     }
@@ -529,12 +758,12 @@ function getFileIcon(ext) {
     return icons[ext] || '📁';
 }
 
-function removeFile(index) {
-    files.splice(index, 1);
-    updateFileList();
+function removeFile(entity, index) {
+    files[entity].splice(index, 1);
+    updateFileList(entity);
+    updateSummary();
     // Hide error when files change
-    const errorDiv = document.getElementById('upload-error');
-    if (errorDiv) errorDiv.style.display = 'none';
+    document.getElementById('upload-error').style.display = 'none';
 }
 
 function formatSize(bytes) {
@@ -543,116 +772,71 @@ function formatSize(bytes) {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
-// Form submit - add files to FormData
+// Form submit - use AJAX to send files with entity info
 document.getElementById('upload-form').addEventListener('submit', function(e) {
-    // Validate before submit
-    if (files.length === 0) {
-        e.preventDefault();
-        showError('Please select at least one file to analyze');
+    e.preventDefault();  // Always prevent default - we use AJAX
+
+    // Validate - must have target documents
+    if (files.target.length === 0) {
+        showError('Please add at least one TARGET document to analyze');
         return;
     }
 
-    const totalSize = files.reduce((sum, f) => sum + f.size, 0);
+    const totalSize = getTotalSize();
     if (totalSize > MAX_TOTAL_SIZE) {
-        e.preventDefault();
         showError('Total file size exceeds 200MB limit. Please remove some files.');
         return;
     }
 
     // Show uploading state
+    const submitBtn = document.getElementById('submit-btn');
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<span class="spinner"></span> Uploading...';
 
     const formData = new FormData(this);
 
-    // Clear existing files and add our tracked files
-    formData.delete('documents');
-    files.forEach(file => {
-        formData.append('documents', file);
+    // Clear existing file inputs and add tracked files
+    formData.delete('target_documents');
+    formData.delete('buyer_documents');
+
+    files.target.forEach(file => {
+        formData.append('target_documents', file);
+    });
+
+    files.buyer.forEach(file => {
+        formData.append('buyer_documents', file);
+    });
+
+    // Submit via AJAX
+    fetch(this.action, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        if (response.redirected) {
+            // Follow redirect (to analysis progress page)
+            window.location.href = response.url;
+        } else if (response.ok) {
+            return response.text().then(html => {
+                // If we got HTML back, it might be an error page
+                // Check for redirect in the response
+                if (response.url !== window.location.href) {
+                    window.location.href = response.url;
+                } else {
+                    // Reload to show any flash messages
+                    window.location.reload();
+                }
+            });
+        } else {
+            throw new Error('Upload failed: ' + response.status);
+        }
+    })
+    .catch(error => {
+        console.error('Upload error:', error);
+        showError('Upload failed: ' + error.message);
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<span>▶</span> Start Analysis';
     });
 });
-
-// Industry / Sub-Industry handling
-const industrySelect = document.getElementById('industry');
-const subIndustryGroup = document.getElementById('sub-industry-group');
-const subIndustrySelect = document.getElementById('sub_industry');
-
-// Sub-industry options by industry
-const subIndustries = {
-    'financial_services': [
-        ['commercial_banking', 'Commercial Banking'],
-        ['mortgage_lending', 'Mortgage Lending'],
-        ['wealth_management', 'Wealth Management'],
-        ['broker_dealer', 'Broker-Dealer'],
-        ['credit_union', 'Credit Union'],
-        ['fintech', 'Fintech'],
-    ],
-    'healthcare': [
-        ['hospital_system', 'Hospital System'],
-        ['physician_practice', 'Physician Practice'],
-        ['specialty_clinic', 'Specialty Clinic'],
-        ['behavioral_health', 'Behavioral Health'],
-        ['post_acute', 'Post-Acute Care'],
-        ['healthcare_it', 'Healthcare IT/Services'],
-    ],
-    'manufacturing': [
-        ['discrete', 'Discrete Manufacturing'],
-        ['process', 'Process Manufacturing'],
-        ['job_shop', 'Job Shop'],
-        ['oem', 'OEM'],
-        ['contract_manufacturing', 'Contract Manufacturing'],
-    ],
-    'retail': [
-        ['brick_mortar', 'Brick & Mortar'],
-        ['ecommerce', 'E-Commerce'],
-        ['omnichannel', 'Omnichannel'],
-        ['grocery', 'Grocery'],
-        ['specialty_retail', 'Specialty Retail'],
-    ],
-    'insurance': [
-        ['property_casualty', 'Property & Casualty'],
-        ['life_annuity', 'Life & Annuity'],
-        ['health_insurance', 'Health Insurance'],
-        ['reinsurance', 'Reinsurance'],
-        ['insurtech', 'Insurtech'],
-    ]
-};
-
-industrySelect.addEventListener('change', function() {
-    const industry = this.value;
-    const subs = subIndustries[industry];
-
-    if (subs && subs.length > 0) {
-        // Clear and populate sub-industry dropdown
-        subIndustrySelect.innerHTML = '<option value="">Select sub-industry...</option>';
-        subs.forEach(([value, label]) => {
-            const option = document.createElement('option');
-            option.value = value;
-            option.textContent = label;
-            subIndustrySelect.appendChild(option);
-        });
-        subIndustryGroup.style.display = 'block';
-    } else {
-        subIndustryGroup.style.display = 'none';
-        subIndustrySelect.value = '';
-    }
-});
 </script>
-
-<style>
-.spinner {
-    display: inline-block;
-    width: 14px;
-    height: 14px;
-    border: 2px solid transparent;
-    border-top-color: currentColor;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-    margin-right: 8px;
-}
-
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
-</style>
 {% endblock %}

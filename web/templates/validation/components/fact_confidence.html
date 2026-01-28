@@ -1,0 +1,103 @@
+{#
+Fact Confidence Indicator Component
+Shows confidence level for individual facts.
+
+Usage:
+{% include 'validation/components/fact_confidence.html' %}
+
+Required variables:
+- fact: Object with confidence_score, verification_status, etc.
+#}
+
+<div class="fact-confidence-indicator" title="AI Confidence: {{ (fact.confidence_score * 100)|int }}%">
+    {% set confidence_pct = (fact.confidence_score * 100)|int %}
+
+    {# Confidence dot #}
+    <span class="confidence-dot
+        {% if confidence_pct >= 80 %}confidence-high
+        {% elif confidence_pct >= 60 %}confidence-medium
+        {% elif confidence_pct >= 40 %}confidence-low
+        {% else %}confidence-critical{% endif %}">
+    </span>
+
+    {# Status badges #}
+    {% if fact.verification_status == 'confirmed' %}
+    <span class="badge badge-sm badge-success" title="Human verified">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        Verified
+    </span>
+    {% elif fact.verification_status == 'corrected' %}
+    <span class="badge badge-sm badge-info" title="Human corrected">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+        </svg>
+        Corrected
+    </span>
+    {% elif fact.verification_status == 'incorrect' %}
+    <span class="badge badge-sm badge-critical" title="Marked incorrect">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+        Rejected
+    </span>
+    {% elif fact.needs_review %}
+    <span class="badge badge-sm badge-warning" title="Needs human review">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+        Review
+    </span>
+    {% endif %}
+</div>
+
+<style>
+    .fact-confidence-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-2);
+    }
+
+    .confidence-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .confidence-dot.confidence-high {
+        background: var(--low);
+    }
+
+    .confidence-dot.confidence-medium {
+        background: var(--medium);
+    }
+
+    .confidence-dot.confidence-low {
+        background: var(--high);
+    }
+
+    .confidence-dot.confidence-critical {
+        background: var(--critical);
+        animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.5; }
+        100% { opacity: 1; }
+    }
+
+    .badge-sm {
+        padding: var(--space-0) var(--space-1);
+        font-size: var(--text-xs);
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-1);
+    }
+</style>

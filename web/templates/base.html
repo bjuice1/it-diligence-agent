@@ -129,6 +129,104 @@
             pointer-events: none;
         }
 
+        /* User Menu */
+        .nav-user {
+            margin-left: var(--space-4);
+        }
+
+        .user-menu {
+            position: relative;
+        }
+
+        .user-menu-trigger {
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+            padding: var(--space-2) var(--space-3);
+            background: transparent;
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            color: var(--text-primary);
+            font-size: var(--text-sm);
+            transition: all var(--transition-fast);
+        }
+
+        .user-menu-trigger:hover {
+            background: var(--bg-surface-sunken);
+            border-color: var(--border-muted);
+        }
+
+        .user-avatar {
+            width: 24px;
+            height: 24px;
+            background: var(--accent);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: var(--font-semibold);
+        }
+
+        .user-name {
+            max-width: 120px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .user-menu-dropdown {
+            position: absolute;
+            top: calc(100% + 4px);
+            right: 0;
+            min-width: 180px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-lg);
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-8px);
+            transition: all var(--transition-fast);
+            z-index: var(--z-dropdown);
+        }
+
+        .user-menu:hover .user-menu-dropdown,
+        .user-menu:focus-within .user-menu-dropdown {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .user-menu-item {
+            display: block;
+            padding: var(--space-3) var(--space-4);
+            color: var(--text-primary);
+            text-decoration: none;
+            font-size: var(--text-sm);
+            transition: background var(--transition-fast);
+        }
+
+        .user-menu-item:hover {
+            background: var(--bg-surface-sunken);
+        }
+
+        .user-menu-divider {
+            height: 1px;
+            background: var(--border-default);
+            margin: var(--space-2) 0;
+        }
+
+        .user-menu-logout {
+            color: var(--critical);
+        }
+
+        .user-menu-logout:hover {
+            background: var(--critical-bg);
+        }
+
         /* =================================================================
            LAYOUT
            ================================================================= */
@@ -625,6 +723,122 @@
         }
 
         /* =================================================================
+           REPORT VIEW (for Inventory/Report toggle)
+           ================================================================= */
+        .report-container {
+            background: var(--bg-surface);
+            padding: var(--space-6);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-subtle);
+        }
+
+        .report-section {
+            margin-bottom: var(--space-6);
+        }
+
+        .report-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .report-section h3 {
+            font-size: var(--text-sm);
+            font-weight: var(--font-semibold);
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: var(--space-3);
+        }
+
+        .report-so-what {
+            font-size: var(--text-lg);
+            font-weight: var(--font-semibold);
+            color: var(--accent);
+            line-height: 1.4;
+        }
+
+        .report-narrative {
+            line-height: 1.8;
+            color: var(--text-primary);
+            white-space: pre-wrap;
+        }
+
+        .report-considerations {
+            list-style: disc;
+            padding-left: var(--space-6);
+            color: var(--text-primary);
+        }
+
+        .report-considerations li {
+            margin-bottom: var(--space-2);
+            line-height: 1.6;
+        }
+
+        .report-editable {
+            border: 1px dashed transparent;
+            padding: var(--space-2);
+            border-radius: var(--radius-md);
+            transition: border-color var(--transition-fast);
+        }
+
+        .report-editable:hover {
+            border-color: var(--border-subtle);
+        }
+
+        .report-editable:focus {
+            border-color: var(--accent);
+            outline: none;
+            background: var(--bg-surface-sunken);
+        }
+
+        .report-actions {
+            display: flex;
+            gap: var(--space-3);
+            margin-top: var(--space-6);
+            padding-top: var(--space-4);
+            border-top: 1px solid var(--border-subtle);
+        }
+
+        .report-loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--space-8);
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        .report-loading::before {
+            content: "";
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--border-subtle);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            margin-right: var(--space-3);
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .report-error {
+            padding: var(--space-4);
+            background: var(--critical-bg);
+            color: var(--critical);
+            border-radius: var(--radius-md);
+            text-align: center;
+        }
+
+        .report-cost-summary {
+            background: var(--bg-surface-sunken);
+            padding: var(--space-4);
+            border-radius: var(--radius-md);
+            font-size: var(--text-sm);
+            color: var(--text-secondary);
+        }
+
+        /* =================================================================
            LINKS
            ================================================================= */
         .link {
@@ -833,9 +1047,9 @@
             <a href="{{ url_for('open_questions') }}" class="nav-link {{ 'active' if request.endpoint == 'open_questions' }}" {% if request.endpoint == 'open_questions' %}aria-current="page"{% endif %}>Questions</a>
             <a href="{{ url_for('facts') }}" class="nav-link {{ 'active' if request.endpoint in ['facts', 'fact_detail'] }}" {% if request.endpoint in ['facts', 'fact_detail'] %}aria-current="page"{% endif %}>Facts</a>
             <a href="{{ url_for('gaps') }}" class="nav-link {{ 'active' if request.endpoint == 'gaps' }}" {% if request.endpoint == 'gaps' %}aria-current="page"{% endif %}>Gaps</a>
-            <a href="{{ url_for('organization_overview') }}" class="nav-link {{ 'active' if 'organization' in request.endpoint }}" {% if 'organization' in request.endpoint %}aria-current="page"{% endif %}>Organization</a>
-            <a href="{{ url_for('applications_overview') }}" class="nav-link {{ 'active' if 'applications' in request.endpoint }}" {% if 'applications' in request.endpoint %}aria-current="page"{% endif %}>Applications</a>
-            <a href="{{ url_for('infrastructure_overview') }}" class="nav-link {{ 'active' if 'infrastructure' in request.endpoint }}" {% if 'infrastructure' in request.endpoint %}aria-current="page"{% endif %}>Infrastructure</a>
+            <a href="{{ url_for('organization_overview') }}" class="nav-link {{ 'active' if request.endpoint and 'organization' in request.endpoint }}" {% if request.endpoint and 'organization' in request.endpoint %}aria-current="page"{% endif %}>Organization</a>
+            <a href="{{ url_for('applications_overview') }}" class="nav-link {{ 'active' if request.endpoint and 'applications' in request.endpoint }}" {% if request.endpoint and 'applications' in request.endpoint %}aria-current="page"{% endif %}>Applications</a>
+            <a href="{{ url_for('infrastructure_overview') }}" class="nav-link {{ 'active' if request.endpoint and 'infrastructure' in request.endpoint }}" {% if request.endpoint and 'infrastructure' in request.endpoint %}aria-current="page"{% endif %}>Infrastructure</a>
             <a href="{{ url_for('review_queue_page') }}" class="nav-link nav-link-review {{ 'active' if request.endpoint == 'review_queue_page' }}" {% if request.endpoint == 'review_queue_page' %}aria-current="page"{% endif %}>Review</a>
             <a href="{{ url_for('documents_page') }}" class="nav-link nav-link-docs {{ 'active' if request.endpoint == 'documents_page' }}" {% if request.endpoint == 'documents_page' %}aria-current="page"{% endif %}>Documents</a>
         </div>
@@ -850,6 +1064,28 @@
                 <label for="search-input" class="sr-only">Search findings</label>
                 <input type="search" id="search-input" name="q" placeholder="Search findings..." value="{{ request.args.get('q', '') }}">
             </form>
+        </div>
+        <!-- User Auth Menu -->
+        <div class="nav-user">
+            {% if current_user.is_authenticated %}
+            <div class="user-menu">
+                <button class="user-menu-trigger" aria-haspopup="true" aria-expanded="false">
+                    <span class="user-avatar">{{ current_user.name[0]|upper if current_user.name else current_user.email[0]|upper }}</span>
+                    <span class="user-name">{{ current_user.name or current_user.email.split('@')[0] }}</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </button>
+                <div class="user-menu-dropdown">
+                    <a href="{{ url_for('auth.profile') }}" class="user-menu-item">Profile</a>
+                    <a href="{{ url_for('auth.change_password') }}" class="user-menu-item">Change Password</a>
+                    <div class="user-menu-divider"></div>
+                    <a href="{{ url_for('auth.logout') }}" class="user-menu-item user-menu-logout">Sign Out</a>
+                </div>
+            </div>
+            {% else %}
+            <a href="{{ url_for('auth.login') }}" class="btn btn-sm btn-primary">Sign In</a>
+            {% endif %}
         </div>
     </nav>
 

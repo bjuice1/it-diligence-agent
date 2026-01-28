@@ -35,6 +35,17 @@ from web.task_manager import task_manager, AnalysisPhase, TaskStatus
 from web.session_store import session_store, get_or_create_session_id
 from web.analysis_runner import run_analysis, run_analysis_simple
 
+# Phase 2: Authentication imports
+from flask_login import LoginManager, login_required, current_user
+from flask_wtf.csrf import CSRFProtect
+from flask_talisman import Talisman
+
+# Phase 3: Database imports
+from web.database import db, migrate, init_db, create_all_tables
+
+# Phase 4: Session and Task imports
+from flask_session import Session as FlaskSession
+
 # Configure Flask with static folder
 app = Flask(__name__,
             static_folder='static',
@@ -42,6 +53,273 @@ app = Flask(__name__,
 
 # Use environment variable for secret key, with fallback for development
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev-it-dd-agent-secret-key-change-in-prod')
+
+# =============================================================================
+# Phase 3: Database Setup
+# =============================================================================
+
+# Check if database is enabled (for gradual migration)
+USE_DATABASE = os.environ.get('USE_DATABASE', 'false').lower() == 'true'
+
+if USE_DATABASE:
+    init_db(app)
+    # Create tables on first run (will use migrations in production)
+    with app.app_context():
+        db.create_all()
+    logger.info("Database initialized")
+
+# =============================================================================
+# Phase 4: Session & Task Configuration
+# =============================================================================
+
+# Check if Redis is available for sessions
+REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+USE_REDIS_SESSIONS = os.environ.get('USE_REDIS_SESSIONS', 'false').lower() == 'true'
+
+if USE_REDIS_SESSIONS:
+    try:
+        import redis
+        # Test Redis connection
+        redis_client = redis.from_url(REDIS_URL)
+        redis_client.ping()
+
+        # Configure Flask-Session with Redis
+        app.config['SESSION_TYPE'] = 'redis'
+        app.config['SESSION_REDIS'] = redis_client
+        app.config['SESSION_PERMANENT'] = True
+        app.config['SESSION_USE_SIGNER'] = True
+        app.config['SESSION_KEY_PREFIX'] = 'diligence:'
+        app.config['PERMANENT_SESSION_LIFETIME'] = 86400  # 24 hours
+
+        FlaskSession(app)
+        logger.info("Redis sessions enabled")
+    except Exception as e:
+        logger.warning(f"Redis not available, using filesystem sessions: {e}")
+        app.config['SESSION_TYPE'] = 'filesystem'
+        app.config['SESSION_FILE_DIR'] = '/tmp/flask_session'
+        FlaskSession(app)
+else:
+    # Use filesystem sessions by default
+    app.config['SESSION_TYPE'] = 'filesystem'
+    app.config['SESSION_FILE_DIR'] = '/tmp/flask_session'
+    app.config['SESSION_PERMANENT'] = True
+    app.config['PERMANENT_SESSION_LIFETIME'] = 86400  # 24 hours
+    FlaskSession(app)
+    logger.info("Filesystem sessions enabled")
+
+# Check if Celery is available for background tasks
+USE_CELERY = os.environ.get('USE_CELERY', 'false').lower() == 'true'
+
+if USE_CELERY:
+    try:
+        from web.celery_app import celery, is_celery_available
+        if is_celery_available():
+            logger.info("Celery tasks enabled")
+        else:
+            logger.warning("Celery broker not available, tasks will run synchronously")
+            USE_CELERY = False
+    except Exception as e:
+        logger.warning(f"Celery not available: {e}")
+        USE_CELERY = False
+
+# =============================================================================
+# Phase 5: Cloud Storage Setup
+# =============================================================================
+
+STORAGE_TYPE = os.environ.get('STORAGE_TYPE', 'local')
+
+try:
+    from web.storage import get_storage
+    storage = get_storage()
+    storage.initialize(STORAGE_TYPE)
+    logger.info(f"Storage initialized: {storage.storage_type}")
+except Exception as e:
+    logger.warning(f"Storage initialization failed: {e}")
+    storage = None
+
+# =============================================================================
+# Phase 2: Authentication Setup
+# =============================================================================
+
+# Initialize CSRF protection
+csrf = CSRFProtect(app)
+
+# Configure CSRF exemptions for API routes
+app.config['WTF_CSRF_CHECK_DEFAULT'] = False  # We'll check manually
+
+@app.before_request
+def csrf_protect():
+    """Apply CSRF protection selectively - exempt API routes."""
+    # Skip CSRF for API routes (they should use token auth)
+    if request.path.startswith('/api/'):
+        return None
+    # Skip for GET, HEAD, OPTIONS, TRACE
+    if request.method in ('GET', 'HEAD', 'OPTIONS', 'TRACE'):
+        return None
+    # Apply CSRF check for other routes
+    csrf.protect()
+
+# Initialize Flask-Talisman for security headers
+# Only enforce HTTPS in production
+FORCE_HTTPS = os.environ.get('FORCE_HTTPS', 'false').lower() == 'true'
+
+# Content Security Policy
+csp = {
+    'default-src': "'self'",
+    'script-src': ["'self'", "'unsafe-inline'"],  # Allow inline scripts for now (can tighten later)
+    'style-src': ["'self'", "'unsafe-inline'"],   # Allow inline styles
+    'img-src': ["'self'", "data:"],               # Allow data URIs for images
+    'font-src': "'self'",
+}
+
+talisman = Talisman(
+    app,
+    force_https=FORCE_HTTPS,
+    strict_transport_security=FORCE_HTTPS,
+    session_cookie_secure=FORCE_HTTPS,
+    content_security_policy=csp,
+    # Disabled nonce requirement to allow inline scripts (unsafe-inline is in CSP)
+    # content_security_policy_nonce_in=['script-src'],
+    feature_policy={
+        'geolocation': "'none'",
+        'camera': "'none'",
+        'microphone': "'none'",
+    }
+)
+
+# Initialize Flask-Login
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'auth.login'
+login_manager.login_message = 'Please log in to access this page.'
+login_manager.login_message_category = 'info'
+
+@login_manager.user_loader
+def load_user(user_id):
+    """Load user by ID for Flask-Login."""
+    from web.models.user import get_user_store
+    user_store = get_user_store()
+    return user_store.get_by_id(user_id)
+
+# Register authentication blueprint
+from web.auth import auth_bp
+app.register_blueprint(auth_bp)
+
+# Check if authentication is required (can be disabled for development)
+AUTH_REQUIRED = os.environ.get('AUTH_REQUIRED', 'true').lower() != 'false'
+
+def auth_optional(f):
+    """Decorator that makes auth optional based on AUTH_REQUIRED setting."""
+    from functools import wraps
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if AUTH_REQUIRED and not current_user.is_authenticated:
+            return login_manager.unauthorized()
+        return f(*args, **kwargs)
+    return decorated_function
+
+# Initialize user store and ensure admin exists
+def init_auth():
+    """Initialize authentication system."""
+    from web.models.user import get_user_store
+    user_store = get_user_store()
+
+    # Create default admin if no users exist
+    if user_store.user_count() == 0:
+        default_admin_email = os.environ.get('DEFAULT_ADMIN_EMAIL', 'admin@example.com')
+        default_admin_password = os.environ.get('DEFAULT_ADMIN_PASSWORD', 'changeme123')
+        user_store.ensure_admin_exists(default_admin_email, default_admin_password)
+        logger.info(f"Created default admin user: {default_admin_email}")
+
+# Initialize auth on first request
+@app.before_request
+def before_first_request():
+    """Run initialization on first request."""
+    if not hasattr(app, '_auth_initialized'):
+        init_auth()
+        app._auth_initialized = True
+
+# =============================================================================
+# End Phase 2 Authentication Setup
+# =============================================================================
+
+# =============================================================================
+# Phase 6: Multi-Tenancy Setup
+# =============================================================================
+
+USE_MULTI_TENANCY = os.environ.get('USE_MULTI_TENANCY', 'false').lower() == 'true'
+
+if USE_MULTI_TENANCY:
+    from web.middleware import set_tenant, create_default_tenant
+
+    # Register tenant resolution middleware
+    app.before_request(set_tenant)
+
+    # Create default tenant if database is enabled
+    if USE_DATABASE:
+        with app.app_context():
+            create_default_tenant(app)
+
+    logger.info("Multi-tenancy enabled")
+
+# =============================================================================
+# End Phase 6 Multi-Tenancy Setup
+# =============================================================================
+
+# =============================================================================
+# Phase 7: Enterprise Features
+# =============================================================================
+
+# 7.1 Structured Logging
+USE_STRUCTURED_LOGGING = os.environ.get('USE_STRUCTURED_LOGGING', 'false').lower() == 'true'
+
+if USE_STRUCTURED_LOGGING:
+    try:
+        from web.logging_config import init_logging, setup_request_logging
+        init_logging()
+        setup_request_logging(app)
+        logger.info("Structured logging enabled")
+    except Exception as e:
+        logger.warning(f"Structured logging not available: {e}")
+
+# 7.2 Error Tracking (Sentry)
+USE_ERROR_TRACKING = os.environ.get('USE_ERROR_TRACKING', 'false').lower() == 'true'
+
+if USE_ERROR_TRACKING:
+    try:
+        from web.error_tracking import init_sentry, setup_flask_error_handlers
+        if init_sentry(app):
+            setup_flask_error_handlers(app)
+            logger.info("Error tracking (Sentry) enabled")
+    except Exception as e:
+        logger.warning(f"Error tracking not available: {e}")
+
+# 7.3 Rate Limiting
+USE_RATE_LIMITING = os.environ.get('USE_RATE_LIMITING', 'false').lower() == 'true'
+
+if USE_RATE_LIMITING:
+    try:
+        from web.rate_limiting import init_rate_limiter, RateLimits
+        rate_limiter = init_rate_limiter(app)
+        if rate_limiter:
+            logger.info("Rate limiting enabled")
+    except Exception as e:
+        logger.warning(f"Rate limiting not available: {e}")
+
+# 7.4 Audit Logging
+USE_AUDIT_LOGGING = os.environ.get('USE_AUDIT_LOGGING', 'true').lower() == 'true'
+
+if USE_AUDIT_LOGGING:
+    try:
+        from web.audit_service import setup_audit_logging, audit_service
+        setup_audit_logging(app)
+        logger.info("Audit logging enabled")
+    except Exception as e:
+        logger.warning(f"Audit logging not available: {e}")
+
+# =============================================================================
+# End Phase 7 Enterprise Features
+# =============================================================================
 
 # Configure task manager and session store
 from config_v2 import OUTPUT_DIR, DATA_DIR
@@ -84,6 +362,41 @@ def clean_gap_text(text):
         text = re.sub(pattern, description, text)
 
     return text
+
+
+def log_activity(action: str, details: dict):
+    """Log an activity to the activity log file."""
+    from config_v2 import OUTPUT_DIR
+    from datetime import datetime
+    import json as json_module
+
+    activity_file = OUTPUT_DIR / "activity_log.json"
+
+    # Load existing activities
+    activities = []
+    if activity_file.exists():
+        try:
+            with open(activity_file, 'r') as f:
+                activities = json_module.load(f)
+        except Exception:
+            activities = []
+
+    # Add new activity
+    activities.append({
+        "timestamp": datetime.now().isoformat(),
+        "action": action,
+        "details": details
+    })
+
+    # Keep only last 500 activities
+    activities = activities[-500:]
+
+    # Save
+    try:
+        with open(activity_file, 'w') as f:
+            json_module.dump(activities, f, indent=2, default=str)
+    except Exception:
+        pass
 
 
 def get_session():
@@ -180,43 +493,222 @@ def welcome():
     return render_template('welcome.html')
 
 
+@app.route('/health')
+def health_check():
+    """Health check endpoint for container orchestration and load balancers.
+
+    Returns service health status and basic diagnostics.
+    Used by Railway, Docker, and other deployment platforms.
+    """
+    from config_v2 import OUTPUT_DIR, DATA_DIR
+
+    health_status = {
+        "status": "healthy",
+        "version": "1.0.0",
+        "service": "it-diligence-agent",
+        "checks": {
+            "api_key_configured": bool(os.environ.get('ANTHROPIC_API_KEY')),
+            "output_dir_exists": OUTPUT_DIR.exists(),
+            "data_dir_exists": DATA_DIR.exists(),
+            "output_dir_writable": os.access(OUTPUT_DIR, os.W_OK) if OUTPUT_DIR.exists() else False,
+        },
+        "services": {}
+    }
+
+    # Check database (Phase 3)
+    if USE_DATABASE:
+        try:
+            from web.database import db
+            db.session.execute(db.text('SELECT 1'))
+            health_status["services"]["database"] = "connected"
+        except Exception as e:
+            health_status["services"]["database"] = f"error: {str(e)}"
+
+    # Check Redis (Phase 4)
+    if USE_REDIS_SESSIONS:
+        try:
+            import redis
+            r = redis.from_url(REDIS_URL)
+            r.ping()
+            health_status["services"]["redis"] = "connected"
+        except Exception as e:
+            health_status["services"]["redis"] = f"error: {str(e)}"
+
+    # Check Celery (Phase 4)
+    if USE_CELERY:
+        try:
+            from web.celery_app import is_celery_available
+            if is_celery_available():
+                health_status["services"]["celery"] = "available"
+            else:
+                health_status["services"]["celery"] = "unavailable"
+        except Exception as e:
+            health_status["services"]["celery"] = f"error: {str(e)}"
+
+    # Check Multi-tenancy (Phase 6)
+    if USE_MULTI_TENANCY:
+        try:
+            from web.database import Tenant
+            tenant_count = Tenant.query.count()
+            health_status["services"]["multi_tenancy"] = f"enabled ({tenant_count} tenants)"
+        except Exception as e:
+            health_status["services"]["multi_tenancy"] = f"error: {str(e)}"
+
+    # Check Enterprise Features (Phase 7)
+    if USE_STRUCTURED_LOGGING:
+        health_status["services"]["structured_logging"] = "enabled"
+
+    if USE_ERROR_TRACKING:
+        try:
+            from web.error_tracking import SENTRY_AVAILABLE
+            health_status["services"]["error_tracking"] = "enabled" if SENTRY_AVAILABLE else "sdk not installed"
+        except Exception:
+            health_status["services"]["error_tracking"] = "not configured"
+
+    if USE_RATE_LIMITING:
+        try:
+            from web.rate_limiting import LIMITER_AVAILABLE
+            health_status["services"]["rate_limiting"] = "enabled" if LIMITER_AVAILABLE else "limiter not installed"
+        except Exception:
+            health_status["services"]["rate_limiting"] = "not configured"
+
+    if USE_AUDIT_LOGGING:
+        health_status["services"]["audit_logging"] = "enabled"
+
+    # Determine overall health
+    critical_checks = [
+        health_status["checks"]["api_key_configured"],
+        health_status["checks"]["output_dir_exists"],
+    ]
+
+    if all(critical_checks):
+        health_status["status"] = "healthy"
+        return jsonify(health_status), 200
+    else:
+        health_status["status"] = "unhealthy"
+        return jsonify(health_status), 503
+
+
 @app.route('/upload')
+@auth_optional
 def upload_documents():
     """Document upload page."""
     return render_template('upload.html')
 
 
 @app.route('/upload/process', methods=['POST'])
+@csrf.exempt  # Exempt for AJAX file uploads
+@auth_optional
 def process_upload():
-    """Process uploaded documents and run analysis."""
-    from pathlib import Path
-    from config_v2 import DATA_DIR
+    """Process uploaded documents and run analysis.
 
-    # Create upload directory
+    Handles entity-separated uploads (target vs buyer documents).
+    Integrates with DocumentStore for hash-based tracking.
+    """
+    from pathlib import Path
+    from config_v2 import DATA_DIR, ensure_directories
+
+    # Ensure directories exist
+    ensure_directories()
+
+    # Initialize DocumentStore
+    try:
+        from tools_v2.document_store import DocumentStore
+        doc_store = DocumentStore.get_instance()
+    except Exception as e:
+        logger.error(f"Failed to initialize DocumentStore: {e}")
+        doc_store = None
+
+    # Create legacy upload directory (for compatibility)
     upload_dir = DATA_DIR / 'uploads'
     upload_dir.mkdir(exist_ok=True)
 
-    # Save uploaded files
-    uploaded_files = request.files.getlist('documents')
-    saved_files = []
+    # Get authority levels from form
+    target_authority = int(request.form.get('target_authority', 1))
+    buyer_authority = int(request.form.get('buyer_authority', 1))
 
-    for file in uploaded_files:
+    # Process TARGET documents
+    target_files = request.files.getlist('target_documents')
+    target_saved = []
+    target_doc_ids = []
+
+    for file in target_files:
         if file.filename:
-            # Sanitize filename
             safe_filename = file.filename.replace('..', '').replace('/', '_')
-            filepath = upload_dir / safe_filename
-            file.save(str(filepath))
-            saved_files.append(str(filepath))
 
-    if not saved_files:
-        flash('No files were uploaded', 'error')
+            if doc_store:
+                # Use DocumentStore for proper entity separation
+                try:
+                    file_bytes = file.read()
+                    doc = doc_store.add_document_from_bytes(
+                        file_bytes=file_bytes,
+                        filename=safe_filename,
+                        entity="target",
+                        authority_level=target_authority,
+                        uploaded_by="web_upload"
+                    )
+                    target_doc_ids.append(doc.doc_id)
+                    target_saved.append(doc.raw_file_path)
+                    logger.info(f"Added target document: {safe_filename} (doc_id: {doc.doc_id})")
+                except Exception as e:
+                    logger.error(f"DocumentStore error for {safe_filename}: {e}")
+                    # Fallback to legacy path
+                    file.seek(0)
+                    filepath = upload_dir / f"target_{safe_filename}"
+                    file.save(str(filepath))
+                    target_saved.append(str(filepath))
+            else:
+                # Legacy behavior if DocumentStore not available
+                filepath = upload_dir / f"target_{safe_filename}"
+                file.save(str(filepath))
+                target_saved.append(str(filepath))
+
+    # Process BUYER documents
+    buyer_files = request.files.getlist('buyer_documents')
+    buyer_saved = []
+    buyer_doc_ids = []
+
+    for file in buyer_files:
+        if file.filename:
+            safe_filename = file.filename.replace('..', '').replace('/', '_')
+
+            if doc_store:
+                try:
+                    file_bytes = file.read()
+                    doc = doc_store.add_document_from_bytes(
+                        file_bytes=file_bytes,
+                        filename=safe_filename,
+                        entity="buyer",
+                        authority_level=buyer_authority,
+                        uploaded_by="web_upload"
+                    )
+                    buyer_doc_ids.append(doc.doc_id)
+                    buyer_saved.append(doc.raw_file_path)
+                    logger.info(f"Added buyer document: {safe_filename} (doc_id: {doc.doc_id})")
+                except Exception as e:
+                    logger.error(f"DocumentStore error for {safe_filename}: {e}")
+                    file.seek(0)
+                    filepath = upload_dir / f"buyer_{safe_filename}"
+                    file.save(str(filepath))
+                    buyer_saved.append(str(filepath))
+            else:
+                filepath = upload_dir / f"buyer_{safe_filename}"
+                file.save(str(filepath))
+                buyer_saved.append(str(filepath))
+
+    # Validate: must have target documents
+    if not target_saved:
+        flash('No TARGET documents were uploaded. At least one target document is required.', 'error')
         return redirect(url_for('upload_documents'))
+
+    # Combine for analysis (target first, then buyer)
+    all_saved_files = target_saved + buyer_saved
 
     # Get deal context
     deal_type = request.form.get('deal_type', 'bolt_on')
     target_name = request.form.get('target_name', 'Target Company')
+    buyer_name = request.form.get('buyer_name', '')
     industry = request.form.get('industry', '')
-    sub_industry = request.form.get('sub_industry', '')
     employee_count = request.form.get('employee_count', '')
 
     # Get selected domains (default to all if none selected)
@@ -225,37 +717,65 @@ def process_upload():
         from config_v2 import DOMAINS
         domains = DOMAINS
 
-    # Create deal context dict
+    # Create deal context dict with entity info
     deal_context = {
         'deal_type': deal_type,
         'target_name': target_name,
+        'buyer_name': buyer_name,
         'industry': industry,
-        'sub_industry': sub_industry,
         'employee_count': employee_count,
+        # Entity tracking for analysis
+        'target_doc_ids': target_doc_ids,
+        'buyer_doc_ids': buyer_doc_ids,
+        'target_doc_count': len(target_saved),
+        'buyer_doc_count': len(buyer_saved),
     }
 
     # Create analysis task
     task = task_manager.create_task(
-        file_paths=saved_files,
+        file_paths=all_saved_files,
         domains=domains,
         deal_context=deal_context
     )
 
     # Store task ID in Flask session
     flask_session['current_task_id'] = task.task_id
-    flask_session['analysis_file_count'] = len(saved_files)
+    flask_session['analysis_file_count'] = len(all_saved_files)
+    flask_session['target_doc_count'] = len(target_saved)
+    flask_session['buyer_doc_count'] = len(buyer_saved)
 
     # Associate task with user session
     session_id = get_or_create_session_id(flask_session)
     session_store.set_analysis_task(session_id, task.task_id)
 
     # Start background analysis
-    # Use simple runner if full agent infrastructure has issues
     try:
         task_manager.start_task(task.task_id, run_analysis)
     except ImportError:
-        # Fall back to simple runner if agent imports fail
         task_manager.start_task(task.task_id, run_analysis_simple)
+
+    logger.info(
+        f"Started analysis task {task.task_id}: "
+        f"{len(target_saved)} target docs, {len(buyer_saved)} buyer docs"
+    )
+
+    # Audit log the analysis start
+    if USE_AUDIT_LOGGING:
+        try:
+            from web.audit_service import audit_log, AuditAction
+            audit_log(
+                action=AuditAction.ANALYSIS_START,
+                resource_type='analysis',
+                resource_id=task.task_id,
+                details={
+                    'target_documents': len(target_saved),
+                    'buyer_documents': len(buyer_saved),
+                    'domains': domains,
+                    'target_name': target_name,
+                }
+            )
+        except Exception as e:
+            logger.debug(f"Audit logging failed: {e}")
 
     # Redirect to processing page
     return redirect(url_for('processing'))
@@ -351,8 +871,12 @@ def cancel_analysis():
 
 
 @app.route('/dashboard')
+@auth_optional
 def dashboard():
     """Main dashboard view."""
+    from config_v2 import OUTPUT_DIR
+    import json as json_module
+
     s = get_session()
     summary = s.get_summary()
 
@@ -363,7 +887,7 @@ def dashboard():
     # Get recent work items by phase
     day1_items = [w for w in s.reasoning_store.work_items if w.phase == 'Day_1'][:5]
 
-    # Get analysis metadata from current task
+    # Get analysis metadata - show what data is currently being displayed
     analysis_metadata = None
     task_id = flask_session.get('current_task_id')
     if task_id:
@@ -375,17 +899,99 @@ def dashboard():
                 'timestamp': task.completed_at[:10] if task.completed_at else None,
                 'domains': task.domains,
                 'task_id': task_id,
+                'source': 'current_analysis',
             }
+
+    # If no current task, show info about loaded data
+    if not analysis_metadata and s and s.fact_store and len(s.fact_store.facts) > 0:
+        # Find the source from fact_store metadata
+        from datetime import datetime
+        created_at = s.fact_store.metadata.get('created_at', '')
+        timestamp = created_at[:10] if created_at else 'Unknown'
+
+        # Get domains from facts
+        domains = list(set(f.domain for f in s.fact_store.facts))
+
+        # Find the most recent facts file to show as source
+        facts_files = sorted(OUTPUT_DIR.glob("facts_*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
+        source_file = facts_files[0].name if facts_files else 'Unknown'
+
+        analysis_metadata = {
+            'file_count': len(set(f.source_document for f in s.fact_store.facts if f.source_document)),
+            'timestamp': timestamp,
+            'domains': domains,
+            'source': 'loaded_from_file',
+            'source_file': source_file,
+            'fact_count': len(s.fact_store.facts),
+        }
+
+    # Get pending changes summary for incremental updates
+    pending_summary = {"tier1": 0, "tier2": 0, "tier3": 0, "total": 0}
+    pending_file = OUTPUT_DIR / "pending_changes.json"
+    if pending_file.exists():
+        try:
+            with open(pending_file, 'r') as f:
+                pending = json_module.load(f)
+            pending_summary = {
+                "tier1": len(pending.get("tier1", [])),
+                "tier2": len(pending.get("tier2", [])),
+                "tier3": len(pending.get("tier3", [])),
+                "total": len(pending.get("tier1", [])) + len(pending.get("tier2", [])) + len(pending.get("tier3", []))
+            }
+        except Exception:
+            pass
+
+    # Get entity summary (target vs buyer breakdown)
+    entity_summary = None
+    if s and s.fact_store and len(s.fact_store.facts) > 0:
+        # Use facts list directly, not get_all_facts() which returns a dict
+        all_facts = list(s.fact_store.facts)
+        target_facts = [f for f in all_facts if getattr(f, 'entity', 'target') == 'target']
+        buyer_facts = [f for f in all_facts if getattr(f, 'entity', '') == 'buyer']
+
+        def domain_breakdown(facts):
+            breakdown = {}
+            for f in facts:
+                breakdown[f.domain] = breakdown.get(f.domain, 0) + 1
+            return breakdown
+
+        # Get document counts from DocumentStore
+        target_doc_count = 0
+        buyer_doc_count = 0
+        try:
+            from tools_v2.document_store import DocumentStore
+            doc_store = DocumentStore.get_instance()
+            stats = doc_store.get_statistics()
+            target_doc_count = stats["by_entity"]["target"]
+            buyer_doc_count = stats["by_entity"]["buyer"]
+        except Exception:
+            pass
+
+        entity_summary = {
+            "target": {
+                "fact_count": len(target_facts),
+                "document_count": target_doc_count,
+                "by_domain": domain_breakdown(target_facts)
+            },
+            "buyer": {
+                "fact_count": len(buyer_facts),
+                "document_count": buyer_doc_count,
+                "by_domain": domain_breakdown(buyer_facts)
+            }
+        }
 
     return render_template('dashboard.html',
                          summary=summary,
                          top_risks=top_risks,
                          day1_items=day1_items,
                          analysis_metadata=analysis_metadata,
+                         pending_summary=pending_summary,
+                         entity_summary=entity_summary,
                          session=s)
 
 
 @app.route('/risks')
+@auth_optional
 def risks():
     """List all risks with pagination."""
     s = get_session()
@@ -495,6 +1101,7 @@ def add_risk_note(risk_id):
 
 
 @app.route('/work-items')
+@auth_optional
 def work_items():
     """List all work items with pagination."""
     s = get_session()
@@ -665,6 +1272,7 @@ def adjust_work_item(wi_id):
 
 
 @app.route('/facts')
+@auth_optional
 def facts():
     """List all facts with pagination."""
     s = get_session()
@@ -743,6 +1351,7 @@ def fact_detail(fact_id):
 
 
 @app.route('/gaps')
+@auth_optional
 def gaps():
     """List all gaps with pagination."""
     s = get_session()
@@ -833,6 +1442,7 @@ def context():
 
 
 @app.route('/export', methods=['POST'])
+@csrf.exempt  # Form submission
 def export():
     """Export current session."""
     s = get_session()
@@ -841,6 +1451,22 @@ def export():
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     saved_files = s.save_to_files(OUTPUT_DIR, timestamp)
+
+    # Audit log the export
+    if USE_AUDIT_LOGGING:
+        try:
+            from web.audit_service import audit_log, AuditAction
+            audit_log(
+                action=AuditAction.EXPORT_CREATE,
+                resource_type='export',
+                resource_id=timestamp,
+                details={
+                    'files_exported': len(saved_files),
+                    'filenames': [str(f) for f in saved_files[:5]],  # First 5 only
+                }
+            )
+        except Exception as e:
+            logger.debug(f"Audit logging failed: {e}")
 
     flash(f'Exported to {len(saved_files)} files', 'success')
     return redirect(url_for('dashboard'))
@@ -1347,6 +1973,7 @@ def organization_refresh():
 
 
 @app.route('/organization')
+@auth_optional
 def organization_overview():
     """Organization module overview."""
     result = get_organization_analysis()
@@ -1458,6 +2085,7 @@ def organization_shared_services():
 # =============================================================================
 
 @app.route('/applications')
+@auth_optional
 def applications_overview():
     """Applications inventory overview."""
     from services.applications_bridge import build_applications_inventory
@@ -1510,6 +2138,7 @@ def applications_category(category):
 # =============================================================================
 
 @app.route('/infrastructure')
+@auth_optional
 def infrastructure_overview():
     """Infrastructure inventory overview."""
     from services.infrastructure_bridge import build_infrastructure_inventory
@@ -1637,8 +2266,8 @@ def handle_exception(e):
 # =============================================================================
 
 @app.route('/api/health')
-def health_check():
-    """Health check endpoint."""
+def api_health_detailed():
+    """Detailed health check endpoint with configuration info."""
     from config_v2 import validate_environment, get_config_summary
 
     env_status = validate_environment()
@@ -1698,6 +2327,53 @@ def pipeline_status():
         },
         'errors': status['errors'] if status['errors'] else None
     })
+
+
+@app.route('/api/audit')
+@auth_optional
+def get_audit_logs():
+    """Get audit log entries (Phase 7)."""
+    if not USE_AUDIT_LOGGING:
+        return jsonify({'error': 'Audit logging not enabled'}), 400
+
+    try:
+        from web.audit_service import audit_service
+
+        # Parse query parameters
+        action = request.args.get('action')
+        resource_type = request.args.get('resource_type')
+        limit = min(int(request.args.get('limit', 100)), 500)
+        offset = int(request.args.get('offset', 0))
+
+        events = audit_service.query(
+            action=action,
+            resource_type=resource_type,
+            limit=limit,
+            offset=offset
+        )
+
+        return jsonify({
+            'count': len(events),
+            'limit': limit,
+            'offset': offset,
+            'events': events
+        })
+    except Exception as e:
+        logger.error(f"Error fetching audit logs: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/rate-limit/status')
+def rate_limit_status():
+    """Get current rate limit status (Phase 7)."""
+    if not USE_RATE_LIMITING:
+        return jsonify({'enabled': False})
+
+    try:
+        from web.rate_limiting import get_rate_limit_status
+        return jsonify(get_rate_limit_status())
+    except Exception as e:
+        return jsonify({'enabled': False, 'error': str(e)})
 
 
 @app.route('/api/cleanup', methods=['POST'])
@@ -1890,6 +2566,93 @@ def confidence_summary():
     s = get_session()
     summary = s.fact_store.get_confidence_summary()
     return jsonify(summary)
+
+
+@app.route('/api/entity-summary')
+def entity_summary():
+    """Get summary of facts by entity (target vs buyer).
+
+    Returns counts and breakdown by domain for each entity.
+    """
+    s = get_session()
+
+    if not s or not s.fact_store:
+        return jsonify({
+            "status": "error",
+            "message": "No session or fact store available"
+        }), 400
+
+    # Use facts list directly, not get_all_facts() which returns a dict
+    all_facts = list(s.fact_store.facts)
+
+    # Count by entity
+    target_facts = [f for f in all_facts if getattr(f, 'entity', 'target') == 'target']
+    buyer_facts = [f for f in all_facts if getattr(f, 'entity', '') == 'buyer']
+
+    # Count by domain for each entity
+    def domain_breakdown(facts):
+        breakdown = {}
+        for f in facts:
+            domain = f.domain
+            breakdown[domain] = breakdown.get(domain, 0) + 1
+        return breakdown
+
+    # Get document counts from DocumentStore if available
+    doc_stats = {"target": 0, "buyer": 0}
+    try:
+        from tools_v2.document_store import DocumentStore
+        doc_store = DocumentStore.get_instance()
+        stats = doc_store.get_statistics()
+        doc_stats["target"] = stats["by_entity"]["target"]
+        doc_stats["buyer"] = stats["by_entity"]["buyer"]
+    except Exception:
+        pass
+
+    return jsonify({
+        "status": "success",
+        "summary": {
+            "target": {
+                "fact_count": len(target_facts),
+                "document_count": doc_stats["target"],
+                "by_domain": domain_breakdown(target_facts)
+            },
+            "buyer": {
+                "fact_count": len(buyer_facts),
+                "document_count": doc_stats["buyer"],
+                "by_domain": domain_breakdown(buyer_facts)
+            },
+            "total_facts": len(all_facts)
+        }
+    })
+
+
+@app.route('/api/documents/store')
+def api_document_store():
+    """Get document store statistics and list."""
+    try:
+        from tools_v2.document_store import DocumentStore
+        doc_store = DocumentStore.get_instance()
+
+        entity = request.args.get('entity')
+        authority = request.args.get('authority')
+
+        if authority:
+            authority = int(authority)
+
+        docs = doc_store.list_documents(entity=entity, authority_level=authority)
+        stats = doc_store.get_statistics()
+
+        return jsonify({
+            "status": "success",
+            "statistics": stats,
+            "documents": [d.to_dict() for d in docs[:100]]  # Limit to 100
+        })
+    except Exception as e:
+        logger.error(f"Error getting document store: {e}")
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
 
 
 # =============================================================================
@@ -2264,6 +3027,85 @@ def api_risks():
             for r in risks
         ]
     })
+
+
+# =============================================================================
+# NARRATIVE API ROUTES (for Report View toggle)
+# =============================================================================
+
+@app.route('/api/narrative/<domain>')
+def api_get_narrative(domain):
+    """
+    Get or generate narrative for a domain.
+
+    Returns cached narrative if available, otherwise generates new one.
+    """
+    from web.narrative_service import (
+        generate_domain_narrative,
+        get_placeholder_narrative
+    )
+    from config_v2 import ANTHROPIC_API_KEY
+
+    s = get_session()
+    session_id = get_or_create_session_id(flask_session)
+
+    # Check if we have data to generate narrative from
+    if not s or not s.fact_store or not s.fact_store.facts:
+        return jsonify(get_placeholder_narrative(domain))
+
+    # Check if domain has facts
+    domain_facts = [f for f in s.fact_store.facts if f.domain == domain]
+    if not domain_facts:
+        return jsonify(get_placeholder_narrative(domain))
+
+    # Generate narrative
+    result = generate_domain_narrative(
+        domain=domain,
+        fact_store=s.fact_store,
+        reasoning_store=s.reasoning_store,
+        api_key=ANTHROPIC_API_KEY,
+        force_regenerate=False,
+        session_id=session_id
+    )
+
+    return jsonify(result)
+
+
+@app.route('/api/narrative/<domain>/regenerate', methods=['POST'])
+def api_regenerate_narrative(domain):
+    """
+    Force regenerate narrative for a domain.
+
+    Bypasses cache and generates fresh narrative.
+    """
+    from web.narrative_service import (
+        generate_domain_narrative,
+        clear_narrative_cache,
+        get_placeholder_narrative
+    )
+    from config_v2 import ANTHROPIC_API_KEY
+
+    s = get_session()
+    session_id = get_or_create_session_id(flask_session)
+
+    # Check if we have data to generate narrative from
+    if not s or not s.fact_store or not s.fact_store.facts:
+        return jsonify(get_placeholder_narrative(domain))
+
+    # Clear cache for this domain
+    clear_narrative_cache(session_id, domain)
+
+    # Generate fresh narrative
+    result = generate_domain_narrative(
+        domain=domain,
+        fact_store=s.fact_store,
+        reasoning_store=s.reasoning_store,
+        api_key=ANTHROPIC_API_KEY,
+        force_regenerate=True,
+        session_id=session_id
+    )
+
+    return jsonify(result)
 
 
 @app.route('/api/export/excel')
@@ -2997,6 +3839,14 @@ def accept_single_change(change_id):
         # Save updated pending changes
         with open(pending_file, 'w') as f:
             json_module.dump(pending_changes, f, indent=2, default=str)
+        # Log activity
+        log_activity("change_rejected", {
+            "change_id": change_id,
+            "tier": change_tier,
+            "item": fact_data.get("item", ""),
+            "domain": fact_data.get("domain", ""),
+            "notes": notes
+        })
         return jsonify({"status": "success", "action": "rejected"})
 
     # Apply modifications if any
@@ -3029,6 +3879,17 @@ def accept_single_change(change_id):
             facts_files = sorted(OUTPUT_DIR.glob("facts_*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
             if facts_files:
                 s.fact_store.save(str(facts_files[0]))
+
+        # Log activity
+        log_activity("change_accepted", {
+            "change_id": change_id,
+            "tier": change_tier,
+            "item": fact_data.get("item", ""),
+            "domain": fact_data.get("domain", ""),
+            "fact_id": fact_id,
+            "action": action.value,
+            "notes": notes
+        })
 
         return jsonify({
             "status": "success",
@@ -3112,6 +3973,35 @@ def conflicts_review_page():
     return render_template('review/conflicts.html',
                           conflicts=conflicts_with_existing,
                           total_count=len(tier3_changes))
+
+
+# === Activity Log API ===
+
+@app.route('/api/activity-log')
+def get_activity_log():
+    """Get recent activity log entries."""
+    from config_v2 import OUTPUT_DIR
+    import json as json_module
+
+    activity_file = OUTPUT_DIR / "activity_log.json"
+    limit = request.args.get('limit', 50, type=int)
+
+    if not activity_file.exists():
+        return jsonify({"activities": [], "total": 0})
+
+    try:
+        with open(activity_file, 'r') as f:
+            activities = json_module.load(f)
+
+        # Return most recent first
+        activities = list(reversed(activities[-limit:]))
+
+        return jsonify({
+            "activities": activities,
+            "total": len(activities)
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 # === Stale Items API (Phase 4) ===
@@ -3294,6 +4184,311 @@ def update_incremental_settings():
     return jsonify({
         "status": "success",
         "settings": s.incremental_settings
+    })
+
+
+# =============================================================================
+# VALIDATION DASHBOARD ROUTES (Sprint 4 - Human Review Loop)
+# =============================================================================
+
+@app.route('/validation')
+def validation_dashboard():
+    """
+    Validation dashboard showing overall confidence and domain status.
+
+    Part of the human review loop for fact validation.
+    """
+    s = get_session()
+
+    # Get basic stats from fact store
+    stats = s.fact_store.get_review_stats() if hasattr(s.fact_store, 'get_review_stats') else {}
+
+    # Calculate overall confidence
+    total_facts = stats.get('total_facts', 0)
+    confirmed = stats.get('confirmed', 0)
+    overall_confidence = int((confirmed / total_facts * 100)) if total_facts > 0 else 0
+
+    # Determine confidence level for styling
+    if overall_confidence >= 80:
+        confidence_level = 'high'
+    elif overall_confidence >= 60:
+        confidence_level = 'medium'
+    elif overall_confidence >= 40:
+        confidence_level = 'low'
+    else:
+        confidence_level = 'critical'
+
+    # Build domain status
+    domains = {}
+    for domain, dstats in stats.get('by_domain', {}).items():
+        total = dstats.get('total', 0)
+        validated = dstats.get('confirmed', 0)
+        flagged = dstats.get('incorrect', 0) + dstats.get('needs_info', 0)
+
+        domain_confidence = int((validated / total * 100)) if total > 0 else 0
+
+        if domain_confidence >= 80:
+            dlevel = 'high'
+        elif domain_confidence >= 60:
+            dlevel = 'medium'
+        elif domain_confidence >= 40:
+            dlevel = 'low'
+        else:
+            dlevel = 'critical'
+
+        domains[domain] = {
+            'total_facts': total,
+            'validated': validated,
+            'flagged': flagged,
+            'confidence': domain_confidence,
+            'confidence_level': dlevel,
+            'validated_pct': int((validated / total * 100)) if total > 0 else 0,
+            'critical_count': 0,  # Would come from validation store
+            'high_count': 0,
+            'warning_count': flagged
+        }
+
+    # Recent activity (placeholder - would come from audit store)
+    recent_activity = []
+
+    return render_template(
+        'validation/dashboard.html',
+        overall_confidence=overall_confidence,
+        confidence_level=confidence_level,
+        total_facts=total_facts,
+        flagged_count=stats.get('incorrect', 0) + stats.get('needs_info', 0),
+        validated_count=confirmed,
+        validated_pct=int((confirmed / total_facts * 100)) if total_facts > 0 else 0,
+        corrections_count=0,  # Would come from correction store
+        queue_count=stats.get('needs_info', 0) + stats.get('incorrect', 0),
+        domains=domains,
+        recent_activity=recent_activity
+    )
+
+
+@app.route('/validation/queue')
+def validation_review_queue():
+    """
+    Validation-aware review queue with flag-based filtering.
+
+    Uses the enhanced validation templates with correction support.
+    """
+    s = get_session()
+
+    # Get filter parameters
+    filter_domain = request.args.get('domain', '')
+    filter_severity = request.args.get('severity', '')
+
+    # Get review queue
+    queue = s.fact_store.get_review_queue(
+        domain=filter_domain if filter_domain else None,
+        limit=100
+    )
+
+    # Transform facts to validation format
+    items = []
+    for fact in queue:
+        items.append({
+            'fact_id': fact.fact_id,
+            'item': fact.item,
+            'domain': fact.domain,
+            'category': fact.category,
+            'highest_severity': 'warning' if fact.confidence_score < 0.7 else 'info',
+            'flags': [
+                {
+                    'severity': 'warning' if fact.confidence_score < 0.7 else 'info',
+                    'message': fact.verification_note or 'Low confidence extraction'
+                }
+            ] if fact.confidence_score < 0.8 else [],
+            'flags_count': 1 if fact.confidence_score < 0.8 else 0,
+            'ai_confidence': fact.confidence_score or 0.5,
+            'evidence_verified': fact.verification_status == 'confirmed',
+            'evidence_matched_text': fact.evidence.get('exact_quote', '') if fact.evidence else '',
+            'human_reviewed': fact.verification_status in ['confirmed', 'incorrect'],
+            'details': fact.details
+        })
+
+    return render_template(
+        'validation/review_queue.html',
+        items=items,
+        filter_domain=filter_domain,
+        filter_severity=filter_severity,
+        reviewer_name=''  # Would come from session/auth
+    )
+
+
+# =============================================================================
+# Phase 5: Document Storage Endpoints
+# =============================================================================
+
+@app.route('/documents/file/<path:key>')
+@auth_optional
+def serve_document(key):
+    """
+    Serve a document file from storage.
+
+    For local storage: streams the file directly.
+    For S3 storage: redirects to a presigned URL.
+    """
+    if storage is None:
+        return jsonify({"error": "Storage not initialized"}), 500
+
+    try:
+        if storage.storage_type == 's3':
+            # Redirect to presigned URL for S3
+            url = storage.get_document_url(key, expires_in=3600)
+            return redirect(url)
+        else:
+            # Stream file for local storage
+            file_obj, stored_file = storage.get_document(key)
+            from flask import send_file
+            return send_file(
+                file_obj,
+                mimetype=stored_file.content_type,
+                as_attachment=True,
+                download_name=stored_file.filename
+            )
+    except FileNotFoundError:
+        return jsonify({"error": "File not found"}), 404
+    except Exception as e:
+        logger.error(f"Error serving document {key}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/storage/upload', methods=['POST'])
+@auth_optional
+@csrf.exempt  # File uploads use multipart form
+def api_storage_upload():
+    """
+    Upload a document to storage.
+
+    Expects multipart form with:
+    - file: The file to upload
+    - deal_id: The deal to associate with
+    - entity: 'target' or 'buyer'
+    """
+    if storage is None:
+        return jsonify({"error": "Storage not initialized"}), 500
+
+    if 'file' not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+
+    file = request.files['file']
+    if not file.filename:
+        return jsonify({"error": "No file selected"}), 400
+
+    deal_id = request.form.get('deal_id')
+    entity = request.form.get('entity', 'target')
+
+    if not deal_id:
+        return jsonify({"error": "deal_id is required"}), 400
+
+    try:
+        # Upload to storage
+        stored_file = storage.upload_document(
+            file=file.stream,
+            deal_id=deal_id,
+            entity=entity,
+            filename=file.filename,
+            content_type=file.content_type
+        )
+
+        # If database is enabled, also create Document record
+        if USE_DATABASE:
+            from web.database import db, Document
+            doc = Document(
+                deal_id=deal_id,
+                filename=stored_file.filename,
+                file_hash=stored_file.hash,
+                file_size=stored_file.size,
+                mime_type=stored_file.content_type,
+                entity=entity,
+                storage_path=stored_file.key,
+                storage_type=storage.storage_type,
+                status='pending'
+            )
+            db.session.add(doc)
+            db.session.commit()
+
+            return jsonify({
+                "success": True,
+                "document": {
+                    "id": doc.id,
+                    "key": stored_file.key,
+                    "filename": stored_file.filename,
+                    "size": stored_file.size,
+                    "hash": stored_file.hash,
+                }
+            })
+
+        return jsonify({
+            "success": True,
+            "document": stored_file.to_dict()
+        })
+
+    except Exception as e:
+        logger.error(f"Upload failed: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/storage/documents/<deal_id>')
+@auth_optional
+def api_storage_list_documents(deal_id):
+    """List all documents for a deal from storage."""
+    if storage is None:
+        return jsonify({"error": "Storage not initialized"}), 500
+
+    entity = request.args.get('entity')
+
+    try:
+        files = storage.list_deal_documents(deal_id, entity)
+        return jsonify({
+            "deal_id": deal_id,
+            "entity": entity,
+            "documents": [f.to_dict() for f in files]
+        })
+    except Exception as e:
+        logger.error(f"Error listing documents: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/storage/url/<path:key>')
+@auth_optional
+def api_storage_get_url(key):
+    """Get a URL for accessing a document."""
+    if storage is None:
+        return jsonify({"error": "Storage not initialized"}), 500
+
+    expires_in = request.args.get('expires', 3600, type=int)
+
+    try:
+        url = storage.get_document_url(key, expires_in=expires_in)
+        return jsonify({
+            "key": key,
+            "url": url,
+            "expires_in": expires_in
+        })
+    except Exception as e:
+        logger.error(f"Error getting URL for {key}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/storage/status')
+def api_storage_status():
+    """Get storage service status."""
+    if storage is None:
+        return jsonify({
+            "status": "not_initialized",
+            "type": None
+        })
+
+    return jsonify({
+        "status": "active",
+        "type": storage.storage_type,
+        "config": {
+            "storage_type": STORAGE_TYPE,
+            "s3_configured": bool(os.environ.get('S3_ACCESS_KEY')),
+        }
     })
 
 

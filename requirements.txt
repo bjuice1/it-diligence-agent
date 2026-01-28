@@ -37,6 +37,32 @@ flask>=3.0.0
 gunicorn>=21.0.0
 werkzeug>=3.0.0
 
+# Authentication & Security
+flask-login>=0.6.0
+flask-wtf>=1.2.0
+bcrypt>=4.0.0
+email-validator>=2.0.0
+flask-talisman>=1.0.0
+
+# Database (Phase 3)
+flask-sqlalchemy>=3.1.0
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.0
+flask-migrate>=4.0.0
+
+# Sessions & Tasks (Phase 4)
+redis>=5.0.0
+flask-session>=0.5.0
+celery[redis]>=5.3.0
+
+# Cloud Storage (Phase 5)
+boto3>=1.28.0
+
+# Enterprise Features (Phase 7)
+structlog>=24.0.0
+sentry-sdk[flask]>=1.40.0
+flask-limiter>=3.5.0
+
 # Web UI - Streamlit (legacy, kept for compatibility)
 streamlit>=1.30.0
 

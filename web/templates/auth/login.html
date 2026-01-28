@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block title %}Sign In - IT Due Diligence{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="auth-card">
+        <div class="auth-header">
+            <h1>Sign In</h1>
+            <p class="text-muted">Enter your credentials to access the due diligence platform</p>
+        </div>
+
+        <form method="POST" action="{{ url_for('auth.login') }}" class="auth-form">
+            {{ form.hidden_tag() }}
+
+            <div class="form-group">
+                <label for="email">Email</label>
+                {{ form.email(class="form-input", placeholder="you@example.com", autofocus=true) }}
+                {% if form.email.errors %}
+                <div class="form-error">
+                    {% for error in form.email.errors %}{{ error }}{% endfor %}
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                {{ form.password(class="form-input", placeholder="Enter your password") }}
+                {% if form.password.errors %}
+                <div class="form-error">
+                    {% for error in form.password.errors %}{{ error }}{% endfor %}
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="form-group form-checkbox">
+                {{ form.remember_me(class="checkbox-input") }}
+                <label for="remember_me">Remember me</label>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-block">
+                Sign In
+            </button>
+        </form>
+
+        <div class="auth-footer">
+            <p>Don't have an account? <a href="{{ url_for('auth.register') }}">Create one</a></p>
+        </div>
+    </div>
+</div>
+
+<style>
+.auth-container {
+    min-height: calc(100vh - 200px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-6);
+}
+
+.auth-card {
+    width: 100%;
+    max-width: 400px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-xl);
+    padding: var(--space-8);
+    box-shadow: var(--shadow-lg);
+}
+
+.auth-header {
+    text-align: center;
+    margin-bottom: var(--space-6);
+}
+
+.auth-header h1 {
+    font-size: var(--text-2xl);
+    font-weight: var(--font-bold);
+    color: var(--text-primary);
+    margin-bottom: var(--space-2);
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.form-group label {
+    font-size: var(--text-sm);
+    font-weight: var(--font-medium);
+    color: var(--text-secondary);
+}
+
+.form-input {
+    width: 100%;
+    padding: var(--space-3) var(--space-4);
+    font-size: var(--text-base);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-subtle);
+}
+
+.form-input::placeholder {
+    color: var(--text-placeholder);
+}
+
+.form-error {
+    font-size: var(--text-sm);
+    color: var(--critical);
+}
+
+.form-checkbox {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.form-checkbox label {
+    margin: 0;
+}
+
+.checkbox-input {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+}
+
+.btn-block {
+    width: 100%;
+    justify-content: center;
+    padding: var(--space-3) var(--space-4);
+    font-size: var(--text-base);
+    margin-top: var(--space-2);
+}
+
+.auth-footer {
+    text-align: center;
+    margin-top: var(--space-6);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--border-default);
+}
+
+.auth-footer p {
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+}
+
+.auth-footer a {
+    color: var(--accent);
+    font-weight: var(--font-medium);
+    text-decoration: none;
+}
+
+.auth-footer a:hover {
+    text-decoration: underline;
+}
+</style>
+{% endblock %}

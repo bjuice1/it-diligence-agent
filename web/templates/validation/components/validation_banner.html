@@ -1,0 +1,201 @@
+{#
+Validation Banner Component
+Displays validation status banner at top of domain pages.
+
+Usage:
+{% include 'validation/components/validation_banner.html' %}
+
+Required variables:
+- validation_state: Object with status, confidence, flagged_count, reviewed_count
+- domain: The domain name (organization, infrastructure, etc.)
+#}
+
+{% if validation_state %}
+<div class="validation-banner validation-status-{{ validation_state.status_class }}">
+    <div class="validation-banner-content">
+        <div class="validation-confidence">
+            <div class="confidence-ring {{ validation_state.confidence_class }}"
+                 title="AI Confidence: {{ validation_state.confidence }}%">
+                {{ validation_state.confidence }}%
+            </div>
+        </div>
+
+        <div class="validation-info">
+            <div class="validation-title">
+                <span class="status-icon status-{{ validation_state.status_class }}">
+                    {% if validation_state.status_class == 'good' %}
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                    </svg>
+                    {% elif validation_state.status_class == 'warning' %}
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                        <line x1="12" y1="9" x2="12" y2="13"></line>
+                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                    {% else %}
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    {% endif %}
+                </span>
+                <span class="validation-status-text">{{ validation_state.status_text }}</span>
+            </div>
+
+            <div class="validation-stats">
+                <span class="stat">
+                    <strong>{{ validation_state.total_facts }}</strong> facts
+                </span>
+                {% if validation_state.flagged_count > 0 %}
+                <span class="stat stat-flagged">
+                    <strong>{{ validation_state.flagged_count }}</strong> flagged
+                </span>
+                {% endif %}
+                <span class="stat">
+                    <strong>{{ validation_state.reviewed_count }}</strong> / {{ validation_state.flagged_count }} reviewed
+                </span>
+            </div>
+        </div>
+
+        <div class="validation-actions">
+            {% if validation_state.flagged_count > 0 %}
+            <a href="{{ url_for('validation_review_queue', domain=domain) }}" class="btn btn-sm btn-primary">
+                Review Flags ({{ validation_state.flagged_count }})
+            </a>
+            {% else %}
+            <span class="badge badge-success">All Clear</span>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if validation_state.critical_flags > 0 %}
+    <div class="validation-alert">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+        <strong>{{ validation_state.critical_flags }} critical issue(s)</strong> require immediate attention
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+<style>
+    .validation-banner {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-lg);
+        margin-bottom: var(--space-4);
+        overflow: hidden;
+    }
+
+    .validation-banner.validation-status-good {
+        border-left: 4px solid var(--low);
+    }
+
+    .validation-banner.validation-status-warning {
+        border-left: 4px solid var(--medium);
+    }
+
+    .validation-banner.validation-status-error {
+        border-left: 4px solid var(--critical);
+    }
+
+    .validation-banner-content {
+        display: flex;
+        align-items: center;
+        gap: var(--space-4);
+        padding: var(--space-4);
+    }
+
+    .validation-confidence {
+        flex-shrink: 0;
+    }
+
+    .confidence-ring {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: var(--text-sm);
+        font-weight: var(--font-bold);
+    }
+
+    .confidence-ring.confidence-high {
+        background: var(--low-bg);
+        color: var(--low);
+    }
+
+    .confidence-ring.confidence-medium {
+        background: var(--medium-bg);
+        color: var(--medium);
+    }
+
+    .confidence-ring.confidence-low {
+        background: var(--high-bg);
+        color: var(--high);
+    }
+
+    .confidence-ring.confidence-critical {
+        background: var(--critical-bg);
+        color: var(--critical);
+    }
+
+    .validation-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .validation-title {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        margin-bottom: var(--space-1);
+    }
+
+    .status-icon {
+        display: flex;
+        align-items: center;
+    }
+
+    .status-icon.status-good { color: var(--low); }
+    .status-icon.status-warning { color: var(--medium); }
+    .status-icon.status-error { color: var(--critical); }
+
+    .validation-status-text {
+        font-weight: var(--font-semibold);
+        color: var(--text-primary);
+    }
+
+    .validation-stats {
+        display: flex;
+        gap: var(--space-4);
+        font-size: var(--text-sm);
+        color: var(--text-muted);
+    }
+
+    .stat-flagged {
+        color: var(--high);
+    }
+
+    .validation-actions {
+        flex-shrink: 0;
+    }
+
+    .validation-alert {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        padding: var(--space-3) var(--space-4);
+        background: var(--critical-bg);
+        color: var(--critical);
+        font-size: var(--text-sm);
+        border-top: 1px solid rgba(239, 68, 68, 0.2);
+    }
+</style>

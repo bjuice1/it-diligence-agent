@@ -111,6 +111,8 @@ class Fact:
     status: str               # documented, partial, gap
     evidence: Dict[str, str]  # exact_quote, source_section
     entity: str = "target"    # "target" (being acquired) or "buyer" - CRITICAL for avoiding confusion
+    analysis_phase: str = "target_extraction"  # "target_extraction" or "buyer_extraction" - which phase created this fact
+    is_integration_insight: bool = False       # True if this fact describes cross-entity integration considerations
     source_document: str = "" # Filename of source document (for incremental updates)
     created_at: str = field(default_factory=lambda: _generate_timestamp())
     updated_at: str = ""      # Set when fact is modified
@@ -126,6 +128,9 @@ class Fact:
     confidence_score: float = 0.0       # 0.0-1.0 confidence rating
     # Domain overlap detection (Point 75)
     related_domains: List[str] = field(default_factory=list)
+    # Needs review flag - for entries that require human validation
+    needs_review: bool = False          # Flagged for human review (sparse details, low confidence)
+    needs_review_reason: str = ""       # Why it needs review
 
     def to_dict(self) -> Dict:
         result = asdict(self)
@@ -193,11 +198,23 @@ class Fact:
             elif quote_len >= 20:
                 score += CONFIDENCE_FACTORS["evidence_length"] * 0.5
 
-        # Has meaningful details
-        if self.details and len(self.details) >= 2:
-            score += CONFIDENCE_FACTORS["has_details"]
-        elif self.details:
-            score += CONFIDENCE_FACTORS["has_details"] * 0.5
+        # Has meaningful details - with domain-specific logic
+        if self.details:
+            if self.domain == "applications":
+                # Applications domain: boost for key fields
+                app_key_fields = ['vendor', 'version', 'deployment', 'user_count', 'users', 'criticality']
+                key_field_count = sum(1 for f in app_key_fields if f in self.details and self.details[f])
+                if key_field_count >= 3:
+                    score += CONFIDENCE_FACTORS["has_details"]
+                elif key_field_count >= 2:
+                    score += CONFIDENCE_FACTORS["has_details"] * 0.75
+                elif key_field_count >= 1:
+                    score += CONFIDENCE_FACTORS["has_details"] * 0.5
+                # Small penalty for apps with no key fields
+            elif len(self.details) >= 2:
+                score += CONFIDENCE_FACTORS["has_details"]
+            else:
+                score += CONFIDENCE_FACTORS["has_details"] * 0.5
 
         # Has source document
         if self.source_document:
@@ -226,6 +243,11 @@ class Fact:
             data['verification_note'] = ""
         if 'reviewer_id' not in data:
             data['reviewer_id'] = None
+        # New needs_review fields (backwards compatibility)
+        if 'needs_review' not in data:
+            data['needs_review'] = False
+        if 'needs_review_reason' not in data:
+            data['needs_review_reason'] = ""
 
         return cls(**data)
 
@@ -243,6 +265,7 @@ class Gap:
     category: str
     description: str
     importance: str           # critical, high, medium, low
+    entity: str = "target"    # "target" or "buyer" - which entity this gap is for
     created_at: str = field(default_factory=lambda: _generate_timestamp())
 
     def to_dict(self) -> Dict:
@@ -250,7 +273,104 @@ class Gap:
 
     @classmethod
     def from_dict(cls, data: Dict) -> "Gap":
+        # Handle legacy gaps without entity field
+        if 'entity' not in data:
+            data['entity'] = 'target'
         return cls(**data)
+
+
+@dataclass
+class FactStoreSnapshot:
+    """
+    Read-only snapshot of facts for context injection.
+
+    Used to provide TARGET facts as immutable context during Phase 2
+    (buyer analysis) without risk of modification.
+
+    This is passed to the discovery agents during buyer extraction
+    so they can reference what was found about the target company.
+    """
+    entity: str                    # Which entity this snapshot is for
+    facts: List[Dict[str, Any]]    # List of fact dicts (read-only)
+    gaps: List[Dict[str, Any]]     # List of gap dicts (read-only)
+    created_at: str                # When snapshot was created
+
+    def get_facts_by_domain(self, domain: str) -> List[Dict]:
+        """Get facts for a specific domain."""
+        return [f for f in self.facts if f.get('domain') == domain]
+
+    def get_facts_by_category(self, domain: str, category: str) -> List[Dict]:
+        """Get facts for a specific domain and category."""
+        return [f for f in self.facts
+                if f.get('domain') == domain and f.get('category') == category]
+
+    def to_context_string(self, include_evidence: bool = False) -> str:
+        """
+        Format snapshot as context string for LLM prompt injection.
+
+        This produces a structured summary that can be included in
+        the buyer analysis prompt as read-only reference.
+
+        Args:
+            include_evidence: Whether to include evidence quotes
+
+        Returns:
+            Formatted string for prompt injection
+        """
+        lines = [
+            f"=== {self.entity.upper()} COMPANY FACTS (READ-ONLY REFERENCE) ===",
+            f"Snapshot created: {self.created_at}",
+            f"Total facts: {len(self.facts)}",
+            "",
+            "IMPORTANT: These facts are about the TARGET company.",
+            "Do NOT extract new facts from this section.",
+            "Use this as context when analyzing BUYER documents.",
+            "",
+        ]
+
+        # Group by domain
+        by_domain: Dict[str, List[Dict]] = {}
+        for fact in self.facts:
+            domain = fact.get('domain', 'unknown')
+            if domain not in by_domain:
+                by_domain[domain] = []
+            by_domain[domain].append(fact)
+
+        for domain, domain_facts in sorted(by_domain.items()):
+            lines.append(f"## {domain.upper()}")
+            for fact in domain_facts:
+                item = fact.get('item', 'Unknown')
+                category = fact.get('category', 'unknown')
+                fact_id = fact.get('fact_id', '')
+                lines.append(f"- [{fact_id}] {category}: {item}")
+
+                # Add key details
+                details = fact.get('details', {})
+                for key in ['vendor', 'version', 'deployment', 'cost', 'user_count']:
+                    if key in details and details[key]:
+                        lines.append(f"    {key}: {details[key]}")
+
+                if include_evidence:
+                    evidence = fact.get('evidence', {})
+                    if evidence.get('exact_quote'):
+                        quote = evidence['exact_quote'][:200]
+                        lines.append(f"    evidence: \"{quote}...\"")
+
+            lines.append("")
+
+        lines.append("=== END TARGET COMPANY FACTS ===")
+        return "\n".join(lines)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert snapshot to dict for serialization."""
+        return {
+            "entity": self.entity,
+            "facts": self.facts,
+            "gaps": self.gaps,
+            "created_at": self.created_at,
+            "fact_count": len(self.facts),
+            "gap_count": len(self.gaps)
+        }
 
 
 # =============================================================================
@@ -378,7 +498,10 @@ class FactStore:
     def add_fact(self, domain: str, category: str, item: str,
                  details: Dict[str, Any], status: str,
                  evidence: Dict[str, str], entity: str = "target",
-                 source_document: str = "") -> str:
+                 source_document: str = "", needs_review: bool = False,
+                 needs_review_reason: str = "",
+                 analysis_phase: str = None,
+                 is_integration_insight: bool = False) -> str:
         """
         Add a fact and return its unique ID.
 
@@ -391,14 +514,37 @@ class FactStore:
             evidence: Must include 'exact_quote' from document
             entity: "target" (being acquired) or "buyer" - defaults to target
             source_document: Filename of source document (for incremental updates)
+            needs_review: Flag for entries requiring human validation
+            needs_review_reason: Why the entry needs review
+            analysis_phase: "target_extraction" or "buyer_extraction" (auto-set if None)
+            is_integration_insight: True if this is a cross-entity integration observation
 
         Returns:
             Unique fact ID (e.g., F-INFRA-001)
+
+        Raises:
+            ValueError: If entity is invalid or locked
         """
         # Validate entity - fail fast instead of silently defaulting
         if entity not in ("target", "buyer"):
             raise ValueError(f"Invalid entity '{entity}'. Must be 'target' or 'buyer'")
-        
+
+        # Check if entity is locked (Two-Phase Analysis protection)
+        if self.is_entity_locked(entity):
+            raise ValueError(
+                f"Cannot add facts for '{entity}' - entity is locked. "
+                f"TARGET facts are locked after Phase 1 to prevent contamination. "
+                f"Use unlock_entity_facts() only if re-running analysis."
+            )
+
+        # Auto-set analysis_phase based on entity if not provided
+        if analysis_phase is None:
+            analysis_phase = "target_extraction" if entity == "target" else "buyer_extraction"
+
+        # Validate analysis_phase
+        if analysis_phase not in ("target_extraction", "buyer_extraction"):
+            raise ValueError(f"Invalid analysis_phase '{analysis_phase}'. Must be 'target_extraction' or 'buyer_extraction'")
+
         # Validate domain against allowed list
         try:
             from config_v2 import DOMAINS
@@ -422,15 +568,25 @@ class FactStore:
                 status=status,
                 evidence=evidence or {},
                 entity=entity,
-                source_document=source_document
+                analysis_phase=analysis_phase,
+                is_integration_insight=is_integration_insight,
+                source_document=source_document,
+                needs_review=needs_review,
+                needs_review_reason=needs_review_reason
             )
 
             # Calculate initial confidence score
             fact.confidence_score = fact.calculate_confidence()
 
+            # Auto-flag for review if confidence is low
+            if fact.confidence_score < 0.4 and not fact.needs_review:
+                fact.needs_review = True
+                fact.needs_review_reason = "Low confidence score"
+
             self.facts.append(fact)
             self._fact_index[fact_id] = fact  # Update index
-            logger.debug(f"Added fact {fact_id}: {item} (confidence: {fact.confidence_score:.2f})")
+            review_flag = " [NEEDS REVIEW]" if fact.needs_review else ""
+            logger.debug(f"Added fact {fact_id}: {item} (confidence: {fact.confidence_score:.2f}){review_flag}")
 
         return fact_id
 
@@ -734,6 +890,176 @@ class FactStore:
                 "buyer_only": buyer_only,
                 "shared": shared,
                 "conflicts": conflicts
+            }
+
+    # =========================================================================
+    # TWO-PHASE ANALYSIS: ENTITY LOCKING & INTEGRATION INSIGHTS
+    # =========================================================================
+
+    def lock_entity_facts(self, entity: str) -> int:
+        """
+        Lock all facts for an entity, preventing modification.
+
+        Used after Phase 1 (target extraction) to ensure TARGET facts
+        are immutable before Phase 2 (buyer extraction) begins.
+
+        Args:
+            entity: "target" or "buyer"
+
+        Returns:
+            Number of facts locked
+        """
+        with self._lock:
+            if f"_locked_{entity}" not in self.metadata:
+                self.metadata[f"_locked_{entity}"] = False
+
+            if self.metadata[f"_locked_{entity}"]:
+                logger.warning(f"Entity '{entity}' facts are already locked")
+                return 0
+
+            entity_facts = [f for f in self.facts if f.entity == entity]
+            self.metadata[f"_locked_{entity}"] = True
+            self.metadata[f"_locked_{entity}_at"] = _generate_timestamp()
+            self.metadata[f"_locked_{entity}_count"] = len(entity_facts)
+
+            logger.info(f"Locked {len(entity_facts)} {entity} facts")
+            return len(entity_facts)
+
+    def is_entity_locked(self, entity: str) -> bool:
+        """Check if facts for an entity are locked."""
+        return self.metadata.get(f"_locked_{entity}", False)
+
+    def unlock_entity_facts(self, entity: str) -> bool:
+        """
+        Unlock facts for an entity (use with caution).
+
+        This should only be used when re-running analysis.
+        """
+        with self._lock:
+            if not self.metadata.get(f"_locked_{entity}", False):
+                return False
+
+            self.metadata[f"_locked_{entity}"] = False
+            self.metadata.pop(f"_locked_{entity}_at", None)
+            logger.warning(f"Unlocked {entity} facts - they can now be modified")
+            return True
+
+    def get_integration_insights(self) -> List[Fact]:
+        """
+        Get all facts marked as integration insights.
+
+        Integration insights are observations about how TARGET and BUYER
+        systems will need to interact post-acquisition.
+        """
+        with self._lock:
+            return [f for f in self.facts if f.is_integration_insight]
+
+    def add_integration_insight(
+        self,
+        domain: str,
+        category: str,
+        item: str,
+        details: Dict[str, Any],
+        evidence: Dict[str, str],
+        target_fact_ids: List[str] = None,
+        buyer_fact_ids: List[str] = None,
+        source_document: str = ""
+    ) -> str:
+        """
+        Add an integration insight that references both TARGET and BUYER facts.
+
+        Integration insights are special facts created during Phase 2 that
+        describe how systems from both entities will need to integrate.
+
+        Args:
+            domain: Domain of the insight
+            category: Category within domain
+            item: Brief description of the integration point
+            details: Integration details (should include target_system, buyer_system, etc.)
+            evidence: Evidence supporting the insight
+            target_fact_ids: List of TARGET fact IDs this insight references
+            buyer_fact_ids: List of BUYER fact IDs this insight references
+            source_document: Source document for the insight
+
+        Returns:
+            Fact ID of the new integration insight
+        """
+        # Enrich details with cross-references
+        enriched_details = {
+            **details,
+            "target_fact_references": target_fact_ids or [],
+            "buyer_fact_references": buyer_fact_ids or [],
+            "insight_type": "integration"
+        }
+
+        # Add as a buyer-phase fact with integration flag
+        return self.add_fact(
+            domain=domain,
+            category=category,
+            item=item,
+            details=enriched_details,
+            status="documented",
+            evidence=evidence,
+            entity="buyer",  # Integration insights come from buyer analysis phase
+            source_document=source_document,
+            analysis_phase="buyer_extraction",
+            is_integration_insight=True
+        )
+
+    def create_snapshot(self, entity: str = "target") -> 'FactStoreSnapshot':
+        """
+        Create a read-only snapshot of facts for context injection.
+
+        Used to provide TARGET facts as context during Phase 2 (buyer analysis)
+        without risk of modification.
+
+        Args:
+            entity: Which entity's facts to snapshot (default: "target")
+
+        Returns:
+            FactStoreSnapshot with read-only view of facts
+        """
+        with self._lock:
+            facts = [f for f in self.facts if f.entity == entity]
+            gaps = [g for g in self.gaps if g.entity == entity]
+            return FactStoreSnapshot(
+                entity=entity,
+                facts=[f.to_dict() for f in facts],
+                gaps=[g.to_dict() for g in gaps],
+                created_at=_generate_timestamp()
+            )
+
+    def get_phase_summary(self) -> Dict[str, Any]:
+        """
+        Get summary of analysis phases and entity breakdown.
+
+        Returns:
+            Dict with phase status, fact counts by entity, and lock status
+        """
+        with self._lock:
+            target_facts = [f for f in self.facts if f.entity == "target"]
+            buyer_facts = [f for f in self.facts if f.entity == "buyer"]
+            integration_insights = [f for f in self.facts if f.is_integration_insight]
+
+            return {
+                "target": {
+                    "fact_count": len(target_facts),
+                    "locked": self.is_entity_locked("target"),
+                    "locked_at": self.metadata.get("_locked_target_at"),
+                    "domains": list(set(f.domain for f in target_facts))
+                },
+                "buyer": {
+                    "fact_count": len(buyer_facts),
+                    "locked": self.is_entity_locked("buyer"),
+                    "locked_at": self.metadata.get("_locked_buyer_at"),
+                    "domains": list(set(f.domain for f in buyer_facts))
+                },
+                "integration_insights": {
+                    "count": len(integration_insights),
+                    "domains": list(set(f.domain for f in integration_insights))
+                },
+                "total_facts": len(self.facts),
+                "total_gaps": len(self.gaps)
             }
 
     # =========================================================================

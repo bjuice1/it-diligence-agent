@@ -332,6 +332,101 @@
         .error-message.show {
             display: block;
         }
+
+        /* Phase indicator badges */
+        .phase-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .phase-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+            background: rgba(255,255,255,0.05);
+            border: 2px solid rgba(255,255,255,0.1);
+            opacity: 0.5;
+            transition: all 0.5s;
+        }
+
+        .phase-badge.active {
+            opacity: 1;
+        }
+
+        .phase-badge.target.active {
+            background: rgba(233, 69, 96, 0.2);
+            border-color: #e94560;
+            color: #e94560;
+        }
+
+        .phase-badge.target.complete {
+            opacity: 1;
+            background: rgba(0, 217, 255, 0.1);
+            border-color: #00d9ff;
+            color: #00d9ff;
+        }
+
+        .phase-badge.buyer.active {
+            background: rgba(83, 52, 131, 0.3);
+            border-color: #9b59b6;
+            color: #b39ddb;
+        }
+
+        .phase-badge.buyer.complete {
+            opacity: 1;
+            background: rgba(0, 217, 255, 0.1);
+            border-color: #00d9ff;
+            color: #00d9ff;
+        }
+
+        .badge-icon {
+            font-size: 1.1em;
+        }
+
+        .phase-connector {
+            width: 40px;
+            height: 2px;
+            background: rgba(255,255,255,0.2);
+            position: relative;
+        }
+
+        .phase-connector.active::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            width: 100%;
+            background: linear-gradient(90deg, #00d9ff, #9b59b6);
+            animation: connectorPulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes connectorPulse {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
+
+        /* Step colors for TARGET vs BUYER */
+        .step[id^="step-target"].active {
+            background: rgba(233, 69, 96, 0.2);
+            border-left-color: #e94560;
+        }
+
+        .step[id^="step-buyer"].active {
+            background: rgba(155, 89, 182, 0.2);
+            border-left-color: #9b59b6;
+        }
+
+        .step[id^="step-buyer"].active .step-detail {
+            color: #b39ddb;
+        }
     </style>
 </head>
 <body>
@@ -379,21 +474,60 @@
             </div>
         </div>
 
+        <!-- Phase indicator -->
+        <div class="phase-indicator" id="phase-indicator">
+            <div class="phase-badge target active" id="phase-badge-target">
+                <span class="badge-icon">&#127919;</span>
+                <span class="badge-text">TARGET</span>
+            </div>
+            <div class="phase-connector" id="phase-connector"></div>
+            <div class="phase-badge buyer" id="phase-badge-buyer">
+                <span class="badge-icon">&#128188;</span>
+                <span class="badge-text">BUYER</span>
+            </div>
+        </div>
+
         <div class="progress-steps" id="steps">
-            <div class="step" id="step-parse" data-phases="initializing,parsing_documents">
+            <!-- Phase 1: TARGET Analysis -->
+            <div class="step" id="step-parse" data-phases="initializing,parsing_documents,target_analysis_start">
                 <div class="step-icon">&#128194;</div>
                 <div class="step-content">
                     <div class="step-title">Processing Documents</div>
                     <div class="step-detail">Reading {{ file_count }} uploaded files...</div>
                 </div>
             </div>
-            <div class="step" id="step-discovery" data-phases="discovery_infrastructure,discovery_network,discovery_cybersecurity,discovery_applications,discovery_identity,discovery_organization">
-                <div class="step-icon">&#128269;</div>
+            <div class="step" id="step-target-discovery" data-phases="discovery_infrastructure,discovery_network,discovery_cybersecurity,discovery_applications,discovery_identity,discovery_organization">
+                <div class="step-icon">&#127919;</div>
                 <div class="step-content">
-                    <div class="step-title">Extracting Facts</div>
-                    <div class="step-detail" id="discovery-detail">AI analyzing content across domains</div>
+                    <div class="step-title">Analyzing TARGET Company</div>
+                    <div class="step-detail" id="target-discovery-detail">Extracting facts from target documents</div>
                 </div>
             </div>
+            <div class="step" id="step-target-lock" data-phases="target_analysis_complete">
+                <div class="step-icon">&#128274;</div>
+                <div class="step-content">
+                    <div class="step-title">Locking TARGET Facts</div>
+                    <div class="step-detail">Securing target analysis before buyer phase</div>
+                </div>
+            </div>
+
+            <!-- Phase 2: BUYER Analysis -->
+            <div class="step" id="step-buyer-discovery" data-phases="buyer_analysis_start,buyer_discovery_infrastructure,buyer_discovery_network,buyer_discovery_cybersecurity,buyer_discovery_applications,buyer_discovery_identity,buyer_discovery_organization">
+                <div class="step-icon">&#128188;</div>
+                <div class="step-content">
+                    <div class="step-title">Analyzing BUYER Company</div>
+                    <div class="step-detail" id="buyer-discovery-detail">Extracting facts with target context</div>
+                </div>
+            </div>
+            <div class="step" id="step-buyer-complete" data-phases="buyer_analysis_complete">
+                <div class="step-icon">&#9989;</div>
+                <div class="step-content">
+                    <div class="step-title">Both Companies Analyzed</div>
+                    <div class="step-detail">Preparing integration analysis</div>
+                </div>
+            </div>
+
+            <!-- Final: Reasoning & Synthesis -->
             <div class="step" id="step-reasoning" data-phases="reasoning">
                 <div class="step-icon">&#9888;</div>
                 <div class="step-content">
@@ -453,31 +587,62 @@
             }, 500);
         }, 8000);
 
-        // Phase to step mapping
+        // Phase to step mapping (Two-Phase Analysis)
         const phaseStepMap = {
+            // Phase 1: TARGET
             'initializing': 'step-parse',
             'parsing_documents': 'step-parse',
-            'discovery_infrastructure': 'step-discovery',
-            'discovery_network': 'step-discovery',
-            'discovery_cybersecurity': 'step-discovery',
-            'discovery_applications': 'step-discovery',
-            'discovery_identity': 'step-discovery',
-            'discovery_organization': 'step-discovery',
+            'target_analysis_start': 'step-parse',
+            'discovery_infrastructure': 'step-target-discovery',
+            'discovery_network': 'step-target-discovery',
+            'discovery_cybersecurity': 'step-target-discovery',
+            'discovery_applications': 'step-target-discovery',
+            'discovery_identity': 'step-target-discovery',
+            'discovery_organization': 'step-target-discovery',
+            'target_analysis_complete': 'step-target-lock',
+            // Phase 2: BUYER
+            'buyer_analysis_start': 'step-buyer-discovery',
+            'buyer_discovery_infrastructure': 'step-buyer-discovery',
+            'buyer_discovery_network': 'step-buyer-discovery',
+            'buyer_discovery_cybersecurity': 'step-buyer-discovery',
+            'buyer_discovery_applications': 'step-buyer-discovery',
+            'buyer_discovery_identity': 'step-buyer-discovery',
+            'buyer_discovery_organization': 'step-buyer-discovery',
+            'buyer_analysis_complete': 'step-buyer-complete',
+            // Final phases
             'reasoning': 'step-reasoning',
             'synthesis': 'step-synthesis',
             'finalizing': 'step-synthesis',
             'complete': 'step-synthesis'
         };
 
-        // Phase display names for discovery detail
-        const discoveryPhaseNames = {
-            'discovery_infrastructure': 'Analyzing infrastructure...',
-            'discovery_network': 'Analyzing network...',
-            'discovery_cybersecurity': 'Analyzing cybersecurity...',
-            'discovery_applications': 'Analyzing applications...',
-            'discovery_identity': 'Analyzing identity & access...',
-            'discovery_organization': 'Analyzing organization...'
+        // Phase display names for discovery details
+        const targetDiscoveryPhases = {
+            'discovery_infrastructure': 'Analyzing TARGET infrastructure...',
+            'discovery_network': 'Analyzing TARGET network...',
+            'discovery_cybersecurity': 'Analyzing TARGET cybersecurity...',
+            'discovery_applications': 'Analyzing TARGET applications...',
+            'discovery_identity': 'Analyzing TARGET identity & access...',
+            'discovery_organization': 'Analyzing TARGET organization...'
         };
+
+        const buyerDiscoveryPhases = {
+            'buyer_discovery_infrastructure': 'Analyzing BUYER infrastructure...',
+            'buyer_discovery_network': 'Analyzing BUYER network...',
+            'buyer_discovery_cybersecurity': 'Analyzing BUYER cybersecurity...',
+            'buyer_discovery_applications': 'Analyzing BUYER applications...',
+            'buyer_discovery_identity': 'Analyzing BUYER identity & access...',
+            'buyer_discovery_organization': 'Analyzing BUYER organization...'
+        };
+
+        // Determine which analysis phase we're in
+        const targetPhases = ['initializing', 'parsing_documents', 'target_analysis_start',
+            'discovery_infrastructure', 'discovery_network', 'discovery_cybersecurity',
+            'discovery_applications', 'discovery_identity', 'discovery_organization',
+            'target_analysis_complete'];
+        const buyerPhases = ['buyer_analysis_start', 'buyer_discovery_infrastructure',
+            'buyer_discovery_network', 'buyer_discovery_cybersecurity', 'buyer_discovery_applications',
+            'buyer_discovery_identity', 'buyer_discovery_organization', 'buyer_analysis_complete'];
 
         function updateProgress(status) {
             const progress = status.progress || {};
@@ -505,18 +670,51 @@
                 partialBtn.style.display = 'inline-block';
             }
 
-            // Update discovery detail if in discovery phase
-            if (discoveryPhaseNames[phase]) {
-                document.getElementById('discovery-detail').textContent = discoveryPhaseNames[phase];
+            // Update phase badges (TARGET vs BUYER)
+            const targetBadge = document.getElementById('phase-badge-target');
+            const buyerBadge = document.getElementById('phase-badge-buyer');
+            const connector = document.getElementById('phase-connector');
+
+            if (targetPhases.includes(phase)) {
+                // In TARGET phase
+                targetBadge.classList.add('active');
+                targetBadge.classList.remove('complete');
+                buyerBadge.classList.remove('active', 'complete');
+                connector.classList.remove('active');
+            } else if (buyerPhases.includes(phase)) {
+                // In BUYER phase (TARGET is complete)
+                targetBadge.classList.remove('active');
+                targetBadge.classList.add('complete');
+                buyerBadge.classList.add('active');
+                buyerBadge.classList.remove('complete');
+                connector.classList.add('active');
+            } else {
+                // Final phases (both complete)
+                targetBadge.classList.remove('active');
+                targetBadge.classList.add('complete');
+                buyerBadge.classList.remove('active');
+                buyerBadge.classList.add('complete');
+                connector.classList.remove('active');
+            }
+
+            // Update discovery detail based on phase
+            if (targetDiscoveryPhases[phase]) {
+                document.getElementById('target-discovery-detail').textContent = targetDiscoveryPhases[phase];
+            }
+            if (buyerDiscoveryPhases[phase]) {
+                document.getElementById('buyer-discovery-detail').textContent = buyerDiscoveryPhases[phase];
             }
 
             // Update step states
             const currentStepId = phaseStepMap[phase];
-            const stepOrder = ['step-parse', 'step-discovery', 'step-reasoning', 'step-synthesis'];
+            const stepOrder = ['step-parse', 'step-target-discovery', 'step-target-lock',
+                              'step-buyer-discovery', 'step-buyer-complete',
+                              'step-reasoning', 'step-synthesis'];
             const currentIndex = stepOrder.indexOf(currentStepId);
 
             stepOrder.forEach((stepId, index) => {
                 const step = document.getElementById(stepId);
+                if (!step) return;
                 step.classList.remove('active', 'complete');
 
                 if (index < currentIndex) {

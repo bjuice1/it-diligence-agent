@@ -1,0 +1,525 @@
+{#
+Correction Modal Component
+Modal dialog for making corrections to extracted facts.
+
+Usage:
+{% include 'validation/components/correction_modal.html' %}
+
+Requires JavaScript functions:
+- openCorrectionModal()
+- closeCorrectionModal()
+- submitCorrection()
+
+Expects global variables:
+- currentFactId
+- currentFact
+#}
+
+<div id="correction-modal-overlay" class="modal-overlay" onclick="closeCorrectionModal()"></div>
+<div id="correction-modal" class="modal" role="dialog" aria-labelledby="correction-modal-title" aria-modal="true">
+    <div class="modal-header">
+        <h2 id="correction-modal-title" class="modal-title">Correct Fact</h2>
+        <button class="modal-close" onclick="closeCorrectionModal()" aria-label="Close modal">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+        </button>
+    </div>
+
+    <div class="modal-body">
+        <form id="correction-form" onsubmit="submitCorrection(event)">
+            <!-- Original vs Corrected comparison -->
+            <div class="correction-comparison">
+                <div class="comparison-column original">
+                    <h3 class="comparison-title">Original Values</h3>
+                    <div id="original-values" class="comparison-values">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+                <div class="comparison-arrow">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                        <polyline points="12 5 19 12 12 19"></polyline>
+                    </svg>
+                </div>
+                <div class="comparison-column corrected">
+                    <h3 class="comparison-title">Corrected Values</h3>
+                    <div id="corrected-values" class="comparison-values">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Correction reason -->
+            <div class="form-group">
+                <label class="form-label" for="correction-reason">
+                    Reason for Correction <span class="required">*</span>
+                </label>
+                <textarea
+                    id="correction-reason"
+                    class="form-textarea"
+                    placeholder="Explain why this correction is needed..."
+                    required
+                    rows="3"></textarea>
+                <div class="form-hint">This will be recorded in the audit trail</div>
+            </div>
+
+            <!-- New evidence (optional) -->
+            <div class="form-group">
+                <label class="form-label" for="correction-evidence">
+                    New Evidence Quote (Optional)
+                </label>
+                <textarea
+                    id="correction-evidence"
+                    class="form-textarea"
+                    placeholder="Paste the exact quote from the source document that supports this correction..."
+                    rows="2"></textarea>
+                <div class="form-hint">Provide source text if the original evidence was incorrect</div>
+            </div>
+
+            <!-- Reviewer info -->
+            <div class="form-group">
+                <label class="form-label" for="correction-reviewer">Reviewer Name</label>
+                <input
+                    type="text"
+                    id="correction-reviewer"
+                    class="form-input"
+                    value="{{ reviewer_name or '' }}"
+                    placeholder="Your name">
+            </div>
+
+            <!-- Ripple effect warning -->
+            <div id="ripple-warning" class="ripple-warning" style="display: none;">
+                <div class="ripple-warning-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                        <line x1="12" y1="9" x2="12" y2="13"></line>
+                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                </div>
+                <div class="ripple-warning-content">
+                    <strong>This correction may affect derived values</strong>
+                    <p id="ripple-warning-text">Changing headcount or cost values will trigger recalculations.</p>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeCorrectionModal()">
+            Cancel
+        </button>
+        <button type="submit" form="correction-form" class="btn btn-primary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            Apply Correction
+        </button>
+    </div>
+</div>
+
+<style>
+    .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: var(--bg-overlay);
+        z-index: var(--z-modal);
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity var(--transition-base), visibility var(--transition-base);
+    }
+
+    .modal-overlay.open {
+        opacity: 1;
+        visibility: visible;
+    }
+
+    .modal {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) scale(0.95);
+        background: var(--bg-surface);
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow-xl);
+        z-index: calc(var(--z-modal) + 1);
+        width: 90%;
+        max-width: 700px;
+        max-height: 90vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        opacity: 0;
+        visibility: hidden;
+        transition: all var(--transition-base);
+    }
+
+    .modal.open {
+        opacity: 1;
+        visibility: visible;
+        transform: translate(-50%, -50%) scale(1);
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: var(--space-4) var(--space-5);
+        border-bottom: 1px solid var(--border-default);
+    }
+
+    .modal-title {
+        font-size: var(--text-lg);
+        font-weight: var(--font-semibold);
+        color: var(--text-primary);
+    }
+
+    .modal-close {
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-md);
+        border: none;
+        background: transparent;
+        color: var(--text-muted);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+    }
+
+    .modal-close:hover {
+        background: var(--bg-surface-sunken);
+        color: var(--text-primary);
+    }
+
+    .modal-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: var(--space-5);
+    }
+
+    .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: var(--space-3);
+        padding: var(--space-4) var(--space-5);
+        border-top: 1px solid var(--border-default);
+        background: var(--bg-surface-sunken);
+    }
+
+    /* Correction comparison */
+    .correction-comparison {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        gap: var(--space-4);
+        margin-bottom: var(--space-5);
+        padding: var(--space-4);
+        background: var(--bg-surface-sunken);
+        border-radius: var(--radius-lg);
+    }
+
+    .comparison-column {
+        min-width: 0;
+    }
+
+    .comparison-title {
+        font-size: var(--text-sm);
+        font-weight: var(--font-semibold);
+        color: var(--text-muted);
+        margin-bottom: var(--space-3);
+        text-transform: uppercase;
+        letter-spacing: 0.025em;
+    }
+
+    .comparison-values {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-3);
+    }
+
+    .comparison-field {
+        background: var(--bg-surface);
+        padding: var(--space-3);
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-default);
+    }
+
+    .comparison-field-label {
+        font-size: var(--text-xs);
+        color: var(--text-muted);
+        margin-bottom: var(--space-1);
+    }
+
+    .comparison-field-value {
+        font-size: var(--text-sm);
+        color: var(--text-primary);
+        word-break: break-word;
+    }
+
+    .original .comparison-field {
+        border-left: 3px solid var(--border-muted);
+    }
+
+    .corrected .comparison-field {
+        border-left: 3px solid var(--accent);
+    }
+
+    .corrected .comparison-field-value {
+        font-weight: var(--font-medium);
+    }
+
+    .corrected .comparison-field input {
+        width: 100%;
+        padding: var(--space-2);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-md);
+        font-size: var(--text-sm);
+        background: var(--bg-surface);
+    }
+
+    .corrected .comparison-field input:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px var(--accent-subtle);
+        outline: none;
+    }
+
+    .comparison-arrow {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-muted);
+    }
+
+    /* Form elements */
+    .form-hint {
+        font-size: var(--text-xs);
+        color: var(--text-muted);
+        margin-top: var(--space-1);
+    }
+
+    .required {
+        color: var(--critical);
+    }
+
+    /* Ripple warning */
+    .ripple-warning {
+        display: flex;
+        gap: var(--space-3);
+        padding: var(--space-4);
+        background: var(--high-bg);
+        border: 1px solid var(--high);
+        border-radius: var(--radius-md);
+        margin-top: var(--space-4);
+    }
+
+    .ripple-warning-icon {
+        color: var(--high);
+        flex-shrink: 0;
+    }
+
+    .ripple-warning-content {
+        font-size: var(--text-sm);
+    }
+
+    .ripple-warning-content strong {
+        color: var(--high);
+        display: block;
+        margin-bottom: var(--space-1);
+    }
+
+    .ripple-warning-content p {
+        color: var(--text-secondary);
+        margin: 0;
+    }
+
+    /* Changed field highlight */
+    .field-changed {
+        animation: highlight-change 0.5s ease;
+    }
+
+    @keyframes highlight-change {
+        0% { background: var(--accent-subtle); }
+        100% { background: var(--bg-surface); }
+    }
+</style>
+
+<script>
+    // Correction modal state
+    let correctedFields = {};
+
+    function openCorrectionModal() {
+        if (!currentFact) return;
+
+        // Populate original values
+        const originalContainer = document.getElementById('original-values');
+        const correctedContainer = document.getElementById('corrected-values');
+        originalContainer.innerHTML = '';
+        correctedContainer.innerHTML = '';
+        correctedFields = {};
+
+        // Add item field
+        addComparisonField('item', currentFact.fact?.item || '', originalContainer, correctedContainer);
+
+        // Add detail fields
+        if (currentFact.fact?.details) {
+            for (const [key, value] of Object.entries(currentFact.fact.details)) {
+                addComparisonField(key, value || '', originalContainer, correctedContainer);
+            }
+        }
+
+        // Show ripple warning for headcount/cost fields
+        checkRippleWarning();
+
+        // Show modal
+        document.getElementById('correction-modal-overlay').classList.add('open');
+        document.getElementById('correction-modal').classList.add('open');
+
+        // Focus first input
+        setTimeout(() => {
+            const firstInput = correctedContainer.querySelector('input');
+            if (firstInput) firstInput.focus();
+        }, 100);
+    }
+
+    function addComparisonField(key, value, originalContainer, correctedContainer) {
+        // Original value (read-only)
+        const originalDiv = document.createElement('div');
+        originalDiv.className = 'comparison-field';
+        originalDiv.innerHTML = `
+            <div class="comparison-field-label">${formatFieldLabel(key)}</div>
+            <div class="comparison-field-value">${value}</div>
+        `;
+        originalContainer.appendChild(originalDiv);
+
+        // Corrected value (editable)
+        const correctedDiv = document.createElement('div');
+        correctedDiv.className = 'comparison-field';
+        correctedDiv.innerHTML = `
+            <div class="comparison-field-label">${formatFieldLabel(key)}</div>
+            <input type="text"
+                   data-field="${key}"
+                   value="${value}"
+                   placeholder="Enter corrected value"
+                   onchange="trackFieldChange('${key}', this.value, '${value}')">
+        `;
+        correctedContainer.appendChild(correctedDiv);
+
+        // Store original value
+        correctedFields[key] = { original: value, corrected: value };
+    }
+
+    function formatFieldLabel(key) {
+        return key
+            .replace(/_/g, ' ')
+            .replace(/\b\w/g, l => l.toUpperCase());
+    }
+
+    function trackFieldChange(key, newValue, originalValue) {
+        correctedFields[key] = {
+            original: originalValue,
+            corrected: newValue
+        };
+        checkRippleWarning();
+    }
+
+    function checkRippleWarning() {
+        const rippleFields = ['headcount', 'fte', 'staff_count', 'team_size',
+                             'personnel_cost', 'total_cost', 'budget', 'spend'];
+
+        let showWarning = false;
+        let affectedFields = [];
+
+        for (const [key, values] of Object.entries(correctedFields)) {
+            if (rippleFields.includes(key.toLowerCase()) && values.original !== values.corrected) {
+                showWarning = true;
+                affectedFields.push(key);
+            }
+        }
+
+        const warningEl = document.getElementById('ripple-warning');
+        const warningText = document.getElementById('ripple-warning-text');
+
+        if (showWarning) {
+            warningEl.style.display = 'flex';
+            warningText.textContent = `Changing ${affectedFields.join(', ')} will trigger recalculation of derived values like totals and averages.`;
+        } else {
+            warningEl.style.display = 'none';
+        }
+    }
+
+    function closeCorrectionModal() {
+        document.getElementById('correction-modal-overlay').classList.remove('open');
+        document.getElementById('correction-modal').classList.remove('open');
+        correctedFields = {};
+    }
+
+    async function submitCorrection(event) {
+        event.preventDefault();
+
+        const reason = document.getElementById('correction-reason').value;
+        const newEvidence = document.getElementById('correction-evidence').value;
+        const reviewer = document.getElementById('correction-reviewer').value || 'anonymous';
+
+        if (!reason) {
+            alert('Please provide a reason for the correction');
+            return;
+        }
+
+        // Build corrected fields (only changed values)
+        const changedFields = {};
+        for (const [key, values] of Object.entries(correctedFields)) {
+            if (values.original !== values.corrected) {
+                changedFields[key] = values.corrected;
+            }
+        }
+
+        if (Object.keys(changedFields).length === 0) {
+            alert('No changes detected. Please modify at least one field.');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/review/${currentFactId}/correct`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    corrected_fields: changedFields,
+                    reason: reason,
+                    corrected_by: reviewer,
+                    new_evidence: newEvidence || null
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.status === 'corrected') {
+                // Show success message with ripple effects if any
+                let message = 'Correction applied successfully!';
+                if (result.ripple_effects && result.ripple_effects.length > 0) {
+                    message += `\n\n${result.ripple_effects.length} derived value(s) were updated.`;
+                }
+                if (result.new_flags && result.new_flags.length > 0) {
+                    message += `\n\n${result.new_flags.length} new flag(s) created for review.`;
+                }
+                alert(message);
+
+                closeCorrectionModal();
+                removeCurrentCard();
+            } else {
+                alert('Correction failed: ' + (result.message || result.error || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Error applying correction:', error);
+            alert('Error applying correction. Please try again.');
+        }
+    }
+
+    // Close modal on escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeCorrectionModal();
+        }
+    });
+</script>

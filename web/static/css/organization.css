@@ -1157,3 +1157,70 @@
     font-weight: 600;
     text-transform: uppercase;
 }
+
+/* Entity Filter Styles */
+.entity-filter {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.filter-label {
+    font-size: 0.85em;
+    color: var(--text-muted);
+    margin-right: 4px;
+}
+
+.entity-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid var(--border-default);
+    border-radius: 6px;
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    font-size: 0.85em;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.entity-btn:hover {
+    border-color: var(--accent);
+}
+
+.entity-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+}
+
+.entity-btn.entity-target.active {
+    background: #10b981;
+    border-color: #10b981;
+}
+
+.entity-btn.entity-buyer.active {
+    background: #3b82f6;
+    border-color: #3b82f6;
+}
+
+.entity-icon {
+    font-size: 1em;
+}
+
+/* Row filtering */
+tr.entity-hidden {
+    display: none !important;
+}
+
+@media (max-width: 768px) {
+    .controls-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .entity-filter {
+        width: 100%;
+        justify-content: flex-start;
+    }
+}

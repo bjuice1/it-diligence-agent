@@ -86,10 +86,30 @@ def build_organization_from_facts(fact_store: FactStore, target_name: str = "Tar
     leadership_facts = [f for f in org_facts if f.category == "leadership"]
     central_it_facts = [f for f in org_facts if f.category == "central_it"]
     app_team_facts = [f for f in org_facts if f.category == "app_teams"]
+    roles_facts = [f for f in org_facts if f.category == "roles"]
     outsourcing_facts = [f for f in org_facts if f.category == "outsourcing"]
     embedded_facts = [f for f in org_facts if f.category == "embedded_it"]
     key_individual_facts = [f for f in org_facts if f.category == "key_individuals"]
     skills_facts = [f for f in org_facts if f.category == "skills"]
+    budget_facts = [f for f in org_facts if f.category == "budget"]
+
+    # Extract authoritative total headcount from IT Budget fact (if available)
+    authoritative_headcount = None
+    for fact in budget_facts:
+        details = fact.details or {}
+        if 'total_it_headcount' in details:
+            authoritative_headcount = details.get('total_it_headcount')
+            logger.info(f"Found authoritative IT headcount from budget fact: {authoritative_headcount}")
+            break
+
+    # Also check for headcount in any fact's details (backup)
+    if authoritative_headcount is None:
+        for fact in org_facts:
+            details = fact.details or {}
+            if 'total_it_headcount' in details:
+                authoritative_headcount = details.get('total_it_headcount')
+                logger.info(f"Found authoritative IT headcount from fact {fact.item}: {authoritative_headcount}")
+                break
 
     # Build staff members from facts
     staff_members = []
@@ -114,6 +134,11 @@ def build_organization_from_facts(fact_store: FactStore, target_name: str = "Tar
         members = _create_staff_from_team_fact(fact, RoleCategory.OTHER)
         staff_members.extend(members)
 
+    # Process roles (from Role & Compensation Breakdown table)
+    for fact in roles_facts:
+        members = _create_staff_from_role_fact(fact)
+        staff_members.extend(members)
+
     # Process key individuals
     for fact in key_individual_facts:
         member = _create_staff_from_key_individual_fact(fact)
@@ -127,6 +152,11 @@ def build_organization_from_facts(fact_store: FactStore, target_name: str = "Tar
                 staff_members.append(member)
 
     store.staff_members = staff_members
+
+    # Set authoritative headcount from IT Budget fact if found
+    if authoritative_headcount is not None:
+        store.authoritative_headcount = authoritative_headcount
+        logger.info(f"Set authoritative headcount to {authoritative_headcount} (from IT Budget)")
 
     # Build MSP relationships from outsourcing facts
     msp_relationships = []
@@ -302,6 +332,64 @@ def _parse_cost(cost_str: Any) -> float:
         except ValueError:
             return 0.0
     return 0.0
+
+
+def _create_staff_from_role_fact(fact: Fact) -> List[StaffMember]:
+    """Create StaffMembers from a role fact (from Role & Compensation Breakdown table).
+
+    Role facts have details like:
+    - item: "Applications Manager"
+    - team: "Applications"
+    - level: "Manager"
+    - count: 5
+    - salary_range: "$125,000 - $165,000"
+    - total_cost: "$893,065"
+    """
+    details = fact.details or {}
+    members = []
+
+    role_title = fact.item if fact.item else "Unknown Role"
+    team = details.get('team', 'IT')
+    level = details.get('level', 'IC')
+    count = _parse_headcount(details.get('count', 1))
+    total_cost = _parse_cost(details.get('total_cost', 0))
+
+    # Calculate per-person cost
+    per_person_cost = total_cost / count if count > 0 and total_cost > 0 else 0
+
+    # If no total_cost, try to parse from salary_range
+    if per_person_cost == 0:
+        salary_range = details.get('salary_range', '')
+        if salary_range:
+            # Parse "125,000 - $165,000" to get midpoint
+            parts = salary_range.replace('$', '').replace(',', '').split('-')
+            if len(parts) == 2:
+                try:
+                    low = float(parts[0].strip())
+                    high = float(parts[1].strip())
+                    per_person_cost = (low + high) / 2
+                except ValueError:
+                    pass
+
+    # Determine category from team name
+    category = _determine_category_from_name(team, RoleCategory.OTHER)
+
+    # Create staff members for this role
+    for i in range(min(count, 50)):  # Cap at 50
+        members.append(StaffMember(
+            id=gen_id("STAFF"),
+            name=f"{role_title} #{i+1}",
+            role_title=role_title,
+            role_category=category,
+            department=team,
+            employment_type=EmploymentType.FTE,
+            base_compensation=int(per_person_cost) if per_person_cost > 0 else DEFAULT_SALARIES.get(category, 100000),
+            location="Unknown",
+            entity=details.get('entity', 'target'),
+            notes=f"Level: {level}. {_get_evidence_str(fact)}"
+        ))
+
+    return members
 
 
 def _create_staff_from_key_individual_fact(fact: Fact) -> Optional[StaffMember]:
@@ -525,13 +613,16 @@ def build_organization_result(
         overall_status="analyzed" if status == "success" else "no_data"
     )
 
-    # Build the result
+    # Build the result - use authoritative headcount if available
+    headcount = store.get_target_headcount()  # Uses authoritative_headcount if set
+    logger.info(f"Final headcount for result: {headcount} (staff_members: {len(store.staff_members)}, authoritative: {store.authoritative_headcount})")
+
     result = OrganizationAnalysisResult(
         msp_summary=msp_summary,
         shared_services_summary=shared_summary,
         cost_summary=cost_summary,
         benchmark_comparison=benchmark,
-        total_it_headcount=len(store.staff_members),
+        total_it_headcount=headcount,
         total_it_cost=store.total_compensation
     )
 

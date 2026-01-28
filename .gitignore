@@ -54,3 +54,16 @@ logs/
 tmp/
 temp/
 *.tmp
+
+# Session/Auth files
+cookies.txt
+data/users.json
+data/diligence.db
+
+# Local test data
+*.log
+/tmp/
+
+# Flask sessions
+flask_session/
+

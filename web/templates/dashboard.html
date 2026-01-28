@@ -11,12 +11,19 @@
         </div>
         <div class="flex gap-2">
             {% if analysis_metadata %}
-            <span class="text-sm text-muted" style="line-height: 2.5;">
-                Analyzed {{ analysis_metadata.file_count }} file(s)
-                {% if analysis_metadata.timestamp %}
-                on {{ analysis_metadata.timestamp }}
+            <div class="text-sm" style="line-height: 1.5; text-align: right;">
+                {% if analysis_metadata.source == 'current_analysis' %}
+                <span style="color: var(--success);">Current Analysis</span><br>
+                {% else %}
+                <span style="color: var(--warning);">Loaded from: {{ analysis_metadata.source_file }}</span><br>
                 {% endif %}
-            </span>
+                <span class="text-muted">
+                    {{ analysis_metadata.fact_count or analysis_metadata.file_count }} facts
+                    {% if analysis_metadata.timestamp %}
+                    | {{ analysis_metadata.timestamp }}
+                    {% endif %}
+                </span>
+            </div>
             {% endif %}
             <a href="{{ url_for('upload_documents') }}" class="btn btn-secondary btn-sm">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -30,7 +37,7 @@
     </div>
 </div>
 
-{% if summary.facts == 0 and summary.risks == 0 %}
+{% if summary.facts == 0 and summary.risks == 0 and (not pending_summary or pending_summary.total == 0) %}
 <!-- Empty State - No Analysis -->
 <div class="card" style="text-align: center; padding: 60px 40px;">
     <div style="font-size: 4em; margin-bottom: 20px;">📊</div>
@@ -45,6 +52,44 @@
             <line x1="12" y1="3" x2="12" y2="15"/>
         </svg>
         Upload Documents
+    </a>
+</div>
+{% elif summary.facts == 0 and summary.risks == 0 and pending_summary and pending_summary.total > 0 %}
+<!-- Pending Updates Only State -->
+<div class="card mb-4" style="border-left: 4px solid var(--warning); background: rgba(234, 179, 8, 0.05);">
+    <div class="card-body" style="padding: 24px;">
+        <div class="flex justify-between items-center">
+            <div>
+                <h3 style="color: var(--warning); margin-bottom: 8px;">{{ pending_summary.total }} Document Updates Pending Review</h3>
+                <p class="text-muted mb-0">
+                    New facts have been extracted from uploaded documents. Review and approve them to add to your knowledge base.
+                </p>
+                <div class="flex gap-2 mt-3">
+                    <span class="badge" style="background: rgba(234, 179, 8, 0.2); color: #b45309;">{{ pending_summary.tier2 }} batch review</span>
+                    {% if pending_summary.tier3 > 0 %}
+                    <span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #dc2626;">{{ pending_summary.tier3 }} conflicts</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="flex gap-2">
+                {% if pending_summary.tier2 > 0 %}
+                <a href="/review/batch" class="btn" style="background: var(--warning); color: white;">
+                    Review Batch
+                </a>
+                {% endif %}
+                {% if pending_summary.tier3 > 0 %}
+                <a href="/review/conflicts" class="btn btn-danger">
+                    Resolve Conflicts
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+<div class="card" style="text-align: center; padding: 40px;">
+    <p class="text-muted">Or run a full analysis to generate risks and work items</p>
+    <a href="{{ url_for('upload_documents') }}" class="btn btn-secondary">
+        Run Full Analysis
     </a>
 </div>
 {% else %}
@@ -76,7 +121,173 @@
         <span class="metric-value">{{ summary.work_items }}</span>
         <span class="metric-subtext">{{ summary.cost_summary.Day_1.count|default(0) if summary.cost_summary else 0 }} for Day 1</span>
     </div>
+    {% if pending_summary and pending_summary.total > 0 %}
+    <div class="metric-card metric-warning" style="cursor: pointer;" onclick="window.location='/documents'">
+        <span class="metric-label">Pending Updates</span>
+        <span class="metric-value">{{ pending_summary.total }}</span>
+        <span class="metric-subtext">
+            {% if pending_summary.tier3 > 0 %}<span style="color: var(--danger);">{{ pending_summary.tier3 }} conflicts</span>, {% endif %}
+            {{ pending_summary.tier2 }} to review
+        </span>
+    </div>
+    {% endif %}
 </div>
+
+<!-- Pending Updates Alert -->
+{% if pending_summary and pending_summary.total > 0 %}
+<div class="card mb-4" style="border-left: 4px solid var(--warning); background: rgba(234, 179, 8, 0.05);">
+    <div class="card-body" style="padding: 16px 20px;">
+        <div class="flex justify-between items-center">
+            <div>
+                <strong style="color: var(--warning);">Document Updates Pending Review</strong>
+                <p class="text-muted text-sm mb-0">
+                    {{ pending_summary.total }} new facts extracted from uploaded documents need review before being added to the knowledge base.
+                </p>
+            </div>
+            <div class="flex gap-2">
+                {% if pending_summary.tier2 > 0 %}
+                <a href="/review/batch" class="btn btn-sm" style="background: var(--warning); color: white;">
+                    Review {{ pending_summary.tier2 }} Batch
+                </a>
+                {% endif %}
+                {% if pending_summary.tier3 > 0 %}
+                <a href="/review/conflicts" class="btn btn-sm btn-danger">
+                    Resolve {{ pending_summary.tier3 }} Conflicts
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Entity Summary -->
+{% if entity_summary %}
+<div class="card mb-4">
+    <div class="card-header">
+        <span class="card-title">Entity Analysis</span>
+        <span class="text-muted text-sm">Facts by company</span>
+    </div>
+    <div class="card-body">
+        <div class="entity-summary-grid">
+            <div class="entity-box entity-target">
+                <div class="entity-header-badge">
+                    <span class="entity-icon-small">🎯</span>
+                    <span class="entity-name">TARGET</span>
+                </div>
+                <div class="entity-stats">
+                    <div class="entity-stat">
+                        <span class="stat-value">{{ entity_summary.target.fact_count }}</span>
+                        <span class="stat-label">Facts</span>
+                    </div>
+                    <div class="entity-stat">
+                        <span class="stat-value">{{ entity_summary.target.document_count }}</span>
+                        <span class="stat-label">Documents</span>
+                    </div>
+                </div>
+                {% if entity_summary.target.by_domain %}
+                <div class="entity-domains">
+                    {% for domain, count in entity_summary.target.by_domain.items() %}
+                    <span class="domain-chip">{{ domain }}: {{ count }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            <div class="entity-box entity-buyer">
+                <div class="entity-header-badge">
+                    <span class="entity-icon-small">🏢</span>
+                    <span class="entity-name">BUYER</span>
+                </div>
+                <div class="entity-stats">
+                    <div class="entity-stat">
+                        <span class="stat-value">{{ entity_summary.buyer.fact_count }}</span>
+                        <span class="stat-label">Facts</span>
+                    </div>
+                    <div class="entity-stat">
+                        <span class="stat-value">{{ entity_summary.buyer.document_count }}</span>
+                        <span class="stat-label">Documents</span>
+                    </div>
+                </div>
+                {% if entity_summary.buyer.by_domain %}
+                <div class="entity-domains">
+                    {% for domain, count in entity_summary.buyer.by_domain.items() %}
+                    <span class="domain-chip">{{ domain }}: {{ count }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+<style>
+.entity-summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+.entity-box {
+    padding: 16px;
+    border-radius: 8px;
+    border: 2px solid var(--border-default);
+}
+.entity-target {
+    border-color: #10b981;
+    background: rgba(16, 185, 129, 0.05);
+}
+.entity-buyer {
+    border-color: #3b82f6;
+    background: rgba(59, 130, 246, 0.05);
+}
+.entity-header-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.entity-icon-small {
+    font-size: 1.2em;
+}
+.entity-name {
+    font-weight: 600;
+    font-size: 0.9em;
+    letter-spacing: 0.05em;
+}
+.entity-stats {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 12px;
+}
+.entity-stat {
+    display: flex;
+    flex-direction: column;
+}
+.entity-stat .stat-value {
+    font-size: 1.5em;
+    font-weight: 700;
+}
+.entity-stat .stat-label {
+    font-size: 0.8em;
+    color: var(--text-muted);
+}
+.entity-domains {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.domain-chip {
+    font-size: 0.75em;
+    padding: 3px 8px;
+    background: var(--bg-surface);
+    border-radius: 4px;
+    color: var(--text-muted);
+}
+@media (max-width: 600px) {
+    .entity-summary-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+{% endif %}
 
 <!-- Domain Coverage -->
 {% if summary.domains_with_facts %}

@@ -79,6 +79,13 @@ def _extract_application_data(fact_store: Any) -> Dict[str, Any]:
         "databases": [],
         "by_category": {},
         "by_hosting": {"saas": 0, "on_prem": 0, "cloud": 0, "hybrid": 0},
+        # Data quality tracking
+        "quality": {
+            "total": 0,
+            "high_confidence": 0,
+            "needs_review": 0,
+            "low_confidence": 0,
+        },
     }
 
     if not fact_store or not fact_store.facts:
@@ -89,6 +96,11 @@ def _extract_application_data(fact_store: Any) -> Dict[str, Any]:
 
     for fact in app_facts:
         category = fact.category or "other"
+
+        # Get confidence and review status
+        confidence = getattr(fact, 'confidence_score', 0.0)
+        needs_review = getattr(fact, 'needs_review', False)
+        needs_review_reason = getattr(fact, 'needs_review_reason', '')
 
         app_info = {
             "name": fact.item,
@@ -101,7 +113,20 @@ def _extract_application_data(fact_store: Any) -> Dict[str, Any]:
             "status": fact.status,
             "fact_id": fact.fact_id,
             "details": fact.details,
+            # Data quality fields
+            "confidence": confidence,
+            "needs_review": needs_review,
+            "needs_review_reason": needs_review_reason,
         }
+
+        # Track data quality
+        data["quality"]["total"] += 1
+        if needs_review:
+            data["quality"]["needs_review"] += 1
+        elif confidence >= 0.6:
+            data["quality"]["high_confidence"] += 1
+        else:
+            data["quality"]["low_confidence"] += 1
 
         # Categorize
         if category == "integration":
@@ -154,13 +179,40 @@ def _render_apps_summary(data: Dict[str, Any]) -> None:
     with col5:
         st.metric("📁 Categories", len(data["by_category"]))
 
+    # Data Quality Summary
+    quality = data.get("quality", {})
+    if quality.get("total", 0) > 0:
+        needs_review = quality.get("needs_review", 0)
+        high_conf = quality.get("high_confidence", 0)
+        low_conf = quality.get("low_confidence", 0)
+
+        if needs_review > 0 or low_conf > 0:
+            st.divider()
+            st.markdown("##### Data Quality")
+            qcol1, qcol2, qcol3 = st.columns(3)
+
+            with qcol1:
+                st.metric("✅ Validated", high_conf, help="High confidence entries")
+
+            with qcol2:
+                if needs_review > 0:
+                    st.metric("⚠️ Needs Review", needs_review, help="Entries flagged for human review")
+                else:
+                    st.metric("⚠️ Needs Review", 0)
+
+            with qcol3:
+                if low_conf > 0:
+                    st.metric("❓ Low Confidence", low_conf, help="Sparse details - may need verification")
+                else:
+                    st.metric("❓ Low Confidence", 0)
+
 
 def _render_inventory_tab(data: Dict[str, Any]) -> None:
     """Render application inventory tab."""
     section_header("Application Inventory", icon="📋", level=4)
 
     # Filter controls
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns([2, 2, 1])
 
     with col1:
         categories = ["All"] + list(data["by_category"].keys())
@@ -177,6 +229,14 @@ def _render_inventory_tab(data: Dict[str, Any]) -> None:
             key="apps_search",
         )
 
+    with col3:
+        # Data quality filter
+        quality_filter = st.selectbox(
+            "Quality",
+            ["All", "Needs Review", "High Confidence", "Low Confidence"],
+            key="apps_quality_filter",
+        )
+
     # Filter applications
     apps = data["applications"]
 
@@ -187,8 +247,17 @@ def _render_inventory_tab(data: Dict[str, Any]) -> None:
         search_lower = search.lower()
         apps = [a for a in apps if search_lower in a["name"].lower() or search_lower in a.get("vendor", "").lower()]
 
+    # Quality filter
+    if quality_filter == "Needs Review":
+        apps = [a for a in apps if a.get("needs_review", False)]
+    elif quality_filter == "High Confidence":
+        apps = [a for a in apps if a.get("confidence", 0) >= 0.6 and not a.get("needs_review", False)]
+    elif quality_filter == "Low Confidence":
+        apps = [a for a in apps if a.get("confidence", 0) < 0.6 and not a.get("needs_review", False)]
+
     # Results
-    st.caption(f"Showing {len(apps)} application(s)")
+    quality_note = f" ({quality_filter})" if quality_filter != "All" else ""
+    st.caption(f"Showing {len(apps)} application(s){quality_note}")
 
     # Render by category
     if selected_cat == "All":
@@ -214,7 +283,11 @@ def _render_category_apps(category: str, apps: List[Dict]) -> None:
     icon = category_icons.get(category, "📱")
     label = category.replace("_", " ").title()
 
-    with st.expander(f"{icon} {label} ({len(apps)})", expanded=len(apps) <= 5):
+    # Count apps needing review in this category
+    needs_review_count = len([a for a in apps if a.get("needs_review", False)])
+    review_indicator = f" ⚠️{needs_review_count}" if needs_review_count > 0 else ""
+
+    with st.expander(f"{icon} {label} ({len(apps)}){review_indicator}", expanded=len(apps) <= 5):
         for app in apps:
             criticality_icon = {
                 "critical": "🔴",
@@ -227,7 +300,14 @@ def _render_category_apps(category: str, apps: List[Dict]) -> None:
             if app["hosting"]:
                 hosting_badge = f" `{app['hosting']}`"
 
-            st.markdown(f"{criticality_icon} **{app['name']}**{hosting_badge}")
+            # Review/confidence indicator
+            review_badge = ""
+            if app.get("needs_review", False):
+                review_badge = " ⚠️"
+            elif app.get("confidence", 0) >= 0.6:
+                review_badge = " ✓"
+
+            st.markdown(f"{criticality_icon} **{app['name']}**{hosting_badge}{review_badge}")
 
             details = []
             if app["vendor"]:
@@ -237,8 +317,18 @@ def _render_category_apps(category: str, apps: List[Dict]) -> None:
             if app["users"]:
                 details.append(f"{app['users']} users")
 
+            # Show confidence score
+            confidence = app.get("confidence", 0)
+            if confidence > 0:
+                conf_pct = int(confidence * 100)
+                details.append(f"Confidence: {conf_pct}%")
+
             if details:
                 st.caption(" | ".join(details))
+
+            # Show review reason if flagged
+            if app.get("needs_review", False) and app.get("needs_review_reason"):
+                st.warning(f"Review needed: {app['needs_review_reason']}", icon="⚠️")
 
 
 def _render_integrations_tab(data: Dict[str, Any]) -> None:

@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% block title %}Profile - IT Due Diligence{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Your Profile</h1>
+    <p class="subtitle">Account settings and information</p>
+</div>
+
+<div class="grid grid-2 gap-4">
+    <!-- Account Info -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Account Information</span>
+        </div>
+        <div class="card-body">
+            <div class="profile-info">
+                <div class="profile-avatar">
+                    {{ user.name[0]|upper if user.name else user.email[0]|upper }}
+                </div>
+                <div class="profile-details">
+                    <h3>{{ user.name or 'No name set' }}</h3>
+                    <p class="text-muted">{{ user.email }}</p>
+                </div>
+            </div>
+
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">Role</span>
+                    <span class="info-value">
+                        {% for role in user.roles %}
+                        <span class="badge badge-info">{{ role|title }}</span>
+                        {% endfor %}
+                    </span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Member Since</span>
+                    <span class="info-value">{{ user.created_at[:10] if user.created_at else 'Unknown' }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Last Login</span>
+                    <span class="info-value">{{ user.last_login[:10] if user.last_login else 'Never' }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Status</span>
+                    <span class="info-value">
+                        {% if user.active %}
+                        <span class="badge badge-success">Active</span>
+                        {% else %}
+                        <span class="badge badge-danger">Inactive</span>
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Quick Actions</span>
+        </div>
+        <div class="card-body">
+            <div class="action-list">
+                <a href="{{ url_for('auth.change_password') }}" class="action-item">
+                    <span class="action-icon">🔒</span>
+                    <div class="action-content">
+                        <strong>Change Password</strong>
+                        <p class="text-muted text-sm">Update your account password</p>
+                    </div>
+                </a>
+                <a href="{{ url_for('auth.logout') }}" class="action-item action-danger">
+                    <span class="action-icon">🚪</span>
+                    <div class="action-content">
+                        <strong>Sign Out</strong>
+                        <p class="text-muted text-sm">Log out of your account</p>
+                    </div>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.profile-info {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+    padding-bottom: var(--space-4);
+    border-bottom: 1px solid var(--border-default);
+}
+
+.profile-avatar {
+    width: 64px;
+    height: 64px;
+    background: var(--accent);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--text-2xl);
+    font-weight: var(--font-bold);
+}
+
+.profile-details h3 {
+    margin: 0;
+    font-size: var(--text-lg);
+}
+
+.profile-details p {
+    margin: var(--space-1) 0 0 0;
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-4);
+}
+
+.info-item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+}
+
+.info-label {
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+}
+
+.info-value {
+    font-weight: var(--font-medium);
+}
+
+.action-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.action-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    text-decoration: none;
+    color: inherit;
+    transition: all var(--transition-fast);
+}
+
+.action-item:hover {
+    background: var(--bg-surface-sunken);
+    border-color: var(--accent);
+}
+
+.action-item.action-danger:hover {
+    border-color: var(--critical);
+}
+
+.action-icon {
+    font-size: 1.5em;
+}
+
+.action-content strong {
+    display: block;
+    margin-bottom: var(--space-1);
+}
+
+.action-content p {
+    margin: 0;
+}
+
+.badge-success {
+    background: var(--low-bg);
+    color: var(--low);
+}
+
+.badge-danger {
+    background: var(--critical-bg);
+    color: var(--critical);
+}
+</style>
+{% endblock %}

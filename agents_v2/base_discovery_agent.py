@@ -102,6 +102,8 @@ class BaseDiscoveryAgent(ABC):
         self.messages: List[Dict] = []
         self.discovery_complete: bool = False
         self.current_document_name: str = ""  # Track source document for fact traceability
+        self.current_entity: str = "target"   # "target" or "buyer" - enforced on all fact creation
+        self.current_analysis_phase: str = "target_extraction"  # "target_extraction" or "buyer_extraction"
 
         # Metrics
         self.metrics = DiscoveryMetrics()
@@ -164,13 +166,21 @@ class BaseDiscoveryAgent(ABC):
         """Return the categories this domain should extract. Override in subclass."""
         return []
 
-    def discover(self, document_text: str, document_name: str = "") -> Dict[str, Any]:
+    def discover(
+        self,
+        document_text: str,
+        document_name: str = "",
+        entity: str = "target",
+        analysis_phase: str = "target_extraction"
+    ) -> Dict[str, Any]:
         """
         Run discovery on the provided document.
 
         Args:
             document_text: Text extracted from IT documents
             document_name: Filename of source document for fact traceability
+            entity: "target" or "buyer" - enforced on all extracted facts
+            analysis_phase: "target_extraction" or "buyer_extraction"
 
         Returns:
             Dict with discovery results including:
@@ -180,6 +190,8 @@ class BaseDiscoveryAgent(ABC):
         """
         self.start_time = time()
         self.current_document_name = document_name  # Store for injection into tool calls
+        self.current_entity = entity  # Store for enforcing entity on all facts
+        self.current_analysis_phase = analysis_phase
         self.logger.info(f"Starting {self.domain.upper()} discovery from: {document_name or 'unknown'}")
         print(f"\n{'='*60}")
         print(f"Discovery: {self.domain.upper()}")
@@ -273,24 +285,32 @@ class BaseDiscoveryAgent(ABC):
         """Build the user message with document content"""
         parts = []
 
-        # Add critical entity focus instructions
+        # Add phase-specific entity focus instructions
         parts.append("## CRITICAL: ENTITY FOCUS INSTRUCTIONS")
         parts.append("")
-        parts.append("You may be analyzing documents for MULTIPLE entities (TARGET and BUYER).")
-        parts.append("- Documents marked '# ENTITY: TARGET' describe the TARGET company (being acquired)")
-        parts.append("- Documents marked '# ENTITY: BUYER' describe the BUYER company (acquirer)")
-        parts.append("")
-        parts.append("**PRIMARY FOCUS: Extract facts about the TARGET company for the investment thesis.**")
-        if self.target_name:
-            parts.append(f"**TARGET COMPANY NAME: {self.target_name}**")
-            parts.append(f"Focus your extraction on facts about {self.target_name}.")
-        parts.append("")
-        parts.append("For each inventory entry, you MUST include:")
-        parts.append("- `entity: 'target'` for TARGET company information (primary focus)")
-        parts.append("- `entity: 'buyer'` for BUYER company information (for integration context only)")
-        parts.append("")
-        parts.append("If a document is about the TARGET company, extract those facts with entity='target'.")
-        parts.append("If a document is about the BUYER company, you may still extract facts but tag them with entity='buyer'.")
+
+        if self.current_entity == "target":
+            # Phase 1: Target extraction
+            parts.append("You are analyzing **TARGET COMPANY** documents.")
+            parts.append("All content below is from the TARGET company (the company being acquired).")
+            parts.append("")
+            parts.append("**IMPORTANT:** Every fact you extract MUST be about the TARGET company.")
+            parts.append("Use `entity: 'target'` for all inventory entries.")
+            if self.target_name:
+                parts.append(f"**TARGET COMPANY NAME: {self.target_name}**")
+        else:
+            # Phase 2: Buyer extraction
+            parts.append("You are analyzing **BUYER COMPANY** documents.")
+            parts.append("All content below is from the BUYER company (the acquirer).")
+            parts.append("")
+            parts.append("**IMPORTANT:** Every fact you extract MUST be about the BUYER company.")
+            parts.append("Use `entity: 'buyer'` for all inventory entries.")
+            parts.append("")
+            parts.append("If you see a section marked 'TARGET COMPANY FACTS (READ-ONLY REFERENCE)',")
+            parts.append("that is context about what the TARGET has - do NOT extract facts from it.")
+            parts.append("Only extract facts from the BUYER documents below that section.")
+            if self.target_name:
+                parts.append(f"**BUYER COMPANY NAME: {self.target_name}**")  # target_name is reused for buyer in Phase 2
         parts.append("")
 
         # Document content
@@ -299,10 +319,11 @@ class BaseDiscoveryAgent(ABC):
         parts.append(document_text)
         parts.append("")
 
-        # Task instructions
+        # Task instructions - phase-specific
         parts.append("## Your Task")
         parts.append(f"Extract all {self.domain} information from the document above.")
-        parts.append("**Remember:** Always include `entity: 'target'` or `entity: 'buyer'` in each inventory entry.")
+        entity_label = "TARGET" if self.current_entity == "target" else "BUYER"
+        parts.append(f"**Remember:** You are extracting {entity_label} company facts. Use `entity: '{self.current_entity}'` in each entry.")
         parts.append("Use create_inventory_entry for each fact you find.")
         parts.append("Use flag_gap for each expected item that is missing.")
         parts.append(f"Call complete_discovery when you have processed all {self.domain} categories.")
@@ -416,10 +437,25 @@ class BaseDiscoveryAgent(ABC):
                 self.metrics.tool_calls += 1
                 print(f"  Tool: {tool_name}")
 
-                # Inject source_document for traceability
-                if tool_name == "create_inventory_entry" and self.current_document_name:
+                # Inject source_document and ENFORCE entity for traceability and contamination prevention
+                if tool_name == "create_inventory_entry":
                     tool_input = dict(tool_input)  # Make a copy
-                    tool_input["source_document"] = self.current_document_name
+
+                    # Inject source document
+                    if self.current_document_name:
+                        tool_input["source_document"] = self.current_document_name
+
+                    # CRITICAL: Enforce entity to prevent cross-contamination
+                    # Override whatever the LLM provided - we control which entity is being analyzed
+                    tool_input["entity"] = self.current_entity
+                    tool_input["analysis_phase"] = self.current_analysis_phase
+
+                    # Log if LLM tried to use wrong entity
+                    llm_entity = tool_input.get("entity", "")
+                    if llm_entity and llm_entity != self.current_entity:
+                        self.logger.warning(
+                            f"Entity override: LLM tried '{llm_entity}', enforced '{self.current_entity}'"
+                        )
 
                 # Execute tool
                 try:
@@ -445,9 +481,16 @@ class BaseDiscoveryAgent(ABC):
                         else:
                             print(f"    -> {result.get('message', 'OK')[:60]}")
 
-                    # Check for discovery complete
+                    # Check for discovery complete - ONLY if the tool succeeded
+                    # Rejected completions (e.g., insufficient extraction) should NOT end discovery
                     if tool_name == "complete_discovery":
-                        self.discovery_complete = True
+                        if result.get("status") == "success":
+                            self.discovery_complete = True
+                        elif result.get("status") == "rejected":
+                            # Extraction incomplete - log and continue
+                            reason = result.get("reason", "unknown")
+                            self.logger.warning(f"complete_discovery REJECTED: {reason}")
+                            print(f"    -> REJECTED: {result.get('message', 'Incomplete extraction')[:100]}...")
 
                     tool_results.append({
                         "type": "tool_result",

@@ -27,6 +27,13 @@ You are NOT analyzing implications, risks, or strategic considerations. You are 
 3. **NO FABRICATION**: Do not invent details. If the document says "VMware environment" but doesn't specify version, record vendor="VMware", version="Not specified".
 4. **GAPS ARE VALUABLE**: Missing information is important to capture. Flag gaps explicitly - they tell the Reasoning Agent where uncertainty exists.
 
+5. **EXHAUSTIVE TABLE EXTRACTION - CRITICAL**:
+   - If a document has a "Data Center Facilities" table with 4 rows, you MUST create 4 inventory entries
+   - If there is a "Cloud Infrastructure" table listing providers, extract EVERY row
+   - Do NOT summarize, skip, or sample - extract EVERY SINGLE ITEM from every table
+   - Count table rows and verify your extraction matches before calling complete_discovery
+   - This is an AUDIT requirement - partners need to verify completeness
+
 ## OUTPUT FORMAT
 
 You must produce inventory entries in this EXACT structure. Every analysis should produce the same categories, whether documented or flagged as gaps.
