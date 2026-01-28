@@ -6,15 +6,41 @@ AI-powered IT due diligence analysis for M&A transactions. Uses Claude to analyz
 
 ---
 
+## Quick Start
+
+```bash
+# Clone and setup
+git clone https://github.com/bjuice1/it-diligence-agent.git
+cd it-diligence-agent
+pip install -r requirements.txt
+
+# Configure
+cp .env.example .env
+# Add your ANTHROPIC_API_KEY to .env
+
+# Run web interface
+python -m web.app
+# Access at http://localhost:5001
+
+# Or use CLI
+python main_v2.py --docs data/input --target-name "Acme Corp"
+```
+
+See [Deployment Guide](docs/deployment.md) for production setup.
+
+---
+
 ## Quick Links
 
 | Document | Purpose |
 |----------|---------|
+| [Architecture](docs/architecture.md) | System architecture overview |
+| [Data Flow](docs/data-flow.md) | How data moves through the system |
+| [Storage](docs/storage.md) | Storage architecture and stores |
+| [API Reference](docs/api.md) | REST API documentation |
+| [Deployment](docs/deployment.md) | Deployment and configuration guide |
 | [Output Guide](docs/OUTPUT_GUIDE.md) | All outputs explained (JSON, HTML, Excel, etc.) |
 | [V2 System Architecture](docs/V2_SYSTEM_ARCHITECTURE_AND_OPTIMIZATIONS.md) | Technical deep-dive on V2 |
-| [Investment Thesis Design](docs/INVESTMENT_THESIS_DESIGN.md) | PE buyer presentation design |
-| [System Architecture (V1)](docs/SYSTEM_ARCHITECTURE.md) | Legacy V1 architecture |
-| [Cost Estimation Module](docs/COST_ESTIMATION_MODULE.md) | Future bottoms-up costing design |
 
 ---
 

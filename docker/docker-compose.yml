@@ -3,8 +3,8 @@ version: '3.8'
 services:
   app:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/Dockerfile
     ports:
       - "5001:8080"
     environment:
@@ -38,9 +38,9 @@ services:
       - USE_AUDIT_LOGGING=${USE_AUDIT_LOGGING:-true}
     volumes:
       # Mount data directories for persistence
-      - ./data:/app/data
-      - ./output:/app/output
-      - ./uploads:/app/uploads  # Phase D: User document uploads
+      - ../data:/app/data
+      - ../output:/app/output
+      - ../uploads:/app/uploads  # Phase D: User document uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -57,8 +57,8 @@ services:
   # Celery Worker (Phase 4)
   celery-worker:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/Dockerfile
     command: celery -A web.celery_app:celery worker --loglevel=info --concurrency=2
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
@@ -75,9 +75,9 @@ services:
       - S3_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
       - S3_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
     volumes:
-      - ./data:/app/data
-      - ./output:/app/output
-      - ./uploads:/app/uploads  # Phase D: User document uploads
+      - ../data:/app/data
+      - ../output:/app/output
+      - ../uploads:/app/uploads  # Phase D: User document uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -88,8 +88,8 @@ services:
   # Celery Beat Scheduler (Phase 4 - for periodic tasks)
   celery-beat:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/Dockerfile
     command: celery -A web.celery_app:celery beat --loglevel=info
     environment:
       - REDIS_URL=redis://redis:6379/0
