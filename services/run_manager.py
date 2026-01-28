@@ -11,6 +11,7 @@ import os
 import json
 import shutil
 import logging
+import threading
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional, Any
@@ -110,12 +111,15 @@ class RunOutputManager:
         self.archive_dir = self.output_dir / "archive" / "runs"
         self.latest_pointer = self.runs_dir / "latest"
 
+        # Thread safety lock for file operations
+        self._lock = threading.Lock()
+
         # Ensure base directories exist
         self.runs_dir.mkdir(parents=True, exist_ok=True)
 
     def create_run_directory(self, target_name: str = "", deal_type: str = "") -> RunPaths:
         """
-        Create a new run directory with timestamp.
+        Create a new run directory with timestamp. Thread-safe.
 
         Args:
             target_name: Name of target company (for folder naming)
@@ -124,43 +128,44 @@ class RunOutputManager:
         Returns:
             RunPaths with all directory paths
         """
-        timestamp = datetime.now().strftime('%Y-%m-%d_%H%M%S')
+        with self._lock:
+            timestamp = datetime.now().strftime('%Y-%m-%d_%H%M%S')
 
-        # Sanitize target name for directory
-        safe_name = self._sanitize_name(target_name) if target_name else "analysis"
+            # Sanitize target name for directory
+            safe_name = self._sanitize_name(target_name) if target_name else "analysis"
 
-        run_id = f"{timestamp}_{safe_name}"
-        run_dir = self.runs_dir / run_id
+            run_id = f"{timestamp}_{safe_name}"
+            run_dir = self.runs_dir / run_id
 
-        # Create paths
-        paths = RunPaths(
-            root=run_dir,
-            facts=run_dir / "facts",
-            findings=run_dir / "findings",
-            logs=run_dir / "logs",
-            reports=run_dir / "reports",
-            exports=run_dir / "exports",
-            documents=run_dir / "documents"
-        )
+            # Create paths
+            paths = RunPaths(
+                root=run_dir,
+                facts=run_dir / "facts",
+                findings=run_dir / "findings",
+                logs=run_dir / "logs",
+                reports=run_dir / "reports",
+                exports=run_dir / "exports",
+                documents=run_dir / "documents"
+            )
 
-        # Create all directories
-        paths.ensure_all()
+            # Create all directories
+            paths.ensure_all()
 
-        # Create initial metadata
-        metadata = RunMetadata(
-            run_id=run_id,
-            created_at=datetime.now().isoformat(),
-            target_name=target_name,
-            deal_type=deal_type,
-            status="in_progress"
-        )
-        self._save_metadata(run_dir, metadata)
+            # Create initial metadata
+            metadata = RunMetadata(
+                run_id=run_id,
+                created_at=datetime.now().isoformat(),
+                target_name=target_name,
+                deal_type=deal_type,
+                status="in_progress"
+            )
+            self._save_metadata(run_dir, metadata)
 
-        # Update latest pointer
-        self.save_latest_pointer(run_id)
+            # Update latest pointer (already holds lock, call internal method)
+            self._save_latest_pointer_unlocked(run_id)
 
-        logger.info(f"Created run directory: {run_id}")
-        return paths
+            logger.info(f"Created run directory: {run_id}")
+            return paths
 
     def get_run_paths(self, run_id: str = None) -> Optional[RunPaths]:
         """
@@ -194,11 +199,16 @@ class RunOutputManager:
 
     def save_latest_pointer(self, run_id: str):
         """
-        Update the 'latest' pointer to point to a run.
+        Update the 'latest' pointer to point to a run. Thread-safe.
 
         Args:
             run_id: Run ID to point to
         """
+        with self._lock:
+            self._save_latest_pointer_unlocked(run_id)
+
+    def _save_latest_pointer_unlocked(self, run_id: str):
+        """Internal: Update latest pointer without acquiring lock."""
         # Write run_id to a file (cross-platform compatible)
         pointer_file = self.runs_dir / ".latest"
         pointer_file.write_text(run_id)
@@ -287,7 +297,7 @@ class RunOutputManager:
 
     def archive_run(self, run_id: str) -> bool:
         """
-        Move a run to the archive directory.
+        Move a run to the archive directory. Thread-safe.
 
         Args:
             run_id: Run ID to archive
@@ -295,32 +305,33 @@ class RunOutputManager:
         Returns:
             True if successful
         """
-        run_dir = self.runs_dir / run_id
-        if not run_dir.exists():
-            logger.warning(f"Run not found for archiving: {run_id}")
-            return False
+        with self._lock:
+            run_dir = self.runs_dir / run_id
+            if not run_dir.exists():
+                logger.warning(f"Run not found for archiving: {run_id}")
+                return False
 
-        # Update metadata
-        metadata = self._load_metadata(run_dir)
-        if metadata:
-            metadata.status = "archived"
-            self._save_metadata(run_dir, metadata)
+            # Update metadata
+            metadata = self._load_metadata(run_dir)
+            if metadata:
+                metadata.status = "archived"
+                self._save_metadata(run_dir, metadata)
 
-        # Create archive directory
-        self.archive_dir.mkdir(parents=True, exist_ok=True)
+            # Create archive directory
+            self.archive_dir.mkdir(parents=True, exist_ok=True)
 
-        # Move to archive
-        archive_path = self.archive_dir / run_id
-        shutil.move(str(run_dir), str(archive_path))
+            # Move to archive
+            archive_path = self.archive_dir / run_id
+            shutil.move(str(run_dir), str(archive_path))
 
-        # Update latest pointer if needed
-        if self.get_latest_run() == run_id:
-            runs = self.list_runs()
-            if runs:
-                self.save_latest_pointer(runs[0]['run_id'])
+            # Update latest pointer if needed
+            if self.get_latest_run() == run_id:
+                runs = self.list_runs()
+                if runs:
+                    self._save_latest_pointer_unlocked(runs[0]['run_id'])
 
-        logger.info(f"Archived run: {run_id}")
-        return True
+            logger.info(f"Archived run: {run_id}")
+            return True
 
     def delete_run(self, run_id: str, confirm: bool = False) -> bool:
         """
@@ -380,7 +391,7 @@ class RunOutputManager:
 
     def update_run_metadata(self, run_id: str, **kwargs) -> bool:
         """
-        Update metadata for a run.
+        Update metadata for a run. Thread-safe.
 
         Args:
             run_id: Run ID
@@ -389,21 +400,22 @@ class RunOutputManager:
         Returns:
             True if successful
         """
-        paths = self.get_run_paths(run_id)
-        if paths is None:
-            return False
+        with self._lock:
+            paths = self.get_run_paths(run_id)
+            if paths is None:
+                return False
 
-        metadata = self._load_metadata(paths.root)
-        if metadata is None:
-            metadata = RunMetadata(run_id=run_id, created_at=datetime.now().isoformat())
+            metadata = self._load_metadata(paths.root)
+            if metadata is None:
+                metadata = RunMetadata(run_id=run_id, created_at=datetime.now().isoformat())
 
-        # Update fields
-        for key, value in kwargs.items():
-            if hasattr(metadata, key):
-                setattr(metadata, key, value)
+            # Update fields
+            for key, value in kwargs.items():
+                if hasattr(metadata, key):
+                    setattr(metadata, key, value)
 
-        self._save_metadata(paths.root, metadata)
-        return True
+            self._save_metadata(paths.root, metadata)
+            return True
 
     def complete_run(self, run_id: str = None,
                      facts_count: int = 0,
@@ -495,8 +507,8 @@ class RunOutputManager:
                 time_part = parts[1]
                 dt = datetime.strptime(f"{date_part}_{time_part}", '%Y-%m-%d_%H%M%S')
                 return dt.isoformat()
-        except:
-            pass
+        except (ValueError, IndexError) as e:
+            logger.debug(f"Could not parse timestamp from run name '{name}': {e}")
         return ""
 
     def _save_metadata(self, run_dir: Path, metadata: RunMetadata):
@@ -524,12 +536,17 @@ class RunOutputManager:
 # =============================================================================
 
 _run_manager: Optional[RunOutputManager] = None
+_run_manager_lock = threading.Lock()
+
 
 def get_run_manager() -> RunOutputManager:
-    """Get or create the global RunOutputManager instance."""
+    """Get or create the global RunOutputManager instance. Thread-safe."""
     global _run_manager
     if _run_manager is None:
-        _run_manager = RunOutputManager()
+        with _run_manager_lock:
+            # Double-check locking pattern
+            if _run_manager is None:
+                _run_manager = RunOutputManager()
     return _run_manager
 
 

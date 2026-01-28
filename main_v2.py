@@ -79,6 +79,9 @@ import threading
 # Interactive mode
 from interactive import Session, InteractiveCLI
 
+# Run management
+from services.run_manager import get_run_manager, RunPaths
+
 # Document loading (reuse from v1)
 from ingestion.pdf_parser import parse_pdfs
 
@@ -909,6 +912,17 @@ Phases:
         help="Output directory (default: output/)"
     )
     parser.add_argument(
+        "--use-runs",
+        action="store_true",
+        default=True,
+        help="Organize outputs into timestamped run folders (default: enabled)"
+    )
+    parser.add_argument(
+        "--no-runs",
+        action="store_true",
+        help="Disable run folders, save to flat output directory"
+    )
+    parser.add_argument(
         "--target-name",
         type=str,
         default="Target Company",
@@ -977,6 +991,18 @@ Phases:
     # Timestamp for outputs
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
+    # Create run directory for organized outputs (default: enabled)
+    run_paths: Optional[RunPaths] = None
+    use_runs = args.use_runs and not args.no_runs
+
+    if use_runs:
+        run_manager = get_run_manager()
+        run_paths = run_manager.create_run_directory(
+            target_name=args.target_name,
+            deal_type=getattr(args, 'deal_type', '')
+        )
+        logger.info(f"Created run directory: {run_paths.root}")
+
     # Determine domains to analyze
     if getattr(args, 'all', False):
         domains_to_analyze = DOMAINS
@@ -1001,6 +1027,8 @@ Phases:
     print("IT DUE DILIGENCE AGENT V2")
     print(f"{'='*60}")
     print(f"Timestamp: {timestamp}")
+    if run_paths:
+        print(f"Run: {run_paths.root.name}")
     if dd_session:
         print(f"Session: {dd_session.session_id}")
         print(f"Deal Type: {dd_session.state.deal_context.deal_type}")
@@ -1100,8 +1128,11 @@ Phases:
                         target_name=args.target_name
                     )
 
-        # Save facts (always save to standard location as well)
-        facts_file = FACTS_DIR / f"facts_{timestamp}.json"
+        # Save facts
+        if run_paths:
+            facts_file = run_paths.facts / "facts.json"
+        else:
+            facts_file = FACTS_DIR / f"facts_{timestamp}.json"
         fact_store.save(str(facts_file))
         print(f"\nFacts saved to: {facts_file}")
 
@@ -1153,7 +1184,10 @@ Phases:
                         all_reasoning_results[domain] = result
 
                 # Save findings
-                findings_file = FINDINGS_DIR / f"findings_{timestamp}.json"
+                if run_paths:
+                    findings_file = run_paths.findings / "findings.json"
+                else:
+                    findings_file = FINDINGS_DIR / f"findings_{timestamp}.json"
                 with open(findings_file, 'w') as f:
                     json.dump(all_reasoning_results, f, indent=2, default=str)
                 print(f"\nFindings saved to: {findings_file}")
@@ -1162,7 +1196,7 @@ Phases:
         coverage_results = run_coverage_analysis(fact_store)
 
         # Save coverage report
-        coverage_file = OUTPUT_DIR / f"coverage_{timestamp}.json"
+        coverage_file = (run_paths.root if run_paths else OUTPUT_DIR) / f"coverage_{timestamp}.json"
         with open(coverage_file, 'w') as f:
             json.dump(coverage_results['coverage'], f, indent=2)
         print(f"\nCoverage saved to: {coverage_file}")
@@ -1177,13 +1211,13 @@ Phases:
             synthesis_results = run_synthesis(fact_store, merged_reasoning_store)
 
             # Save synthesis results
-            synthesis_file = OUTPUT_DIR / f"synthesis_{timestamp}.json"
+            synthesis_file = (run_paths.root if run_paths else OUTPUT_DIR) / f"synthesis_{timestamp}.json"
             with open(synthesis_file, 'w') as f:
                 json.dump(synthesis_results['synthesis'], f, indent=2, default=str)
             print(f"\nSynthesis saved to: {synthesis_file}")
 
             # Save executive summary
-            exec_summary_file = OUTPUT_DIR / f"executive_summary_{timestamp}.md"
+            exec_summary_file = (run_paths.reports if run_paths else OUTPUT_DIR) / f"executive_summary_{timestamp}.md"
             with open(exec_summary_file, 'w') as f:
                 f.write(synthesis_results['executive_summary'])
             print(f"Executive summary saved to: {exec_summary_file}")
@@ -1195,13 +1229,13 @@ Phases:
             vdr_results = run_vdr_generation(fact_store, merged_reasoning_store)
 
             # Save VDR pack
-            vdr_file = OUTPUT_DIR / f"vdr_requests_{timestamp}.json"
+            vdr_file = (run_paths.root if run_paths else OUTPUT_DIR) / f"vdr_requests_{timestamp}.json"
             with open(vdr_file, 'w') as f:
                 json.dump(vdr_results['vdr_pack'], f, indent=2)
             print(f"\nVDR requests saved to: {vdr_file}")
 
             # Save VDR markdown
-            vdr_md_file = OUTPUT_DIR / f"vdr_requests_{timestamp}.md"
+            vdr_md_file = (run_paths.root if run_paths else OUTPUT_DIR) / f"vdr_requests_{timestamp}.md"
             with open(vdr_md_file, 'w') as f:
                 f.write(vdr_results['vdr_markdown'])
             print(f"VDR markdown saved to: {vdr_md_file}")
@@ -1267,7 +1301,7 @@ Phases:
 
             # Save narrative store (even if partial)
             if successful_narratives:
-                narrative_file = OUTPUT_DIR / f"narratives_{timestamp}.json"
+                narrative_file = (run_paths.root if run_paths else OUTPUT_DIR) / f"narratives_{timestamp}.json"
                 narrative_store.save(str(narrative_file))
                 print(f"Narratives saved to: {narrative_file}")
                 if failed_narratives:
@@ -1306,13 +1340,13 @@ Phases:
 
                 if executive_narrative_result.get('status') == 'success':
                     # Save executive narrative as JSON
-                    exec_narrative_file = OUTPUT_DIR / f"executive_narrative_{timestamp}.json"
+                    exec_narrative_file = (run_paths.root if run_paths else OUTPUT_DIR) / f"executive_narrative_{timestamp}.json"
                     with open(exec_narrative_file, 'w') as f:
                         json.dump(executive_narrative_result['narrative'], f, indent=2)
                     print(f"Executive narrative JSON saved to: {exec_narrative_file}")
 
                     # Save executive narrative as Markdown
-                    exec_narrative_md = OUTPUT_DIR / f"executive_narrative_{timestamp}.md"
+                    exec_narrative_md = (run_paths.reports if run_paths else OUTPUT_DIR) / f"executive_narrative_{timestamp}.md"
                     with open(exec_narrative_md, 'w') as f:
                         f.write(executive_narrative_result['narrative_markdown'])
                     print(f"Executive narrative Markdown saved to: {exec_narrative_md}")
@@ -1347,7 +1381,7 @@ Phases:
                 )
 
                 # Save review result
-                review_file = OUTPUT_DIR / f"narrative_review_{timestamp}.json"
+                review_file = (run_paths.root if run_paths else OUTPUT_DIR) / f"narrative_review_{timestamp}.json"
                 with open(review_file, 'w') as f:
                     json.dump(review_result.to_dict(), f, indent=2)
                 print(f"Review saved to: {review_file}")
@@ -1383,7 +1417,7 @@ Phases:
             html_report_file = generate_html_report(
                 fact_store=fact_store,
                 reasoning_store=merged_reasoning_store,
-                output_dir=OUTPUT_DIR,
+                output_dir=run_paths.reports if run_paths else OUTPUT_DIR,
                 timestamp=timestamp
             )
             print(f"HTML report saved to: {html_report_file}")
@@ -1400,7 +1434,7 @@ Phases:
                     narrative_store=narrative_store,
                     fact_store=fact_store,
                     reasoning_store=merged_reasoning_store,
-                    output_dir=OUTPUT_DIR,
+                    output_dir=run_paths.reports if run_paths else OUTPUT_DIR,
                     target_name=args.target_name,
                     timestamp=timestamp
                 )
@@ -1410,7 +1444,7 @@ Phases:
                 presentation_file = generate_presentation(
                     fact_store=fact_store,
                     reasoning_store=merged_reasoning_store,
-                    output_dir=OUTPUT_DIR,
+                    output_dir=run_paths.reports if run_paths else OUTPUT_DIR,
                     target_name=args.target_name,
                     timestamp=timestamp
                 )
@@ -1422,7 +1456,7 @@ Phases:
                 print("GENERATING EXCEL EXPORT")
                 print(f"{'='*60}")
 
-                excel_file = OUTPUT_DIR / f"findings_{timestamp}.xlsx"
+                excel_file = (run_paths.exports if run_paths else OUTPUT_DIR) / f"findings_{timestamp}.xlsx"
                 vdr_pack_obj = None
                 if vdr_results:
                     # Import VDRRequestPack for type checking
@@ -1508,7 +1542,21 @@ Phases:
             dd_session.save()
             print(f"\nSession saved: {dd_session.session_id}")
 
+        # Update run metadata with final counts
+        if run_paths:
+            run_manager = get_run_manager()
+            run_manager.complete_run(
+                run_id=run_paths.root.name,
+                facts_count=total_facts,
+                risks_count=total_risks,
+                work_items_count=total_work_items,
+                gaps_count=total_gaps
+            )
+            print(f"\nRun completed: {run_paths.root.name}")
+
         print("\nOutputs:")
+        if run_paths:
+            print(f"  Run Directory: {run_paths.root}")
         print(f"  Facts: {facts_file}")
         if findings_file:
             print(f"  Findings: {findings_file}")
