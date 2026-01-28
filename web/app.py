@@ -5055,6 +5055,169 @@ def api_storage_status():
     })
 
 
+# =============================================================================
+# Run Management API (Phase B)
+# =============================================================================
+
+@app.route('/api/runs')
+def api_list_runs():
+    """List all analysis runs."""
+    try:
+        from services.run_manager import get_run_manager
+        manager = get_run_manager()
+
+        include_archived = request.args.get('include_archived', 'false').lower() == 'true'
+        runs = manager.list_runs(include_archived=include_archived)
+
+        # Add stats for each run
+        for run in runs:
+            stats = manager.get_run_stats(run['run_id'])
+            run['stats'] = stats
+
+        return jsonify({
+            'runs': runs,
+            'total': len(runs),
+            'latest': manager.get_latest_run()
+        })
+    except Exception as e:
+        logger.error(f"Error listing runs: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/runs/<run_id>')
+def api_get_run(run_id):
+    """Get details for a specific run."""
+    try:
+        from services.run_manager import get_run_manager
+        manager = get_run_manager()
+
+        metadata = manager.get_run_metadata(run_id)
+        if metadata is None:
+            return jsonify({'error': 'Run not found'}), 404
+
+        stats = manager.get_run_stats(run_id)
+
+        return jsonify({
+            'metadata': metadata.to_dict(),
+            'stats': stats,
+            'is_latest': run_id == manager.get_latest_run()
+        })
+    except Exception as e:
+        logger.error(f"Error getting run {run_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/runs/<run_id>/load', methods=['POST'])
+def api_load_run(run_id):
+    """Load a run into the current session."""
+    try:
+        from interactive.session import Session
+
+        # Load session from run
+        analysis_session = Session.load_from_run(run_id)
+
+        # Store in session store
+        session_id = get_or_create_session_id(flask_session)
+        user_session = session_store.get_session(session_id)
+        if user_session:
+            user_session.analysis_session = analysis_session
+            user_session.touch()
+
+        return jsonify({
+            'success': True,
+            'run_id': run_id,
+            'facts': len(analysis_session.fact_store.facts),
+            'risks': len(analysis_session.reasoning_store.risks),
+            'work_items': len(analysis_session.reasoning_store.work_items)
+        })
+    except Exception as e:
+        logger.error(f"Error loading run {run_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/runs/current')
+def api_current_run():
+    """Get current run info for the session."""
+    try:
+        s = get_session()
+        run_id = s.get_current_run_id() if hasattr(s, 'get_current_run_id') else None
+
+        if run_id is None:
+            from services.run_manager import get_run_manager
+            run_id = get_run_manager().get_latest_run()
+
+        return jsonify({
+            'run_id': run_id,
+            'has_data': len(s.fact_store.facts) > 0
+        })
+    except Exception as e:
+        logger.error(f"Error getting current run: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/runs/save', methods=['POST'])
+def api_save_run():
+    """Save current session to a run."""
+    try:
+        s = get_session()
+        saved_files = s.save_to_run()
+
+        return jsonify({
+            'success': True,
+            'files': {k: str(v) for k, v in saved_files.items()},
+            'run_id': s.get_current_run_id()
+        })
+    except Exception as e:
+        logger.error(f"Error saving run: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/runs/<run_id>/archive', methods=['POST'])
+def api_archive_run(run_id):
+    """Archive a run."""
+    try:
+        from services.run_manager import get_run_manager
+        manager = get_run_manager()
+
+        success = manager.archive_run(run_id)
+
+        return jsonify({
+            'success': success,
+            'run_id': run_id
+        })
+    except Exception as e:
+        logger.error(f"Error archiving run {run_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/runs')
+def runs_page():
+    """Run history page."""
+    try:
+        from services.run_manager import get_run_manager
+        manager = get_run_manager()
+
+        runs = manager.list_runs()
+        latest_run = manager.get_latest_run()
+
+        # Get current session stats
+        s = get_session()
+        current_stats = {
+            'facts': len(s.fact_store.facts),
+            'risks': len(s.reasoning_store.risks),
+            'work_items': len(s.reasoning_store.work_items),
+            'gaps': len(s.fact_store.gaps)
+        }
+
+        return render_template('runs.html',
+                             runs=runs,
+                             latest_run=latest_run,
+                             current_stats=current_stats)
+    except Exception as e:
+        logger.error(f"Error rendering runs page: {e}")
+        return render_template('error.html', error=str(e))
+
+
 if __name__ == '__main__':
     print("\n" + "="*60)
     print("  IT Due Diligence Agent - Web Interface")

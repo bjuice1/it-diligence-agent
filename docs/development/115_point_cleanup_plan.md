@@ -38,28 +38,40 @@ Comprehensive plan to polish the IT Due Diligence Agent codebase, organizing out
 ---
 
 ## Phase B: Output Directory Reorganization (Points 21-40)
-**Status: NOT STARTED**
+**Status: COMPLETE**
 
-- [ ] 21. Create `output/runs/` directory
-- [ ] 22. Create `RunOutputManager` class
-- [ ] 23. Implement `create_run_directory()`
-- [ ] 24. Implement `get_run_paths()`
-- [ ] 25. Implement `save_latest_pointer()`
-- [ ] 26. Implement `get_latest_run()`
-- [ ] 27. Update `FactStore.save()` to use run folder
-- [ ] 28. Update findings save to use run folder
-- [ ] 29. Update deal_context save to use run folder
-- [ ] 30. Update open_questions save to use run folder
-- [ ] 31. Update logs to use run folder
-- [ ] 32. Update HTML report generation path
-- [ ] 33. Update `get_session()` to load from latest run
-- [ ] 34. Update web app to read from new paths
-- [ ] 35. Add run selector to web UI
-- [ ] 36. Add run metadata file
-- [ ] 37. Implement `list_runs()`
-- [ ] 38. Implement `archive_run()`
-- [ ] 39. Test full analysis with new output structure
-- [ ] 40. Commit output reorganization
+- [x] 21. Create `output/runs/` directory
+- [x] 22. Create `RunOutputManager` class
+- [x] 23. Implement `create_run_directory()`
+- [x] 24. Implement `get_run_paths()`
+- [x] 25. Implement `save_latest_pointer()`
+- [x] 26. Implement `get_latest_run()`
+- [x] 27. Update `FactStore.save()` to use run folder (via Session.save_to_run)
+- [x] 28. Update findings save to use run folder (via Session.save_to_run)
+- [x] 29. Update deal_context save to use run folder (via Session.save_to_run)
+- [x] 30. Update open_questions save to use run folder (via Session.save_to_run)
+- [x] 31. Update logs to use run folder (via get_run_log_dir helper)
+- [x] 32. Update HTML report generation path (via get_run_report_dir helper)
+- [x] 33. Update `get_session()` to load from latest run (SessionStore.load_session_from_run)
+- [x] 34. Update web app to read from new paths (/api/runs endpoints)
+- [x] 35. Add run selector to web UI (/runs page)
+- [x] 36. Add run metadata file (metadata.json per run)
+- [x] 37. Implement `list_runs()`
+- [x] 38. Implement `archive_run()`
+- [x] 39. Test full analysis with new output structure
+- [x] 40. Commit output reorganization
+
+**Completed:** 2026-01-28
+
+**Files Created:**
+- `services/run_manager.py` - RunOutputManager class
+- `services/analysis_integration.py` - AnalysisRun context manager
+- `web/templates/runs.html` - Run history page
+
+**Files Modified:**
+- `interactive/session.py` - save_to_run(), load_from_run() methods
+- `web/session_store.py` - load_session_from_run(), save_session_to_run() methods
+- `web/app.py` - /api/runs endpoints and /runs page
 
 ---
 
@@ -182,14 +194,14 @@ Comprehensive plan to polish the IT Due Diligence Agent codebase, organizing out
 | Phase | Points | Complete | Status |
 |-------|--------|----------|--------|
 | A: Archive & Cleanup | 1-20 | 20/20 | COMPLETE |
-| B: Output Reorganization | 21-40 | 0/20 | NOT STARTED |
+| B: Output Reorganization | 21-40 | 20/20 | COMPLETE |
 | C: Human Exports | 41-70 | 30/30 | COMPLETE |
 | C+: Dossier System | BONUS | 6/6 | COMPLETE |
 | D: Upload Rename | 71-85 | 0/15 | NOT STARTED |
 | E: Store Consolidation | 86-100 | 0/15 | NOT STARTED |
 | F: Documentation | 101-115 | 1/15 | NOT STARTED |
 
-**Overall: 57/121 points complete (47%)**
+**Overall: 77/121 points complete (64%)**
 
 ---
 

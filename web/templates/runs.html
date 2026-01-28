@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+
+{% block title %}Run History - IT Due Diligence{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="flex justify-between items-start">
+        <div>
+            <h1>Analysis Run History</h1>
+            <p>View and load previous analysis runs</p>
+        </div>
+        <div class="flex gap-2">
+            <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-sm">
+                Back to Dashboard
+            </a>
+            <button class="btn btn-primary btn-sm" onclick="saveCurrentRun()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                    <polyline points="17 21 17 13 7 13 7 21"/>
+                    <polyline points="7 3 7 8 15 8"/>
+                </svg>
+                Save Current
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Current Session Summary -->
+<div class="card mb-4">
+    <div class="card-header">
+        <span class="card-title">Current Session</span>
+        <span class="badge badge-info">Active</span>
+    </div>
+    <div class="card-body">
+        <div class="stats-row">
+            <div class="stat-item">
+                <span class="stat-value">{{ current_stats.facts }}</span>
+                <span class="stat-label">Facts</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value">{{ current_stats.risks }}</span>
+                <span class="stat-label">Risks</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value">{{ current_stats.work_items }}</span>
+                <span class="stat-label">Work Items</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value">{{ current_stats.gaps }}</span>
+                <span class="stat-label">Gaps</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Run History -->
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">Previous Runs</span>
+        <span class="text-muted text-sm">{{ runs|length }} runs saved</span>
+    </div>
+    {% if runs %}
+    <div class="card-body" style="padding: 0;">
+        <div class="table-container" style="border: none; border-radius: 0; box-shadow: none;">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Run</th>
+                        <th>Target</th>
+                        <th>Date</th>
+                        <th>Facts</th>
+                        <th>Risks</th>
+                        <th>Status</th>
+                        <th style="text-align: right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for run in runs %}
+                    <tr class="{% if run.run_id == latest_run %}run-latest{% endif %}">
+                        <td>
+                            <div class="run-id">
+                                {% if run.run_id == latest_run %}
+                                <span class="badge badge-low" style="margin-right: 4px;">Latest</span>
+                                {% endif %}
+                                <code>{{ run.run_id[:20] }}...</code>
+                            </div>
+                        </td>
+                        <td>
+                            <strong>{{ run.target_name or 'Unnamed' }}</strong>
+                            {% if run.deal_type %}
+                            <br><span class="text-muted text-sm">{{ run.deal_type }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="text-sm">{{ run.created_at[:16] | replace('T', ' ') if run.created_at else 'Unknown' }}</span>
+                        </td>
+                        <td>{{ run.facts_count or 0 }}</td>
+                        <td>{{ run.risks_count or 0 }}</td>
+                        <td>
+                            {% if run.status == 'completed' %}
+                            <span class="badge badge-low">Completed</span>
+                            {% elif run.status == 'archived' %}
+                            <span class="badge badge-medium">Archived</span>
+                            {% else %}
+                            <span class="badge badge-info">{{ run.status or 'Unknown' }}</span>
+                            {% endif %}
+                        </td>
+                        <td style="text-align: right;">
+                            <div class="btn-group">
+                                <button class="btn btn-sm btn-secondary" onclick="loadRun('{{ run.run_id }}')" title="Load this run">
+                                    Load
+                                </button>
+                                {% if run.status != 'archived' %}
+                                <button class="btn btn-sm btn-ghost" onclick="archiveRun('{{ run.run_id }}')" title="Archive this run">
+                                    Archive
+                                </button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="card-body" style="text-align: center; padding: 40px;">
+        <div style="font-size: 3em; margin-bottom: 10px;">📁</div>
+        <h3>No Previous Runs</h3>
+        <p class="text-muted">Complete an analysis to create your first run.</p>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.stats-row {
+    display: flex;
+    gap: 30px;
+}
+.stat-item {
+    text-align: center;
+}
+.stat-value {
+    display: block;
+    font-size: 1.5em;
+    font-weight: 600;
+    color: var(--accent);
+}
+.stat-label {
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+.run-id {
+    display: flex;
+    align-items: center;
+}
+.run-id code {
+    font-size: 0.8em;
+    background: var(--bg-surface-sunken);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+.run-latest {
+    background: var(--accent-subtle);
+}
+.btn-group {
+    display: flex;
+    gap: 4px;
+    justify-content: flex-end;
+}
+.btn-ghost {
+    background: transparent;
+    color: var(--text-muted);
+}
+.btn-ghost:hover {
+    background: var(--bg-surface-sunken);
+    color: var(--text-primary);
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadRun(runId) {
+    if (!confirm('Load this run? This will replace your current session data.')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/runs/${runId}/load`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            window.location.href = '/dashboard';
+        } else {
+            alert('Failed to load run: ' + (data.error || 'Unknown error'));
+        }
+    } catch (error) {
+        alert('Error loading run: ' + error.message);
+    }
+}
+
+async function archiveRun(runId) {
+    if (!confirm('Archive this run? It will be moved to the archive folder.')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/runs/${runId}/archive`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            window.location.reload();
+        } else {
+            alert('Failed to archive run: ' + (data.error || 'Unknown error'));
+        }
+    } catch (error) {
+        alert('Error archiving run: ' + error.message);
+    }
+}
+
+async function saveCurrentRun() {
+    try {
+        const response = await fetch('/api/runs/save', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            alert('Run saved successfully!');
+            window.location.reload();
+        } else {
+            alert('Failed to save run: ' + (data.error || 'Unknown error'));
+        }
+    } catch (error) {
+        alert('Error saving run: ' + error.message);
+    }
+}
+</script>
+{% endblock %}

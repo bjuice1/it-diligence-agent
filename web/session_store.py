@@ -86,8 +86,17 @@ class SessionStore:
                 session.touch()
             return session
 
-    def get_or_create_analysis_session(self, session_id: str):
-        """Get the analysis Session object, creating if needed."""
+    def get_or_create_analysis_session(self, session_id: str, load_from_run: str = None):
+        """
+        Get the analysis Session object, creating if needed.
+
+        Args:
+            session_id: User session ID
+            load_from_run: Optional run ID to load from. If "latest", loads the latest run.
+
+        Returns:
+            Session object or None if user session not found
+        """
         from interactive.session import Session
 
         user_session = self.get_session(session_id)
@@ -95,7 +104,16 @@ class SessionStore:
             return None
 
         if user_session.analysis_session is None:
-            user_session.analysis_session = Session()
+            if load_from_run:
+                # Load from a run
+                try:
+                    run_id = None if load_from_run == "latest" else load_from_run
+                    user_session.analysis_session = Session.load_from_run(run_id)
+                except (ValueError, FileNotFoundError):
+                    # No run found or error loading, create empty session
+                    user_session.analysis_session = Session()
+            else:
+                user_session.analysis_session = Session()
 
         return user_session.analysis_session
 
@@ -130,6 +148,45 @@ class SessionStore:
 
         user_session.analysis_session = analysis_session
         return analysis_session
+
+    def load_session_from_run(self, session_id: str, run_id: str = None):
+        """
+        Load analysis results from a run into a session.
+
+        Args:
+            session_id: User session ID
+            run_id: Run ID to load, or None for latest run
+
+        Returns:
+            Session object or None if user session not found
+        """
+        from interactive.session import Session
+
+        user_session = self.get_session(session_id)
+        if not user_session:
+            return None
+
+        # Load session from run folder
+        analysis_session = Session.load_from_run(run_id)
+        user_session.analysis_session = analysis_session
+        return analysis_session
+
+    def save_session_to_run(self, session_id: str, run_id: str = None) -> Optional[Dict]:
+        """
+        Save current session to a run folder.
+
+        Args:
+            session_id: User session ID
+            run_id: Run ID to save to, or None for latest/new
+
+        Returns:
+            Dict with saved file paths, or None if no session
+        """
+        user_session = self.get_session(session_id)
+        if not user_session or not user_session.analysis_session:
+            return None
+
+        return user_session.analysis_session.save_to_run(run_id)
 
     def delete_session(self, session_id: str):
         """Delete a session."""

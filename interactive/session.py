@@ -507,3 +507,140 @@ class Session:
         self.mark_saved()
 
         return saved_files
+
+    # =========================================================================
+    # Run-Based Save/Load (Phase B Integration)
+    # =========================================================================
+
+    def save_to_run(self, run_id: str = None) -> Dict[str, Path]:
+        """
+        Save session state to a run folder.
+
+        Args:
+            run_id: Run ID or None for latest/new run
+
+        Returns:
+            Dict mapping file type to path
+        """
+        from services.run_manager import get_run_manager, RunPaths
+
+        manager = get_run_manager()
+
+        # Get or create run
+        if run_id is None:
+            run_id = manager.get_latest_run()
+
+        if run_id is None:
+            # Create new run
+            target_name = self.deal_context.get('target_name', '') if self.deal_context else ''
+            paths = manager.create_run_directory(target_name=target_name)
+            run_id = paths.root.name
+        else:
+            paths = manager.get_run_paths(run_id)
+            if paths is None:
+                raise ValueError(f"Run not found: {run_id}")
+
+        saved_files = {}
+
+        # Save facts to run/facts/facts.json
+        facts_file = paths.facts / "facts.json"
+        self.fact_store.save(str(facts_file))
+        saved_files['facts'] = facts_file
+
+        # Save findings to run/findings/findings.json
+        findings_file = paths.findings / "findings.json"
+        findings_data = self.reasoning_store.get_all_findings()
+        with open(findings_file, 'w') as f:
+            json.dump(findings_data, f, indent=2, default=str)
+        saved_files['findings'] = findings_file
+
+        # Save deal context
+        if self.deal_context:
+            context_file = paths.root / "deal_context.json"
+            with open(context_file, 'w') as f:
+                json.dump(self.deal_context, f, indent=2)
+            saved_files['deal_context'] = context_file
+
+        # Save open questions/gaps
+        gaps_data = {
+            'gaps': [g.to_dict() for g in self.fact_store.gaps],
+            'generated_at': datetime.now().isoformat()
+        }
+        gaps_file = paths.root / "open_questions.json"
+        with open(gaps_file, 'w') as f:
+            json.dump(gaps_data, f, indent=2)
+        saved_files['open_questions'] = gaps_file
+
+        # Update run metadata with counts
+        manager.update_run_metadata(
+            run_id,
+            facts_count=len(self.fact_store.facts),
+            risks_count=len(self.reasoning_store.risks),
+            work_items_count=len(self.reasoning_store.work_items),
+            gaps_count=len(self.fact_store.gaps),
+            domains_analyzed=list(set(f.domain for f in self.fact_store.facts))
+        )
+
+        self.mark_saved()
+        self.source_files['run_id'] = run_id
+
+        return saved_files
+
+    @classmethod
+    def load_from_run(cls, run_id: str = None) -> "Session":
+        """
+        Load session from a run folder.
+
+        Args:
+            run_id: Run ID or None for latest
+
+        Returns:
+            Session instance
+        """
+        from services.run_manager import get_run_manager
+
+        manager = get_run_manager()
+
+        if run_id is None:
+            run_id = manager.get_latest_run()
+            if run_id is None:
+                raise ValueError("No runs found")
+
+        paths = manager.get_run_paths(run_id)
+        if paths is None:
+            raise ValueError(f"Run not found: {run_id}")
+
+        # Load facts
+        facts_file = paths.facts / "facts.json"
+        if facts_file.exists():
+            fact_store = FactStore.load(str(facts_file))
+        else:
+            fact_store = FactStore()
+
+        # Load findings
+        findings_file = paths.findings / "findings.json"
+        reasoning_store = ReasoningStore(fact_store=fact_store)
+        if findings_file.exists():
+            with open(findings_file) as f:
+                findings_data = json.load(f)
+            reasoning_store.import_from_dict(findings_data)
+
+        # Load deal context
+        deal_context = {}
+        context_file = paths.root / "deal_context.json"
+        if context_file.exists():
+            with open(context_file) as f:
+                deal_context = json.load(f)
+
+        session = cls(
+            fact_store=fact_store,
+            reasoning_store=reasoning_store,
+            deal_context=deal_context
+        )
+        session.source_files['run_id'] = run_id
+
+        return session
+
+    def get_current_run_id(self) -> Optional[str]:
+        """Get the run ID this session is associated with."""
+        return self.source_files.get('run_id')
