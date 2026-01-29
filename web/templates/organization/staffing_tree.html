@@ -530,8 +530,8 @@ function updateChart() {
 
     const mermaidCode = lines.join('\n');
 
-    // Clear and re-render
-    chartDiv.innerHTML = mermaidCode;
+    // Clear and re-render using modern mermaid API
+    chartDiv.innerHTML = '';
     chartDiv.removeAttribute('data-processed');
 
     // Configure mermaid with spacing based on detail level
@@ -541,7 +541,10 @@ function updateChart() {
         '3': { node: 35, rank: 50 }     // Level 3: With individuals - very compact
     };
     const spacing = spacingConfig[level] || spacingConfig['2'];
-    mermaid.initialize({
+
+    // Use mermaid.render() for explicit rendering
+    const chartId = 'org-chart-' + Date.now();
+    mermaid.mermaidAPI.initialize({
         startOnLoad: false,
         theme: 'neutral',
         flowchart: {
@@ -557,7 +560,21 @@ function updateChart() {
             fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif'
         }
     });
-    mermaid.init(undefined, chartDiv);
+
+    try {
+        mermaid.mermaidAPI.render(chartId, mermaidCode).then(result => {
+            chartDiv.innerHTML = result.svg;
+        }).catch(err => {
+            console.error('Mermaid render error:', err);
+            // Fallback: show error message
+            chartDiv.innerHTML = '<div style="color: red; padding: 20px;">Error rendering chart. Check console for details.</div>';
+        });
+    } catch (e) {
+        // Fallback for older mermaid versions
+        console.log('Using fallback mermaid render');
+        chartDiv.innerHTML = mermaidCode;
+        mermaid.init(undefined, chartDiv);
+    }
 
     // Reset zoom when chart updates
     currentZoom = 1.0;

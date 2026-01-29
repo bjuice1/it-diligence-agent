@@ -732,7 +732,9 @@
         }
 
         function checkStatus() {
-            fetch('/analysis/status')
+            // Include task_id in URL to handle session race conditions
+            const statusUrl = taskId ? `/analysis/status?task_id=${taskId}` : '/analysis/status';
+            fetch(statusUrl)
                 .then(r => r.json())
                 .then(data => {
                     if (data.complete) {

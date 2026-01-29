@@ -149,9 +149,12 @@ app.config['WTF_CSRF_CHECK_DEFAULT'] = False  # We'll check manually
 
 @app.before_request
 def csrf_protect():
-    """Apply CSRF protection selectively - exempt API routes."""
+    """Apply CSRF protection selectively - exempt API routes and file uploads."""
     # Skip CSRF for API routes (they should use token auth)
     if request.path.startswith('/api/'):
+        return None
+    # Skip for file upload routes (they use multipart form data)
+    if request.path in ('/upload/process',):
         return None
     # Skip for GET, HEAD, OPTIONS, TRACE
     if request.method in ('GET', 'HEAD', 'OPTIONS', 'TRACE'):
@@ -204,6 +207,10 @@ def load_user(user_id):
 # Register authentication blueprint
 from web.auth import auth_bp
 app.register_blueprint(auth_bp)
+
+# Register deals blueprint
+from web.routes.deals import deals_bp
+app.register_blueprint(deals_bp)
 
 # Check if authentication is required (can be disabled for development)
 AUTH_REQUIRED = os.environ.get('AUTH_REQUIRED', 'true').lower() != 'false'
@@ -594,7 +601,16 @@ def health_check():
 @auth_optional
 def upload_documents():
     """Document upload page."""
-    return render_template('upload.html')
+    # Check if there's an active deal - if so, pass it to the template
+    active_deal = None
+    try:
+        from web.services.deal_service import get_deal_service
+        deal_service = get_deal_service()
+        active_deal = deal_service.get_active_deal_for_session()
+    except Exception as e:
+        logger.debug(f"No active deal: {e}")
+
+    return render_template('upload.html', active_deal=active_deal)
 
 
 @app.route('/upload/process', methods=['POST'])
@@ -718,8 +734,47 @@ def process_upload():
         from config_v2 import DOMAINS
         domains = DOMAINS
 
+    # ==========================================================================
+    # DEAL INTEGRATION: Get or create Deal in database
+    # ==========================================================================
+    deal_id = None
+    try:
+        from web.services.deal_service import get_deal_service
+        deal_service = get_deal_service()
+
+        # Check if there's an active deal in session
+        active_deal = deal_service.get_active_deal_for_session()
+
+        if active_deal:
+            # Use existing deal
+            deal_id = str(active_deal.id)
+            logger.info(f"Using existing deal: {deal_id} ({active_deal.name})")
+        else:
+            # Create new deal from upload form data
+            user = get_current_user()
+            deal_name = f"{target_name} Analysis" if target_name else "New Analysis"
+
+            new_deal, error = deal_service.create_deal(
+                user_id=user.id if user else None,
+                name=deal_name,
+                target_name=target_name or "Unknown Target",
+                buyer_name=buyer_name or None,
+                deal_type=deal_type,
+                industry=industry or None,
+            )
+
+            if new_deal:
+                deal_id = str(new_deal.id)
+                deal_service.set_active_deal_for_session(deal_id)
+                logger.info(f"Created new deal: {deal_id} ({new_deal.name})")
+            else:
+                logger.warning(f"Failed to create deal: {error}")
+    except Exception as e:
+        logger.warning(f"Deal integration skipped: {e}")
+
     # Create deal context dict with entity info
     deal_context = {
+        'deal_id': deal_id,  # Database deal ID for persistence
         'deal_type': deal_type,
         'target_name': target_name,
         'buyer_name': buyer_name,
@@ -750,10 +805,11 @@ def process_upload():
     session_store.set_analysis_task(session_id, task.task_id)
 
     # Start background analysis
+    # Pass deal_id to enable Celery task execution (when available)
     try:
-        task_manager.start_task(task.task_id, run_analysis)
+        task_manager.start_task(task.task_id, run_analysis, deal_id=deal_id)
     except ImportError:
-        task_manager.start_task(task.task_id, run_analysis_simple)
+        task_manager.start_task(task.task_id, run_analysis_simple, deal_id=deal_id)
 
     logger.info(
         f"Started analysis task {task.task_id}: "
@@ -778,15 +834,27 @@ def process_upload():
         except Exception as e:
             logger.debug(f"Audit logging failed: {e}")
 
-    # Redirect to processing page
-    return redirect(url_for('processing'))
+    # Force session save before redirect (fixes race condition with Redis)
+    flask_session.modified = True
+
+    # Redirect to processing page with task_id as backup (in case session not ready)
+    return redirect(url_for('processing', task_id=task.task_id))
 
 
 @app.route('/processing')
+@auth_optional
 def processing():
     """Processing/loading page shown while analysis runs."""
     file_count = flask_session.get('analysis_file_count', 0)
-    task_id = flask_session.get('current_task_id')
+
+    # Get task_id from session, with query param as fallback (handles Redis race condition)
+    task_id = flask_session.get('current_task_id') or request.args.get('task_id')
+
+    # If task_id came from query param, store it in session for subsequent status polls
+    if task_id and not flask_session.get('current_task_id'):
+        flask_session['current_task_id'] = task_id
+        flask_session.modified = True
+        logger.info(f"Restored task_id from query param: {task_id}")
 
     # Get initial task status if available
     initial_status = None
@@ -800,9 +868,16 @@ def processing():
 
 
 @app.route('/analysis/status')
+@auth_optional
 def analysis_status():
     """Check analysis progress. Returns JSON for polling."""
-    task_id = flask_session.get('current_task_id')
+    # Get task_id from session, with query param as fallback (handles Redis race condition)
+    task_id = flask_session.get('current_task_id') or request.args.get('task_id')
+
+    # If task_id came from query param, store it in session for subsequent polls
+    if task_id and not flask_session.get('current_task_id'):
+        flask_session['current_task_id'] = task_id
+        flask_session.modified = True
 
     if not task_id:
         # No task - check for existing results in both locations
@@ -856,6 +931,7 @@ def analysis_status():
 
 
 @app.route('/analysis/cancel', methods=['POST'])
+@auth_optional
 def cancel_analysis():
     """Cancel a running analysis."""
     task_id = flask_session.get('current_task_id')
@@ -1039,6 +1115,7 @@ def risks():
 
 
 @app.route('/risk/<risk_id>')
+@auth_optional
 def risk_detail(risk_id):
     """Risk detail view with connected items."""
     s = get_session()
@@ -1069,6 +1146,7 @@ def risk_detail(risk_id):
 
 
 @app.route('/risk/<risk_id>/adjust', methods=['POST'])
+@auth_optional
 def adjust_risk(risk_id):
     """Adjust a risk's severity."""
     s = get_session()
@@ -1083,6 +1161,7 @@ def adjust_risk(risk_id):
 
 
 @app.route('/risk/<risk_id>/note', methods=['POST'])
+@auth_optional
 def add_risk_note(risk_id):
     """Add a note to a risk."""
     s = get_session()
@@ -1166,6 +1245,7 @@ def work_items():
 
 
 @app.route('/work-item/<wi_id>')
+@auth_optional
 def work_item_detail(wi_id):
     """Work item detail view."""
     s = get_session()
@@ -1199,6 +1279,7 @@ def work_item_detail(wi_id):
 
 
 @app.route('/open-questions')
+@auth_optional
 def open_questions():
     """Display open questions for the deal team."""
     from pathlib import Path
@@ -1256,6 +1337,7 @@ def open_questions():
 
 
 @app.route('/work-item/<wi_id>/adjust', methods=['POST'])
+@auth_optional
 def adjust_work_item(wi_id):
     """Adjust a work item."""
     s = get_session()
@@ -1322,6 +1404,7 @@ def facts():
 
 
 @app.route('/fact/<fact_id>')
+@auth_optional
 def fact_detail(fact_id):
     """Fact detail view with items that cite it."""
     s = get_session()
@@ -1398,6 +1481,7 @@ def gaps():
 
 
 @app.route('/export-vdr')
+@auth_optional
 def export_vdr():
     """Export VDR request list."""
     s = get_session()
@@ -1423,6 +1507,7 @@ def export_vdr():
 
 
 @app.route('/context', methods=['GET', 'POST'])
+@auth_optional
 def context():
     """Manage deal context."""
     s = get_session()
@@ -1444,6 +1529,7 @@ def context():
 
 @app.route('/export', methods=['POST'])
 @csrf.exempt  # Form submission
+@auth_optional
 def export():
     """Export current session."""
     s = get_session()
@@ -1474,6 +1560,7 @@ def export():
 
 
 @app.route('/search')
+@auth_optional
 def search():
     """Search across all items."""
     s = get_session()
@@ -2010,6 +2097,7 @@ def _create_empty_organization_result():
 
 
 @app.route('/organization/refresh')
+@auth_optional
 def organization_refresh():
     """Refresh organization data from current analysis.
 
@@ -2047,6 +2135,7 @@ def organization_overview():
 
 
 @app.route('/organization/staffing')
+@auth_optional
 def organization_staffing():
     """Staffing tree view."""
     result = get_organization_analysis()
@@ -2103,6 +2192,7 @@ def organization_staffing():
 
 
 @app.route('/organization/benchmark')
+@auth_optional
 def organization_benchmark():
     """Benchmark comparison view."""
     result = get_organization_analysis()
@@ -2112,6 +2202,7 @@ def organization_benchmark():
 
 
 @app.route('/organization/msp')
+@auth_optional
 def organization_msp():
     """MSP dependency analysis view."""
     result = get_organization_analysis()
@@ -2123,6 +2214,7 @@ def organization_msp():
 
 
 @app.route('/organization/shared-services')
+@auth_optional
 def organization_shared_services():
     """Shared services analysis view."""
     result = get_organization_analysis()
@@ -2167,6 +2259,7 @@ def applications_overview():
 
 
 @app.route('/applications/<category>')
+@auth_optional
 def applications_category(category):
     """View applications in a specific category."""
     from services.applications_bridge import build_applications_inventory
@@ -2220,6 +2313,7 @@ def infrastructure_overview():
 
 
 @app.route('/infrastructure/<category>')
+@auth_optional
 def infrastructure_category(category):
     """View infrastructure in a specific category."""
     from services.infrastructure_bridge import build_infrastructure_inventory
@@ -2249,6 +2343,7 @@ def infrastructure_category(category):
 # =============================================================================
 
 @app.route('/review')
+@auth_optional
 def review_queue_page():
     """
     Fact validation review queue page.
@@ -2454,6 +2549,7 @@ def cleanup_tasks():
 
 
 @app.route('/api/export/json')
+@auth_optional
 def export_json():
     """Export all analysis data as JSON."""
     s = get_session()
@@ -2516,29 +2612,62 @@ def export_json():
 
 
 @app.route('/api/facts')
+@auth_optional
 def api_facts():
-    """Get facts as JSON with optional filtering."""
-    s = get_session()
+    """Get facts as JSON with optional filtering.
+
+    Database-first: Reads from database if deal is selected, falls back to in-memory.
+    """
     domain = request.args.get('domain')
     category = request.args.get('category')
+    entity = request.args.get('entity')
 
+    # Try database first if we have a deal_id
+    deal_id = flask_session.get('current_deal_id')
+    if deal_id and USE_DATABASE:
+        try:
+            from web.repositories.fact_repository import FactRepository
+            repo = FactRepository()
+            db_facts = repo.get_by_deal(
+                deal_id=deal_id,
+                domain=domain,
+                entity=entity,
+                category=category
+            )
+            return jsonify({
+                'count': len(db_facts),
+                'source': 'database',
+                'deal_id': deal_id,
+                'facts': [f.to_dict() for f in db_facts]
+            })
+        except Exception as e:
+            logger.warning(f"Database query failed, falling back to in-memory: {e}")
+
+    # Fallback to in-memory session store
+    s = get_session()
     facts = list(s.fact_store.facts)
 
     if domain:
         facts = [f for f in facts if f.domain == domain]
     if category:
         facts = [f for f in facts if f.category == category]
+    if entity:
+        facts = [f for f in facts if f.entity == entity]
 
     return jsonify({
         'count': len(facts),
+        'source': 'memory',
+        'deal_id': deal_id,
         'facts': [
             {
                 'id': f.fact_id,
+                'fact_id': f.fact_id,
                 'domain': f.domain,
                 'category': f.category,
                 'item': f.item,
                 'details': f.details,
                 'status': f.status,
+                'entity': f.entity,
                 'source_document': f.source_document,
                 'confidence_score': f.confidence_score,
                 'verified': f.verified,
@@ -2551,15 +2680,34 @@ def api_facts():
 
 
 @app.route('/api/facts/<fact_id>/verify', methods=['POST'])
+@auth_optional
 def verify_fact(fact_id):
     """Mark a fact as verified by a human reviewer."""
-    s = get_session()
-
-    # Get the verified_by from request data or default
     data = request.get_json() or {}
     verified_by = data.get('verified_by', 'web_user')
+    verification_note = data.get('note', '')
 
-    # Attempt to verify the fact
+    # Try database first
+    if USE_DATABASE:
+        try:
+            from web.repositories.fact_repository import FactRepository
+            repo = FactRepository()
+            fact = repo.get_by_id(fact_id)
+            if fact:
+                repo.verify_fact(fact, verified_by, verification_note)
+                return jsonify({
+                    'status': 'success',
+                    'source': 'database',
+                    'message': f'Fact {fact_id} verified by {verified_by}',
+                    'fact_id': fact_id,
+                    'verified': True,
+                    'verified_by': verified_by
+                })
+        except Exception as e:
+            logger.warning(f"Database verify failed, trying in-memory: {e}")
+
+    # Fallback to in-memory
+    s = get_session()
     success = s.fact_store.verify_fact(fact_id, verified_by)
 
     if success:
@@ -2571,6 +2719,7 @@ def verify_fact(fact_id):
 
         return jsonify({
             'status': 'success',
+            'source': 'memory',
             'message': f'Fact {fact_id} verified by {verified_by}',
             'fact_id': fact_id,
             'verified': True,
@@ -2584,6 +2733,7 @@ def verify_fact(fact_id):
 
 
 @app.route('/api/facts/<fact_id>/unverify', methods=['POST'])
+@auth_optional
 def unverify_fact(fact_id):
     """Remove verification status from a fact."""
     s = get_session()
@@ -2611,6 +2761,7 @@ def unverify_fact(fact_id):
 
 
 @app.route('/api/facts/verification-stats')
+@auth_optional
 def verification_stats():
     """Get verification statistics for all facts."""
     s = get_session()
@@ -2619,6 +2770,7 @@ def verification_stats():
 
 
 @app.route('/api/facts/confidence-summary')
+@auth_optional
 def confidence_summary():
     """Get confidence score summary for all facts."""
     s = get_session()
@@ -2627,6 +2779,7 @@ def confidence_summary():
 
 
 @app.route('/api/entity-summary')
+@auth_optional
 def entity_summary():
     """Get summary of facts by entity (target vs buyer).
 
@@ -2685,6 +2838,7 @@ def entity_summary():
 
 
 @app.route('/api/documents/store')
+@auth_optional
 def api_document_store():
     """Get document store statistics and list."""
     try:
@@ -2718,6 +2872,7 @@ def api_document_store():
 # =============================================================================
 
 @app.route('/api/review/queue')
+@auth_optional
 def review_queue():
     """
     Get facts needing review, sorted by priority.
@@ -2762,6 +2917,7 @@ def review_queue():
 
 
 @app.route('/api/review/stats')
+@auth_optional
 def review_stats():
     """Get comprehensive review queue statistics."""
     s = get_session()
@@ -2770,6 +2926,7 @@ def review_stats():
 
 
 @app.route('/api/review/export-report')
+@auth_optional
 def export_verification_report():
     """Export verification report as markdown."""
     s = get_session()
@@ -2829,6 +2986,7 @@ def export_verification_report():
 
 
 @app.route('/api/facts/<fact_id>/status', methods=['POST'])
+@auth_optional
 def update_fact_status(fact_id):
     """
     Update verification status for a fact.
@@ -2890,6 +3048,7 @@ def update_fact_status(fact_id):
 
 
 @app.route('/api/facts/<fact_id>/skip', methods=['POST'])
+@auth_optional
 def skip_fact(fact_id):
     """Mark a fact as skipped (will revisit later)."""
     s = get_session()
@@ -2922,6 +3081,7 @@ def skip_fact(fact_id):
 
 
 @app.route('/api/facts/<fact_id>/flag-incorrect', methods=['POST'])
+@auth_optional
 def flag_incorrect(fact_id):
     """Mark a fact as incorrect."""
     s = get_session()
@@ -2961,6 +3121,7 @@ def flag_incorrect(fact_id):
 
 
 @app.route('/api/facts/<fact_id>/needs-info', methods=['POST'])
+@auth_optional
 def needs_more_info(fact_id):
     """Mark a fact as needing more information and optionally create a question."""
     s = get_session()
@@ -3024,6 +3185,7 @@ def needs_more_info(fact_id):
 
 
 @app.route('/api/facts/<fact_id>/note', methods=['PATCH'])
+@auth_optional
 def update_fact_note(fact_id):
     """Update just the note for a fact without changing status."""
     s = get_session()
@@ -3058,12 +3220,38 @@ def update_fact_note(fact_id):
 
 
 @app.route('/api/risks')
+@auth_optional
 def api_risks():
-    """Get risks as JSON with optional filtering."""
-    s = get_session()
+    """Get risks as JSON with optional filtering.
+
+    Database-first: Reads from database if deal is selected, falls back to in-memory.
+    """
     domain = request.args.get('domain')
     severity = request.args.get('severity')
 
+    # Try database first if we have a deal_id
+    deal_id = flask_session.get('current_deal_id')
+    if deal_id and USE_DATABASE:
+        try:
+            from web.repositories.finding_repository import FindingRepository
+            repo = FindingRepository()
+            db_findings = repo.get_by_deal(
+                deal_id=deal_id,
+                finding_type='risk',
+                domain=domain,
+                severity=severity
+            )
+            return jsonify({
+                'count': len(db_findings),
+                'source': 'database',
+                'deal_id': deal_id,
+                'risks': [f.to_dict() for f in db_findings]
+            })
+        except Exception as e:
+            logger.warning(f"Database query failed, falling back to in-memory: {e}")
+
+    # Fallback to in-memory session store
+    s = get_session()
     risks = list(s.reasoning_store.risks)
 
     if domain:
@@ -3073,6 +3261,8 @@ def api_risks():
 
     return jsonify({
         'count': len(risks),
+        'source': 'memory',
+        'deal_id': deal_id,
         'risks': [
             {
                 'id': r.finding_id,
@@ -3092,6 +3282,7 @@ def api_risks():
 # =============================================================================
 
 @app.route('/api/narrative/<domain>')
+@auth_optional
 def api_get_narrative(domain):
     """
     Get or generate narrative for a domain.
@@ -3130,6 +3321,7 @@ def api_get_narrative(domain):
 
 
 @app.route('/api/narrative/<domain>/regenerate', methods=['POST'])
+@auth_optional
 def api_regenerate_narrative(domain):
     """
     Force regenerate narrative for a domain.
@@ -3167,6 +3359,7 @@ def api_regenerate_narrative(domain):
 
 
 @app.route('/api/export/excel')
+@auth_optional
 def export_excel():
     """Export analysis data as Excel file."""
     from io import BytesIO
@@ -3316,6 +3509,7 @@ def export_excel():
 
 
 @app.route('/api/export/dossiers/<domain>')
+@auth_optional
 def export_dossiers(domain):
     """Export comprehensive dossiers for a specific domain."""
     from flask import send_file, request
@@ -3462,6 +3656,7 @@ body {{ font-family: -apple-system, sans-serif; margin: 20px; }}
 
 
 @app.route('/api/export/inventory/<domain>')
+@auth_optional
 def export_inventory(domain):
     """Export inventory for a specific domain using the export service."""
     from flask import send_file, request
@@ -3558,6 +3753,7 @@ def export_inventory(domain):
 
 
 @app.route('/api/export/work-items')
+@auth_optional
 def export_work_items():
     """Export work items as Markdown."""
     from flask import send_file
@@ -3614,6 +3810,7 @@ def export_work_items():
 
 
 @app.route('/api/export/risks')
+@auth_optional
 def export_risks():
     """Export risks as Markdown."""
     from flask import send_file
@@ -3667,6 +3864,7 @@ def export_risks():
 
 
 @app.route('/api/export/vdr-requests')
+@auth_optional
 def export_vdr_requests():
     """Export VDR/information gap requests as Markdown."""
     from flask import send_file
@@ -3708,6 +3906,7 @@ def export_vdr_requests():
 
 
 @app.route('/api/export/executive-summary')
+@auth_optional
 def export_executive_summary():
     """Export executive summary as Markdown."""
     from flask import send_file
@@ -3792,6 +3991,7 @@ def export_executive_summary():
 
 
 @app.route('/exports')
+@auth_optional
 def exports_page():
     """Export center page with all export options."""
     s = get_session()
@@ -3825,6 +4025,7 @@ def exports_page():
 # =============================================================================
 
 @app.route('/documents')
+@auth_optional
 def documents_page():
     """Document management and incremental update page."""
     s = get_session()
@@ -3877,6 +4078,7 @@ def documents_page():
 
 
 @app.route('/api/documents')
+@auth_optional
 def api_documents():
     """Get all registered documents."""
     from tools_v2.document_registry import DocumentRegistry
@@ -3904,6 +4106,7 @@ def api_documents():
 
 
 @app.route('/api/documents/upload', methods=['POST'])
+@auth_optional
 def api_upload_documents():
     """Upload new documents for incremental analysis."""
     from tools_v2.document_registry import DocumentRegistry, ChangeType
@@ -4081,6 +4284,7 @@ def process_document_now(doc_id):
 
 
 @app.route('/api/documents/<doc_id>')
+@auth_optional
 def get_document(doc_id):
     """Get document details."""
     s = get_session()
@@ -4096,6 +4300,7 @@ def get_document(doc_id):
 
 
 @app.route('/api/documents/<doc_id>/facts')
+@auth_optional
 def get_document_facts(doc_id):
     """Get all facts linked to a document."""
     s = get_session()
@@ -4465,6 +4670,7 @@ def accept_single_change(change_id):
 
 
 @app.route('/review/batch')
+@auth_optional
 def batch_review_page():
     """Batch review page for Tier 2 changes."""
     from config_v2 import OUTPUT_DIR
@@ -4500,6 +4706,7 @@ def batch_review_page():
 
 
 @app.route('/review/conflicts')
+@auth_optional
 def conflicts_review_page():
     """Individual review page for Tier 3 conflicts."""
     from config_v2 import OUTPUT_DIR
@@ -4755,6 +4962,7 @@ def update_incremental_settings():
 # =============================================================================
 
 @app.route('/validation')
+@auth_optional
 def validation_dashboard():
     """
     Validation dashboard showing overall confidence and domain status.
@@ -4830,6 +5038,7 @@ def validation_dashboard():
 
 
 @app.route('/validation/queue')
+@auth_optional
 def validation_review_queue():
     """
     Validation-aware review queue with flag-based filtering.
@@ -5060,6 +5269,7 @@ def api_storage_status():
 # =============================================================================
 
 @app.route('/api/runs')
+@auth_optional
 def api_list_runs():
     """List all analysis runs."""
     try:
@@ -5085,6 +5295,7 @@ def api_list_runs():
 
 
 @app.route('/api/runs/<run_id>')
+@auth_optional
 def api_get_run(run_id):
     """Get details for a specific run."""
     try:
@@ -5108,6 +5319,7 @@ def api_get_run(run_id):
 
 
 @app.route('/api/runs/<run_id>/load', methods=['POST'])
+@auth_optional
 def api_load_run(run_id):
     """Load a run into the current session."""
     try:
@@ -5136,6 +5348,7 @@ def api_load_run(run_id):
 
 
 @app.route('/api/runs/current')
+@auth_optional
 def api_current_run():
     """Get current run info for the session."""
     try:
@@ -5156,6 +5369,7 @@ def api_current_run():
 
 
 @app.route('/api/runs/save', methods=['POST'])
+@auth_optional
 def api_save_run():
     """Save current session to a run."""
     try:
@@ -5173,6 +5387,7 @@ def api_save_run():
 
 
 @app.route('/api/runs/<run_id>/archive', methods=['POST'])
+@auth_optional
 def api_archive_run(run_id):
     """Archive a run."""
     try:
@@ -5191,6 +5406,7 @@ def api_archive_run(run_id):
 
 
 @app.route('/runs')
+@auth_optional
 def runs_page():
     """Run history page."""
     try:

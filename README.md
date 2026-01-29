@@ -8,15 +8,28 @@ AI-powered IT due diligence analysis for M&A transactions. Uses Claude to analyz
 
 ## Quick Start
 
+### Option 1: Docker (Recommended)
+
 ```bash
 # Clone and setup
 git clone https://github.com/bjuice1/it-diligence-agent.git
 cd it-diligence-agent
-pip install -r requirements.txt
 
 # Configure
 cp .env.example .env
 # Add your ANTHROPIC_API_KEY to .env
+
+# Start with Docker
+cd docker
+docker compose up -d
+
+# Access at http://localhost:5001
+```
+
+### Option 2: Local Python
+
+```bash
+pip install -r requirements.txt
 
 # Run web interface
 python -m web.app
@@ -27,6 +40,7 @@ python main_v2.py --docs data/input --target-name "Acme Corp"
 ```
 
 See [Deployment Guide](docs/deployment.md) for production setup.
+See [Session Pickup Guide](docs/SESSION_PICKUP.md) for current development status.
 
 ---
 
@@ -34,6 +48,7 @@ See [Deployment Guide](docs/deployment.md) for production setup.
 
 | Document | Purpose |
 |----------|---------|
+| [Session Pickup](docs/SESSION_PICKUP.md) | **Current dev status & resume guide** |
 | [Architecture](docs/architecture.md) | System architecture overview |
 | [Data Flow](docs/data-flow.md) | How data moves through the system |
 | [Storage](docs/storage.md) | Storage architecture and stores |
@@ -41,6 +56,7 @@ See [Deployment Guide](docs/deployment.md) for production setup.
 | [Deployment](docs/deployment.md) | Deployment and configuration guide |
 | [Output Guide](docs/OUTPUT_GUIDE.md) | All outputs explained (JSON, HTML, Excel, etc.) |
 | [V2 System Architecture](docs/V2_SYSTEM_ARCHITECTURE_AND_OPTIMIZATIONS.md) | Technical deep-dive on V2 |
+| [Deal Lens Architecture](docs/DEAL_LENS_ARCHITECTURE.md) | Deal types & industry considerations |
 
 ---
 

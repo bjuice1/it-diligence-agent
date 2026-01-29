@@ -21,6 +21,121 @@ from web.task_manager import AnalysisTask, AnalysisPhase, TaskStatus
 logger = logging.getLogger(__name__)
 
 
+def persist_to_database(session, deal_id: str, timestamp: str) -> Dict[str, int]:
+    """
+    Persist session facts and findings to database.
+
+    Args:
+        session: Analysis session with fact_store and reasoning_store
+        deal_id: Database Deal ID to associate facts/findings with
+        timestamp: Analysis run timestamp
+
+    Returns:
+        Dict with counts of persisted items
+    """
+    from web.database import db, Fact, Finding, AnalysisRun
+    from uuid import uuid4
+
+    result = {'facts_count': 0, 'findings_count': 0, 'analysis_run_id': None}
+
+    # Create an AnalysisRun record
+    analysis_run_id = str(uuid4())
+    analysis_run = AnalysisRun(
+        id=analysis_run_id,
+        deal_id=deal_id,
+        run_type='full',
+        status='completed',
+        domains_analyzed=list(set(f.domain for f in session.fact_store.facts)),
+        facts_extracted=len(session.fact_store.facts),
+        findings_generated=len(session.reasoning_store.risks) + len(session.reasoning_store.work_items),
+        started_at=datetime.utcnow(),
+        completed_at=datetime.utcnow(),
+    )
+    db.session.add(analysis_run)
+    result['analysis_run_id'] = analysis_run_id
+
+    # Persist facts
+    for fact in session.fact_store.facts:
+        db_fact = Fact(
+            id=fact.fact_id,
+            deal_id=deal_id,
+            analysis_run_id=analysis_run_id,
+            domain=fact.domain,
+            category=fact.category or '',
+            entity=fact.entity,
+            item=fact.item,
+            status=fact.status,
+            details=fact.details or {},
+            evidence=fact.evidence or {},
+            source_document=fact.source_document or '',
+            source_quote=fact.evidence.get('exact_quote', '') if fact.evidence else '',
+            confidence_score=getattr(fact, 'confidence_score', 0.5),
+            verified=getattr(fact, 'verified', False),
+            verification_status=getattr(fact, 'verification_status', 'pending'),
+            needs_review=getattr(fact, 'needs_review', False),
+            needs_review_reason=getattr(fact, 'needs_review_reason', ''),
+            analysis_phase=getattr(fact, 'analysis_phase', 'target_extraction'),
+            is_integration_insight=getattr(fact, 'is_integration_insight', False),
+            related_domains=getattr(fact, 'related_domains', []),
+            change_type='new',
+        )
+        db.session.add(db_fact)
+        result['facts_count'] += 1
+
+    # Persist findings (risks)
+    for risk in session.reasoning_store.risks:
+        finding_id = risk.get('risk_id') or f"R-{uuid4().hex[:8].upper()}"
+        db_finding = Finding(
+            id=finding_id,
+            deal_id=deal_id,
+            analysis_run_id=analysis_run_id,
+            finding_type='risk',
+            domain=risk.get('domain', 'general'),
+            title=risk.get('title', ''),
+            description=risk.get('description', ''),
+            severity=risk.get('severity', 'medium'),
+            likelihood=risk.get('likelihood'),
+            impact=risk.get('impact'),
+            phase=risk.get('phase'),
+            mitigation=risk.get('mitigation', ''),
+            cost_estimate_low=risk.get('cost_estimate', {}).get('low') if isinstance(risk.get('cost_estimate'), dict) else None,
+            cost_estimate_high=risk.get('cost_estimate', {}).get('high') if isinstance(risk.get('cost_estimate'), dict) else None,
+            supporting_facts=risk.get('based_on_facts', []),
+            metadata=risk,
+        )
+        db.session.add(db_finding)
+        result['findings_count'] += 1
+
+    # Persist findings (work items)
+    for wi in session.reasoning_store.work_items:
+        finding_id = wi.get('work_item_id') or f"WI-{uuid4().hex[:8].upper()}"
+        db_finding = Finding(
+            id=finding_id,
+            deal_id=deal_id,
+            analysis_run_id=analysis_run_id,
+            finding_type='work_item',
+            domain=wi.get('domain', 'general'),
+            title=wi.get('title', ''),
+            description=wi.get('description', ''),
+            severity=wi.get('priority', 'medium'),
+            phase=wi.get('phase'),
+            owner=wi.get('owner'),
+            cost_estimate_low=wi.get('cost_estimate', {}).get('low') if isinstance(wi.get('cost_estimate'), dict) else None,
+            cost_estimate_high=wi.get('cost_estimate', {}).get('high') if isinstance(wi.get('cost_estimate'), dict) else None,
+            supporting_facts=wi.get('based_on_facts', []),
+            metadata=wi,
+        )
+        db.session.add(db_finding)
+        result['findings_count'] += 1
+
+    # Commit all changes
+    db.session.commit()
+
+    logger.info(f"Database persistence complete: run={analysis_run_id}, facts={result['facts_count']}, findings={result['findings_count']}")
+
+    return result
+
+
 def check_pipeline_availability() -> Dict[str, Any]:
     """
     Check which pipeline components are available.
@@ -365,6 +480,24 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable) -> Dict[str, A
 
     # Save results - session.save_to_files returns dict with actual saved paths
     saved_files = session.save_to_files(OUTPUT_DIR, timestamp)
+
+    # ==========================================================================
+    # DATABASE PERSISTENCE: Save facts and findings to database with deal_id
+    # ==========================================================================
+    deal_id = deal_context.get('deal_id')
+    if deal_id:
+        try:
+            db_result = persist_to_database(
+                session=session,
+                deal_id=deal_id,
+                timestamp=timestamp
+            )
+            logger.info(f"Persisted to database: {db_result['facts_count']} facts, {db_result['findings_count']} findings")
+        except Exception as e:
+            logger.error(f"Database persistence failed (non-fatal): {e}")
+            # Continue - JSON files are already saved as backup
+    else:
+        logger.warning("No deal_id in context - skipping database persistence")
 
     # Save open questions separately
     if open_questions:

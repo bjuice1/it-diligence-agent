@@ -1,0 +1,401 @@
+{% extends "base.html" %}
+
+{% block title %}New Deal - IT Due Diligence{% endblock %}
+
+{% block head %}
+<style>
+    .new-deal-container {
+        max-width: 640px;
+        margin: 0 auto;
+    }
+
+    .page-header {
+        text-align: center;
+        margin-bottom: var(--space-8);
+    }
+
+    .page-header h1 {
+        font-size: var(--text-3xl);
+        margin-bottom: var(--space-2);
+    }
+
+    .page-header p {
+        color: var(--text-secondary);
+    }
+
+    .deal-form {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-lg);
+        padding: var(--space-6);
+    }
+
+    .form-section {
+        margin-bottom: var(--space-6);
+    }
+
+    .form-section:last-child {
+        margin-bottom: 0;
+    }
+
+    .form-section-title {
+        font-size: var(--text-lg);
+        font-weight: var(--font-semibold);
+        color: var(--text-primary);
+        margin-bottom: var(--space-4);
+        padding-bottom: var(--space-2);
+        border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--space-4);
+    }
+
+    @media (max-width: 640px) {
+        .form-row {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .form-group {
+        margin-bottom: var(--space-4);
+    }
+
+    .form-label {
+        display: block;
+        font-size: var(--text-sm);
+        font-weight: var(--font-medium);
+        color: var(--text-primary);
+        margin-bottom: var(--space-2);
+    }
+
+    .form-label .required {
+        color: var(--critical);
+    }
+
+    .form-input,
+    .form-select,
+    .form-textarea {
+        width: 100%;
+        padding: var(--space-3);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-md);
+        font-size: var(--text-sm);
+        background: var(--bg-surface);
+        color: var(--text-primary);
+        transition: all var(--transition-fast);
+    }
+
+    .form-input:focus,
+    .form-select:focus,
+    .form-textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-subtle);
+    }
+
+    .form-textarea {
+        min-height: 100px;
+        resize: vertical;
+    }
+
+    .form-hint {
+        font-size: var(--text-xs);
+        color: var(--text-muted);
+        margin-top: var(--space-1);
+    }
+
+    .form-error {
+        font-size: var(--text-xs);
+        color: var(--critical);
+        margin-top: var(--space-1);
+    }
+
+    .form-actions {
+        display: flex;
+        gap: var(--space-3);
+        justify-content: flex-end;
+        margin-top: var(--space-6);
+        padding-top: var(--space-4);
+        border-top: 1px solid var(--border-subtle);
+    }
+
+    .btn {
+        padding: var(--space-3) var(--space-5);
+        border-radius: var(--radius-md);
+        font-size: var(--text-sm);
+        font-weight: var(--font-medium);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-2);
+    }
+
+    .btn-primary {
+        background: var(--accent);
+        color: white;
+        border: none;
+    }
+
+    .btn-primary:hover {
+        background: var(--accent-hover);
+    }
+
+    .btn-primary:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .btn-secondary {
+        background: var(--bg-surface);
+        color: var(--text-primary);
+        border: 1px solid var(--border-default);
+    }
+
+    .btn-secondary:hover {
+        background: var(--bg-surface-sunken);
+    }
+
+    .spinner {
+        width: 16px;
+        height: 16px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-top-color: white;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    /* Industry selector */
+    .industry-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: var(--space-2);
+    }
+
+    @media (max-width: 640px) {
+        .industry-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    .industry-option {
+        padding: var(--space-3);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-md);
+        cursor: pointer;
+        text-align: center;
+        font-size: var(--text-sm);
+        transition: all var(--transition-fast);
+    }
+
+    .industry-option:hover {
+        border-color: var(--accent);
+    }
+
+    .industry-option.selected {
+        background: var(--accent-subtle);
+        border-color: var(--accent);
+        color: var(--accent);
+    }
+
+    .industry-option input {
+        display: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="new-deal-container">
+    <div class="page-header">
+        <h1>Create New Deal</h1>
+        <p>Set up a new IT due diligence project</p>
+    </div>
+
+    <form class="deal-form" id="new-deal-form">
+        <!-- Basic Information -->
+        <div class="form-section">
+            <h2 class="form-section-title">Basic Information</h2>
+
+            <div class="form-group">
+                <label class="form-label" for="deal-name">
+                    Deal Name <span class="required">*</span>
+                </label>
+                <input type="text" id="deal-name" name="name" class="form-input"
+                       placeholder="e.g., Project Alpha - Q1 2024" required>
+                <div class="form-hint">Internal name for this due diligence project</div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label" for="target-name">
+                        Target Company <span class="required">*</span>
+                    </label>
+                    <input type="text" id="target-name" name="target_name" class="form-input"
+                           placeholder="Company being acquired" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="buyer-name">
+                        Buyer Company
+                    </label>
+                    <input type="text" id="buyer-name" name="buyer_name" class="form-input"
+                           placeholder="Acquiring company (optional)">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="deal-type">Deal Type</label>
+                <select id="deal-type" name="deal_type" class="form-select">
+                    <option value="acquisition">Acquisition</option>
+                    <option value="merger">Merger</option>
+                    <option value="carve-out">Carve-out</option>
+                    <option value="divestiture">Divestiture</option>
+                    <option value="investment">Investment</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Industry Selection -->
+        <div class="form-section">
+            <h2 class="form-section-title">Industry</h2>
+
+            <div class="industry-grid" id="industry-grid">
+                <label class="industry-option">
+                    <input type="radio" name="industry" value="technology">
+                    Technology
+                </label>
+                <label class="industry-option">
+                    <input type="radio" name="industry" value="healthcare">
+                    Healthcare
+                </label>
+                <label class="industry-option">
+                    <input type="radio" name="industry" value="financial_services">
+                    Financial Services
+                </label>
+                <label class="industry-option">
+                    <input type="radio" name="industry" value="manufacturing">
+                    Manufacturing
+                </label>
+                <label class="industry-option">
+                    <input type="radio" name="industry" value="retail">
+                    Retail
+                </label>
+                <label class="industry-option">
+                    <input type="radio" name="industry" value="energy">
+                    Energy
+                </label>
+                <label class="industry-option">
+                    <input type="radio" name="industry" value="media">
+                    Media
+                </label>
+                <label class="industry-option">
+                    <input type="radio" name="industry" value="other">
+                    Other
+                </label>
+            </div>
+        </div>
+
+        <!-- Additional Context -->
+        <div class="form-section">
+            <h2 class="form-section-title">Additional Context</h2>
+
+            <div class="form-group">
+                <label class="form-label" for="context">Deal Context</label>
+                <textarea id="context" name="context" class="form-textarea"
+                          placeholder="Any additional context about this deal, special considerations, focus areas, etc."></textarea>
+                <div class="form-hint">Optional notes to help guide the analysis</div>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <a href="{{ url_for('deals.deals_list_page') }}" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary" id="submit-btn">
+                <span id="submit-text">Create Deal</span>
+                <span id="submit-spinner" class="spinner" style="display: none;"></span>
+            </button>
+        </div>
+
+        <div id="form-error" class="form-error" style="display: none; margin-top: var(--space-3);"></div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const form = document.getElementById('new-deal-form');
+    const submitBtn = document.getElementById('submit-btn');
+    const submitText = document.getElementById('submit-text');
+    const submitSpinner = document.getElementById('submit-spinner');
+    const formError = document.getElementById('form-error');
+
+    // Industry selection
+    document.querySelectorAll('.industry-option').forEach(option => {
+        const input = option.querySelector('input');
+        option.addEventListener('click', () => {
+            document.querySelectorAll('.industry-option').forEach(o => o.classList.remove('selected'));
+            option.classList.add('selected');
+            input.checked = true;
+        });
+    });
+
+    // Form submission
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        formError.style.display = 'none';
+
+        const formData = new FormData(form);
+        const data = {
+            name: formData.get('name'),
+            target_name: formData.get('target_name'),
+            buyer_name: formData.get('buyer_name') || null,
+            deal_type: formData.get('deal_type'),
+            industry: formData.get('industry') || null,
+            context: formData.get('context') || null
+        };
+
+        // Validate required fields
+        if (!data.name || !data.target_name) {
+            formError.textContent = 'Please fill in all required fields.';
+            formError.style.display = 'block';
+            return;
+        }
+
+        // Show loading state
+        submitBtn.disabled = true;
+        submitText.textContent = 'Creating...';
+        submitSpinner.style.display = 'inline-block';
+
+        try {
+            const response = await fetch('/api/deals', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to create deal');
+            }
+
+            // Redirect to the new deal's page
+            window.location.href = `/deals/${result.deal.id}`;
+        } catch (error) {
+            formError.textContent = error.message;
+            formError.style.display = 'block';
+            submitBtn.disabled = false;
+            submitText.textContent = 'Create Deal';
+            submitSpinner.style.display = 'none';
+        }
+    });
+</script>
+{% endblock %}

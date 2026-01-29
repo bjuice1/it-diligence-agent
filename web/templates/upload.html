@@ -7,8 +7,67 @@
     <p>Upload documents for AI-powered IT due diligence analysis</p>
 </div>
 
+{% if active_deal %}
+<!-- Active Deal Banner - Documents will be added to this deal -->
+<div class="active-deal-banner">
+    <div class="deal-badge">
+        <span class="deal-icon">📁</span>
+        <div class="deal-info">
+            <span class="deal-label">Adding documents to:</span>
+            <strong class="deal-name">{{ active_deal.name }}</strong>
+            <span class="deal-target">{{ active_deal.target_name }}</span>
+        </div>
+    </div>
+    <a href="{{ url_for('deals.deals_list_page') }}" class="change-deal-link">Change deal</a>
+</div>
+<style>
+.active-deal-banner {
+    background: var(--accent-subtle);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+    margin-bottom: var(--space-4);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.deal-badge {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+.deal-icon {
+    font-size: 1.5em;
+}
+.deal-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.deal-label {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+}
+.deal-name {
+    font-size: var(--text-base);
+    color: var(--accent);
+}
+.deal-target {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+}
+.change-deal-link {
+    font-size: var(--text-sm);
+    color: var(--accent);
+}
+</style>
+{% endif %}
+
 <div class="upload-container">
     <form action="{{ url_for('process_upload') }}" method="post" enctype="multipart/form-data" id="upload-form">
+        {% if active_deal %}
+        <input type="hidden" name="deal_id" value="{{ active_deal.id }}">
+        {% endif %}
 
         <!-- Entity Upload Section - TWO SEPARATE ZONES -->
         <div class="entity-upload-section">
@@ -143,9 +202,11 @@
             </div>
         </div>
 
-        <!-- Deal Context -->
+        <!-- Deal Context - Only show if no active deal -->
+        {% if not active_deal %}
         <div class="deal-context">
             <h4>Deal Context</h4>
+            <p class="section-hint">Or <a href="{{ url_for('deals.new_deal_page') }}">create a deal first</a> to organize multiple uploads.</p>
             <div class="context-fields">
                 <div class="field-group">
                     <label for="deal_type">Deal Type</label>
@@ -178,6 +239,7 @@
                 </div>
             </div>
         </div>
+        {% endif %}
 
         <div class="submit-section">
             <button type="submit" class="btn btn-primary btn-lg" id="submit-btn" disabled>

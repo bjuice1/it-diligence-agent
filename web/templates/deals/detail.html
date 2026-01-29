@@ -1,0 +1,549 @@
+{% extends "base.html" %}
+
+{% block title %}{{ deal.name }} - IT Due Diligence{% endblock %}
+
+{% block head %}
+<style>
+    .deal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: var(--space-6);
+    }
+
+    .deal-title-section {
+        flex: 1;
+    }
+
+    .deal-breadcrumb {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        font-size: var(--text-sm);
+        color: var(--text-tertiary);
+        margin-bottom: var(--space-2);
+    }
+
+    .deal-breadcrumb a {
+        color: var(--text-secondary);
+        text-decoration: none;
+    }
+
+    .deal-breadcrumb a:hover {
+        color: var(--accent);
+    }
+
+    .deal-title {
+        font-size: var(--text-3xl);
+        font-weight: var(--font-bold);
+        color: var(--text-primary);
+        margin-bottom: var(--space-2);
+    }
+
+    .deal-subtitle {
+        font-size: var(--text-lg);
+        color: var(--text-secondary);
+    }
+
+    .deal-badges {
+        display: flex;
+        gap: var(--space-2);
+        margin-top: var(--space-3);
+    }
+
+    .deal-badge {
+        padding: var(--space-1) var(--space-3);
+        border-radius: var(--radius-full);
+        font-size: var(--text-sm);
+        font-weight: var(--font-medium);
+    }
+
+    .deal-badge.status {
+        background: var(--accent-subtle);
+        color: var(--accent);
+    }
+
+    .deal-badge.type {
+        background: var(--bg-surface-sunken);
+        color: var(--text-secondary);
+    }
+
+    .deal-actions {
+        display: flex;
+        gap: var(--space-3);
+    }
+
+    .btn {
+        padding: var(--space-2) var(--space-4);
+        border-radius: var(--radius-md);
+        font-size: var(--text-sm);
+        font-weight: var(--font-medium);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-2);
+    }
+
+    .btn-primary {
+        background: var(--accent);
+        color: white;
+        border: none;
+    }
+
+    .btn-primary:hover {
+        background: var(--accent-hover);
+    }
+
+    .btn-secondary {
+        background: var(--bg-surface);
+        color: var(--text-primary);
+        border: 1px solid var(--border-default);
+    }
+
+    .btn-secondary:hover {
+        background: var(--bg-surface-sunken);
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: var(--space-4);
+        margin-bottom: var(--space-6);
+    }
+
+    .stat-card {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-lg);
+        padding: var(--space-5);
+    }
+
+    .stat-label {
+        font-size: var(--text-sm);
+        color: var(--text-secondary);
+        margin-bottom: var(--space-1);
+    }
+
+    .stat-value {
+        font-size: var(--text-3xl);
+        font-weight: var(--font-bold);
+        color: var(--text-primary);
+    }
+
+    .stat-change {
+        font-size: var(--text-sm);
+        margin-top: var(--space-1);
+    }
+
+    .stat-change.positive { color: #10b981; }
+    .stat-change.negative { color: #ef4444; }
+
+    /* Progress Section */
+    .progress-section {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-lg);
+        padding: var(--space-5);
+        margin-bottom: var(--space-6);
+    }
+
+    .progress-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: var(--space-4);
+    }
+
+    .progress-title {
+        font-size: var(--text-lg);
+        font-weight: var(--font-semibold);
+    }
+
+    .progress-percent {
+        font-size: var(--text-2xl);
+        font-weight: var(--font-bold);
+        color: var(--accent);
+    }
+
+    .progress-stages {
+        display: flex;
+        gap: var(--space-2);
+    }
+
+    .progress-stage {
+        flex: 1;
+        text-align: center;
+    }
+
+    .progress-stage-indicator {
+        height: 8px;
+        background: var(--bg-surface-sunken);
+        border-radius: 4px;
+        margin-bottom: var(--space-2);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .progress-stage-indicator.complete::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: var(--accent);
+    }
+
+    .progress-stage-indicator.current::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(90deg, var(--accent) 50%, var(--bg-surface-sunken) 50%);
+    }
+
+    .progress-stage-label {
+        font-size: var(--text-xs);
+        color: var(--text-tertiary);
+    }
+
+    .progress-stage.complete .progress-stage-label {
+        color: var(--accent);
+        font-weight: var(--font-medium);
+    }
+
+    /* Quick Actions */
+    .quick-actions {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: var(--space-4);
+        margin-bottom: var(--space-6);
+    }
+
+    .action-card {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-lg);
+        padding: var(--space-5);
+        display: flex;
+        align-items: center;
+        gap: var(--space-4);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        text-decoration: none;
+        color: inherit;
+    }
+
+    .action-card:hover {
+        border-color: var(--accent);
+        box-shadow: var(--shadow-md);
+    }
+
+    .action-icon {
+        width: 48px;
+        height: 48px;
+        background: var(--accent-subtle);
+        border-radius: var(--radius-md);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+    }
+
+    .action-content {
+        flex: 1;
+    }
+
+    .action-title {
+        font-weight: var(--font-semibold);
+        color: var(--text-primary);
+        margin-bottom: var(--space-1);
+    }
+
+    .action-description {
+        font-size: var(--text-sm);
+        color: var(--text-secondary);
+    }
+
+    /* Two Column Layout */
+    .deal-content {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: var(--space-6);
+    }
+
+    @media (max-width: 1024px) {
+        .deal-content {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* Activity Section */
+    .activity-section {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-lg);
+        padding: var(--space-5);
+    }
+
+    .section-title {
+        font-size: var(--text-lg);
+        font-weight: var(--font-semibold);
+        margin-bottom: var(--space-4);
+    }
+
+    .activity-list {
+        list-style: none;
+    }
+
+    .activity-item {
+        display: flex;
+        gap: var(--space-3);
+        padding: var(--space-3) 0;
+        border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .activity-item:last-child {
+        border-bottom: none;
+    }
+
+    .activity-dot {
+        width: 8px;
+        height: 8px;
+        background: var(--accent);
+        border-radius: 50%;
+        margin-top: 6px;
+        flex-shrink: 0;
+    }
+
+    .activity-content {
+        flex: 1;
+    }
+
+    .activity-text {
+        font-size: var(--text-sm);
+        color: var(--text-primary);
+    }
+
+    .activity-time {
+        font-size: var(--text-xs);
+        color: var(--text-tertiary);
+        margin-top: var(--space-1);
+    }
+
+    /* Info Card */
+    .info-card {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-lg);
+        padding: var(--space-5);
+        margin-bottom: var(--space-4);
+    }
+
+    .info-row {
+        display: flex;
+        justify-content: space-between;
+        padding: var(--space-2) 0;
+        border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .info-row:last-child {
+        border-bottom: none;
+    }
+
+    .info-label {
+        color: var(--text-secondary);
+        font-size: var(--text-sm);
+    }
+
+    .info-value {
+        color: var(--text-primary);
+        font-size: var(--text-sm);
+        font-weight: var(--font-medium);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="deal-header">
+    <div class="deal-title-section">
+        <div class="deal-breadcrumb">
+            <a href="{{ url_for('deals.deals_list_page') }}">Deals</a>
+            <span>/</span>
+            <span>{{ deal.name }}</span>
+        </div>
+        <h1 class="deal-title">{{ deal.name }}</h1>
+        <p class="deal-subtitle">{{ deal.target_name }}{% if deal.buyer_name %} → {{ deal.buyer_name }}{% endif %}</p>
+        <div class="deal-badges">
+            <span class="deal-badge status">{{ deal.status }}</span>
+            <span class="deal-badge type">{{ deal.deal_type or 'Acquisition' }}</span>
+            {% if deal.industry %}
+            <span class="deal-badge type">{{ deal.industry }}</span>
+            {% endif %}
+        </div>
+    </div>
+    <div class="deal-actions">
+        <a href="{{ url_for('upload_documents') }}" class="btn btn-primary">
+            📄 Upload Documents
+        </a>
+        <a href="{{ url_for('deals.deal_settings_page', deal_id=deal.id) }}" class="btn btn-secondary">
+            ⚙️ Settings
+        </a>
+    </div>
+</div>
+
+<!-- Stats Grid -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-label">Documents</div>
+        <div class="stat-value">{{ summary.documents_count or 0 }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Facts Extracted</div>
+        <div class="stat-value">{{ summary.facts_count or 0 }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Risks Identified</div>
+        <div class="stat-value">{{ summary.risks_count or 0 }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Work Items</div>
+        <div class="stat-value">{{ summary.work_items_count or 0 }}</div>
+    </div>
+</div>
+
+<!-- Progress Section -->
+<div class="progress-section">
+    <div class="progress-header">
+        <h2 class="progress-title">Analysis Progress</h2>
+        <span class="progress-percent">{{ progress.percent|round|int }}%</span>
+    </div>
+    <div class="progress-stages">
+        {% for stage in progress.stages %}
+        <div class="progress-stage {{ 'complete' if stage.complete else '' }}">
+            <div class="progress-stage-indicator {{ 'complete' if stage.complete else '' }}"></div>
+            <span class="progress-stage-label">{{ stage.name }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="quick-actions">
+    <a href="{{ url_for('upload_documents') }}" class="action-card">
+        <div class="action-icon">📄</div>
+        <div class="action-content">
+            <div class="action-title">Upload Documents</div>
+            <div class="action-description">Add target or buyer documents for analysis</div>
+        </div>
+    </a>
+    <a href="{{ url_for('processing') }}" class="action-card">
+        <div class="action-icon">🔬</div>
+        <div class="action-content">
+            <div class="action-title">Run Analysis</div>
+            <div class="action-description">Extract facts and generate findings</div>
+        </div>
+    </a>
+    <a href="{{ url_for('facts') }}" class="action-card">
+        <div class="action-icon">📊</div>
+        <div class="action-content">
+            <div class="action-title">Review Facts</div>
+            <div class="action-description">Verify and validate extracted facts</div>
+        </div>
+    </a>
+    <a href="{{ url_for('risks') }}" class="action-card">
+        <div class="action-icon">⚠️</div>
+        <div class="action-content">
+            <div class="action-title">View Risks</div>
+            <div class="action-description">Review identified risks and recommendations</div>
+        </div>
+    </a>
+</div>
+
+<!-- Two Column Layout -->
+<div class="deal-content">
+    <!-- Activity Section -->
+    <div class="activity-section">
+        <h2 class="section-title">Recent Activity</h2>
+        <ul class="activity-list">
+            <li class="activity-item">
+                <div class="activity-dot"></div>
+                <div class="activity-content">
+                    <div class="activity-text">Deal created</div>
+                    <div class="activity-time">{{ deal.created_at.strftime('%B %d, %Y at %H:%M') if deal.created_at else 'Unknown' }}</div>
+                </div>
+            </li>
+            {% if summary.documents_count > 0 %}
+            <li class="activity-item">
+                <div class="activity-dot"></div>
+                <div class="activity-content">
+                    <div class="activity-text">{{ summary.documents_count }} documents uploaded</div>
+                    <div class="activity-time">Most recent upload</div>
+                </div>
+            </li>
+            {% endif %}
+            {% if summary.facts_count > 0 %}
+            <li class="activity-item">
+                <div class="activity-dot"></div>
+                <div class="activity-content">
+                    <div class="activity-text">{{ summary.facts_count }} facts extracted across {{ summary.analysis_runs or 0 }} analysis runs</div>
+                    <div class="activity-time">Latest analysis</div>
+                </div>
+            </li>
+            {% endif %}
+        </ul>
+    </div>
+
+    <!-- Info Card -->
+    <div>
+        <div class="info-card">
+            <h2 class="section-title">Deal Information</h2>
+            <div class="info-row">
+                <span class="info-label">Target Company</span>
+                <span class="info-value">{{ deal.target_name }}</span>
+            </div>
+            {% if deal.buyer_name %}
+            <div class="info-row">
+                <span class="info-label">Buyer Company</span>
+                <span class="info-value">{{ deal.buyer_name }}</span>
+            </div>
+            {% endif %}
+            <div class="info-row">
+                <span class="info-label">Deal Type</span>
+                <span class="info-value">{{ deal.deal_type or 'Acquisition' }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Industry</span>
+                <span class="info-value">{{ deal.industry or 'Not specified' }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Status</span>
+                <span class="info-value">{{ deal.status }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Target Locked</span>
+                <span class="info-value">{{ 'Yes' if deal.target_locked else 'No' }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Buyer Locked</span>
+                <span class="info-value">{{ 'Yes' if deal.buyer_locked else 'No' }}</span>
+            </div>
+        </div>
+
+        <div class="info-card">
+            <h2 class="section-title">Review Status</h2>
+            <div class="info-row">
+                <span class="info-label">Verified Facts</span>
+                <span class="info-value">{{ summary.verified_facts or 0 }} / {{ summary.facts_count or 0 }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Review Progress</span>
+                <span class="info-value">{{ summary.review_percent|round|int }}%</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Analysis Runs</span>
+                <span class="info-value">{{ summary.analysis_runs or 0 }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

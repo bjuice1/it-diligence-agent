@@ -48,6 +48,7 @@ class User(UserMixin):
     active: bool = True
     created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
     last_login: Optional[str] = None
+    tenant_id: Optional[str] = None  # For multi-tenancy support
 
     def get_id(self) -> str:
         """Flask-Login requires this method."""

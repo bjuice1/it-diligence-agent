@@ -9,6 +9,7 @@ services:
       - "5001:8080"
     environment:
       - FLASK_ENV=development
+      - AUTH_REQUIRED=false
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:-dev-secret-key-change-in-prod}
       - LOG_LEVEL=debug
@@ -33,10 +34,17 @@ services:
       - USE_ERROR_TRACKING=${USE_ERROR_TRACKING:-false}
       - SENTRY_DSN=${SENTRY_DSN:-}
       - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-development}
-      - USE_RATE_LIMITING=${USE_RATE_LIMITING:-true}
+      - USE_RATE_LIMITING=${USE_RATE_LIMITING:-false}
       - RATELIMIT_STORAGE_URL=redis://redis:6379/1
       - USE_AUDIT_LOGGING=${USE_AUDIT_LOGGING:-true}
+      # Worker configuration (single worker for in-memory task state consistency)
+      - GUNICORN_WORKERS=1
     volumes:
+      # Mount source code for development (hot reload)
+      - ../web:/app/web
+      - ../stores:/app/stores
+      - ../scripts:/app/scripts
+      - ../config_v2.py:/app/config_v2.py
       # Mount data directories for persistence
       - ../data:/app/data
       - ../output:/app/output

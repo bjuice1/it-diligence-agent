@@ -171,6 +171,40 @@ def estimate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
 
 
 # =============================================================================
+# DATABASE CONFIGURATION (Phase 1)
+# =============================================================================
+
+# Database URL - PostgreSQL for production, SQLite for local dev
+DATABASE_URL = os.getenv('DATABASE_URL', '')
+
+# Feature flag - Use PostgreSQL (set to True when ready)
+USE_DATABASE = os.getenv('USE_DATABASE', 'false').lower() == 'true'
+
+# Connection pool settings
+DATABASE_POOL_SIZE = int(os.getenv('DATABASE_POOL_SIZE', '5'))
+DATABASE_MAX_OVERFLOW = int(os.getenv('DATABASE_MAX_OVERFLOW', '10'))
+DATABASE_POOL_TIMEOUT = int(os.getenv('DATABASE_POOL_TIMEOUT', '30'))
+
+# Query timeout (seconds)
+DATABASE_QUERY_TIMEOUT = int(os.getenv('DATABASE_QUERY_TIMEOUT', '30'))
+
+
+# =============================================================================
+# REDIS CONFIGURATION (Phase 2)
+# =============================================================================
+
+# Redis URL for sessions and task queue
+REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+
+# Feature flags
+USE_REDIS_SESSIONS = os.getenv('USE_REDIS_SESSIONS', 'false').lower() == 'true'
+USE_CELERY = os.getenv('USE_CELERY', 'false').lower() == 'true'
+
+# Session configuration
+SESSION_LIFETIME_DAYS = int(os.getenv('SESSION_LIFETIME_DAYS', '7'))
+
+
+# =============================================================================
 # V2 FEATURE FLAGS
 # =============================================================================
 

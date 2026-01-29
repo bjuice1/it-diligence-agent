@@ -58,6 +58,240 @@
             font-size: var(--text-sm);
         }
 
+        /* Deal Selector */
+        .deal-selector {
+            position: relative;
+            margin-left: var(--space-4);
+            padding-left: var(--space-4);
+            border-left: 1px solid var(--border-default);
+        }
+
+        .deal-selector-trigger {
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+            padding: var(--space-2) var(--space-3);
+            background: var(--bg-surface-sunken);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            color: var(--text-primary);
+            font-size: var(--text-sm);
+            transition: all var(--transition-fast);
+            min-width: 180px;
+            max-width: 280px;
+        }
+
+        .deal-selector-trigger:hover {
+            background: var(--bg-surface);
+            border-color: var(--accent);
+        }
+
+        .deal-selector-icon {
+            width: 24px;
+            height: 24px;
+            background: var(--accent-subtle);
+            color: var(--accent);
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            flex-shrink: 0;
+        }
+
+        .deal-selector-content {
+            flex: 1;
+            min-width: 0;
+            text-align: left;
+        }
+
+        .deal-selector-label {
+            font-size: var(--text-xs);
+            color: var(--text-muted);
+            line-height: 1;
+        }
+
+        .deal-selector-name {
+            font-weight: var(--font-medium);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .deal-selector-chevron {
+            color: var(--text-muted);
+            flex-shrink: 0;
+            transition: transform var(--transition-fast);
+        }
+
+        .deal-selector.open .deal-selector-chevron {
+            transform: rotate(180deg);
+        }
+
+        .deal-selector-dropdown {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            min-width: 280px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-lg);
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-8px);
+            transition: all var(--transition-fast);
+            z-index: var(--z-dropdown);
+        }
+
+        .deal-selector.open .deal-selector-dropdown {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .deal-selector-section {
+            padding: var(--space-2);
+        }
+
+        .deal-selector-section-label {
+            font-size: var(--text-xs);
+            font-weight: var(--font-semibold);
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: var(--space-2) var(--space-2);
+        }
+
+        .deal-selector-item {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            padding: var(--space-2) var(--space-3);
+            color: var(--text-primary);
+            text-decoration: none;
+            font-size: var(--text-sm);
+            border-radius: var(--radius-sm);
+            transition: background var(--transition-fast);
+            cursor: pointer;
+        }
+
+        .deal-selector-item:hover {
+            background: var(--bg-surface-sunken);
+        }
+
+        .deal-selector-item.active {
+            background: var(--accent-subtle);
+            color: var(--accent);
+        }
+
+        .deal-selector-item-icon {
+            width: 32px;
+            height: 32px;
+            background: var(--bg-surface-sunken);
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        .deal-selector-item.active .deal-selector-item-icon {
+            background: var(--accent);
+            color: white;
+        }
+
+        .deal-selector-item-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .deal-selector-item-name {
+            font-weight: var(--font-medium);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .deal-selector-item-meta {
+            font-size: var(--text-xs);
+            color: var(--text-muted);
+        }
+
+        .deal-selector-divider {
+            height: 1px;
+            background: var(--border-default);
+            margin: var(--space-2) 0;
+        }
+
+        .deal-selector-actions {
+            padding: var(--space-2);
+            border-top: 1px solid var(--border-default);
+        }
+
+        .deal-selector-action {
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+            width: 100%;
+            padding: var(--space-2) var(--space-3);
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: var(--text-sm);
+            border-radius: var(--radius-sm);
+            transition: all var(--transition-fast);
+            background: none;
+            border: none;
+            cursor: pointer;
+            text-align: left;
+        }
+
+        .deal-selector-action:hover {
+            background: var(--bg-surface-sunken);
+            color: var(--text-primary);
+        }
+
+        .deal-selector-action.primary {
+            color: var(--accent);
+        }
+
+        .deal-selector-action.primary:hover {
+            background: var(--accent-subtle);
+        }
+
+        .deal-selector-empty {
+            padding: var(--space-4);
+            text-align: center;
+            color: var(--text-muted);
+            font-size: var(--text-sm);
+        }
+
+        /* Mobile deal selector */
+        @media (max-width: 768px) {
+            .deal-selector {
+                margin-left: var(--space-2);
+                padding-left: var(--space-2);
+            }
+
+            .deal-selector-trigger {
+                min-width: auto;
+                max-width: 150px;
+            }
+
+            .deal-selector-label {
+                display: none;
+            }
+
+            .deal-selector-dropdown {
+                position: fixed;
+                left: var(--space-4);
+                right: var(--space-4);
+                min-width: auto;
+            }
+        }
+
         .nav-links {
             display: flex;
             gap: var(--space-1);
@@ -1040,6 +1274,45 @@
             <span class="nav-brand-icon" aria-hidden="true">DD</span>
             <span>IT Due Diligence</span>
         </a>
+
+        <!-- Deal Selector -->
+        <div class="deal-selector" id="deal-selector">
+            <button class="deal-selector-trigger" id="deal-selector-trigger" aria-haspopup="true" aria-expanded="false">
+                <span class="deal-selector-icon" id="deal-selector-icon">-</span>
+                <span class="deal-selector-content">
+                    <span class="deal-selector-label">Current Deal</span>
+                    <span class="deal-selector-name" id="current-deal-name">No deal selected</span>
+                </span>
+                <svg class="deal-selector-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+            </button>
+            <div class="deal-selector-dropdown" id="deal-selector-dropdown">
+                <div class="deal-selector-section" id="recent-deals-section">
+                    <div class="deal-selector-section-label">Recent Deals</div>
+                    <div id="recent-deals-list">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+                <div class="deal-selector-actions">
+                    <a href="{{ url_for('deals.deals_list_page') }}" class="deal-selector-action">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                        </svg>
+                        View All Deals
+                    </a>
+                    <a href="{{ url_for('deals.new_deal_page') }}" class="deal-selector-action primary">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        New Deal
+                    </a>
+                </div>
+            </div>
+        </div>
+
         <div class="nav-links">
             <a href="{{ url_for('dashboard') }}" class="nav-link {{ 'active' if request.endpoint == 'dashboard' }}" {% if request.endpoint == 'dashboard' %}aria-current="page"{% endif %}>Dashboard</a>
             <a href="{{ url_for('risks') }}" class="nav-link {{ 'active' if request.endpoint in ['risks', 'risk_detail'] }}" {% if request.endpoint in ['risks', 'risk_detail'] %}aria-current="page"{% endif %}>Risks</a>
@@ -1183,6 +1456,132 @@
         }
 
         drawerOverlay.addEventListener('click', closeDrawer);
+
+        // =================================================================
+        // DEAL SELECTOR
+        // =================================================================
+        const dealSelector = document.getElementById('deal-selector');
+        const dealSelectorTrigger = document.getElementById('deal-selector-trigger');
+        const dealSelectorDropdown = document.getElementById('deal-selector-dropdown');
+        const currentDealName = document.getElementById('current-deal-name');
+        const dealSelectorIcon = document.getElementById('deal-selector-icon');
+        const recentDealsList = document.getElementById('recent-deals-list');
+
+        let currentDealId = null;
+        let recentDeals = [];
+
+        // Toggle dropdown
+        dealSelectorTrigger?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isOpen = dealSelector.classList.toggle('open');
+            dealSelectorTrigger.setAttribute('aria-expanded', isOpen);
+            if (isOpen) {
+                loadRecentDeals();
+            }
+        });
+
+        // Close on outside click
+        document.addEventListener('click', (e) => {
+            if (!dealSelector?.contains(e.target)) {
+                dealSelector?.classList.remove('open');
+                dealSelectorTrigger?.setAttribute('aria-expanded', 'false');
+            }
+        });
+
+        // Close on escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && dealSelector?.classList.contains('open')) {
+                dealSelector.classList.remove('open');
+                dealSelectorTrigger?.setAttribute('aria-expanded', 'false');
+            }
+        });
+
+        // Load current deal on page load
+        async function loadCurrentDeal() {
+            try {
+                const response = await fetch('/api/session/deal');
+                const data = await response.json();
+                if (data.deal) {
+                    setCurrentDeal(data.deal);
+                }
+            } catch (error) {
+                console.error('Failed to load current deal:', error);
+            }
+        }
+
+        // Load recent deals for dropdown
+        async function loadRecentDeals() {
+            try {
+                const response = await fetch('/api/deals?sort=accessed&order=desc');
+                const data = await response.json();
+                recentDeals = data.deals.slice(0, 5);
+                renderRecentDeals();
+            } catch (error) {
+                console.error('Failed to load recent deals:', error);
+                recentDealsList.innerHTML = '<div class="deal-selector-empty">Failed to load deals</div>';
+            }
+        }
+
+        // Render recent deals list
+        function renderRecentDeals() {
+            if (recentDeals.length === 0) {
+                recentDealsList.innerHTML = '<div class="deal-selector-empty">No deals yet</div>';
+                return;
+            }
+
+            recentDealsList.innerHTML = recentDeals.map(deal => `
+                <div class="deal-selector-item ${deal.id === currentDealId ? 'active' : ''}"
+                     data-deal-id="${deal.id}"
+                     onclick="selectDeal('${deal.id}')">
+                    <span class="deal-selector-item-icon">${deal.target_name ? deal.target_name[0].toUpperCase() : 'D'}</span>
+                    <span class="deal-selector-item-content">
+                        <span class="deal-selector-item-name">${escapeHtml(deal.name)}</span>
+                        <span class="deal-selector-item-meta">${escapeHtml(deal.target_name || '')} ${deal.status ? '· ' + deal.status : ''}</span>
+                    </span>
+                </div>
+            `).join('');
+        }
+
+        // Set current deal display
+        function setCurrentDeal(deal) {
+            currentDealId = deal.id;
+            currentDealName.textContent = deal.name;
+            dealSelectorIcon.textContent = deal.target_name ? deal.target_name[0].toUpperCase() : 'D';
+        }
+
+        // Select a deal
+        async function selectDeal(dealId) {
+            try {
+                const response = await fetch('/api/session/deal', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ deal_id: dealId })
+                });
+                const data = await response.json();
+                if (data.deal) {
+                    setCurrentDeal(data.deal);
+                    dealSelector.classList.remove('open');
+                    dealSelectorTrigger.setAttribute('aria-expanded', 'false');
+                    // Optionally reload page to refresh deal context
+                    // window.location.reload();
+                }
+            } catch (error) {
+                console.error('Failed to select deal:', error);
+            }
+        }
+
+        // Helper to escape HTML
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Initialize deal selector
+        if (dealSelector) {
+            loadCurrentDeal();
+        }
 
         // =================================================================
         // TABLE ROW SELECTION

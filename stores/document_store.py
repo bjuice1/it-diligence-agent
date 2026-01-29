@@ -748,14 +748,44 @@ class DocumentStore:
         with open(extracted_path, "r", encoding="utf-8") as f:
             return f.read()
 
+    def _to_relative_path(self, path_str: str) -> str:
+        """Convert absolute path to relative path (relative to base_dir) for storage."""
+        if not path_str:
+            return path_str
+        try:
+            path = Path(path_str)
+            if path.is_absolute():
+                return str(path.relative_to(self.base_dir))
+        except ValueError:
+            # Path is not relative to base_dir, store as-is
+            pass
+        return path_str
+
+    def _to_absolute_path(self, path_str: str) -> str:
+        """Convert relative path to absolute path (resolved against base_dir) for use."""
+        if not path_str:
+            return path_str
+        path = Path(path_str)
+        if not path.is_absolute():
+            return str(self.base_dir / path)
+        return path_str
+
     def _save_manifest(self):
-        """Save document registry to manifest file."""
+        """Save document registry to manifest file with relative paths."""
         with self._lock:
+            # Convert paths to relative for portability
+            docs_for_storage = []
+            for doc in self._documents.values():
+                doc_dict = doc.to_dict()
+                doc_dict['raw_file_path'] = self._to_relative_path(doc_dict.get('raw_file_path', ''))
+                doc_dict['extracted_text_path'] = self._to_relative_path(doc_dict.get('extracted_text_path', ''))
+                docs_for_storage.append(doc_dict)
+
             manifest = {
-                "version": "1.0",
+                "version": "1.1",  # Bumped version for relative paths
                 "updated_at": datetime.now().isoformat(),
                 "document_count": len(self._documents),
-                "documents": [doc.to_dict() for doc in self._documents.values()]
+                "documents": docs_for_storage
             }
 
         # Write atomically (write to temp, then rename)
@@ -767,7 +797,7 @@ class DocumentStore:
         logger.debug(f"Saved manifest with {len(self._documents)} documents")
 
     def _load_manifest(self):
-        """Load document registry from manifest file."""
+        """Load document registry from manifest file, resolving relative paths."""
         if not self.manifest_path.exists():
             logger.debug("No manifest found, starting fresh")
             return
@@ -777,11 +807,15 @@ class DocumentStore:
                 manifest = json.load(f)
 
             for doc_data in manifest.get("documents", []):
+                # Convert relative paths back to absolute for runtime use
+                doc_data['raw_file_path'] = self._to_absolute_path(doc_data.get('raw_file_path', ''))
+                doc_data['extracted_text_path'] = self._to_absolute_path(doc_data.get('extracted_text_path', ''))
+
                 doc = Document.from_dict(doc_data)
                 self._documents[doc.doc_id] = doc
                 self._hash_index[doc.hash_sha256] = doc.doc_id
 
-            logger.info(f"Loaded {len(self._documents)} documents from manifest")
+            logger.info(f"Loaded {len(self._documents)} documents from manifest (version {manifest.get('version', '1.0')})")
 
         except Exception as e:
             logger.error(f"Error loading manifest: {e}")
