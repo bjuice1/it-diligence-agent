@@ -51,6 +51,15 @@ app = Flask(__name__,
             static_folder='static',
             static_url_path='/static')
 
+# Fix for Railway/Heroku proxy - trust proxy headers
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
+# Session cookie settings for production (Railway uses HTTPS)
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('RAILWAY_ENVIRONMENT') is not None or os.environ.get('FORCE_HTTPS', 'false').lower() == 'true'
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
 # Use environment variable for secret key, with fallback for MVP demo
 SECRET_KEY = os.environ.get('FLASK_SECRET_KEY') or os.environ.get('SECRET_KEY') or 'itdd-mvp-demo-secret-2026-production'
 app.secret_key = SECRET_KEY
@@ -164,8 +173,9 @@ app.config['WTF_CSRF_CHECK_DEFAULT'] = False  # We'll check manually
 #     pass
 
 # Initialize Flask-Talisman for security headers
-# Only enforce HTTPS in production
-FORCE_HTTPS = os.environ.get('FORCE_HTTPS', 'false').lower() == 'true'
+# Auto-detect Railway/production environment for HTTPS
+IS_RAILWAY = os.environ.get('RAILWAY_ENVIRONMENT') is not None
+FORCE_HTTPS = IS_RAILWAY or os.environ.get('FORCE_HTTPS', 'false').lower() == 'true'
 
 # Content Security Policy
 csp = {
