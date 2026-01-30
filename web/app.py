@@ -144,26 +144,24 @@ except Exception as e:
 # Phase 2: Authentication Setup
 # =============================================================================
 
-# Initialize CSRF protection
-csrf = CSRFProtect(app)
+# Initialize CSRF protection - DISABLED FOR MVP DEMO
+# csrf = CSRFProtect(app)
+app.config['WTF_CSRF_ENABLED'] = False
+
+# Dummy csrf object so @csrf.exempt decorators don't break
+class DummyCSRF:
+    def exempt(self, f):
+        return f
+csrf = DummyCSRF()
 
 # Configure CSRF exemptions for API routes
 app.config['WTF_CSRF_CHECK_DEFAULT'] = False  # We'll check manually
 
-@app.before_request
-def csrf_protect():
-    """Apply CSRF protection selectively - exempt API routes and file uploads."""
-    # Skip CSRF for API routes (they should use token auth)
-    if request.path.startswith('/api/'):
-        return None
-    # Skip for file upload routes (they use multipart form data)
-    if request.path in ('/upload/process',):
-        return None
-    # Skip for GET, HEAD, OPTIONS, TRACE
-    if request.method in ('GET', 'HEAD', 'OPTIONS', 'TRACE'):
-        return None
-    # Apply CSRF check for other routes
-    csrf.protect()
+# CSRF protection disabled for MVP demo
+# @app.before_request
+# def csrf_protect():
+#     """Apply CSRF protection selectively - exempt API routes and file uploads."""
+#     pass
 
 # Initialize Flask-Talisman for security headers
 # Only enforce HTTPS in production
