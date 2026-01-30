@@ -101,8 +101,17 @@ if USE_REDIS_SESSIONS:
         app.config['SESSION_TYPE'] = 'filesystem'
         app.config['SESSION_FILE_DIR'] = '/tmp/flask_session'
         FlaskSession(app)
+elif USE_DATABASE:
+    # Use SQLAlchemy sessions when database is enabled (works on Railway)
+    app.config['SESSION_TYPE'] = 'sqlalchemy'
+    app.config['SESSION_SQLALCHEMY'] = db
+    app.config['SESSION_PERMANENT'] = True
+    app.config['SESSION_USE_SIGNER'] = True
+    app.config['PERMANENT_SESSION_LIFETIME'] = 86400  # 24 hours
+    FlaskSession(app)
+    logger.info("SQLAlchemy database sessions enabled")
 else:
-    # Use filesystem sessions by default
+    # Use filesystem sessions by default (local development)
     app.config['SESSION_TYPE'] = 'filesystem'
     app.config['SESSION_FILE_DIR'] = '/tmp/flask_session'
     app.config['SESSION_PERMANENT'] = True
