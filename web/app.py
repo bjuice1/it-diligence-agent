@@ -51,8 +51,11 @@ app = Flask(__name__,
             static_folder='static',
             static_url_path='/static')
 
-# Use environment variable for secret key, with fallback for development
-app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev-it-dd-agent-secret-key-change-in-prod')
+# Use environment variable for secret key, with fallback for MVP demo
+SECRET_KEY = os.environ.get('FLASK_SECRET_KEY') or os.environ.get('SECRET_KEY') or 'itdd-mvp-demo-secret-2026-production'
+app.secret_key = SECRET_KEY
+app.config['SECRET_KEY'] = SECRET_KEY
+app.config['WTF_CSRF_SECRET_KEY'] = SECRET_KEY
 
 # =============================================================================
 # Phase 3: Database Setup
