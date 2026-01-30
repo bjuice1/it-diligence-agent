@@ -44,6 +44,9 @@ services:
       - ../web:/app/web
       - ../stores:/app/stores
       - ../scripts:/app/scripts
+      - ../tools_v2:/app/tools_v2
+      - ../pipeline:/app/pipeline
+      - ../services:/app/services
       - ../config_v2.py:/app/config_v2.py
       # Mount data directories for persistence
       - ../data:/app/data

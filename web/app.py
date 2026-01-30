@@ -212,6 +212,14 @@ app.register_blueprint(auth_bp)
 from web.routes.deals import deals_bp
 app.register_blueprint(deals_bp)
 
+# Register inventory blueprint
+from web.blueprints.inventory import inventory_bp
+app.register_blueprint(inventory_bp)
+
+# Register costs blueprint
+from web.blueprints.costs import costs_bp
+app.register_blueprint(costs_bp)
+
 # Check if authentication is required (can be disabled for development)
 AUTH_REQUIRED = os.environ.get('AUTH_REQUIRED', 'true').lower() != 'false'
 
@@ -1057,6 +1065,22 @@ def dashboard():
             }
         }
 
+    # Get inventory summary
+    inventory_summary = None
+    try:
+        from web.blueprints.inventory import get_inventory_store
+        inv_store = get_inventory_store()
+        if len(inv_store) > 0:
+            apps = inv_store.get_items(inventory_type="application", entity="target", status="active")
+            inventory_summary = {
+                "total": len(inv_store),
+                "applications": len(apps),
+                "total_cost": sum(app.cost or 0 for app in apps),
+                "critical": len([a for a in apps if a.criticality and 'critical' in str(a.criticality).lower()]),
+            }
+    except Exception:
+        pass
+
     return render_template('dashboard.html',
                          summary=summary,
                          top_risks=top_risks,
@@ -1064,6 +1088,7 @@ def dashboard():
                          analysis_metadata=analysis_metadata,
                          pending_summary=pending_summary,
                          entity_summary=entity_summary,
+                         inventory_summary=inventory_summary,
                          session=s)
 
 
@@ -1139,10 +1164,55 @@ def risk_detail(risk_id):
             if risk_id in wi.triggered_by_risks:
                 related_wi.append(wi)
 
+    # Find affected inventory items based on fact item names
+    affected_items = []
+    affected_cost_total = 0
+    affected_users_total = 0
+    try:
+        from web.blueprints.inventory import get_inventory_store
+        inv_store = get_inventory_store()
+        if len(inv_store) > 0:
+            all_items = inv_store.get_items(entity="target", status="active")
+            # Match fact items to inventory items by name
+            fact_item_names = [f.item.lower() for f in facts if f.item]
+            for item in all_items:
+                item_name_lower = item.name.lower()
+                for fact_name in fact_item_names:
+                    # Fuzzy match: fact item contains inventory name or vice versa
+                    if fact_name in item_name_lower or item_name_lower in fact_name:
+                        if item not in affected_items:
+                            affected_items.append(item)
+                            # Accumulate cost
+                            if item.cost:
+                                affected_cost_total += item.cost
+                            # Accumulate users (parse from string like "1,407")
+                            users_str = item.data.get('users', '0')
+                            if users_str:
+                                try:
+                                    users_val = int(str(users_str).replace(',', ''))
+                                    affected_users_total += users_val
+                                except (ValueError, TypeError):
+                                    pass
+                        break
+    except Exception as e:
+        logger.warning(f"Could not load affected inventory items: {e}")
+
+    # Extract M&A-specific context from risk if available
+    mna_context = {
+        'lens': getattr(risk, 'mna_lens', None),
+        'implication': getattr(risk, 'mna_implication', None),
+        'timeline': getattr(risk, 'timeline', None),
+        'confidence': getattr(risk, 'confidence', None),
+    }
+
     return render_template('risk_detail.html',
                          risk=risk,
                          facts=facts,
-                         related_work_items=related_wi)
+                         related_work_items=related_wi,
+                         affected_items=affected_items,
+                         affected_cost_total=affected_cost_total,
+                         affected_users_total=affected_users_total,
+                         mna_context=mna_context)
 
 
 @app.route('/risk/<risk_id>/adjust', methods=['POST'])
@@ -2238,8 +2308,25 @@ def organization_shared_services():
 @auth_optional
 def applications_overview():
     """Applications inventory overview."""
-    from services.applications_bridge import build_applications_inventory
+    from services.applications_bridge import build_applications_inventory, build_applications_from_inventory_store, ApplicationsInventory
 
+    # First try InventoryStore (structured data from imports)
+    try:
+        from web.blueprints.inventory import get_inventory_store
+        inv_store = get_inventory_store()
+        if len(inv_store) > 0:
+            apps = inv_store.get_items(inventory_type="application", entity="target", status="active")
+            if apps:
+                inventory, status = build_applications_from_inventory_store(inv_store)
+                data_source = "inventory"
+                return render_template('applications/overview.html',
+                                      inventory=inventory,
+                                      status=status,
+                                      data_source=data_source)
+    except Exception as e:
+        logger.warning(f"Could not load from InventoryStore: {e}")
+
+    # Fall back to FactStore (facts from discovery agents)
     session = get_session()
 
     if session and session.fact_store:
@@ -2247,7 +2334,6 @@ def applications_overview():
         data_source = "analysis"
     else:
         # Return empty inventory
-        from services.applications_bridge import ApplicationsInventory
         inventory = ApplicationsInventory()
         status = "no_facts"
         data_source = "none"
@@ -2292,8 +2378,25 @@ def applications_category(category):
 @auth_optional
 def infrastructure_overview():
     """Infrastructure inventory overview."""
-    from services.infrastructure_bridge import build_infrastructure_inventory
+    from services.infrastructure_bridge import build_infrastructure_inventory, build_infrastructure_from_inventory_store, InfrastructureInventory
 
+    # First try InventoryStore (structured data from imports)
+    try:
+        from web.blueprints.inventory import get_inventory_store
+        inv_store = get_inventory_store()
+        if len(inv_store) > 0:
+            infra_items = inv_store.get_items(inventory_type="infrastructure", entity="target", status="active")
+            if infra_items:
+                inventory, status = build_infrastructure_from_inventory_store(inv_store)
+                data_source = "inventory"
+                return render_template('infrastructure/overview.html',
+                                      inventory=inventory,
+                                      status=status,
+                                      data_source=data_source)
+    except Exception as e:
+        logger.warning(f"Could not load from InventoryStore: {e}")
+
+    # Fall back to FactStore (facts from discovery agents)
     session = get_session()
 
     if session and session.fact_store:
@@ -2301,7 +2404,6 @@ def infrastructure_overview():
         data_source = "analysis"
     else:
         # Return empty inventory
-        from services.infrastructure_bridge import InfrastructureInventory
         inventory = InfrastructureInventory()
         status = "no_facts"
         data_source = "none"
@@ -2316,16 +2418,29 @@ def infrastructure_overview():
 @auth_optional
 def infrastructure_category(category):
     """View infrastructure in a specific category."""
-    from services.infrastructure_bridge import build_infrastructure_inventory
+    from services.infrastructure_bridge import build_infrastructure_inventory, build_infrastructure_from_inventory_store, InfrastructureInventory
 
-    session = get_session()
+    inventory = None
 
-    if session and session.fact_store:
-        inventory, status = build_infrastructure_inventory(session.fact_store)
-    else:
-        from services.infrastructure_bridge import InfrastructureInventory
-        inventory = InfrastructureInventory()
-        status = "no_facts"
+    # First try InventoryStore (structured data from imports)
+    try:
+        from web.blueprints.inventory import get_inventory_store
+        inv_store = get_inventory_store()
+        if len(inv_store) > 0:
+            infra_items = inv_store.get_items(inventory_type="infrastructure", entity="target", status="active")
+            if infra_items:
+                inventory, status = build_infrastructure_from_inventory_store(inv_store)
+    except Exception as e:
+        logger.warning(f"Could not load from InventoryStore: {e}")
+
+    # Fall back to FactStore if no inventory data
+    if inventory is None:
+        session = get_session()
+        if session and session.fact_store:
+            inventory, status = build_infrastructure_inventory(session.fact_store)
+        else:
+            inventory = InfrastructureInventory()
+            status = "no_facts"
 
     # Get category summary
     cat_summary = inventory.by_category.get(category)

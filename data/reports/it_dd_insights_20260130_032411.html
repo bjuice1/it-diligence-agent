@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IT Due Diligence Insights - Target Company</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>mermaid.initialize({startOnLoad:true, theme:'neutral'});</script>
+    <style>
+        :root {
+            --primary: #1e40af;
+            --critical: #dc2626;
+            --high: #ea580c;
+            --medium: #ca8a04;
+            --low: #16a34a;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+            --muted: #64748b;
+            --border: #e2e8f0;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
+            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+            color: white;
+            padding: 3rem 2rem;
+            margin-bottom: 2rem;
+        }
+
+        header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        header .subtitle {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+
+        .executive-summary {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border-left: 4px solid var(--primary);
+        }
+
+        .executive-summary h2 {
+            font-size: 1.25rem;
+            margin-bottom: 1rem;
+            color: var(--primary);
+        }
+
+        .stat-row {
+            display: flex;
+            gap: 2rem;
+            margin-top: 1rem;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        .stat-value.critical { color: var(--critical); }
+        .stat-value.high { color: var(--high); }
+        .stat-value.cost { color: var(--primary); }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--muted);
+        }
+
+        section {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        section h2 {
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .finding {
+            border-left: 4px solid var(--medium);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            background: #fafafa;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .finding.critical { border-left-color: var(--critical); background: #fef2f2; }
+        .finding.high { border-left-color: var(--high); background: #fff7ed; }
+        .finding.medium { border-left-color: var(--medium); background: #fefce8; }
+        .finding.low { border-left-color: var(--low); background: #f0fdf4; }
+
+        .finding-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .severity-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .severity-badge.critical { background: var(--critical); color: white; }
+        .severity-badge.high { background: var(--high); color: white; }
+        .severity-badge.medium { background: var(--medium); color: white; }
+        .severity-badge.low { background: var(--low); color: white; }
+
+        .finding h3 {
+            font-size: 1.1rem;
+            margin: 0;
+        }
+
+        .so-what {
+            font-size: 1rem;
+            margin: 0.75rem 0;
+            color: var(--text);
+        }
+
+        .so-what strong {
+            color: var(--primary);
+        }
+
+        .evidence {
+            font-size: 0.85rem;
+            color: var(--muted);
+            margin-top: 0.75rem;
+        }
+
+        .evidence code {
+            background: #e2e8f0;
+            padding: 0.125rem 0.375rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+
+        .mermaid {
+            background: white;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+
+        .diagram-caption {
+            text-align: center;
+            font-size: 0.9rem;
+            color: var(--muted);
+            margin-top: 0.5rem;
+        }
+
+        .action-item {
+            display: flex;
+            gap: 1rem;
+            padding: 1rem;
+            background: #f8fafc;
+            border-radius: 8px;
+            margin-bottom: 0.75rem;
+            align-items: flex-start;
+        }
+
+        .action-number {
+            background: var(--primary);
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.9rem;
+            flex-shrink: 0;
+        }
+
+        .action-content h4 {
+            margin: 0 0 0.25rem 0;
+            font-size: 1rem;
+        }
+
+        .action-content p {
+            margin: 0;
+            font-size: 0.9rem;
+            color: var(--muted);
+        }
+
+        .appendix {
+            background: #f8fafc;
+        }
+
+        .appendix h2 {
+            color: var(--muted);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            margin-top: 1rem;
+        }
+
+        th, td {
+            padding: 0.625rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            background: #f1f5f9;
+            font-weight: 600;
+            color: var(--muted);
+        }
+
+        .nav {
+            position: sticky;
+            top: 0;
+            background: white;
+            padding: 1rem 2rem;
+            border-bottom: 1px solid var(--border);
+            z-index: 100;
+            display: flex;
+            gap: 1.5rem;
+        }
+
+        .nav a {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .nav a:hover {
+            text-decoration: underline;
+        }
+
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--muted);
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>IT Due Diligence Insights</h1>
+            <p class="subtitle">Target Company • Acquisition Analysis • January 30, 2026</p>
+        </div>
+    </header>
+
+    <nav class="nav">
+        <a href="#findings">Key Findings</a>
+        <a href="#dataflow">Data & Connectivity</a>
+        <a href="#implications">Deal Implications</a>
+        <a href="#actions">Recommended Actions</a>
+        <a href="#appendix">Appendix</a>
+    </nav>
+
+    <div class="container">
+        <div class="executive-summary">
+            <h2>Executive Summary</h2>
+            <p>Analysis of 33 applications and 2 infrastructure components reveals 0 key findings requiring attention.</p>
+            <div class="stat-row">
+                <div class="stat">
+                    <div class="stat-value critical">0</div>
+                    <div class="stat-label">Critical Findings</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value high">0</div>
+                    <div class="stat-label">High Priority</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value cost">$7,183,698</div>
+                    <div class="stat-label">Annual IT Spend</div>
+                </div>
+            </div>
+        </div>
+
+        
+        <section id="findings">
+            <h2>🎯 Key Findings</h2>
+            <p style="color: var(--muted);">No findings generated yet. Run analysis to identify key insights.</p>
+        </section>
+        
+
+        
+    <section id="dataflow">
+        <h2>🔄 Data Flow & Connectivity</h2>
+        <p>Critical data flows are shown with bold arrows. These represent the highest separation complexity.</p>
+
+        <div class="mermaid">
+flowchart LR
+    NetSuite["NetSuite"] ==>|"Customer Data"| Salesforce_Sales_Cloud["Salesforce Sales Cloud"]
+    ADP_Workforce_Now["ADP Workforce Now"] -->|"Employee Data"| NetSuite["NetSuite"]
+        </div>
+        <p class="diagram-caption">Application connectivity map • 1 critical flows identified</p>
+
+        <h3 style="margin-top: 1.5rem;">Critical Data Flows</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Source</th>
+                    <th>Target</th>
+                    <th>Data Type</th>
+                    <th>Frequency</th>
+                    <th>Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+                <tr>
+                    <td>NetSuite</td>
+                    <td>Salesforce Sales Cloud</td>
+                    <td>Customer Data</td>
+                    <td>batch</td>
+                    <td>Inferred - needs validation</td>
+                </tr>
+                
+            </tbody>
+        </table>
+    </section>
+    
+
+        
+    <section id="implications">
+        <h2>💼 Deal Implications</h2>
+        
+            <div class="action-item">
+                <div class="action-number">i</div>
+                <div class="action-content">
+                    <h4>Standard Due Diligence</h4>
+                    <p>No unusual implications identified. Proceed with standard integration planning.</p>
+                </div>
+            </div>
+        
+    </section>
+    
+
+        
+    <section id="actions">
+        <h2>✅ Recommended Actions</h2>
+        
+            <div class="action-item">
+                <div class="action-number">1</div>
+                <div class="action-content">
+                    <h4>Request system integration documentation from VDR</h4>
+                    <p>Priority: High</p>
+                </div>
+            </div>
+        
+            <div class="action-item">
+                <div class="action-number">2</div>
+                <div class="action-content">
+                    <h4>Schedule technical deep-dive with target IT leadership</h4>
+                    <p>Priority: Medium</p>
+                </div>
+            </div>
+        
+            <div class="action-item">
+                <div class="action-number">3</div>
+                <div class="action-content">
+                    <h4>Validate application inventory against actual environment</h4>
+                    <p>Priority: Medium</p>
+                </div>
+            </div>
+        
+    </section>
+    
+
+        
+    <section id="appendix" class="appendix">
+        <h2>📎 Appendix: Supporting Inventory</h2>
+        <p style="color: var(--muted); margin-bottom: 1rem;">Top 20 applications by cost. Full inventory available in separate export.</p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Application</th>
+                    <th>Vendor</th>
+                    <th style="text-align: right;">Annual Cost</th>
+                    <th>Criticality</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+            <tr>
+                <td><code>I-APP-b79922</code></td>
+                <td>Duck Creek Policy</td>
+                <td>Duck Creek</td>
+                <td style="text-align: right;">$546,257</td>
+                <td>CRITICAL fileciteturn3file1L11-L16</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-d918ca</code></td>
+                <td>Majesco Policy for L&A</td>
+                <td>Majesco</td>
+                <td style="text-align: right;">$440,225</td>
+                <td>CRITICAL fileciteturn3file1L11-L13</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-70b895</code></td>
+                <td>Duck Creek Claims</td>
+                <td>Duck Creek</td>
+                <td style="text-align: right;">$435,426</td>
+                <td>CRITICAL fileciteturn3file1L13-L15</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-2bd27c</code></td>
+                <td>Guidewire ClaimCenter</td>
+                <td>Guidewire</td>
+                <td style="text-align: right;">$421,687</td>
+                <td>CRITICAL fileciteturn3file1L13-L16</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-272704</code></td>
+                <td>Guidewire PolicyCenter</td>
+                <td>Guidewire</td>
+                <td style="text-align: right;">$413,263</td>
+                <td>CRITICAL fileciteturn3file1L14-L16</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-90354a</code></td>
+                <td>CSG Ascendon</td>
+                <td>CSG</td>
+                <td style="text-align: right;">$343,532</td>
+                <td>HIGH fileciteturn3file1L15-L17</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-54101e</code></td>
+                <td>Salesforce Sales Cloud</td>
+                <td>Salesforce</td>
+                <td style="text-align: right;">$311,556</td>
+                <td>LOW fileciteturn3file1L16-L18</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-6f43e0</code></td>
+                <td>NetSuite</td>
+                <td>Oracle</td>
+                <td style="text-align: right;">$309,562</td>
+                <td>CRITICAL fileciteturn3file1L17-L19</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-8f9561</code></td>
+                <td>ADP Workforce Now</td>
+                <td>ADP</td>
+                <td style="text-align: right;">$281,181</td>
+                <td>HIGH fileciteturn3file1L18-L20</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-036063</code></td>
+                <td>Netcracker Revenue Management</td>
+                <td>NEC/Netcracker</td>
+                <td style="text-align: right;">$279,087</td>
+                <td>HIGH fileciteturn3file1L19-L21</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-606bed</code></td>
+                <td>SAP S/4HANA</td>
+                <td>SAP</td>
+                <td style="text-align: right;">$276,449</td>
+                <td>CRITICAL fileciteturn5file0L79-L81</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-a63af8</code></td>
+                <td>Microsoft Dynamics 365 Sales</td>
+                <td>Microsoft</td>
+                <td style="text-align: right;">$254,244</td>
+                <td>MEDIUM fileciteturn5file0L80-L82</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-539d25</code></td>
+                <td>BlackLine</td>
+                <td>BlackLine</td>
+                <td style="text-align: right;">$240,728</td>
+                <td>HIGH fileciteturn5file0L81-L83</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-c5c5f6</code></td>
+                <td>Amdocs Revenue Management</td>
+                <td>Amdocs</td>
+                <td style="text-align: right;">$215,194</td>
+                <td>HIGH fileciteturn5file0L84-L86</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-6b6079</code></td>
+                <td>Workday HCM</td>
+                <td>Workday</td>
+                <td style="text-align: right;">$196,910</td>
+                <td>HIGH fileciteturn5file0L85-L87</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-2d76c6</code></td>
+                <td>Qlik Sense</td>
+                <td>Qlik</td>
+                <td style="text-align: right;">$195,736</td>
+                <td>MEDIUM fileciteturn5file0L86-L88</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-41f173</code></td>
+                <td>Box Enterprise</td>
+                <td>Box</td>
+                <td style="text-align: right;">$170,462</td>
+                <td>LOW fileciteturn5file0L87-L89</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-2b5bfe</code></td>
+                <td>Microsoft 365 E3</td>
+                <td>Microsoft</td>
+                <td style="text-align: right;">$162,259</td>
+                <td>MEDIUM fileciteturn5file0L88-L90</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-6c796d</code></td>
+                <td>Microsoft Power BI Premium</td>
+                <td>Microsoft</td>
+                <td style="text-align: right;">$160,093</td>
+                <td>MEDIUM fileciteturn5file0L89-L91</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-de2123</code></td>
+                <td>Microsoft Exchange Online</td>
+                <td>Microsoft</td>
+                <td style="text-align: right;">$155,967</td>
+                <td>MEDIUM fileciteturn5file0L90-L92</td>
+            </tr>
+        
+            </tbody>
+        </table>
+    </section>
+    
+    </div>
+
+    <footer>
+        <p>Generated by IT Due Diligence Agent • "So What" Report v1.0</p>
+        <p>Data is deterministic from inventory import. Analysis is AI-assisted.</p>
+    </footer>
+</body>
+</html>

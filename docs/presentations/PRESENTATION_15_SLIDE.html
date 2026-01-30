@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IT Due Diligence Agent - Deal Team Guide</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #fafafa;
+            color: #1a1a2e;
+            line-height: 1.6;
+        }
+        .slide {
+            min-height: 100vh;
+            padding: 45px 65px;
+            border-bottom: 1px solid #e5e7eb;
+            position: relative;
+            background: white;
+        }
+        .slide:nth-child(odd) { background: linear-gradient(135deg, #ffffff 0%, #f8faff 100%); }
+        .slide:nth-child(even) { background: linear-gradient(135deg, #fefffe 0%, #f8fafc 100%); }
+        .slide-number {
+            position: absolute;
+            top: 22px;
+            right: 30px;
+            font-size: 12px;
+            color: #9ca3af;
+        }
+        .section-label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: #6366f1;
+            margin-bottom: 8px;
+        }
+        .persona-tag {
+            position: absolute;
+            top: 22px;
+            left: 30px;
+            font-size: 11px;
+            color: #0891b2;
+            background: rgba(8,145,178,0.1);
+            padding: 4px 10px;
+            border-radius: 4px;
+        }
+        h1 {
+            font-size: 2.4rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #6366f1 0%, #ec4899 50%, #f59e0b 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        h2 { font-size: 1.4rem; color: #6b7280; margin-bottom: 30px; font-weight: 500; }
+        h3 { font-size: 1.15rem; color: #6366f1; margin: 22px 0 12px 0; font-weight: 600; }
+        h4 { font-size: 1rem; color: #1a1a2e; margin: 18px 0 10px 0; }
+        p { color: #4b5563; margin-bottom: 12px; font-size: 0.95rem; }
+        table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 0.9rem; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.04); }
+        th, td { padding: 11px 14px; text-align: left; border-bottom: 1px solid #f3f4f6; }
+        th { color: #6b7280; font-weight: 500; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; background: #f9fafb; }
+        td { color: #374151; }
+        .highlight td { color: #6366f1; font-weight: 600; background: rgba(99,102,241,0.05); }
+        .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; margin: 18px 0; }
+        .card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+        }
+        .card h4 { margin-top: 0; color: #1a1a2e; font-size: 0.95rem; }
+        .card p { font-size: 0.85rem; margin-bottom: 8px; }
+        .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+        .flow { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 25px 0; flex-wrap: wrap; }
+        .flow-box {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 18px 28px;
+            text-align: center;
+            min-width: 120px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+        }
+        .flow-box.hl { background: linear-gradient(135deg, rgba(99,102,241,0.1) 0%, rgba(236,72,153,0.1) 100%); border-color: #6366f1; }
+        .flow-box .lbl { font-size: 0.65rem; color: #9ca3af; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+        .flow-box .ttl { font-size: 0.95rem; font-weight: 600; color: #1a1a2e; }
+        .flow-box .sub { font-size: 0.75rem; color: #6b7280; margin-top: 4px; }
+        .arr { color: #ec4899; font-size: 1.3rem; }
+        .tag { display: inline-block; padding: 3px 9px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; margin-right: 6px; }
+        .tag.hi { background: rgba(239,68,68,0.1); color: #dc2626; }
+        .tag.md { background: rgba(245,158,11,0.1); color: #d97706; }
+        .tag.lo { background: rgba(16,185,129,0.1); color: #059669; }
+        .callout {
+            background: linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(236,72,153,0.06) 100%);
+            border-left: 3px solid #6366f1;
+            padding: 18px 22px;
+            margin: 18px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .callout p { margin: 0; color: #374151; }
+        .trust-callout {
+            background: linear-gradient(135deg, rgba(16,185,129,0.06) 0%, rgba(6,182,212,0.06) 100%);
+            border-left: 3px solid #10b981;
+            padding: 18px 22px;
+            margin: 18px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .trust-callout p { margin: 0; color: #374151; }
+        ul.bl { list-style: none; margin: 12px 0; }
+        ul.bl li { padding: 6px 0 6px 20px; position: relative; color: #4b5563; font-size: 0.9rem; }
+        ul.bl li::before { content: "•"; position: absolute; left: 0; color: #ec4899; }
+        .step-list { list-style: none; margin: 15px 0; counter-reset: step; }
+        .step-list li {
+            padding: 12px 0 12px 50px;
+            position: relative;
+            color: #374151;
+            font-size: 0.95rem;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .step-list li::before {
+            counter-increment: step;
+            content: counter(step);
+            position: absolute;
+            left: 0;
+            top: 10px;
+            width: 28px;
+            height: 28px;
+            background: linear-gradient(135deg, rgba(99,102,241,0.15) 0%, rgba(236,72,153,0.15) 100%);
+            border: 1px solid #6366f1;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #6366f1;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+        .mock-screen {
+            background: #1a1a2e;
+            border: 2px solid #374151;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .mock-screen .title-bar {
+            font-size: 0.8rem;
+            color: #9ca3af;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #374151;
+        }
+        .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 15px 0; }
+        .stat-box {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+        }
+        .stat-box .value { font-size: 1.6rem; font-weight: 700; color: #6366f1; }
+        .stat-box .label { font-size: 0.75rem; color: #6b7280; margin-top: 4px; }
+        .evidence-chain {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 25px;
+            margin: 20px 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+        }
+        .chain-item {
+            background: linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(236,72,153,0.08) 100%);
+            border: 1px solid rgba(99,102,241,0.2);
+            border-radius: 6px;
+            padding: 12px 16px;
+            margin: 8px 0;
+        }
+        .chain-item .type { font-size: 0.65rem; color: #6366f1; text-transform: uppercase; letter-spacing: 1px; }
+        .chain-item .content { color: #1a1a2e; font-weight: 500; margin-top: 4px; font-size: 0.9rem; }
+        .chain-item .id { color: #6b7280; font-size: 0.8rem; }
+        .chain-connector { text-align: center; color: #ec4899; font-size: 1rem; margin: 4px 0; }
+        .source-table { font-size: 0.85rem; }
+        .source-table td:first-child { color: #6b7280; width: 35%; }
+        .source-table td:last-child { color: #1a1a2e; }
+        .persona-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin: 15px 0; }
+        .persona-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 18px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+        }
+        .persona-card h4 { margin: 0 0 10px 0; color: #6366f1; font-size: 0.95rem; }
+        .persona-card .use { color: #374151; font-size: 0.85rem; margin-bottom: 8px; }
+        .persona-card .screens { color: #6b7280; font-size: 0.8rem; }
+        .footer { text-align: center; padding: 25px; color: #9ca3af; font-size: 0.8rem; background: #f9fafb; }
+    </style>
+</head>
+<body>
+
+<!-- SLIDE 1 -->
+<div class="slide">
+    <div class="slide-number">1 / 15</div>
+    <div class="persona-tag">All Team Members</div>
+    <div class="section-label">Overview</div>
+    <h1>The IT DD Challenge</h1>
+    <h2>What We're Replacing</h2>
+
+    <table>
+        <thead>
+            <tr><th>Manual Task</th><th>Hours Today</th><th>With This Tool</th><th>Savings</th></tr>
+        </thead>
+        <tbody>
+            <tr><td>Read all VDR documents</td><td>40 hrs</td><td>Automated</td><td>40 hrs</td></tr>
+            <tr><td>Build application inventory</td><td>8 hrs</td><td>Auto-extracted</td><td>8 hrs</td></tr>
+            <tr><td>Identify and document risks</td><td>16 hrs</td><td>AI-generated, you review</td><td>14 hrs</td></tr>
+            <tr><td>Estimate integration costs</td><td>8 hrs</td><td>Cost engine</td><td>6 hrs</td></tr>
+            <tr><td>Write findings memo</td><td>12 hrs</td><td>Templates + export</td><td>8 hrs</td></tr>
+            <tr class="highlight"><td><strong>Total</strong></td><td><strong>84 hrs</strong></td><td><strong>~8 hrs review</strong></td><td><strong>76 hrs</strong></td></tr>
+        </tbody>
+    </table>
+
+    <div class="callout">
+        <p><strong>The Problem:</strong> Traditional IT DD tells you what exists. It doesn't tell you what it means for the deal.</p>
+    </div>
+
+    <h3>Who Uses What</h3>
+    <div class="persona-grid">
+        <div class="persona-card">
+            <h4>Deal Partner</h4>
+            <div class="use">High-level risk view, cost summary</div>
+            <div class="screens">Screens: Dashboard, Cost Center</div>
+        </div>
+        <div class="persona-card">
+            <h4>Associate</h4>
+            <div class="use">Detailed analysis, fact verification</div>
+            <div class="screens">Screens: Risk Detail, Facts, Work Items</div>
+        </div>
+        <div class="persona-card">
+            <h4>Operating Partner</h4>
+            <div class="use">Integration planning, resource needs</div>
+            <div class="screens">Screens: Work Items, Cost by Phase</div>
+        </div>
+        <div class="persona-card">
+            <h4>Offshore Analyst</h4>
+            <div class="use">Fact verification, data cleanup</div>
+            <div class="screens">Screens: Review Queue, Evidence Chain</div>
+        </div>
+    </div>
+</div>
+
+<!-- SLIDE 2 -->
+<div class="slide">
+    <div class="slide-number">2 / 15</div>
+    <div class="persona-tag">All Team Members</div>
+    <div class="section-label">Overview</div>
+    <h1>What This Tool Does</h1>
+    <h2>Data In → Insights Out</h2>
+
+    <div class="flow">
+        <div class="flow-box">
+            <div class="lbl">You Provide</div>
+            <div class="ttl">VDR Documents</div>
+            <div class="sub">Excel, Word, PDF</div>
+        </div>
+        <div class="arr">→</div>
+        <div class="flow-box hl">
+            <div class="lbl">System Does</div>
+            <div class="ttl">AI Analysis</div>
+            <div class="sub">Extract + Reason</div>
+        </div>
+        <div class="arr">→</div>
+        <div class="flow-box">
+            <div class="lbl">You Get</div>
+            <div class="ttl">Deal Insights</div>
+            <div class="sub">Costs, Risks, Actions</div>
+        </div>
+    </div>
+
+    <div class="two-col">
+        <div>
+            <h3>Without This Tool (Raw Data)</h3>
+            <ul class="bl">
+                <li>"SAP exists"</li>
+                <li>"500 users"</li>
+                <li>"$1.2M license"</li>
+            </ul>
+        </div>
+        <div>
+            <h3>With This Tool (Insights)</h3>
+            <ul class="bl">
+                <li>"SAP handles 80% of transactions"</li>
+                <li>"Heavy customization = migration risk"</li>
+                <li>"Replacement: $2-4M over 18-24 months"</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="trust-callout">
+        <p><strong>Why trust AI output?</strong> Every fact has an exact quote from your document. Every risk cites specific facts. Click any finding → see the source → verify yourself. We're showing you the receipts.</p>
+    </div>
+</div>
+
+<!-- SLIDE 3 -->
+<div class="slide">
+    <div class="slide-number">3 / 15</div>
+    <div class="persona-tag">Associate / Analyst</div>
+    <div class="section-label">Workflow</div>
+    <h1>What You Actually Do</h1>
+    <h2>Step-by-Step Workflow</h2>
+
+    <ol class="step-list">
+        <li><strong>Get VDR access</strong> — Download key IT docs: application inventory, IT assessment, org chart, security review</li>
+        <li><strong>Upload to tool</strong> — Drag and drop files. System auto-detects document type (application list? org chart? narrative?)</li>
+        <li><strong>Wait ~10 minutes</strong> — AI processes documents, extracts facts, generates risks and work items</li>
+        <li><strong>Review Dashboard</strong> — See summary: total risks, facts extracted, costs calculated</li>
+        <li><strong>Drill into risks</strong> — Click any risk to see the evidence chain: Risk → Facts → Source Document → Exact Quote</li>
+        <li><strong>Review Cost Center</strong> — See run-rate costs, one-time integration costs, synergy opportunities</li>
+        <li><strong>Export for deal model</strong> — Excel export for cost model, PDF for IC memo</li>
+    </ol>
+
+    <div class="callout">
+        <p><strong>Total time:</strong> 10 min upload + 10 min processing + 2-4 hrs review = Half a day vs. 2 weeks</p>
+    </div>
+</div>
+
+<!-- SLIDE 4 -->
+<div class="slide">
+    <div class="slide-number">4 / 15</div>
+    <div class="persona-tag">Associate / Analyst</div>
+    <div class="section-label">Inputs</div>
+    <h1>What Goes In</h1>
+    <h2>Works With or Without ToltIQ</h2>
+
+    <div class="two-col">
+        <div>
+            <h3>If You Have ToltIQ</h3>
+            <ul class="bl">
+                <li>Import ToltIQ output for richer analysis</li>
+                <li>Pre-structured data = faster processing</li>
+                <li>Same outputs, more detail</li>
+            </ul>
+        </div>
+        <div>
+            <h3>Standalone (No ToltIQ)</h3>
+            <ul class="bl">
+                <li>Upload Excel/Word/PDF directly from VDR</li>
+                <li>System auto-detects and parses</li>
+                <li>Same outputs, works independently</li>
+            </ul>
+        </div>
+    </div>
+
+    <h3>Document Types We Handle</h3>
+    <table>
+        <thead><tr><th>Type</th><th>Examples</th><th>What We Extract</th></tr></thead>
+        <tbody>
+            <tr><td><strong>Excel</strong></td><td>App inventory, org chart, vendor list</td><td>Structured rows → inventory items</td></tr>
+            <tr><td><strong>Word</strong></td><td>IT assessment, security review</td><td>Narrative facts with quotes</td></tr>
+            <tr><td><strong>PDF</strong></td><td>Architecture docs, contracts</td><td>Text + tables</td></tr>
+            <tr><td><strong>Markdown</strong></td><td>Meeting notes, data room index</td><td>Unstructured insights</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- SLIDE 5 -->
+<div class="slide">
+    <div class="slide-number">5 / 15</div>
+    <div class="persona-tag">Deal Partner / Associate</div>
+    <div class="section-label">Outputs</div>
+    <h1>What Comes Out</h1>
+    <h2>Four Key Deliverables</h2>
+
+    <div class="card-grid">
+        <div class="card">
+            <h4>📊 Cost Center</h4>
+            <p>All IT costs in one view</p>
+            <ul class="bl">
+                <li>Run-rate (annual recurring)</li>
+                <li>One-time (integration costs)</li>
+                <li>Synergies (savings opportunities)</li>
+            </ul>
+        </div>
+        <div class="card">
+            <h4>⚠️ Risk Register</h4>
+            <p>Evidence-backed risks</p>
+            <ul class="bl">
+                <li>Severity ratings</li>
+                <li>M&A implications ("so what")</li>
+                <li>Mitigation recommendations</li>
+            </ul>
+        </div>
+        <div class="card">
+            <h4>📋 Work Items</h4>
+            <p>Integration roadmap</p>
+            <ul class="bl">
+                <li>Day 1 / Day 100 / Post-100</li>
+                <li>Cost estimate per item</li>
+                <li>Owner + dependencies</li>
+            </ul>
+        </div>
+        <div class="card">
+            <h4>🔗 Evidence Chain</h4>
+            <p>Audit trail for every finding</p>
+            <ul class="bl">
+                <li>Risk → Facts → Document</li>
+                <li>Exact quotes from source</li>
+                <li>Validate in mgmt calls</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<!-- SLIDE 6 -->
+<div class="slide">
+    <div class="slide-number">6 / 15</div>
+    <div class="persona-tag">All Team Members</div>
+    <div class="section-label">Key Feature</div>
+    <h1>The Evidence Chain</h1>
+    <h2>Why You Can Trust the Output</h2>
+
+    <div class="evidence-chain">
+        <div class="chain-item">
+            <div class="type">Risk</div>
+            <div class="content">"High ERP concentration with dual-platform costs"</div>
+            <div class="id">R-APP-001 | Severity: High</div>
+        </div>
+
+        <div class="chain-connector">↓ supported by these facts</div>
+
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+            <div class="chain-item">
+                <div class="type">Fact</div>
+                <div class="content">"SAP S/4HANA, 500 users"</div>
+                <div class="id">F-APP-001</div>
+            </div>
+            <div class="chain-item">
+                <div class="type">Fact</div>
+                <div class="content">"NetSuite also active"</div>
+                <div class="id">F-APP-003</div>
+            </div>
+            <div class="chain-item">
+                <div class="type">Fact</div>
+                <div class="content">"$586K combined ERP cost"</div>
+                <div class="id">F-APP-007</div>
+            </div>
+        </div>
+
+        <div class="chain-connector">↓ extracted from</div>
+
+        <div class="chain-item" style="background: linear-gradient(135deg, rgba(16,185,129,0.08) 0%, rgba(6,182,212,0.08) 100%); border-color: rgba(16,185,129,0.3);">
+            <div class="type" style="color: #059669;">Source Document</div>
+            <div class="content">"Application_Inventory.xlsx"</div>
+            <div class="id" style="margin-top: 8px; font-style: italic; color: #6b7280;">
+                Exact quote: "SAP S/4HANA serves as our core ERP platform with approximately 500 active users and handles 80% of financial transactions..."
+            </div>
+        </div>
+    </div>
+
+    <p style="text-align: center; color: #6b7280;">Click any risk in the UI → see this chain → verify in the original document</p>
+</div>
+
+<!-- SLIDE 7 -->
+<div class="slide">
+    <div class="slide-number">7 / 15</div>
+    <div class="persona-tag">Deal Partner / Operating Partner</div>
+    <div class="section-label">Cost Analysis</div>
+    <h1>Cost Center Deep Dive</h1>
+    <h2>Where the Numbers Come From</h2>
+
+    <div class="stat-grid">
+        <div class="stat-box"><div class="value">$36.1M</div><div class="label">Run-Rate</div></div>
+        <div class="stat-box"><div class="value">$2.2-8.4M</div><div class="label">One-Time</div></div>
+        <div class="stat-box"><div class="value" style="color: #10b981;">$1.2M</div><div class="label">Synergies</div></div>
+        <div class="stat-box"><div class="value" style="color: #f59e0b;">21</div><div class="label">Work Items</div></div>
+    </div>
+
+    <h3>Source Transparency</h3>
+    <table class="source-table">
+        <tr><td>Headcount ($28.9M)</td><td>FTE count from org data × avg compensation by role category</td></tr>
+        <tr><td>Applications ($7.2M)</td><td>Sum of license costs from application inventory spreadsheet</td></tr>
+        <tr><td>One-Time ($2.2-8.4M)</td><td>21 work items × cost range per item (e.g., "100k_to_500k")</td></tr>
+        <tr><td>Synergies ($1.2M)</td><td>Dual platforms detected → 30-50% of smaller platform cost</td></tr>
+    </table>
+
+    <div class="two-col" style="margin-top: 25px;">
+        <div>
+            <h4>Run-Rate by Category</h4>
+            <table>
+                <tr><td>Headcount</td><td>$28.9M</td><td>80%</td></tr>
+                <tr><td>Applications</td><td>$7.2M</td><td>20%</td></tr>
+                <tr class="highlight"><td>Total</td><td>$36.1M</td><td></td></tr>
+            </table>
+        </div>
+        <div>
+            <h4>One-Time by Phase</h4>
+            <table>
+                <tr><td>Day 1</td><td>$275K - $1.0M</td></tr>
+                <tr><td>Day 100</td><td>$1.2M - $4.5M</td></tr>
+                <tr><td>Post-100</td><td>$750K - $2.9M</td></tr>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- SLIDE 8 -->
+<div class="slide">
+    <div class="slide-number">8 / 15</div>
+    <div class="persona-tag">Associate / Deal Partner</div>
+    <div class="section-label">Risk Analysis</div>
+    <h1>Risk Register</h1>
+    <h2>How Risks Are Structured</h2>
+
+    <table>
+        <thead><tr><th>Field</th><th>What It Tells You</th></tr></thead>
+        <tbody>
+            <tr><td>ID</td><td>R-APP-001, R-INFRA-002, etc.</td></tr>
+            <tr><td>Title</td><td>Clear statement of the risk</td></tr>
+            <tr><td>Severity</td><td><span class="tag hi">Critical</span> <span class="tag hi">High</span> <span class="tag md">Medium</span> <span class="tag lo">Low</span></td></tr>
+            <tr><td>So What</td><td>M&A implication — why this matters for the deal</td></tr>
+            <tr><td>Mitigation</td><td>Recommended approach to address</td></tr>
+            <tr><td>Citing Facts</td><td>Evidence trail — click to verify</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Example Risk</h3>
+    <div class="card" style="margin-top: 15px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h4 style="margin: 0;">R-APP-001: High ERP Concentration Risk</h4>
+            <span class="tag hi">High</span>
+        </div>
+        <p style="color: #374151;">SAP S/4HANA handles 80% of business transactions with heavy customization.</p>
+        <p><strong style="color: #6366f1;">So What:</strong> Migration or replacement would cost $2-4M and take 18-24 months. TSA exposure is significant.</p>
+        <p><strong style="color: #10b981;">Mitigation:</strong> Negotiate extended TSA, begin assessment immediately.</p>
+        <p style="font-size: 0.85rem; color: #6b7280;"><strong>Evidence:</strong> F-APP-001, F-APP-003, F-APP-007 (click to view)</p>
+    </div>
+</div>
+
+<!-- SLIDE 9 -->
+<div class="slide">
+    <div class="slide-number">9 / 15</div>
+    <div class="persona-tag">Operating Partner / Associate</div>
+    <div class="section-label">Integration Planning</div>
+    <h1>Work Items & Phases</h1>
+    <h2>Integration Roadmap</h2>
+
+    <table>
+        <thead><tr><th>Phase</th><th>Timeline</th><th>Focus</th><th>Items</th><th>Cost Range</th></tr></thead>
+        <tbody>
+            <tr><td><strong>Day 1</strong></td><td>Close date</td><td>Business must run</td><td>5</td><td>$275K - $1.0M</td></tr>
+            <tr><td><strong>Day 100</strong></td><td>First 100 days</td><td>Initial integration</td><td>10</td><td>$1.2M - $4.5M</td></tr>
+            <tr><td><strong>Post-100</strong></td><td>After 100 days</td><td>Optimization</td><td>6</td><td>$750K - $2.9M</td></tr>
+            <tr class="highlight"><td><strong>Total</strong></td><td></td><td></td><td><strong>21</strong></td><td><strong>$2.2M - $8.4M</strong></td></tr>
+        </tbody>
+    </table>
+
+    <h3>Work Item Structure</h3>
+    <div class="two-col">
+        <table>
+            <tr><td>Title</td><td>What needs to be done</td></tr>
+            <tr><td>Phase</td><td>When it needs to happen</td></tr>
+            <tr><td>Cost Estimate</td><td>Range (low/mid/high)</td></tr>
+        </table>
+        <table>
+            <tr><td>Owner</td><td>Buyer / Target / Shared</td></tr>
+            <tr><td>Dependencies</td><td>What must happen first</td></tr>
+            <tr><td>Triggered By</td><td>Which risks drive this work</td></tr>
+        </table>
+    </div>
+</div>
+
+<!-- SLIDE 10 -->
+<div class="slide">
+    <div class="slide-number">10 / 15</div>
+    <div class="persona-tag">Analyst / Associate</div>
+    <div class="section-label">Data Quality</div>
+    <h1>Confidence & Transparency</h1>
+    <h2>What We Know vs. What We're Uncertain About</h2>
+
+    <h3>Confidence Levels</h3>
+    <table>
+        <thead><tr><th>Level</th><th>Meaning</th><th>What To Do</th></tr></thead>
+        <tbody>
+            <tr><td><span class="tag lo">High</span></td><td>Explicitly stated in documents</td><td>Use as-is</td></tr>
+            <tr><td><span class="tag md">Medium</span></td><td>Reasonably inferred from context</td><td>Verify in mgmt call</td></tr>
+            <tr><td><span class="tag hi">Low</span></td><td>Possible but uncertain</td><td>Flag for investigation</td></tr>
+        </tbody>
+    </table>
+
+    <h3>What We Flag</h3>
+    <div class="card-grid">
+        <div class="card">
+            <h4>Gaps</h4>
+            <p>Information that should exist but doesn't. "No DR plan mentioned."</p>
+        </div>
+        <div class="card">
+            <h4>Unknowns</h4>
+            <p>Items we couldn't identify. "Unrecognized application: XYZ"</p>
+        </div>
+        <div class="card">
+            <h4>Assumptions</h4>
+            <p>Where we made judgment calls. "Assumed standard compensation."</p>
+        </div>
+    </div>
+
+    <div class="trust-callout">
+        <p><strong>Philosophy:</strong> Better to be honest about uncertainty than falsely confident. DRAFT label stays until human confirms.</p>
+    </div>
+</div>
+
+<!-- SLIDE 11 -->
+<div class="slide">
+    <div class="slide-number">11 / 15</div>
+    <div class="persona-tag">Analyst</div>
+    <div class="section-label">Human Review</div>
+    <h1>Review Workflow</h1>
+    <h2>AI + Human = Best Results</h2>
+
+    <div class="flow">
+        <div class="flow-box"><div class="ttl">AI Extract</div><div class="sub">Draft status</div></div>
+        <div class="arr">→</div>
+        <div class="flow-box"><div class="ttl">Review Queue</div><div class="sub">Prioritized list</div></div>
+        <div class="arr">→</div>
+        <div class="flow-box hl"><div class="ttl">Confirmed</div><div class="sub">Human verified</div></div>
+    </div>
+
+    <h3>Review Queue Features</h3>
+    <table>
+        <tr><td><strong>Priority sorting</strong></td><td>High-impact items first (high cost, high risk)</td></tr>
+        <tr><td><strong>Bulk actions</strong></td><td>Approve multiple similar items at once</td></tr>
+        <tr><td><strong>Correction workflow</strong></td><td>Fix errors, system learns from corrections</td></tr>
+        <tr><td><strong>Audit trail</strong></td><td>Who reviewed what, when</td></tr>
+    </table>
+
+    <h3>When SME Review Is Triggered</h3>
+    <div class="card-grid">
+        <div class="card"><h4>Cost > $500K</h4><p>Finance SME review</p></div>
+        <div class="card"><h4>Security Gap</h4><p>Security SME review</p></div>
+        <div class="card"><h4>Key Person Risk</h4><p>HR/Ops SME review</p></div>
+        <div class="card"><h4>Contract Issue</h4><p>Legal SME review</p></div>
+    </div>
+</div>
+
+<!-- SLIDE 12 -->
+<div class="slide">
+    <div class="slide-number">12 / 15</div>
+    <div class="persona-tag">Associate / Analyst</div>
+    <div class="section-label">Demo</div>
+    <h1>Screen: Upload</h1>
+    <h2>What You'll See</h2>
+
+    <div class="mock-screen">
+        <div class="title-bar">Upload Documents — IT Due Diligence</div>
+        <div style="border: 2px dashed #4b5563; border-radius: 8px; padding: 40px; text-align: center; margin: 15px 0;">
+            <p style="color: #9ca3af; margin: 0; font-size: 1.1rem;">Drag and drop files here</p>
+            <p style="color: #6b7280; font-size: 0.85rem; margin-top: 10px;">or click to browse</p>
+            <p style="color: #4b5563; font-size: 0.75rem; margin-top: 15px;">Supported: Excel (.xlsx), Word (.docx), PDF, Markdown</p>
+        </div>
+        <div style="border-top: 1px solid #374151; padding-top: 15px; margin-top: 10px;">
+            <p style="font-size: 0.85rem; color: #6b7280; margin-bottom: 10px;">Recent uploads:</p>
+            <p style="color: #10b981; margin: 5px 0;">✓ Application_Inventory.xlsx — 33 apps detected — Application Inventory</p>
+            <p style="color: #f59e0b; margin: 5px 0;">⟳ IT_Assessment_2025.docx — Processing... — Narrative Document</p>
+            <p style="color: #10b981; margin: 5px 0;">✓ Org_Chart.xlsx — 92 employees — Organization Data</p>
+        </div>
+    </div>
+
+    <p style="color: #6b7280; font-size: 0.9rem;">System auto-detects document type based on column headers and content. You can override if needed.</p>
+</div>
+
+<!-- SLIDE 13 -->
+<div class="slide">
+    <div class="slide-number">13 / 15</div>
+    <div class="persona-tag">Deal Partner / Associate</div>
+    <div class="section-label">Demo</div>
+    <h1>Screen: Dashboard</h1>
+    <h2>What You'll See After Processing</h2>
+
+    <div class="mock-screen">
+        <div class="title-bar">Dashboard — IT Due Diligence</div>
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 20px 0;">
+            <div style="background: rgba(239,68,68,0.15); border-radius: 8px; padding: 15px; text-align: center;">
+                <div style="font-size: 1.4rem; font-weight: 700; color: #ef4444;">12</div>
+                <div style="font-size: 0.75rem; color: #9ca3af;">High Risks</div>
+            </div>
+            <div style="background: rgba(99,102,241,0.15); border-radius: 8px; padding: 15px; text-align: center;">
+                <div style="font-size: 1.4rem; font-weight: 700; color: #818cf8;">38</div>
+                <div style="font-size: 0.75rem; color: #9ca3af;">Facts</div>
+            </div>
+            <div style="background: rgba(245,158,11,0.15); border-radius: 8px; padding: 15px; text-align: center;">
+                <div style="font-size: 1.4rem; font-weight: 700; color: #f59e0b;">21</div>
+                <div style="font-size: 0.75rem; color: #9ca3af;">Work Items</div>
+            </div>
+            <div style="background: rgba(16,185,129,0.15); border-radius: 8px; padding: 15px; text-align: center;">
+                <div style="font-size: 1.4rem; font-weight: 700; color: #10b981;">$36.1M</div>
+                <div style="font-size: 0.75rem; color: #9ca3af;">Run-Rate</div>
+            </div>
+        </div>
+        <div style="border-top: 1px solid #374151; padding-top: 15px;">
+            <p style="font-size: 0.85rem; color: #6b7280; margin-bottom: 10px;">Recent Findings:</p>
+            <p style="color: #ef4444; margin: 8px 0; font-size: 0.9rem;">⚠️ R-APP-001: High ERP concentration risk — Click to view evidence</p>
+            <p style="color: #ef4444; margin: 8px 0; font-size: 0.9rem;">⚠️ R-SEC-003: MFA not enforced for admin accounts</p>
+            <p style="color: #818cf8; margin: 8px 0; font-size: 0.9rem;">ℹ️ F-ORG-012: 3 key persons identified with unique system knowledge</p>
+        </div>
+    </div>
+
+    <div class="flow" style="margin-top: 20px;">
+        <div class="flow-box"><div class="ttl">Dashboard</div></div>
+        <div class="arr">→</div>
+        <div class="flow-box"><div class="ttl">Risk List</div></div>
+        <div class="arr">→</div>
+        <div class="flow-box"><div class="ttl">Risk Detail</div></div>
+        <div class="arr">→</div>
+        <div class="flow-box"><div class="ttl">Source Doc</div></div>
+    </div>
+</div>
+
+<!-- SLIDE 14 -->
+<div class="slide">
+    <div class="slide-number">14 / 15</div>
+    <div class="persona-tag">Associate</div>
+    <div class="section-label">Integration</div>
+    <h1>Export Options</h1>
+    <h2>Getting Data Out</h2>
+
+    <table>
+        <thead><tr><th>Format</th><th>Use Case</th><th>What's Included</th></tr></thead>
+        <tbody>
+            <tr><td><strong>Excel</strong></td><td>Deal model integration</td><td>Cost tables, risk register, work items with formulas</td></tr>
+            <tr><td><strong>PDF</strong></td><td>IC memo attachment</td><td>Executive summary, key findings, evidence chain</td></tr>
+            <tr><td><strong>PowerPoint</strong></td><td>Deal presentation</td><td>Summary slides, risk heat map, cost charts</td></tr>
+            <tr><td><strong>JSON</strong></td><td>System integration</td><td>Full data export for other tools</td></tr>
+        </tbody>
+    </table>
+
+    <h3>What Exports to Deal Model</h3>
+    <div class="card-grid">
+        <div class="card">
+            <h4>Run-Rate Tab</h4>
+            <p>Headcount costs by category, application costs by criticality, infrastructure costs</p>
+        </div>
+        <div class="card">
+            <h4>Integration Tab</h4>
+            <p>One-time costs by phase (Day 1, Day 100, Post-100) with low/mid/high ranges</p>
+        </div>
+        <div class="card">
+            <h4>Synergies Tab</h4>
+            <p>Identified consolidation opportunities with estimated annual savings</p>
+        </div>
+    </div>
+</div>
+
+<!-- SLIDE 15 -->
+<div class="slide">
+    <div class="slide-number">15 / 15</div>
+    <div class="persona-tag">All Team Members</div>
+    <div class="section-label">Getting Started</div>
+    <h1>Quick Start</h1>
+    <h2>From Zero to Analysis</h2>
+
+    <div class="two-col">
+        <div>
+            <h3>Prerequisites</h3>
+            <table>
+                <tr><td>Docker installed</td><td><span class="tag lo">Required</span></td></tr>
+                <tr><td>Anthropic API key</td><td><span class="tag lo">Required</span></td></tr>
+                <tr><td>VDR access</td><td><span class="tag lo">Required</span></td></tr>
+            </table>
+        </div>
+        <div>
+            <h3>Start the System</h3>
+            <div style="background: #1a1a2e; border: 1px solid #374151; border-radius: 6px; padding: 15px; font-family: monospace; font-size: 0.85rem; color: #e5e7eb;">
+                cd docker/<br>
+                docker-compose up<br><br>
+                # Open browser<br>
+                http://localhost:5001
+            </div>
+        </div>
+    </div>
+
+    <h3>First Deal Checklist</h3>
+    <ol class="step-list">
+        <li>Upload application inventory (Excel)</li>
+        <li>Upload IT assessment or security review (Word/PDF)</li>
+        <li>Upload org chart if available (Excel)</li>
+        <li>Wait for processing (~10 min)</li>
+        <li>Review Dashboard → drill into high risks</li>
+        <li>Check Cost Center → validate numbers</li>
+        <li>Export to Excel for deal model</li>
+    </ol>
+
+    <div class="callout" style="margin-top: 25px;">
+        <p style="font-size: 1.1rem;"><strong>Every deal makes the next one better.</strong> Corrections feed back. Patterns learned. Benchmarks refined.</p>
+    </div>
+</div>
+
+<div class="footer">
+    IT Due Diligence Agent | Deal Team Guide | January 2026
+</div>
+
+</body>
+</html>

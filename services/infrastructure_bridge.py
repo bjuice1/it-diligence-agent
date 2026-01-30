@@ -359,3 +359,121 @@ def build_infrastructure_inventory(fact_store: FactStore) -> Tuple[Infrastructur
 
     logger.info(f"Built infrastructure inventory with {len(items)} items")
     return inventory, "success"
+
+
+def _map_category_from_inventory(category_str: str) -> InfraCategory:
+    """Map inventory category string to InfraCategory enum."""
+    if not category_str:
+        return InfraCategory.OTHER
+    cat_lower = category_str.lower().replace(" ", "_").replace("/", "_")
+
+    category_map = {
+        "hosting": InfraCategory.HOSTING,
+        "data_center": InfraCategory.HOSTING,
+        "datacenter": InfraCategory.HOSTING,
+        "compute": InfraCategory.COMPUTE,
+        "servers": InfraCategory.COMPUTE,
+        "virtual": InfraCategory.COMPUTE,
+        "storage": InfraCategory.STORAGE,
+        "backup": InfraCategory.BACKUP_DR,
+        "backup_dr": InfraCategory.BACKUP_DR,
+        "disaster_recovery": InfraCategory.BACKUP_DR,
+        "cloud": InfraCategory.CLOUD,
+        "aws": InfraCategory.CLOUD,
+        "azure": InfraCategory.CLOUD,
+        "gcp": InfraCategory.CLOUD,
+        "legacy": InfraCategory.LEGACY,
+        "mainframe": InfraCategory.LEGACY,
+        "tooling": InfraCategory.TOOLING,
+        "monitoring": InfraCategory.TOOLING,
+        "endpoints": InfraCategory.ENDPOINTS,
+        "euc": InfraCategory.ENDPOINTS,
+        "desktop": InfraCategory.ENDPOINTS,
+        "laptop": InfraCategory.ENDPOINTS,
+    }
+
+    for key, val in category_map.items():
+        if key in cat_lower:
+            return val
+    return InfraCategory.OTHER
+
+
+def build_infrastructure_from_inventory_store(inventory_store) -> Tuple[InfrastructureInventory, str]:
+    """
+    Build an InfrastructureInventory from InventoryStore data.
+
+    Args:
+        inventory_store: The InventoryStore containing infrastructure items
+
+    Returns:
+        Tuple of (InfrastructureInventory, status) where status is:
+        - "success": Infra data was found and built
+        - "no_infra": No infrastructure items in inventory
+        - "no_data": No data at all in the store
+    """
+    inventory = InfrastructureInventory()
+
+    if len(inventory_store) == 0:
+        logger.warning("No items in inventory store")
+        return inventory, "no_data"
+
+    # Get infrastructure items from inventory store
+    infra_items = inventory_store.get_items(inventory_type="infrastructure", entity="target", status="active")
+
+    if not infra_items:
+        logger.warning("No infrastructure items found in inventory store")
+        return inventory, "no_infra"
+
+    # Convert inventory items to InfrastructureItem objects
+    items = []
+    for inv_item in infra_items:
+        data = inv_item.data or {}
+
+        category = _map_category_from_inventory(data.get('category', ''))
+
+        item = InfrastructureItem(
+            id=inv_item.item_id,
+            name=inv_item.name,
+            category=category,
+            item_type=data.get('type', ''),
+            vendor=data.get('vendor', ''),
+            model=data.get('model', ''),
+            location=data.get('location', ''),
+            hosting_type=_parse_hosting_type(data.get('hosting', '')),
+            capacity=data.get('capacity', ''),
+            utilization=data.get('utilization', ''),
+            count=_parse_int(data.get('count', 1)),
+            annual_cost=inv_item.cost or 0.0,
+            support_status=data.get('support_status', ''),
+            entity=inv_item.entity or 'target',
+            notes=str(data),
+            evidence=f"{inv_item.name} | {data.get('vendor', '')} | {data.get('category', '')}",
+            fact_id='',
+            source_document=inv_item.source_file or '',
+            confidence_score=1.0,
+            verified=True,
+            details=data
+        )
+        items.append(item)
+
+    inventory.items = items
+    inventory.total_count = len(items)
+    inventory.total_cost = sum(i.annual_cost for i in items)
+    inventory.cloud_count = len([i for i in items if i.category == InfraCategory.CLOUD])
+    inventory.on_prem_count = len([i for i in items if i.hosting_type in [HostingType.OWNED, HostingType.COLOCATION]])
+    inventory.data_centers = [i for i in items if i.category == InfraCategory.HOSTING]
+    inventory.cloud_platforms = [i for i in items if i.category == InfraCategory.CLOUD]
+
+    # Build category summaries
+    for category in InfraCategory:
+        cat_items = [i for i in items if i.category == category]
+        if cat_items:
+            inventory.by_category[category.value] = CategorySummary(
+                category=category,
+                total_count=len(cat_items),
+                total_cost=sum(i.annual_cost for i in cat_items),
+                items=cat_items
+            )
+
+    logger.info(f"Built infrastructure inventory from store with {len(items)} items")
+    return inventory, "success"

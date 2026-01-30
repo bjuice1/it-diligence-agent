@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IT Due Diligence Agent - Technical Deep Dive</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #fafafa;
+            color: #1a1a2e;
+            line-height: 1.5;
+            font-size: 14px;
+        }
+        .slide {
+            min-height: 100vh;
+            padding: 35px 55px;
+            border-bottom: 1px solid #e5e7eb;
+            position: relative;
+            background: white;
+        }
+        .slide:nth-child(odd) { background: linear-gradient(135deg, #ffffff 0%, #f8faff 100%); }
+        .slide:nth-child(even) { background: linear-gradient(135deg, #fefffe 0%, #fff8f5 100%); }
+        .slide-number { position: absolute; top: 18px; right: 25px; font-size: 11px; color: #9ca3af; }
+        .section-label { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 2px; color: #6366f1; margin-bottom: 6px; }
+        .why-box {
+            background: linear-gradient(135deg, rgba(16,185,129,0.06) 0%, rgba(6,182,212,0.06) 100%);
+            border-left: 3px solid #10b981;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+            border-radius: 0 6px 6px 0;
+        }
+        .why-box p { margin: 0; color: #4b5563; font-size: 0.85rem; }
+        .why-box strong { color: #059669; }
+        h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 6px;
+            background: linear-gradient(135deg, #6366f1 0%, #ec4899 50%, #f59e0b 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        h2 { font-size: 1.2rem; color: #6b7280; margin-bottom: 20px; font-weight: 500; }
+        h3 { font-size: 1rem; color: #6366f1; margin: 18px 0 10px 0; font-weight: 600; }
+        h4 { font-size: 0.9rem; color: #1a1a2e; margin: 14px 0 8px 0; }
+        p { color: #4b5563; margin-bottom: 10px; font-size: 0.9rem; }
+        table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.85rem; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.04); }
+        th, td { padding: 9px 11px; text-align: left; border-bottom: 1px solid #f3f4f6; }
+        th { color: #6b7280; font-weight: 500; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; background: #f9fafb; }
+        td { color: #374151; }
+        .highlight td { color: #6366f1; font-weight: 600; background: rgba(99,102,241,0.05); }
+        .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 12px 0; }
+        .card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 14px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+        }
+        .card h4 { margin-top: 0; color: #1a1a2e; font-size: 0.85rem; }
+        .card p { font-size: 0.8rem; margin-bottom: 6px; }
+        .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
+        .code {
+            background: #1a1a2e;
+            border: 1px solid #374151;
+            border-radius: 5px;
+            padding: 12px;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 0.75rem;
+            color: #e5e7eb;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            line-height: 1.5;
+        }
+        .code .comment { color: #6b7280; }
+        .code .keyword { color: #ec4899; }
+        .code .string { color: #10b981; }
+        .flow { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 18px 0; flex-wrap: wrap; }
+        .flow-box {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 12px 20px;
+            text-align: center;
+            min-width: 90px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+        }
+        .flow-box.hl { background: linear-gradient(135deg, rgba(99,102,241,0.1) 0%, rgba(236,72,153,0.1) 100%); border-color: #6366f1; }
+        .flow-box.warn { background: rgba(239,68,68,0.08); border-color: #ef4444; }
+        .flow-box .lbl { font-size: 0.55rem; color: #9ca3af; text-transform: uppercase; letter-spacing: 1px; }
+        .flow-box .ttl { font-size: 0.85rem; font-weight: 600; color: #1a1a2e; }
+        .arr { color: #ec4899; font-size: 1.1rem; }
+        .tag { display: inline-block; padding: 2px 7px; border-radius: 3px; font-size: 0.65rem; font-weight: 600; margin-right: 4px; }
+        .tag.hi { background: rgba(239,68,68,0.1); color: #dc2626; }
+        .tag.md { background: rgba(245,158,11,0.1); color: #d97706; }
+        .tag.lo { background: rgba(16,185,129,0.1); color: #059669; }
+        .callout {
+            background: linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(236,72,153,0.06) 100%);
+            border-left: 3px solid #6366f1;
+            padding: 12px 16px;
+            margin: 14px 0;
+            border-radius: 0 6px 6px 0;
+        }
+        .callout p { margin: 0; color: #374151; font-size: 0.85rem; }
+        ul.bl { list-style: none; margin: 10px 0; }
+        ul.bl li { padding: 5px 0 5px 16px; position: relative; color: #4b5563; font-size: 0.85rem; }
+        ul.bl li::before { content: "•"; position: absolute; left: 0; color: #ec4899; }
+        .diagram {
+            background: #1a1a2e;
+            border: 1px solid #374151;
+            border-radius: 6px;
+            padding: 16px;
+            font-family: 'SF Mono', monospace;
+            font-size: 0.7rem;
+            color: #9ca3af;
+            white-space: pre;
+            overflow-x: auto;
+            line-height: 1.4;
+        }
+        .debug-table { font-size: 0.8rem; }
+        .debug-table td:first-child { color: #dc2626; width: 25%; }
+        .debug-table td:nth-child(2) { color: #d97706; width: 35%; }
+        .debug-table td:last-child { color: #059669; }
+        .er-diagram {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 20px;
+            text-align: center;
+            margin: 15px 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+        }
+        .er-box {
+            display: inline-block;
+            background: linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(236,72,153,0.08) 100%);
+            border: 1px solid rgba(99,102,241,0.2);
+            border-radius: 6px;
+            padding: 12px 20px;
+            margin: 5px;
+            min-width: 120px;
+        }
+        .er-box .name { color: #6366f1; font-weight: 600; font-size: 0.9rem; }
+        .er-box .key { color: #6b7280; font-size: 0.75rem; margin-top: 4px; }
+        .er-line { color: #ec4899; font-size: 0.8rem; margin: 8px 0; }
+        .footer { text-align: center; padding: 20px; color: #9ca3af; font-size: 0.75rem; background: #f9fafb; }
+    </style>
+</head>
+<body>
+
+<!-- SECTION 1: OVERVIEW (1-5) -->
+
+<div class="slide">
+    <div class="slide-number">1 / 30</div>
+    <div class="section-label">Section 1: Overview</div>
+    <h1>The IT DD Challenge</h1>
+    <h2>Why We Built This</h2>
+
+    <div class="why-box">
+        <p><strong>Why this section matters:</strong> Understanding the problem ensures you build/extend solutions that address real pain points.</p>
+    </div>
+
+    <table>
+        <tr><th>Problem</th><th>Impact</th><th>Our Solution</th></tr>
+        <tr><td>Manual document review</td><td>80+ hours/deal</td><td>AI extraction in minutes</td></tr>
+        <tr><td>Inconsistent methodology</td><td>Quality varies by person</td><td>Standardized agents</td></tr>
+        <tr><td>Expensive consultants</td><td>$150-300K per engagement</td><td>Scalable technology</td></tr>
+        <tr><td>Data dumps, no insights</td><td>IC asks "so what?"</td><td>"So what" first approach</td></tr>
+        <tr><td>No audit trail</td><td>"Trust me" doesn't fly</td><td>Evidence chain</td></tr>
+    </table>
+
+    <div class="callout"><p><strong>The Gap:</strong> Existing tools extract data. We provide the analysis layer that explains what it means for the deal.</p></div>
+</div>
+
+<div class="slide">
+    <div class="slide-number">2 / 30</div>
+    <div class="section-label">Section 1: Overview</div>
+    <h1>Core Design Principles</h1>
+    <h2>The Philosophy Behind Every Decision</h2>
+
+    <div class="card-grid">
+        <div class="card"><h4>1. Documents Are Truth</h4><p>Facts are interpretations. The document (with hash) is immutable. Facts can change; documents don't.</p></div>
+        <div class="card"><h4>2. Extract Everything</h4><p>All facts extracted, even low confidence. Filtering happens in human review, not during extraction.</p></div>
+        <div class="card"><h4>3. No Inference = No Fact</h4><p>If AI must deduce, it's a Gap or Question, not a Fact. Facts require explicit documentary evidence.</p></div>
+        <div class="card"><h4>4. Draft Until Confirmed</h4><p>All output labeled "DRAFT" until human verifies. Honest about confidence levels.</p></div>
+    </div>
+
+    <h3>Why Trust AI Output?</h3>
+    <p>We're not asking users to trust AI. We're showing receipts:</p>
+    <ul class="bl">
+        <li>Every fact has an exact quote from the source document</li>
+        <li>Every risk cites specific facts</li>
+        <li>Click any finding → see the evidence → verify yourself</li>
+        <li>Confidence levels shown so you know what needs verification</li>
+    </ul>
+</div>
+
+<div class="slide">
+    <div class="slide-number">3 / 30</div>
+    <div class="section-label">Section 1: Overview</div>
+    <h1>System Architecture</h1>
+    <h2>High-Level Components</h2>
+
+    <div class="why-box">
+        <p><strong>Why this matters:</strong> Understanding the layers helps you know where to look when debugging or extending.</p>
+    </div>
+
+    <div class="diagram">
+┌─────────────────────────────────────────────────────────────┐
+│                     WEB UI (Flask)                           │
+│              Templates, Blueprints, Routes                   │
+└─────────────────────────────┬───────────────────────────────┘
+                              │
+┌─────────────────────────────┼───────────────────────────────┐
+│                    BLUEPRINTS                                │
+│   [inventory]  [costs]  [upload]  [core app routes]         │
+└─────────────────────────────┼───────────────────────────────┘
+                              │
+┌─────────────────────────────┼───────────────────────────────┐
+│                   DATA STORES                                │
+│   [InventoryStore]    [FactStore]    [ReasoningStore]       │
+│    Structured data     Extracted      Risks, Work Items     │
+└─────────────────────────────┼───────────────────────────────┘
+                              │
+┌─────────────────────────────┼───────────────────────────────┐
+│                     AGENTS                                   │
+│   [Discovery - Haiku]        [Reasoning - Sonnet]           │
+│    Fast, cheap, extract       Smart, analyze, conclude      │
+└─────────────────────────────────────────────────────────────┘
+    </div>
+</div>
+
+<div class="slide">
+    <div class="slide-number">4 / 30</div>
+    <div class="section-label">Section 1: Overview</div>
+    <h1>Three-Funnel Framework</h1>
+    <h2>Sequential Processing Stages</h2>
+
+    <div class="diagram">
+┌─────────────────────────────────────────────────────────────┐
+│         FUNNEL 1: LOGGING (Data Collection)                  │
+│  IN:  Raw documents, extracted text, metadata               │
+│  OUT: Document registry, provisional facts, gaps            │
+│  RULE: Extract ALL facts, NO inference, link to quotes      │
+└─────────────────────────────┬───────────────────────────────┘
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│         FUNNEL 2: ANALYSIS (Understanding)                   │
+│  IN:  Confirmed facts, inventory data, deal context         │
+│  OUT: Risks, work items, strategic considerations           │
+│  RULE: Must cite facts, consider M&A context                │
+└─────────────────────────────┬───────────────────────────────┘
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│         FUNNEL 3: OUTPUT (Delivery)                          │
+│  IN:  Analysis results, cost calculations                   │
+│  OUT: Reports, diagrams, cost models                        │
+│  RULE: Lead with "so what", provide evidence                │
+└─────────────────────────────────────────────────────────────┘
+    </div>
+</div>
+
+<div class="slide">
+    <div class="slide-number">5 / 30</div>
+    <div class="section-label">Section 1: Overview</div>
+    <h1>Deterministic vs AI</h1>
+    <h2>Where We Use Each</h2>
+
+    <table>
+        <tr><th>Stage</th><th>Type</th><th>Why</th></tr>
+        <tr><td>File parsing</td><td><span class="tag lo">Deterministic</span></td><td>Reproducible, testable</td></tr>
+        <tr><td>Type detection</td><td><span class="tag lo">Deterministic</span></td><td>Consistent results</td></tr>
+        <tr><td>Schema validation</td><td><span class="tag lo">Deterministic</span></td><td>Reliable</td></tr>
+        <tr><td>Fact extraction</td><td><span class="tag md">AI (Haiku)</span></td><td>Pattern recognition</td></tr>
+        <tr><td>Risk analysis</td><td><span class="tag hi">AI (Sonnet)</span></td><td>Nuanced reasoning</td></tr>
+    </table>
+
+    <h3>Separation of Discovery and Reasoning</h3>
+    <div class="flow">
+        <div class="flow-box"><div class="ttl">Discovery</div><div class="lbl">Extract facts</div></div>
+        <div class="arr">→</div>
+        <div class="flow-box warn"><div class="ttl">Facts Locked</div><div class="lbl">No changes</div></div>
+        <div class="arr">→</div>
+        <div class="flow-box"><div class="ttl">Reasoning</div><div class="lbl">Must cite facts</div></div>
+    </div>
+
+    <div class="callout"><p><strong>Why separate?</strong> Prevents reasoning from "inventing" facts. Clean audit trail. Facts are immutable before analysis begins.</p></div>
+</div>
+
+<!-- SECTION 2: DATA FLOW (6-12) -->
+
+<div class="slide">
+    <div class="slide-number">6 / 30</div>
+    <div class="section-label">Section 2: Data Flow</div>
+    <h1>Document Ingestion</h1>
+    <h2>Stage 1: Getting Data In</h2>
+
+    <div class="why-box">
+        <p><strong>Why this matters:</strong> If data doesn't flow correctly, nothing else works. This is 100% deterministic—same input = same output.</p>
+    </div>
+
+    <div class="diagram">
+┌──────┐  ┌──────┐  ┌──────┐  ┌──────┐
+│Excel │  │ Word │  │ PDF  │  │  MD  │
+└──┬───┘  └──┬───┘  └──┬───┘  └──┬───┘
+   └─────────┴────┬────┴─────────┘
+                  ▼
+         ┌───────────────┐
+         │  FILE ROUTER  │  ← Detect file format
+         └───────┬───────┘
+                 ▼
+         ┌───────────────┐
+         │ TYPE DETECTOR │  ← App inventory? Org chart?
+         └───────┬───────┘
+                 ▼
+         ┌───────────────┐
+         │   VALIDATOR   │  ← Required fields present?
+         └───────┬───────┘
+                 ▼
+         ┌───────────────┐
+         │ STORE DATA    │  → InventoryStore or FactStore
+         └───────────────┘
+    </div>
+</div>
+
+<div class="slide">
+    <div class="slide-number">7 / 30</div>
+    <div class="section-label">Section 2: Data Flow</div>
+    <h1>Type Detection Logic</h1>
+    <h2>How We Know What We're Looking At</h2>
+
+    <div class="code">// Column header patterns for detection
+APPLICATION_PATTERNS = ["application", "app name", "system", "software"]
+INFRASTRUCTURE_PATTERNS = ["server", "hostname", "ip address", "infrastructure"]
+ORGANIZATION_PATTERNS = ["employee", "name", "title", "department", "manager"]
+VENDOR_PATTERNS = ["vendor", "supplier", "contract", "provider"]</div>
+
+    <h3>Routing Rules</h3>
+    <table>
+        <tr><th>Detected Type</th><th>Destination</th><th>Processing</th></tr>
+        <tr><td>Application inventory</td><td>InventoryStore</td><td>Structured import, row per item</td></tr>
+        <tr><td>Infrastructure list</td><td>InventoryStore</td><td>Structured import</td></tr>
+        <tr><td>Org chart</td><td>FactStore</td><td>Headcount analysis via agents</td></tr>
+        <tr><td>Narrative doc</td><td>FactStore</td><td>Discovery agents extract facts</td></tr>
+        <tr><td>Unknown</td><td>Flagged</td><td>Human review required</td></tr>
+    </table>
+</div>
+
+<div class="slide">
+    <div class="slide-number">8 / 30</div>
+    <div class="section-label">Section 2: Data Flow</div>
+    <h1>Inventory Store</h1>
+    <h2>Structured Data Home</h2>
+
+    <div class="code">@dataclass
+class InventoryItem:
+    item_id: str           # I-APP-0f2c01 (content-based)
+    inventory_type: str    # "application", "infrastructure", "vendor"
+    name: str              # "Salesforce"
+    entity: str            # "target" or "buyer"
+    status: str            # "active", "planned", "retired"
+    data: Dict             # Flexible: cost, users, criticality, etc.
+    source_file: str       # Origin document
+    created_at: datetime</div>
+
+    <h3>ID Patterns</h3>
+    <table>
+        <tr><th>Type</th><th>Pattern</th><th>Example</th></tr>
+        <tr><td>Application</td><td>I-APP-xxxxx</td><td>I-APP-0f2c01</td></tr>
+        <tr><td>Infrastructure</td><td>I-INFRA-xxxxx</td><td>I-INFRA-a3b2c1</td></tr>
+        <tr><td>Vendor</td><td>I-VEND-xxxxx</td><td>I-VEND-7d8e9f</td></tr>
+    </table>
+
+    <p><strong>Key feature:</strong> Content-based IDs. Same item always gets same ID, enabling deduplication across documents.</p>
+</div>
+
+<div class="slide">
+    <div class="slide-number">9 / 30</div>
+    <div class="section-label">Section 2: Data Flow</div>
+    <h1>Content-Based IDs</h1>
+    <h2>Why IDs Matter</h2>
+
+    <h3>The Problem</h3>
+    <p>Different documents reference the same things differently: "SAP S/4HANA" vs "SAP" vs "S4"</p>
+
+    <h3>The Solution</h3>
+    <div class="code">def generate_item_id(item_type: str, name: str, entity: str) -> str:
+    # Normalize inputs
+    normalized = f"{item_type}:{name.lower().strip()}:{entity}"
+
+    # Hash to create stable ID
+    hash_bytes = hashlib.sha256(normalized.encode()).digest()
+    short_hash = base64.b32encode(hash_bytes[:4]).decode()[:6].lower()
+
+    return f"I-{item_type.upper()[:4]}-{short_hash}"
+
+# Same input always → same ID
+generate_item_id("application", "Salesforce", "target")
+# Always returns: I-APP-0f2c01</div>
+
+    <ul class="bl">
+        <li>Same item always gets same ID</li>
+        <li>Can match across documents</li>
+        <li>Enables deduplication</li>
+        <li>Supports entity resolution</li>
+    </ul>
+</div>
+
+<div class="slide">
+    <div class="slide-number">10 / 30</div>
+    <div class="section-label">Section 2: Data Flow</div>
+    <h1>Fact Store</h1>
+    <h2>Extracted Knowledge Home</h2>
+
+    <div class="code">@dataclass
+class Fact:
+    finding_id: str        # F-APP-001
+    domain: str            # applications, infrastructure, security
+    category: str          # erp, crm, network
+    item: str              # What this fact is about
+    attribute: str         # What aspect (users, cost, version)
+    value: str             # The extracted value
+    confidence: str        # high, medium, low
+
+    # Evidence chain - THE KEY DIFFERENTIATOR
+    source_document_id: str
+    exact_quote: str       # Word-for-word from document
+    source_section: str    # Where in document
+
+    # Lifecycle
+    status: str            # draft, confirmed, rejected
+    reviewed_by: str
+    reviewed_at: datetime</div>
+
+    <h3>Domains</h3>
+    <div class="flow">
+        <div class="flow-box"><div class="ttl">applications</div></div>
+        <div class="flow-box"><div class="ttl">infrastructure</div></div>
+        <div class="flow-box"><div class="ttl">security</div></div>
+        <div class="flow-box"><div class="ttl">organization</div></div>
+        <div class="flow-box"><div class="ttl">network</div></div>
+    </div>
+</div>
+
+<div class="slide">
+    <div class="slide-number">11 / 30</div>
+    <div class="section-label">Section 2: Data Flow</div>
+    <h1>Evidence Chain</h1>
+    <h2>Data Model Relationships</h2>
+
+    <div class="why-box">
+        <p><strong>Why this matters:</strong> The evidence chain is what makes output trustworthy. Every conclusion traces to source.</p>
+    </div>
+
+    <div class="er-diagram">
+        <div class="er-box">
+            <div class="name">Document</div>
+            <div class="key">document_id, file_hash</div>
+        </div>
+        <div class="er-line">↑ source of ↑</div>
+        <div class="er-box">
+            <div class="name">Fact</div>
+            <div class="key">finding_id, exact_quote</div>
+        </div>
+        <div class="er-line">↑ cited by ↑</div>
+        <div class="er-box">
+            <div class="name">Risk</div>
+            <div class="key">finding_id, citing_facts[]</div>
+        </div>
+        <div class="er-line">↑ triggers ↑</div>
+        <div class="er-box">
+            <div class="name">WorkItem</div>
+            <div class="key">finding_id, triggered_by[]</div>
+        </div>
+    </div>
+
+    <div class="code">// Query pattern: Get full evidence chain
+def get_evidence_chain(risk_id):
+    risk = reasoning_store.get_risk(risk_id)
+    facts = [fact_store.get(f_id) for f_id in risk.citing_facts]
+    documents = [doc_store.get(f.source_document_id) for f in facts]
+    return risk, facts, documents</div>
+</div>
+
+<div class="slide">
+    <div class="slide-number">12 / 30</div>
+    <div class="section-label">Section 2: Data Flow</div>
+    <h1>Two Data Systems</h1>
+    <h2>FactStore vs InventoryStore</h2>
+
+    <div class="two-col">
+        <div>
+            <h3>FactStore</h3>
+            <ul class="bl">
+                <li>Facts from discovery agents</li>
+                <li>Unstructured extraction</li>
+                <li>Narrative content</li>
+                <li>Lower structure, richer context</li>
+            </ul>
+        </div>
+        <div>
+            <h3>InventoryStore</h3>
+            <ul class="bl">
+                <li>Items from structured imports</li>
+                <li>Excel/CSV data</li>
+                <li>Higher quality, less context</li>
+                <li>Preferred source when available</li>
+            </ul>
+        </div>
+    </div>
+
+    <h3>Resolution Strategy</h3>
+    <div class="code">def get_applications():
+    # 1. Try InventoryStore first (structured = higher quality)
+    apps = inventory_store.get_items(type="application", status="active")
+    if apps:
+        return apps
+
+    # 2. Fall back to FactStore (if no structured data)
+    return build_from_facts(fact_store.get_by_domain("applications"))</div>
+
+    <div class="callout"><p><strong>Rule:</strong> InventoryStore wins when both have data. Better to have clean structured data than rich unstructured data.</p></div>
+</div>
+
+<!-- SECTION 3: AGENTS (13-20) -->
+
+<div class="slide">
+    <div class="slide-number">13 / 30</div>
+    <div class="section-label">Section 3: Agents</div>
+    <h1>Discovery vs Reasoning</h1>
+    <h2>Two-Phase Agent Architecture</h2>
+
+    <div class="why-box">
+        <p><strong>Why this matters:</strong> Understanding agents helps you debug extraction issues and extend to new domains.</p>
+    </div>
+
+    <div class="two-col">
+        <div class="card">
+            <h4>Discovery Agents (Haiku)</h4>
+            <p><strong>Purpose:</strong> Extract facts from documents</p>
+            <p><strong>Model:</strong> Claude 3 Haiku (fast, cheap)</p>
+            <p><strong>Cost:</strong> ~$0.01/document</p>
+            <p><strong>Rules:</strong></p>
+            <ul class="bl">
+                <li>Extract ALL facts, even low confidence</li>
+                <li>NO inference—only explicit statements</li>
+                <li>Link every fact to exact quote</li>
+            </ul>
+        </div>
+        <div class="card">
+            <h4>Reasoning Agents (Sonnet)</h4>
+            <p><strong>Purpose:</strong> Analyze facts, find "so what"</p>
+            <p><strong>Model:</strong> Claude 3 Sonnet (smart)</p>
+            <p><strong>Cost:</strong> ~$0.05/domain</p>
+            <p><strong>Rules:</strong></p>
+            <ul class="bl">
+                <li>MUST cite facts for every conclusion</li>
+                <li>Consider M&A context</li>
+                <li>Generate risks + work items</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<div class="slide">
+    <div class="slide-number">14 / 30</div>
+    <div class="section-label">Section 3: Agents</div>
+    <h1>Discovery Agent Config</h1>
+    <h2>How Facts Get Extracted</h2>
+
+    <div class="code">DISCOVERY_AGENT_CONFIG = {
+    "model": "claude-3-haiku",
+    "max_tokens": 4096,
+    "tools": ["create_fact", "flag_gap", "complete"],
+    "system_prompt": """
+    You are an IT due diligence fact extractor.
+
+    For each document:
+    1. Read thoroughly
+    2. Extract EVERY fact about IT systems
+    3. Provide exact quotes as evidence
+    4. Flag gaps where info should exist but doesn't
+    5. Call complete when document exhausted
+
+    RULES:
+    - Only extract explicit statements
+    - Never infer or deduce
+    - Low confidence facts still get extracted
+    - Always include the exact quote
+    """
+}</div>
+
+    <h3>Agent Loop</h3>
+    <div class="flow">
+        <div class="flow-box"><div class="ttl">Read Doc</div></div>
+        <div class="arr">→</div>
+        <div class="flow-box"><div class="ttl">Find Fact</div></div>
+        <div class="arr">→</div>
+        <div class="flow-box"><div class="ttl">create_fact()</div></div>
+        <div class="arr">→</div>
+        <div class="flow-box"><div class="ttl">Repeat</div></div>
+        <div class="arr">→</div>
+        <div class="flow-box hl"><div class="ttl">complete()</div></div>
+    </div>
+</div>
+
+<div class="slide">
+    <div class="slide-number">15 / 30</div>
+    <div class="section-label">Section 3: Agents</div>
+    <h1>Fact Extraction Rules</h1>
+    <h2>Valid vs Invalid Facts</h2>
+
+    <table>
+        <tr><th>Statement</th><th>Valid?</th><th>Why</th></tr>
+        <tr><td>"SAP has 500 users" (doc states this)</td><td><span class="tag lo">Valid</span></td><td>Explicit statement</td></tr>
+        <tr><td>"SAP is probably critical" (not stated)</td><td><span class="tag hi">Invalid</span></td><td>Inference</td></tr>
+        <tr><td>"They likely use AWS" (not stated)</td><td><span class="tag hi">Invalid</span></td><td>Assumption</td></tr>
+        <tr><td>"No DR plan mentioned"</td><td><span class="tag lo">Valid Gap</span></td><td>Absence is factual</td></tr>
+    </table>
+
+    <h3>Required Elements for Every Fact</h3>
+    <table>
+        <tr><th>Element</th><th>Description</th><th>Example</th></tr>
+        <tr><td>Item</td><td>What the fact is about</td><td>"SAP S/4HANA"</td></tr>
+        <tr><td>Attribute</td><td>What aspect</td><td>"user_count"</td></tr>
+        <tr><td>Value</td><td>Extracted value</td><td>"500"</td></tr>
+        <tr><td>Quote</td><td>Exact text from doc</td><td>"approximately 500 active users"</td></tr>
+        <tr><td>Source</td><td>Document + section</td><td>"IT Overview, page 3"</td></tr>
+    </table>
+</div>
+
+<div class="slide">
+    <div class="slide-number">16 / 30</div>
+    <div class="section-label">Section 3: Agents</div>
+    <h1>Reasoning Agent Config</h1>
+    <h2>How Insights Get Generated</h2>
+
+    <div class="code">REASONING_AGENT_CONFIG = {
+    "model": "claude-3-sonnet",
+    "max_tokens": 8192,
+    "tools": ["create_risk", "create_work_item", "complete"],
+    "system_prompt": """
+    You are an M&A IT due diligence analyst.
+
+    Given facts about a target company's IT:
+    1. Identify risks with M&A implications
+    2. Create work items for integration
+    3. Consider deal context (carve-out vs acquisition)
+
+    RULES:
+    - EVERY conclusion must cite specific fact IDs
+    - No conclusion without evidence
+    - Include cost estimates using standard ranges
+    - Explain the "so what" for the deal
+    """
+}</div>
+
+    <div class="code">// Input context provided to reasoning agent
+reasoning_input = {
+    "facts": all_facts_for_domain,
+    "inventory": relevant_inventory_items,
+    "deal_context": {
+        "type": "carve_out",  // or "acquisition", "merger"
+        "buyer_has": ["SAP", "Azure"],
+        "timeline": "6 months to close"
+    }
+}</div>
+</div>
+
+<div class="slide">
+    <div class="slide-number">17 / 30</div>
+    <div class="section-label">Section 3: Agents</div>
+    <h1>Risk Generation</h1>
+    <h2>create_risk() Tool Schema</h2>
+
+    <div class="code">def create_risk(
+    domain: str,              # applications, infrastructure, security
+    title: str,               # Clear statement of risk
+    description: str,         # Full explanation
+    severity: str,            # critical, high, medium, low
+    so_what: str,             # M&A implication - THE KEY FIELD
+    mitigation: str,          # Recommended approach
+    citing_facts: List[str],  # REQUIRED - fact IDs as evidence
+    timeline: str,            # When this matters
+    mna_lens: str             # valuation, integration, tsa_exposure
+) -> Risk</div>
+
+    <h3>Severity Guidelines</h3>
+    <table>
+        <tr><th>Level</th><th>Criteria</th><th>Examples</th></tr>
+        <tr><td><span class="tag hi">Critical</span></td><td>Blocks close, >$1M impact</td><td>No IT leadership, major security breach</td></tr>
+        <tr><td><span class="tag hi">High</span></td><td>Day 1 issue, $500K-$1M</td><td>ERP concentration, key person risk</td></tr>
+        <tr><td><span class="tag md">Medium</span></td><td>Day 100 issue, $100K-$500K</td><td>Dual platforms, tech debt</td></tr>
+        <tr><td><span class="tag lo">Low</span></td><td>Post-100, <$100K</td><td>License optimization, minor upgrades</td></tr>
+    </table>
+</div>
+
+<div class="slide">
+    <div class="slide-number">18 / 30</div>
+    <div class="section-label">Section 3: Agents</div>
+    <h1>Work Item Generation</h1>
+    <h2>create_work_item() Tool Schema</h2>
+
+    <div class="code">def create_work_item(
+    domain: str,
+    title: str,                    # What needs to be done
+    description: str,
+    phase: str,                    # Day_1, Day_100, Post_100
+    priority: str,                 # critical, high, medium, low
+    owner_type: str,               # buyer, target, shared, vendor
+    cost_estimate: str,            # under_25k, 25k_to_100k, etc.
+    triggered_by: List[str],       # Fact IDs
+    triggered_by_risks: List[str], # Risk IDs
+    dependencies: List[str],       # Other work item IDs
+    reasoning: str                 # WHY this work is needed
+) -> WorkItem</div>
+
+    <h3>Phase Definitions</h3>
+    <table>
+        <tr><th>Phase</th><th>Timeline</th><th>Focus</th></tr>
+        <tr><td>Day_1</td><td>Close date</td><td>Business continuity—must run</td></tr>
+        <tr><td>Day_100</td><td>First 100 days</td><td>Initial integration activities</td></tr>
+        <tr><td>Post_100</td><td>After 100 days</td><td>Optimization, rationalization</td></tr>
+    </table>
+</div>
+
+<div class="slide">
+    <div class="slide-number">19 / 30</div>
+    <div class="section-label">Section 3: Agents</div>
+    <h1>Cost Estimation</h1>
+    <h2>How Work Items Become Dollars</h2>
+
+    <div class="code">COST_RANGE_VALUES = {
+    "under_25k":    {"low": 0,         "high": 25_000,    "label": "<$25K"},
+    "25k_to_100k":  {"low": 25_000,    "high": 100_000,   "label": "$25K-$100K"},
+    "100k_to_500k": {"low": 100_000,   "high": 500_000,   "label": "$100K-$500K"},
+    "500k_to_1m":   {"low": 500_000,   "high": 1_000_000, "label": "$500K-$1M"},
+    "over_1m":      {"low": 1_000_000, "high": 2_500_000, "label": ">$1M"},
+}</div>
+
+    <h3>Aggregation by Phase</h3>
+    <table>
+        <tr><th>Phase</th><th>Items</th><th>Low</th><th>High</th><th>Mid</th></tr>
+        <tr><td>Day_1</td><td>5</td><td>$275K</td><td>$1.0M</td><td>$650K</td></tr>
+        <tr><td>Day_100</td><td>10</td><td>$1.2M</td><td>$4.5M</td><td>$2.9M</td></tr>
+        <tr><td>Post_100</td><td>6</td><td>$750K</td><td>$2.9M</td><td>$1.8M</td></tr>
+        <tr class="highlight"><td><strong>Total</strong></td><td><strong>21</strong></td><td><strong>$2.2M</strong></td><td><strong>$8.4M</strong></td><td><strong>$5.3M</strong></td></tr>
+    </table>
+</div>
+
+<div class="slide">
+    <div class="slide-number">20 / 30</div>
+    <div class="section-label">Section 3: Agents</div>
+    <h1>Model Selection</h1>
+    <h2>When to Use Haiku vs Sonnet</h2>
+
+    <table>
+        <tr><th>Task</th><th>Model</th><th>Why</th></tr>
+        <tr><td>Fact extraction</td><td>Haiku</td><td>Volume, cost, speed</td></tr>
+        <tr><td>Type detection</td><td>Haiku</td><td>Simple classification</td></tr>
+        <tr><td>Risk analysis</td><td>Sonnet</td><td>Nuanced reasoning required</td></tr>
+        <tr><td>Cost estimation</td><td>Sonnet</td><td>Judgment calls needed</td></tr>
+        <tr><td>Report generation</td><td>Sonnet</td><td>Quality writing matters</td></tr>
+    </table>
+
+    <h3>Cost Comparison</h3>
+    <table>
+        <tr><th>Model</th><th>Input (1M tokens)</th><th>Output (1M tokens)</th></tr>
+        <tr><td>Haiku</td><td>$0.25</td><td>$1.25</td></tr>
+        <tr><td>Sonnet</td><td>$3.00</td><td>$15.00</td></tr>
+    </table>
+
+    <div class="callout"><p><strong>Typical deal cost:</strong> ~$4.50 total (20 docs × Haiku + 6 domains × Sonnet)</p></div>
+</div>
+
+<!-- SECTION 4: COST CENTER (21-24) -->
+
+<div class="slide">
+    <div class="slide-number">21 / 30</div>
+    <div class="section-label">Section 4: Cost Center</div>
+    <h1>Cost Center Architecture</h1>
+    <h2>All Costs in One Place</h2>
+
+    <div class="why-box">
+        <p><strong>Why this matters:</strong> Costs are the north star. Finance teams need one place to see the full picture. This section shows exactly how numbers are calculated.</p>
+    </div>
+
+    <div class="code">@dataclass
+class CostCenterData:
+    run_rate: RunRateCosts      # Annual recurring (headcount, apps, infra)
+    one_time: OneTimeCosts      # Integration costs from work items
+    synergies: List[Synergy]    # Identified savings opportunities
+    insights: List[Insight]     # Auto-generated commentary
+    data_quality: Dict          # Confidence level per source</div>
+
+    <div class="flow">
+        <div class="flow-box"><div class="ttl">FactStore</div><div class="lbl">Headcount</div></div>
+        <div class="flow-box"><div class="ttl">InventoryStore</div><div class="lbl">App costs</div></div>
+        <div class="flow-box"><div class="ttl">ReasoningStore</div><div class="lbl">Work items</div></div>
+        <div class="arr">→</div>
+        <div class="flow-box hl"><div class="ttl">Cost Center</div><div class="lbl">Aggregated</div></div>
+    </div>
+</div>
+
+<div class="slide">
+    <div class="slide-number">22 / 30</div>
+    <div class="section-label">Section 4: Cost Center</div>
+    <h1>Run-Rate Gathering</h1>
+    <h2>Annual Recurring Costs</h2>
+
+    <table>
+        <tr><th>Category</th><th>Source</th><th>Calculation Method</th></tr>
+        <tr><td>Headcount</td><td>FactStore (org facts)</td><td>FTE count × avg comp by role</td></tr>
+        <tr><td>Applications</td><td>InventoryStore</td><td>Sum of cost field per app</td></tr>
+        <tr><td>Infrastructure</td><td>InventoryStore</td><td>Sum of infra item costs</td></tr>
+        <tr><td>Vendors/MSP</td><td>FactStore</td><td>Contract values extracted</td></tr>
+    </table>
+
+    <div class="code">def gather_application_costs():
+    apps = inventory_store.get_items(
+        inventory_type="application",
+        entity="target",
+        status="active"
+    )
+
+    total = 0
+    for app in apps:
+        cost = app.data.get("cost", 0) or app.data.get("annual_cost", 0)
+        total += cost
+
+    return total, apps  # $7.2M from 33 apps</div>
+</div>
+
+<div class="slide">
+    <div class="slide-number">23 / 30</div>
+    <div class="section-label">Section 4: Cost Center</div>
+    <h1>One-Time Calculation</h1>
+    <h2>Integration Cost Aggregation</h2>
+
+    <div class="code">def gather_one_time_costs():
+    by_phase = {}
+
+    for wi in reasoning_store.work_items:
+        # Get cost range from work item's estimate key
+        cost_key = wi.cost_estimate  # e.g., "100k_to_500k"
+        cost_range = COST_RANGE_VALUES.get(cost_key, {"low": 0, "high": 0})
+
+        phase = wi.phase  # Day_1, Day_100, Post_100
+        if phase not in by_phase:
+            by_phase[phase] = {"low": 0, "high": 0, "items": []}
+
+        by_phase[phase]["low"] += cost_range["low"]
+        by_phase[phase]["high"] += cost_range["high"]
+        by_phase[phase]["items"].append(wi)
+
+    # Calculate totals
+    total_low = sum(p["low"] for p in by_phase.values())
+    total_high = sum(p["high"] for p in by_phase.values())
+
+    return total_low, total_high, by_phase  # $2.2M - $8.4M</div>
+</div>
+
+<div class="slide">
+    <div class="slide-number">24 / 30</div>
+    <div class="section-label">Section 4: Cost Center</div>
+    <h1>Synergy Identification</h1>
+    <h2>Finding Cost Savings</h2>
+
+    <div class="code">SYNERGY_PATTERNS = {
+    "dual_platform": {
+        "description": "Two systems serving same function",
+        "examples": ["Dual ERP", "Dual CRM", "Dual HCM"],
+        "savings_range": (0.3, 0.5)  # 30-50% of smaller platform
+    },
+    "license_optimization": {
+        "description": "Unused or underutilized licenses",
+        "savings_range": (0.1, 0.2)  # 10-20% of license cost
+    },
+    "vendor_consolidation": {
+        "description": "Multiple vendors for same service",
+        "savings_range": (0.15, 0.25)
+    }
+}</div>
+
+    <div class="code">// Detection logic
+for func in ["ERP", "CRM", "HCM"]:
+    apps = inventory_store.get_by_function(func)
+    if len(apps) > 1:  # Dual platform detected!
+        smaller_cost = min(app.cost for app in apps)
+        synergy_low = smaller_cost * 0.3
+        synergy_high = smaller_cost * 0.5
+        // Record synergy opportunity</div>
+</div>
+
+<!-- SECTION 5: HUMAN REVIEW (25-27) -->
+
+<div class="slide">
+    <div class="slide-number">25 / 30</div>
+    <div class="section-label">Section 5: Human Review</div>
+    <h1>Validation Workflow</h1>
+    <h2>From Draft to Confirmed</h2>
+
+    <div class="why-box">
+        <p><strong>Why this matters:</strong> AI output starts as draft. Human review turns it into trusted output. Understanding this flow is critical for analysts.</p>
+    </div>
+
+    <div class="flow">
+        <div class="flow-box"><div class="ttl">DRAFT</div><div class="lbl">AI extracted</div></div>
+        <div class="arr">→</div>
+        <div class="flow-box"><div class="ttl">PENDING</div><div class="lbl">In queue</div></div>
+        <div class="arr">→</div>
+        <div class="flow-box hl"><div class="ttl">CONFIRMED</div><div class="lbl">Verified</div></div>
+    </div>
+
+    <h3>Status Definitions</h3>
+    <table>
+        <tr><th>Status</th><th>Meaning</th><th>Who Changes It</th></tr>
+        <tr><td>draft</td><td>AI-extracted, not yet reviewed</td><td>System (automatic)</td></tr>
+        <tr><td>pending_review</td><td>Queued for human review</td><td>System (automatic)</td></tr>
+        <tr><td>confirmed</td><td>Human verified as correct</td><td>Analyst</td></tr>
+        <tr><td>corrected</td><td>Human fixed an error</td><td>Analyst</td></tr>
+        <tr><td>rejected</td><td>Human determined invalid</td><td>Analyst</td></tr>
+    </table>
+</div>
+
+<div class="slide">
+    <div class="slide-number">26 / 30</div>
+    <div class="section-label">Section 5: Human Review</div>
+    <h1>SME Verification</h1>
+    <h2>When Experts Get Involved</h2>
+
+    <h3>Auto-Flagged for SME Review</h3>
+    <table>
+        <tr><th>Trigger</th><th>Example</th><th>SME Type</th></tr>
+        <tr><td>Cost > $500K</td><td>ERP migration estimate</td><td>Finance</td></tr>
+        <tr><td>Security gap</td><td>No MFA for admins</td><td>Security</td></tr>
+        <tr><td>Key person risk</td><td>Single DBA for critical system</td><td>HR/Ops</td></tr>
+        <tr><td>Contract issue</td><td>Auto-renewal clause</td><td>Legal</td></tr>
+        <tr><td>Low confidence + high impact</td><td>Uncertain cost, critical system</td><td>Domain expert</td></tr>
+    </table>
+
+    <h3>SME Actions</h3>
+    <ul class="bl">
+        <li><strong>Confirm</strong> — Estimate is reasonable, proceed</li>
+        <li><strong>Adjust</strong> — Change the value with rationale</li>
+        <li><strong>Request info</strong> — Need more data from target</li>
+        <li><strong>Reject</strong> — Finding is invalid</li>
+    </ul>
+</div>
+
+<div class="slide">
+    <div class="slide-number">27 / 30</div>
+    <div class="section-label">Section 5: Human Review</div>
+    <h1>Correction Loop</h1>
+    <h2>Learning from Mistakes</h2>
+
+    <div class="code">@dataclass
+class Correction:
+    finding_id: str
+    original_value: str
+    corrected_value: str
+    correction_type: str  # value_error, misattribution, false_positive
+    corrected_by: str
+    corrected_at: datetime
+    notes: str</div>
+
+    <h3>Error Types & System Response</h3>
+    <table>
+        <tr><th>Error Type</th><th>Example</th><th>System Response</th></tr>
+        <tr><td>Value error</td><td>"500" → "5000" users</td><td>Flag similar patterns for review</td></tr>
+        <tr><td>Misattribution</td><td>Wrong app assigned</td><td>Improve entity resolution</td></tr>
+        <tr><td>False positive</td><td>Extracted non-fact</td><td>Adjust extraction threshold</td></tr>
+        <tr><td>Missing fact</td><td>Human found more</td><td>Flag similar gaps</td></tr>
+    </table>
+
+    <div class="callout"><p><strong>Every deal makes the next one better.</strong> Corrections feed back. Patterns learned. Benchmarks refined.</p></div>
+</div>
+
+<!-- SECTION 6: OPERATIONS (28-30) -->
+
+<div class="slide">
+    <div class="slide-number">28 / 30</div>
+    <div class="section-label">Section 6: Operations</div>
+    <h1>Deployment</h1>
+    <h2>Docker-Based Architecture</h2>
+
+    <div class="why-box">
+        <p><strong>Why this matters:</strong> Knowing the deployment architecture helps you debug issues and understand where to look.</p>
+    </div>
+
+    <div class="diagram">
+┌─────────────────────────────────────────────────────────────┐
+│                    DOCKER COMPOSE                            │
+│  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐              │
+│  │  APP   │ │ WORKER │ │POSTGRES│ │ REDIS  │              │
+│  │ :5001  │ │(Celery)│ │ :5432  │ │ :6379  │              │
+│  └────────┘ └────────┘ └────────┘ └────────┘              │
+│  ┌────────┐ ┌────────┐                                     │
+│  │ MINIO  │ │  BEAT  │                                     │
+│  │ :9000  │ │(Sched) │                                     │
+│  └────────┘ └────────┘                                     │
+└─────────────────────────────────────────────────────────────┘
+    </div>
+
+    <div class="code">cd docker/
+docker-compose up        # Start all services
+docker-compose logs app  # View app logs
+docker-compose down      # Stop all</div>
+</div>
+
+<div class="slide">
+    <div class="slide-number">29 / 30</div>
+    <div class="section-label">Section 6: Operations</div>
+    <h1>Debugging Guide</h1>
+    <h2>When Things Go Wrong</h2>
+
+    <h3>Common Issues</h3>
+    <table class="debug-table">
+        <tr><th>Symptom</th><th>Where to Look</th><th>Solution</th></tr>
+        <tr><td>Facts not extracting</td><td>Celery worker logs</td><td>Check worker running, API key valid</td></tr>
+        <tr><td>Wrong document type</td><td>Type detector logic</td><td>Check column headers match patterns</td></tr>
+        <tr><td>Costs showing $0</td><td>InventoryStore</td><td>Verify source has cost column</td></tr>
+        <tr><td>Evidence chain broken</td><td>FactStore</td><td>Verify citing_facts IDs are valid</td></tr>
+        <tr><td>Slow processing</td><td>Redis queue</td><td>Check if queue backed up</td></tr>
+        <tr><td>API errors</td><td>App logs</td><td>Check ANTHROPIC_API_KEY, rate limits</td></tr>
+    </table>
+
+    <h3>Key Log Locations</h3>
+    <div class="code">docker logs app                    # Web app errors
+docker logs celery-worker          # Processing errors
+docker logs postgres               # Database issues
+/app/output/logs/                  # Agent run logs (inside container)</div>
+
+    <h3>Error Handling</h3>
+    <ul class="bl">
+        <li><strong>Rate limited:</strong> Auto-retry with exponential backoff</li>
+        <li><strong>API down:</strong> Queue holds tasks, resumes when available</li>
+        <li><strong>Partial failure:</strong> Completed facts saved, failed docs flagged</li>
+    </ul>
+</div>
+
+<div class="slide">
+    <div class="slide-number">30 / 30</div>
+    <div class="section-label">Section 6: Operations</div>
+    <h1>Extending the System</h1>
+    <h2>How to Add New Capabilities</h2>
+
+    <h3>Adding a New Discovery Agent</h3>
+    <div class="code">// 1. Create agent configuration
+NEW_AGENT_CONFIG = {
+    "name": "vendor_discovery",
+    "domain": "vendors",
+    "model": "claude-3-haiku",
+    "tools": ["create_fact", "flag_gap", "complete"],
+    "system_prompt": "You extract vendor and contract facts..."
+}
+
+// 2. Register in agent registry
+DISCOVERY_AGENTS["vendors"] = NEW_AGENT_CONFIG
+
+// 3. Add domain to FactStore
+VALID_DOMAINS.append("vendors")</div>
+
+    <h3>Adding a New Cost Category</h3>
+    <div class="code">// In costs.py blueprint
+def gather_vendor_costs():
+    vendors = inventory_store.get_items(inventory_type="vendor")
+    return sum(v.data.get("annual_cost", 0) for v in vendors)
+
+// Add to run_rate calculation
+run_rate.vendors = CostCategory(
+    name="vendors",
+    display_name="Vendors & MSP",
+    total=gather_vendor_costs()
+)</div>
+
+    <div class="callout" style="margin-top: 20px;"><p style="font-size: 1rem;"><strong>Every finding cites evidence. No hallucination. Show your work.</strong></p></div>
+</div>
+
+<div class="footer">
+    IT Due Diligence Agent | Technical Deep Dive | January 2026
+</div>
+
+</body>
+</html>

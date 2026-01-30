@@ -4,15 +4,35 @@ Applications View
 Application inventory and analysis.
 
 Steps 146-152 of the alignment plan.
+
+UPDATED: Now uses applications_bridge to get ApplicationItem data with
+proper names, vendors, costs, and structured category information.
 """
 
 import streamlit as st
-from typing import Any, List, Optional, Dict
+from typing import Any, List, Optional, Dict, Tuple
+import sys
+from pathlib import Path
+
+# Add project root for imports
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from ..components.layout import page_header, section_header, empty_state
 from ..components.badges import severity_badge, domain_badge
 from ..components.charts import domain_breakdown_bar, cost_breakdown_pie
 from ..components.filters import filter_bar, pagination
+
+# Import applications bridge and models
+from services.applications_bridge import (
+    build_applications_inventory,
+    ApplicationsInventory,
+    ApplicationItem,
+    AppCategory,
+    DeploymentType,
+    Criticality,
+    CategorySummary,
+)
 
 
 def render_applications_view(
@@ -34,10 +54,10 @@ def render_applications_view(
         icon="📱",
     )
 
-    # Extract application data
-    app_data = _extract_application_data(fact_store)
+    # Get applications data via bridge
+    inventory, status = _get_applications_inventory(fact_store)
 
-    if not app_data["applications"]:
+    if not inventory or not inventory.applications:
         empty_state(
             title="No Application Data",
             message="Run an analysis with applications domain to see details",
@@ -46,7 +66,7 @@ def render_applications_view(
         return
 
     # Summary
-    _render_apps_summary(app_data)
+    _render_apps_summary(inventory)
 
     st.divider()
 
@@ -59,163 +79,111 @@ def render_applications_view(
     ])
 
     with tab1:
-        _render_inventory_tab(app_data)
+        _render_inventory_tab(inventory)
 
     with tab2:
-        _render_integrations_tab(app_data)
+        _render_integrations_tab(inventory)
 
     with tab3:
-        _render_risks_tab(app_data, reasoning_store)
+        _render_risks_tab(inventory, reasoning_store)
 
     with tab4:
-        _render_analysis_tab(app_data, reasoning_store)
+        _render_analysis_tab(inventory, reasoning_store)
 
 
-def _extract_application_data(fact_store: Any) -> Dict[str, Any]:
-    """Extract application-related data from fact store."""
-    data = {
-        "applications": [],
-        "integrations": [],
-        "databases": [],
-        "by_category": {},
-        "by_hosting": {"saas": 0, "on_prem": 0, "cloud": 0, "hybrid": 0},
-        # Data quality tracking
-        "quality": {
-            "total": 0,
-            "high_confidence": 0,
-            "needs_review": 0,
-            "low_confidence": 0,
-        },
-    }
+def _get_applications_inventory(fact_store: Any) -> Tuple[Optional[ApplicationsInventory], str]:
+    """
+    Get ApplicationsInventory from fact_store via applications bridge.
 
-    if not fact_store or not fact_store.facts:
-        return data
+    Returns:
+        Tuple of (ApplicationsInventory, status_string)
+    """
+    if not fact_store or not hasattr(fact_store, 'facts') or not fact_store.facts:
+        return None, "no_facts"
 
-    # Filter applications facts
-    app_facts = [f for f in fact_store.facts if f.domain == "applications"]
-
-    for fact in app_facts:
-        category = fact.category or "other"
-
-        # Get confidence and review status
-        confidence = getattr(fact, 'confidence_score', 0.0)
-        needs_review = getattr(fact, 'needs_review', False)
-        needs_review_reason = getattr(fact, 'needs_review_reason', '')
-
-        app_info = {
-            "name": fact.item,
-            "category": category,
-            "vendor": fact.details.get("vendor", ""),
-            "version": fact.details.get("version", ""),
-            "hosting": fact.details.get("hosting_type", ""),
-            "users": fact.details.get("user_count", ""),
-            "criticality": fact.details.get("criticality", "medium"),
-            "status": fact.status,
-            "fact_id": fact.fact_id,
-            "details": fact.details,
-            # Data quality fields
-            "confidence": confidence,
-            "needs_review": needs_review,
-            "needs_review_reason": needs_review_reason,
-        }
-
-        # Track data quality
-        data["quality"]["total"] += 1
-        if needs_review:
-            data["quality"]["needs_review"] += 1
-        elif confidence >= 0.6:
-            data["quality"]["high_confidence"] += 1
-        else:
-            data["quality"]["low_confidence"] += 1
-
-        # Categorize
-        if category == "integration":
-            data["integrations"].append(app_info)
-        elif category == "database":
-            data["databases"].append(app_info)
-        else:
-            data["applications"].append(app_info)
-
-        # Track by category
-        if category not in data["by_category"]:
-            data["by_category"][category] = []
-        data["by_category"][category].append(app_info)
-
-        # Track hosting type
-        hosting = app_info["hosting"].lower() if app_info["hosting"] else ""
-        if "saas" in hosting or "cloud" in hosting:
-            data["by_hosting"]["saas"] += 1
-        elif "on-prem" in hosting or "on_prem" in hosting:
-            data["by_hosting"]["on_prem"] += 1
-        elif "hybrid" in hosting:
-            data["by_hosting"]["hybrid"] += 1
-
-    return data
+    try:
+        return build_applications_inventory(fact_store)
+    except Exception as e:
+        st.error(f"Error loading applications data: {e}")
+        return None, f"error: {str(e)}"
 
 
-def _render_apps_summary(data: Dict[str, Any]) -> None:
-    """Render applications summary metrics."""
-    total_apps = len(data["applications"])
-    total_integrations = len(data["integrations"])
-    total_databases = len(data["databases"])
-
-    # Count critical
-    critical = len([a for a in data["applications"] if a["criticality"] == "critical"])
-
+def _render_apps_summary(inventory: ApplicationsInventory) -> None:
+    """Render applications summary metrics from ApplicationsInventory."""
     col1, col2, col3, col4, col5 = st.columns(5)
 
     with col1:
-        st.metric("📱 Applications", total_apps)
+        st.metric("📱 Applications", inventory.total_count)
 
     with col2:
-        st.metric("🔗 Integrations", total_integrations)
+        # Count integrations
+        integration_count = len([a for a in inventory.applications
+                                if a.category == AppCategory.INTEGRATION])
+        st.metric("🔗 Integrations", integration_count)
 
     with col3:
-        st.metric("🗄️ Databases", total_databases)
+        # Count databases
+        database_count = len([a for a in inventory.applications
+                             if a.category == AppCategory.DATABASE])
+        st.metric("🗄️ Databases", database_count)
 
     with col4:
-        st.metric("🔴 Critical", critical)
+        st.metric("🔴 Critical", inventory.critical_count)
 
     with col5:
-        st.metric("📁 Categories", len(data["by_category"]))
+        st.metric("📁 Categories", len(inventory.by_category))
 
-    # Data Quality Summary
-    quality = data.get("quality", {})
-    if quality.get("total", 0) > 0:
-        needs_review = quality.get("needs_review", 0)
-        high_conf = quality.get("high_confidence", 0)
-        low_conf = quality.get("low_confidence", 0)
+    # Cost summary if available
+    if inventory.total_cost > 0:
+        st.divider()
+        cost_col1, cost_col2, cost_col3 = st.columns(3)
 
-        if needs_review > 0 or low_conf > 0:
-            st.divider()
-            st.markdown("##### Data Quality")
-            qcol1, qcol2, qcol3 = st.columns(3)
+        with cost_col1:
+            st.metric("💰 Total Annual Cost", f"${inventory.total_cost:,.0f}")
 
-            with qcol1:
-                st.metric("✅ Validated", high_conf, help="High confidence entries")
+        with cost_col2:
+            st.metric("☁️ SaaS Apps", inventory.saas_count)
 
-            with qcol2:
-                if needs_review > 0:
-                    st.metric("⚠️ Needs Review", needs_review, help="Entries flagged for human review")
-                else:
-                    st.metric("⚠️ Needs Review", 0)
+        with cost_col3:
+            st.metric("🏢 On-Prem Apps", inventory.on_prem_count)
 
-            with qcol3:
-                if low_conf > 0:
-                    st.metric("❓ Low Confidence", low_conf, help="Sparse details - may need verification")
-                else:
-                    st.metric("❓ Low Confidence", 0)
+    # User count if available
+    if inventory.total_users > 0:
+        st.metric("👥 Total Users", f"{inventory.total_users:,}")
+
+    # Data Quality Summary - count verified vs needs review
+    verified_count = len([a for a in inventory.applications if a.verified])
+    low_conf_count = len([a for a in inventory.applications
+                         if a.confidence_score < 0.6 and not a.verified])
+
+    if verified_count > 0 or low_conf_count > 0:
+        st.divider()
+        st.markdown("##### Data Quality")
+        qcol1, qcol2, qcol3 = st.columns(3)
+
+        with qcol1:
+            st.metric("✅ Verified", verified_count, help="High confidence entries")
+
+        with qcol2:
+            high_conf = len([a for a in inventory.applications
+                            if a.confidence_score >= 0.6 and not a.verified])
+            st.metric("📊 High Confidence", high_conf)
+
+        with qcol3:
+            st.metric("❓ Low Confidence", low_conf_count,
+                     help="May need verification")
 
 
-def _render_inventory_tab(data: Dict[str, Any]) -> None:
-    """Render application inventory tab."""
+def _render_inventory_tab(inventory: ApplicationsInventory) -> None:
+    """Render application inventory tab using ApplicationItem objects."""
     section_header("Application Inventory", icon="📋", level=4)
 
     # Filter controls
     col1, col2, col3 = st.columns([2, 2, 1])
 
     with col1:
-        categories = ["All"] + list(data["by_category"].keys())
+        categories = ["All"] + [cat.display_name for cat in AppCategory
+                               if cat.value in inventory.by_category]
         selected_cat = st.selectbox(
             "Category",
             categories,
@@ -230,127 +198,192 @@ def _render_inventory_tab(data: Dict[str, Any]) -> None:
         )
 
     with col3:
-        # Data quality filter
-        quality_filter = st.selectbox(
-            "Quality",
-            ["All", "Needs Review", "High Confidence", "Low Confidence"],
-            key="apps_quality_filter",
+        criticality_filter = st.selectbox(
+            "Criticality",
+            ["All", "Critical", "High", "Medium", "Low"],
+            key="apps_crit_filter",
         )
 
     # Filter applications
-    apps = data["applications"]
+    apps = inventory.applications.copy()
 
     if selected_cat != "All":
-        apps = [a for a in apps if a["category"] == selected_cat]
+        # Find the category enum
+        cat_enum = next((c for c in AppCategory if c.display_name == selected_cat), None)
+        if cat_enum:
+            apps = [a for a in apps if a.category == cat_enum]
 
     if search:
         search_lower = search.lower()
-        apps = [a for a in apps if search_lower in a["name"].lower() or search_lower in a.get("vendor", "").lower()]
+        apps = [a for a in apps if search_lower in a.name.lower()
+                or search_lower in a.vendor.lower()]
 
-    # Quality filter
-    if quality_filter == "Needs Review":
-        apps = [a for a in apps if a.get("needs_review", False)]
-    elif quality_filter == "High Confidence":
-        apps = [a for a in apps if a.get("confidence", 0) >= 0.6 and not a.get("needs_review", False)]
-    elif quality_filter == "Low Confidence":
-        apps = [a for a in apps if a.get("confidence", 0) < 0.6 and not a.get("needs_review", False)]
+    if criticality_filter != "All":
+        crit_enum = Criticality(criticality_filter.lower())
+        apps = [a for a in apps if a.criticality == crit_enum]
 
     # Results
-    quality_note = f" ({quality_filter})" if quality_filter != "All" else ""
-    st.caption(f"Showing {len(apps)} application(s){quality_note}")
+    st.caption(f"Showing {len(apps)} application(s)")
 
-    # Render by category
-    if selected_cat == "All":
-        for category in sorted(data["by_category"].keys()):
-            cat_apps = [a for a in apps if a["category"] == category]
-            if cat_apps:
-                _render_category_apps(category, cat_apps)
-    else:
-        _render_category_apps(selected_cat, apps)
+    # Render applications table
+    if apps:
+        _render_apps_table(apps)
+
+    # Also render by category
+    st.divider()
+    section_header("By Category", icon="📂", level=4)
+
+    for cat_value, summary in inventory.by_category.items():
+        cat_apps = [a for a in apps if a.category.value == cat_value]
+        if cat_apps:
+            _render_category_section(summary.category, cat_apps)
 
 
-def _render_category_apps(category: str, apps: List[Dict]) -> None:
-    """Render applications in a category."""
-    category_icons = {
-        "erp": "🏢",
-        "crm": "👥",
-        "custom": "🛠️",
-        "saas": "☁️",
-        "database": "🗄️",
-        "development": "💻",
-    }
+def _render_apps_table(apps: List[ApplicationItem]) -> None:
+    """Render a table of applications with all details."""
+    import pandas as pd
 
-    icon = category_icons.get(category, "📱")
-    label = category.replace("_", " ").title()
+    rows = []
+    for app in apps:
+        cost_str = f"${app.annual_cost:,.0f}" if app.annual_cost else "-"
+        users_str = f"{app.user_count:,}" if app.user_count else "-"
+        verified_badge = "✅" if app.verified else ""
+        crit_icon = {
+            Criticality.CRITICAL: "🔴",
+            Criticality.HIGH: "🟠",
+            Criticality.MEDIUM: "🟡",
+            Criticality.LOW: "🟢",
+        }.get(app.criticality, "⚪")
 
-    # Count apps needing review in this category
-    needs_review_count = len([a for a in apps if a.get("needs_review", False)])
-    review_indicator = f" ⚠️{needs_review_count}" if needs_review_count > 0 else ""
+        rows.append({
+            "App ID": app.id[:12] + "..." if len(app.id) > 12 else app.id,
+            "Name": app.name,
+            "Vendor": app.vendor or "-",
+            "Version": app.version or "-",
+            "Category": app.category.display_name,
+            "Deployment": app.deployment.value.replace("_", " ").title(),
+            "Criticality": f"{crit_icon} {app.criticality.value.title()}",
+            "Users": users_str,
+            "Annual Cost": cost_str,
+            "Verified": verified_badge,
+        })
 
-    with st.expander(f"{icon} {label} ({len(apps)}){review_indicator}", expanded=len(apps) <= 5):
+    if rows:
+        df = pd.DataFrame(rows)
+        st.dataframe(
+            df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "App ID": st.column_config.TextColumn("ID", width="small"),
+                "Name": st.column_config.TextColumn("Name", width="medium"),
+                "Vendor": st.column_config.TextColumn("Vendor", width="medium"),
+                "Version": st.column_config.TextColumn("Version", width="small"),
+                "Category": st.column_config.TextColumn("Category", width="medium"),
+                "Deployment": st.column_config.TextColumn("Deployment", width="small"),
+                "Criticality": st.column_config.TextColumn("Criticality", width="small"),
+                "Users": st.column_config.TextColumn("Users", width="small"),
+                "Annual Cost": st.column_config.TextColumn("Annual Cost", width="small"),
+                "Verified": st.column_config.TextColumn("✓", width="small"),
+            }
+        )
+
+
+def _render_category_section(category: AppCategory, apps: List[ApplicationItem]) -> None:
+    """Render applications in a category with full details."""
+    icon = category.icon
+    label = category.display_name
+
+    # Calculate category totals
+    total_cost = sum(a.annual_cost for a in apps)
+    critical_count = len([a for a in apps if a.criticality == Criticality.CRITICAL])
+
+    cost_str = f" | ${total_cost:,.0f}" if total_cost > 0 else ""
+    crit_str = f" | 🔴 {critical_count}" if critical_count > 0 else ""
+
+    with st.expander(f"{icon} {label} ({len(apps)}){cost_str}{crit_str}", expanded=len(apps) <= 5):
         for app in apps:
             criticality_icon = {
-                "critical": "🔴",
-                "high": "🟠",
-                "medium": "🟡",
-                "low": "🟢",
-            }.get(app["criticality"], "⚪")
+                Criticality.CRITICAL: "🔴",
+                Criticality.HIGH: "🟠",
+                Criticality.MEDIUM: "🟡",
+                Criticality.LOW: "🟢",
+            }.get(app.criticality, "⚪")
 
-            hosting_badge = ""
-            if app["hosting"]:
-                hosting_badge = f" `{app['hosting']}`"
+            deployment_badge = ""
+            if app.deployment != DeploymentType.UNKNOWN:
+                deployment_badge = f" `{app.deployment.value.replace('_', '-')}`"
 
-            # Review/confidence indicator
-            review_badge = ""
-            if app.get("needs_review", False):
-                review_badge = " ⚠️"
-            elif app.get("confidence", 0) >= 0.6:
-                review_badge = " ✓"
+            verified_badge = " ✅" if app.verified else ""
 
-            st.markdown(f"{criticality_icon} **{app['name']}**{hosting_badge}{review_badge}")
+            st.markdown(f"{criticality_icon} **{app.name}**{deployment_badge}{verified_badge}")
 
             details = []
-            if app["vendor"]:
-                details.append(f"Vendor: {app['vendor']}")
-            if app["version"]:
-                details.append(f"v{app['version']}")
-            if app["users"]:
-                details.append(f"{app['users']} users")
-
-            # Show confidence score
-            confidence = app.get("confidence", 0)
-            if confidence > 0:
-                conf_pct = int(confidence * 100)
+            if app.vendor:
+                details.append(f"Vendor: {app.vendor}")
+            if app.version:
+                details.append(f"v{app.version}")
+            if app.user_count:
+                details.append(f"{app.user_count:,} users")
+            if app.annual_cost:
+                details.append(f"${app.annual_cost:,.0f}/yr")
+            if app.confidence_score > 0:
+                conf_pct = int(app.confidence_score * 100)
                 details.append(f"Confidence: {conf_pct}%")
 
             if details:
                 st.caption(" | ".join(details))
 
-            # Show review reason if flagged
-            if app.get("needs_review", False) and app.get("needs_review_reason"):
-                st.warning(f"Review needed: {app['needs_review_reason']}", icon="⚠️")
+            # Show evidence if available
+            if app.evidence:
+                with st.container():
+                    st.caption(f"📄 Source: {app.source_document or 'Document'}")
 
 
-def _render_integrations_tab(data: Dict[str, Any]) -> None:
-    """Render integrations tab."""
+def _render_integrations_tab(inventory: ApplicationsInventory) -> None:
+    """Render integrations tab from ApplicationItem objects."""
     section_header("Application Integrations", icon="🔗", level=4)
 
-    integrations = data["integrations"]
+    # Get integration-category apps
+    integrations = [a for a in inventory.applications
+                   if a.category == AppCategory.INTEGRATION]
 
     if not integrations:
-        st.info("No integration data identified")
+        st.info("No integration applications identified")
+        # Show apps with integrations listed
+        apps_with_integrations = [a for a in inventory.applications if a.integrations]
+        if apps_with_integrations:
+            st.markdown(f"**{len(apps_with_integrations)} apps have integration data:**")
+            for app in apps_with_integrations:
+                with st.expander(f"🔗 {app.name} - {len(app.integrations)} integration(s)"):
+                    for integ in app.integrations:
+                        st.markdown(f"- {integ}")
         return
 
-    st.markdown(f"**{len(integrations)} integration(s) documented:**")
+    st.markdown(f"**{len(integrations)} integration/middleware application(s):**")
 
-    for integration in integrations:
-        with st.expander(f"🔗 {integration['name']}"):
-            if integration["details"]:
-                for key, value in integration["details"].items():
-                    if value and value != "not_stated":
-                        st.markdown(f"**{key.replace('_', ' ').title()}:** {value}")
+    for app in integrations:
+        with st.expander(f"🔗 {app.name} ({app.vendor or 'Unknown vendor'})"):
+            col1, col2 = st.columns(2)
 
-            st.caption(f"Source: {integration['fact_id']}")
+            with col1:
+                st.markdown(f"**Vendor:** {app.vendor or '-'}")
+                st.markdown(f"**Version:** {app.version or '-'}")
+                st.markdown(f"**Deployment:** {app.deployment.value.replace('_', ' ').title()}")
+
+            with col2:
+                if app.annual_cost:
+                    st.markdown(f"**Annual Cost:** ${app.annual_cost:,.0f}")
+                if app.user_count:
+                    st.markdown(f"**Users:** {app.user_count:,}")
+                st.markdown(f"**Criticality:** {app.criticality.value.title()}")
+
+            if app.integrations:
+                st.markdown("**Connected Systems:**")
+                for integ in app.integrations:
+                    st.markdown(f"- {integ}")
+
+            st.caption(f"Source: {app.fact_id}")
 
     # Integration map placeholder
     st.divider()
@@ -358,22 +391,58 @@ def _render_integrations_tab(data: Dict[str, Any]) -> None:
     st.info("Visual integration map coming in future update")
 
 
-def _render_risks_tab(data: Dict[str, Any], reasoning_store: Any) -> None:
+def _render_risks_tab(inventory: ApplicationsInventory, reasoning_store: Any) -> None:
     """Render application risks tab."""
     section_header("Application Risks", icon="⚠️", level=4)
 
-    if not reasoning_store or not reasoning_store.risks:
-        st.info("Run analysis to identify application risks")
+    # Show critical applications
+    critical_apps = [a for a in inventory.applications
+                    if a.criticality == Criticality.CRITICAL]
+
+    if critical_apps:
+        st.warning(f"**🔴 {len(critical_apps)} Critical Application(s)**")
+        for app in critical_apps:
+            with st.expander(f"🔴 {app.name}"):
+                st.markdown(f"**Vendor:** {app.vendor or 'Unknown'}")
+                st.markdown(f"**Deployment:** {app.deployment.value.replace('_', ' ').title()}")
+                if app.annual_cost:
+                    st.markdown(f"**Annual Cost:** ${app.annual_cost:,.0f}")
+                if app.user_count:
+                    st.markdown(f"**Users:** {app.user_count:,}")
+                st.markdown("**Risk Considerations:**")
+                st.markdown("- Business-critical dependency")
+                st.markdown("- Requires continuity planning")
+                st.markdown("- Consider for Day 1 readiness")
+
+    # Show apps needing review (low confidence)
+    low_conf_apps = [a for a in inventory.applications
+                    if a.confidence_score < 0.6 and not a.verified]
+
+    if low_conf_apps:
+        st.divider()
+        st.info(f"**❓ {len(low_conf_apps)} Application(s) Need Verification**")
+        for app in low_conf_apps[:10]:
+            conf_pct = int(app.confidence_score * 100)
+            st.markdown(f"- {app.name} ({conf_pct}% confidence)")
+        if len(low_conf_apps) > 10:
+            st.caption(f"+ {len(low_conf_apps) - 10} more")
+
+    # Reasoning store risks
+    if not reasoning_store or not hasattr(reasoning_store, 'risks') or not reasoning_store.risks:
+        if not critical_apps and not low_conf_apps:
+            st.info("Run analysis to identify application risks")
         return
 
     # Filter to applications domain
     app_risks = [r for r in reasoning_store.risks if r.domain == "applications"]
 
     if not app_risks:
-        st.success("No application-specific risks identified")
+        if not critical_apps and not low_conf_apps:
+            st.success("No application-specific risks identified")
         return
 
-    st.markdown(f"**{len(app_risks)} application risk(s):**")
+    st.divider()
+    st.markdown(f"**{len(app_risks)} application risk(s) from analysis:**")
 
     for risk in sorted(app_risks, key=lambda r: ["critical", "high", "medium", "low"].index(r.severity) if r.severity in ["critical", "high", "medium", "low"] else 99):
         severity_icon = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}.get(risk.severity, "⚪")
@@ -388,37 +457,67 @@ def _render_risks_tab(data: Dict[str, Any], reasoning_store: Any) -> None:
             st.caption(f"Evidence: {', '.join(getattr(risk, 'based_on_facts', []))}")
 
 
-def _render_analysis_tab(data: Dict[str, Any], reasoning_store: Any) -> None:
+def _render_analysis_tab(inventory: ApplicationsInventory, reasoning_store: Any) -> None:
     """Render analysis/insights tab."""
     section_header("Application Analysis", icon="📊", level=4)
 
     col1, col2 = st.columns(2)
 
     with col1:
-        # Hosting breakdown
-        st.markdown("### Hosting Distribution")
-        hosting = data["by_hosting"]
-        total = sum(hosting.values())
+        # Deployment breakdown
+        st.markdown("### Deployment Distribution")
 
+        deployment_counts = {
+            "SaaS/Cloud": inventory.saas_count,
+            "On-Premises": inventory.on_prem_count,
+            "Hybrid": len([a for a in inventory.applications
+                          if a.deployment == DeploymentType.HYBRID]),
+            "Unknown": len([a for a in inventory.applications
+                           if a.deployment == DeploymentType.UNKNOWN]),
+        }
+
+        total = sum(deployment_counts.values())
         if total > 0:
-            for host_type, count in hosting.items():
+            for deploy_type, count in deployment_counts.items():
                 if count > 0:
                     pct = count / total * 100
-                    st.markdown(f"- **{host_type.replace('_', '-').title()}**: {count} ({pct:.0f}%)")
+                    st.markdown(f"- **{deploy_type}**: {count} ({pct:.0f}%)")
         else:
-            st.caption("No hosting data available")
+            st.caption("No deployment data available")
 
     with col2:
-        # Category breakdown
+        # Category breakdown with costs
         st.markdown("### By Category")
-        for category, apps in sorted(data["by_category"].items()):
-            st.markdown(f"- **{category.replace('_', ' ').title()}**: {len(apps)}")
+        for cat_value, summary in sorted(inventory.by_category.items()):
+            cost_str = f" | ${summary.total_cost:,.0f}" if summary.total_cost else ""
+            st.markdown(f"- **{summary.category.display_name}**: {summary.total_count}{cost_str}")
+
+    # Cost analysis
+    if inventory.total_cost > 0:
+        st.divider()
+        st.markdown("### Cost Analysis")
+
+        cost_col1, cost_col2 = st.columns(2)
+
+        with cost_col1:
+            st.metric("Total Annual IT Application Cost", f"${inventory.total_cost:,.0f}")
+            avg_cost = inventory.total_cost / inventory.total_count if inventory.total_count > 0 else 0
+            st.metric("Average Cost per Application", f"${avg_cost:,.0f}")
+
+        with cost_col2:
+            # Top 5 most expensive apps
+            st.markdown("**Top 5 by Cost:**")
+            sorted_apps = sorted(inventory.applications,
+                               key=lambda a: a.annual_cost or 0, reverse=True)[:5]
+            for app in sorted_apps:
+                if app.annual_cost:
+                    st.markdown(f"- {app.name}: ${app.annual_cost:,.0f}")
 
     # Work items
     st.divider()
     st.markdown("### Related Work Items")
 
-    if reasoning_store and reasoning_store.work_items:
+    if reasoning_store and hasattr(reasoning_store, 'work_items') and reasoning_store.work_items:
         app_items = [w for w in reasoning_store.work_items if w.domain == "applications"]
 
         if app_items:

@@ -1,0 +1,699 @@
+{% extends "base.html" %}
+
+{% block title %}{{ risk.title }} - Risk Detail{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="flex items-center gap-3">
+        <a href="{{ url_for('risks') }}" class="btn btn-ghost btn-sm">&larr; Back to Risks</a>
+        <h1>Risk Detail</h1>
+    </div>
+</div>
+
+<div class="risk-detail-container">
+    <!-- Risk Header -->
+    <div class="risk-header">
+        <div class="risk-severity">
+            <span class="badge badge-{{ risk.severity }} badge-lg">{{ risk.severity|upper }}</span>
+        </div>
+        <div class="risk-title-section">
+            <h2>{{ risk.title }}</h2>
+            <div class="risk-meta">
+                <span class="risk-id font-mono">{{ risk.finding_id }}</span>
+                <span class="risk-domain">{{ risk.domain|replace('_', ' ')|title }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Risk Description -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h3>Description</h3>
+        </div>
+        <div class="card-body">
+            <p>{{ risk.description }}</p>
+        </div>
+    </div>
+
+    <!-- M&A Implications -->
+    {% if mna_context and (mna_context.implication or mna_context.timeline) %}
+    <div class="card mb-4 mna-card">
+        <div class="card-header">
+            <h3>M&A Deal Implications</h3>
+        </div>
+        <div class="card-body">
+            {% if mna_context.lens %}
+            <div class="mna-lens mb-3">
+                <span class="lens-label">Analysis Lens:</span>
+                <span class="lens-value">{{ mna_context.lens|replace('_', ' ')|title }}</span>
+            </div>
+            {% endif %}
+
+            {% if mna_context.implication %}
+            <div class="mna-implication mb-3">
+                <div class="section-label">Deal Impact</div>
+                <p class="implication-text">{{ mna_context.implication }}</p>
+            </div>
+            {% endif %}
+
+            {% if mna_context.timeline %}
+            <div class="mna-timeline">
+                <span class="timeline-icon">⏱️</span>
+                <span class="timeline-label">Timeline:</span>
+                <span class="timeline-value">{{ mna_context.timeline }}</span>
+            </div>
+            {% endif %}
+
+            {% if mna_context.confidence %}
+            <div class="mna-confidence mt-2">
+                <span class="confidence-label">Confidence:</span>
+                <span class="badge badge-{{ 'low' if mna_context.confidence == 'high' else 'medium' if mna_context.confidence == 'medium' else 'critical' }}">{{ mna_context.confidence|upper }}</span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Mitigation -->
+    {% if risk.mitigation %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h3>Recommended Mitigation</h3>
+        </div>
+        <div class="card-body">
+            <p>{{ risk.mitigation }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Evidence Chain Section -->
+    <div class="card mb-4 evidence-chain-card">
+        <div class="card-header">
+            <h3>Evidence Chain - Why This Conclusion?</h3>
+            <p class="text-muted text-sm mt-1">Trace this risk back to its source evidence</p>
+        </div>
+        <div class="card-body">
+            <!-- Reasoning -->
+            {% if risk.reasoning %}
+            <div class="reasoning-section mb-4">
+                <div class="section-label">Analysis Reasoning</div>
+                <div class="reasoning-content">
+                    {{ risk.reasoning|replace('→', '<span class="reasoning-arrow">→</span>')|safe }}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Supporting Facts -->
+            <div class="facts-section">
+                <div class="section-label">Supporting Facts ({{ facts|length }})</div>
+                {% if facts %}
+                <div class="facts-list">
+                    {% for fact in facts %}
+                    <div class="fact-card">
+                        <div class="fact-header">
+                            <span class="fact-id font-mono">{{ fact.fact_id }}</span>
+                            <span class="fact-domain">{{ fact.domain|replace('_', ' ')|title }}</span>
+                        </div>
+                        <div class="fact-item">{{ fact.item }}</div>
+
+                        {% if fact.evidence %}
+                        <div class="fact-evidence">
+                            <div class="evidence-label">Exact Quote from VDR Document</div>
+                            <blockquote class="evidence-quote">
+                                {{ fact.evidence.exact_quote if fact.evidence.exact_quote else 'No quote available' }}
+                            </blockquote>
+                            {% if fact.evidence.source_section %}
+                            <div class="evidence-source">
+                                <strong>Section:</strong> {{ fact.evidence.source_section }}
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+
+                        {% if fact.source_document %}
+                        <div class="fact-source-doc">
+                            <strong>Source Document(s):</strong>
+                            <div class="source-docs">
+                                {% for doc in fact.source_document.split(', ') %}
+                                <span class="source-doc-chip">{{ doc.split('_', 1)[1] if '_' in doc else doc }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        {% if fact.details %}
+                        <div class="fact-details">
+                            <div class="details-toggle" onclick="this.parentElement.classList.toggle('expanded')">
+                                Show extracted data
+                            </div>
+                            <div class="details-content">
+                                {% for key, value in fact.details.items() %}
+                                <div class="detail-row">
+                                    <span class="detail-key">{{ key }}:</span>
+                                    <span class="detail-value">{{ value }}</span>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-muted">No supporting facts linked to this risk.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Affected Inventory Items -->
+    {% if affected_items %}
+    <div class="card mb-4 affected-items-card">
+        <div class="card-header">
+            <h3>Affected Inventory Items ({{ affected_items|length }})</h3>
+            <p class="text-muted text-sm mt-1">Applications and systems referenced by this risk</p>
+        </div>
+        <div class="card-body">
+            <!-- Cost Impact Summary -->
+            {% if affected_cost_total > 0 or affected_users_total > 0 %}
+            <div class="cost-impact-summary mb-4">
+                <div class="cost-impact-header">Combined Impact</div>
+                <div class="cost-impact-stats">
+                    {% if affected_cost_total > 0 %}
+                    <div class="impact-stat">
+                        <div class="stat-value">${{ "{:,.0f}".format(affected_cost_total) }}</div>
+                        <div class="stat-label">Annual Cost</div>
+                    </div>
+                    {% endif %}
+                    {% if affected_users_total > 0 %}
+                    <div class="impact-stat">
+                        <div class="stat-value">{{ "{:,}".format(affected_users_total) }}</div>
+                        <div class="stat-label">Users Affected</div>
+                    </div>
+                    {% endif %}
+                    <div class="impact-stat">
+                        <div class="stat-value">{{ affected_items|length }}</div>
+                        <div class="stat-label">Systems</div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            <div class="affected-items-grid">
+                {% for item in affected_items %}
+                <div class="affected-item">
+                    <div class="affected-item-header">
+                        <span class="item-type-badge {{ item.inventory_type }}">{{ item.inventory_type|upper }}</span>
+                        {% if item.criticality and 'critical' in item.criticality|lower %}
+                        <span class="badge badge-critical">CRITICAL</span>
+                        {% elif item.criticality and 'high' in item.criticality|lower %}
+                        <span class="badge badge-high">HIGH</span>
+                        {% endif %}
+                    </div>
+                    <div class="affected-item-name">{{ item.name }}</div>
+                    <div class="affected-item-details">
+                        {% if item.data.vendor %}<span>{{ item.data.vendor }}</span>{% endif %}
+                        {% if item.cost %}<span class="item-cost">${{ "{:,.0f}".format(item.cost) }}/yr</span>{% endif %}
+                        {% if item.data.users %}<span>{{ item.data.users }} users</span>{% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Related Work Items -->
+    {% if related_work_items %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h3>Related Work Items</h3>
+        </div>
+        <div class="card-body">
+            <ul class="work-items-list">
+                {% for wi in related_work_items %}
+                <li>
+                    <span class="badge badge-outline">{{ wi.phase }}</span>
+                    {{ wi.title }}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Actions -->
+    <div class="card">
+        <div class="card-header">
+            <h3>Actions</h3>
+        </div>
+        <div class="card-body">
+            <div class="actions-row">
+                <form action="{{ url_for('adjust_risk', risk_id=risk.finding_id) }}" method="POST" class="inline-form">
+                    <label for="severity">Adjust Severity:</label>
+                    <select name="severity" id="severity" class="filter-select">
+                        <option value="critical" {{ 'selected' if risk.severity == 'critical' }}>Critical</option>
+                        <option value="high" {{ 'selected' if risk.severity == 'high' }}>High</option>
+                        <option value="medium" {{ 'selected' if risk.severity == 'medium' }}>Medium</option>
+                        <option value="low" {{ 'selected' if risk.severity == 'low' }}>Low</option>
+                    </select>
+                    <button type="submit" class="btn btn-secondary btn-sm">Update</button>
+                </form>
+            </div>
+            <div class="actions-row mt-3">
+                <form action="{{ url_for('add_risk_note', risk_id=risk.finding_id) }}" method="POST" class="note-form">
+                    <label for="note">Add Note:</label>
+                    <textarea name="note" id="note" rows="2" class="filter-input" placeholder="Add your analysis note..."></textarea>
+                    <button type="submit" class="btn btn-secondary btn-sm mt-2">Add Note</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.risk-detail-container {
+    max-width: 900px;
+}
+
+.risk-header {
+    display: flex;
+    gap: var(--space-4);
+    align-items: flex-start;
+    margin-bottom: var(--space-6);
+    padding: var(--space-4);
+    background: var(--bg-surface);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-muted);
+}
+
+.risk-severity .badge-lg {
+    font-size: 1rem;
+    padding: var(--space-2) var(--space-4);
+}
+
+.risk-title-section h2 {
+    margin: 0 0 var(--space-2) 0;
+    font-size: 1.5rem;
+}
+
+.risk-meta {
+    display: flex;
+    gap: var(--space-3);
+    color: var(--text-muted);
+    font-size: 0.875rem;
+}
+
+.evidence-chain-card {
+    border-color: var(--accent);
+    border-width: 2px;
+}
+
+.evidence-chain-card .card-header {
+    background: linear-gradient(135deg, var(--accent) 0%, #3b82f6 100%);
+    color: white;
+}
+
+.evidence-chain-card .card-header h3 {
+    color: white;
+}
+
+.evidence-chain-card .card-header .text-muted {
+    color: rgba(255,255,255,0.8);
+}
+
+.section-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--space-2);
+}
+
+.reasoning-content {
+    background: var(--bg-surface-sunken);
+    padding: var(--space-4);
+    border-radius: var(--radius-md);
+    line-height: 1.8;
+}
+
+.reasoning-arrow {
+    color: var(--accent);
+    font-weight: bold;
+    padding: 0 var(--space-2);
+}
+
+.facts-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.fact-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-muted);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+}
+
+.fact-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: var(--space-2);
+}
+
+.fact-id {
+    background: var(--bg-surface-sunken);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    font-size: 0.8rem;
+}
+
+.fact-domain {
+    color: var(--text-muted);
+    font-size: 0.875rem;
+}
+
+.fact-item {
+    font-weight: 600;
+    font-size: 1.1rem;
+    margin-bottom: var(--space-3);
+}
+
+.fact-evidence {
+    background: var(--bg-surface-sunken);
+    padding: var(--space-3);
+    border-radius: var(--radius-sm);
+    margin-bottom: var(--space-3);
+}
+
+.evidence-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--space-2);
+}
+
+.evidence-quote {
+    border-left: 3px solid var(--accent);
+    padding-left: var(--space-3);
+    margin: 0;
+    font-style: italic;
+    background: white;
+    padding: var(--space-2) var(--space-3);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.evidence-source {
+    margin-top: var(--space-2);
+    font-size: 0.875rem;
+    color: var(--text-muted);
+}
+
+.fact-source-doc {
+    margin-top: var(--space-2);
+    font-size: 0.875rem;
+}
+
+.source-docs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+    margin-top: var(--space-1);
+}
+
+.source-doc-chip {
+    background: var(--bg-surface-sunken);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 300px;
+}
+
+.fact-details {
+    margin-top: var(--space-3);
+    border-top: 1px solid var(--border-muted);
+    padding-top: var(--space-2);
+}
+
+.details-toggle {
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 0.875rem;
+}
+
+.details-toggle:hover {
+    text-decoration: underline;
+}
+
+.details-content {
+    display: none;
+    margin-top: var(--space-2);
+    padding: var(--space-2);
+    background: var(--bg-surface-sunken);
+    border-radius: var(--radius-sm);
+}
+
+.fact-details.expanded .details-content {
+    display: block;
+}
+
+.fact-details.expanded .details-toggle::before {
+    content: "Hide ";
+}
+
+.detail-row {
+    display: flex;
+    gap: var(--space-2);
+    padding: var(--space-1) 0;
+    font-size: 0.875rem;
+}
+
+.detail-key {
+    color: var(--text-muted);
+    min-width: 120px;
+}
+
+.work-items-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.work-items-list li {
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--border-muted);
+    display: flex;
+    gap: var(--space-2);
+    align-items: center;
+}
+
+.work-items-list li:last-child {
+    border-bottom: none;
+}
+
+.inline-form {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.note-form {
+    display: flex;
+    flex-direction: column;
+}
+
+.note-form label {
+    margin-bottom: var(--space-1);
+}
+
+/* Affected Items Styles */
+.affected-items-card {
+    border-color: #f59e0b;
+    border-width: 2px;
+}
+
+.affected-items-card .card-header {
+    background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+    color: white;
+}
+
+.affected-items-card .card-header h3 {
+    color: white;
+}
+
+.affected-items-card .card-header .text-muted {
+    color: rgba(255,255,255,0.8);
+}
+
+.affected-items-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: var(--space-3);
+}
+
+.affected-item {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-muted);
+    border-radius: var(--radius-md);
+    padding: var(--space-3);
+}
+
+.affected-item-header {
+    display: flex;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+}
+
+.item-type-badge {
+    font-size: 0.65rem;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+}
+
+.item-type-badge.application {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.item-type-badge.infrastructure {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.affected-item-name {
+    font-weight: 600;
+    font-size: 1rem;
+    margin-bottom: var(--space-1);
+}
+
+.affected-item-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.affected-item-details span {
+    background: var(--bg-surface-sunken);
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+}
+
+.item-cost {
+    color: var(--accent);
+    font-weight: 500;
+}
+
+/* M&A Card Styles */
+.mna-card {
+    border-color: #6366f1;
+    border-width: 2px;
+}
+
+.mna-card .card-header {
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    color: white;
+}
+
+.mna-card .card-header h3 {
+    color: white;
+}
+
+.mna-lens {
+    display: flex;
+    gap: var(--space-2);
+    align-items: center;
+}
+
+.lens-label {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+}
+
+.lens-value {
+    background: #e0e7ff;
+    color: #4338ca;
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    font-size: 0.875rem;
+}
+
+.implication-text {
+    background: var(--bg-surface-sunken);
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
+    border-left: 4px solid #6366f1;
+    margin: 0;
+}
+
+.mna-timeline {
+    display: flex;
+    gap: var(--space-2);
+    align-items: center;
+    font-size: 0.9rem;
+}
+
+.timeline-icon {
+    font-size: 1.1rem;
+}
+
+.timeline-value {
+    font-weight: 600;
+    color: var(--accent);
+}
+
+.mna-confidence {
+    font-size: 0.875rem;
+}
+
+/* Cost Impact Summary */
+.cost-impact-summary {
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    border: 1px solid #fbbf24;
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+}
+
+.cost-impact-header {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #92400e;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--space-3);
+}
+
+.cost-impact-stats {
+    display: flex;
+    gap: var(--space-6);
+    flex-wrap: wrap;
+}
+
+.impact-stat {
+    text-align: center;
+}
+
+.impact-stat .stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #92400e;
+}
+
+.impact-stat .stat-label {
+    font-size: 0.75rem;
+    color: #b45309;
+    text-transform: uppercase;
+}
+</style>
+{% endblock %}

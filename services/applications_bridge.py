@@ -327,3 +327,120 @@ def build_applications_inventory(fact_store: FactStore) -> Tuple[ApplicationsInv
 
     logger.info(f"Built applications inventory with {len(applications)} apps")
     return inventory, "success"
+
+
+def _map_category_from_inventory(category_str: str) -> AppCategory:
+    """Map inventory category string to AppCategory enum."""
+    if not category_str:
+        return AppCategory.OTHER
+    cat_lower = category_str.lower().replace(" ", "_").replace("/", "_")
+
+    category_map = {
+        "erp": AppCategory.ERP,
+        "crm": AppCategory.CRM,
+        "crm_agency_management": AppCategory.CRM,
+        "hr": AppCategory.HCM,
+        "hr_hcm": AppCategory.HCM,
+        "hcm": AppCategory.HCM,
+        "policy_administration": AppCategory.VERTICAL,
+        "claims_management": AppCategory.VERTICAL,
+        "billing": AppCategory.VERTICAL,
+        "finance": AppCategory.OTHER,
+        "analytics": AppCategory.DATABASE,
+        "analytics_actuarial": AppCategory.DATABASE,
+        "data_analytics": AppCategory.DATABASE,
+        "collaboration": AppCategory.SAAS,
+        "email_communication": AppCategory.SAAS,
+        "document_management": AppCategory.SAAS,
+        "it_service_management": AppCategory.SAAS,
+        "identity_access": AppCategory.OTHER,
+        "security": AppCategory.OTHER,
+        "backup_dr": AppCategory.OTHER,
+        "integration": AppCategory.INTEGRATION,
+        "custom": AppCategory.CUSTOM,
+    }
+
+    for key, val in category_map.items():
+        if key in cat_lower:
+            return val
+    return AppCategory.OTHER
+
+
+def build_applications_from_inventory_store(inventory_store) -> Tuple[ApplicationsInventory, str]:
+    """
+    Build an ApplicationsInventory from InventoryStore data.
+
+    Args:
+        inventory_store: The InventoryStore containing application items
+
+    Returns:
+        Tuple of (ApplicationsInventory, status) where status is:
+        - "success": App data was found and built
+        - "no_apps": No application items in inventory
+        - "no_data": No data at all in the store
+    """
+    inventory = ApplicationsInventory()
+
+    if len(inventory_store) == 0:
+        logger.warning("No items in inventory store")
+        return inventory, "no_data"
+
+    # Get application items from inventory store
+    app_items = inventory_store.get_items(inventory_type="application", entity="target", status="active")
+
+    if not app_items:
+        logger.warning("No application items found in inventory store")
+        return inventory, "no_apps"
+
+    # Convert inventory items to ApplicationItem objects
+    applications = []
+    for item in app_items:
+        data = item.data or {}
+
+        app = ApplicationItem(
+            id=item.item_id,
+            name=item.name,
+            category=_map_category_from_inventory(data.get('category', '')),
+            vendor=data.get('vendor', ''),
+            version=data.get('version', ''),
+            deployment=_parse_deployment(data.get('hosting', '')),
+            user_count=_parse_int(data.get('users', 0)),
+            criticality=_parse_criticality(data.get('criticality', '')),
+            modules=[],
+            integrations=[],
+            support_status='',
+            license_type='',
+            annual_cost=item.cost or 0.0,
+            entity=item.entity or 'target',
+            notes=str(data),
+            evidence=f"{item.name} | {data.get('vendor', '')} | {data.get('category', '')} | {data.get('hosting', '')} | {data.get('users', '')} | ${item.cost:,.0f}" if item.cost else "",
+            fact_id='',
+            source_document=item.source_file or '',
+            confidence_score=1.0,
+            verified=True
+        )
+        applications.append(app)
+
+    inventory.applications = applications
+    inventory.total_count = len(applications)
+    inventory.critical_count = len([a for a in applications if a.criticality == Criticality.CRITICAL])
+    inventory.saas_count = len([a for a in applications if a.deployment in [DeploymentType.SAAS, DeploymentType.CLOUD]])
+    inventory.on_prem_count = len([a for a in applications if a.deployment in [DeploymentType.ON_PREM, DeploymentType.HYBRID]])
+    inventory.total_users = sum(a.user_count for a in applications)
+    inventory.total_cost = sum(a.annual_cost for a in applications)
+
+    # Build category summaries
+    for category in AppCategory:
+        cat_apps = [a for a in applications if a.category == category]
+        if cat_apps:
+            inventory.by_category[category.value] = CategorySummary(
+                category=category,
+                total_count=len(cat_apps),
+                critical_count=len([a for a in cat_apps if a.criticality == Criticality.CRITICAL]),
+                total_users=sum(a.user_count for a in cat_apps),
+                total_cost=sum(a.annual_cost for a in cat_apps),
+                applications=cat_apps
+            )
+
+    logger.info(f"Built applications inventory from store with {len(applications)} apps")
+    return inventory, "success"

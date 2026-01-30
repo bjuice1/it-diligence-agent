@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IT Due Diligence Insights - Target Company</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>mermaid.initialize({startOnLoad:true, theme:'neutral'});</script>
+    <style>
+        :root {
+            --primary: #1e40af;
+            --critical: #dc2626;
+            --high: #ea580c;
+            --medium: #ca8a04;
+            --low: #16a34a;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+            --muted: #64748b;
+            --border: #e2e8f0;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
+            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+            color: white;
+            padding: 3rem 2rem;
+            margin-bottom: 2rem;
+        }
+
+        header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        header .subtitle {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+
+        .executive-summary {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border-left: 4px solid var(--primary);
+        }
+
+        .executive-summary h2 {
+            font-size: 1.25rem;
+            margin-bottom: 1rem;
+            color: var(--primary);
+        }
+
+        .stat-row {
+            display: flex;
+            gap: 2rem;
+            margin-top: 1rem;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        .stat-value.critical { color: var(--critical); }
+        .stat-value.high { color: var(--high); }
+        .stat-value.cost { color: var(--primary); }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--muted);
+        }
+
+        section {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        section h2 {
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .finding {
+            border-left: 4px solid var(--medium);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            background: #fafafa;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .finding.critical { border-left-color: var(--critical); background: #fef2f2; }
+        .finding.high { border-left-color: var(--high); background: #fff7ed; }
+        .finding.medium { border-left-color: var(--medium); background: #fefce8; }
+        .finding.low { border-left-color: var(--low); background: #f0fdf4; }
+
+        .finding-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .severity-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .severity-badge.critical { background: var(--critical); color: white; }
+        .severity-badge.high { background: var(--high); color: white; }
+        .severity-badge.medium { background: var(--medium); color: white; }
+        .severity-badge.low { background: var(--low); color: white; }
+
+        .finding h3 {
+            font-size: 1.1rem;
+            margin: 0;
+        }
+
+        .so-what {
+            font-size: 1rem;
+            margin: 0.75rem 0;
+            color: var(--text);
+        }
+
+        .so-what strong {
+            color: var(--primary);
+        }
+
+        .evidence {
+            font-size: 0.85rem;
+            color: var(--muted);
+            margin-top: 0.75rem;
+        }
+
+        .evidence code {
+            background: #e2e8f0;
+            padding: 0.125rem 0.375rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+
+        .mermaid {
+            background: white;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+
+        .diagram-caption {
+            text-align: center;
+            font-size: 0.9rem;
+            color: var(--muted);
+            margin-top: 0.5rem;
+        }
+
+        .action-item {
+            display: flex;
+            gap: 1rem;
+            padding: 1rem;
+            background: #f8fafc;
+            border-radius: 8px;
+            margin-bottom: 0.75rem;
+            align-items: flex-start;
+        }
+
+        .action-number {
+            background: var(--primary);
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.9rem;
+            flex-shrink: 0;
+        }
+
+        .action-content h4 {
+            margin: 0 0 0.25rem 0;
+            font-size: 1rem;
+        }
+
+        .action-content p {
+            margin: 0;
+            font-size: 0.9rem;
+            color: var(--muted);
+        }
+
+        .appendix {
+            background: #f8fafc;
+        }
+
+        .appendix h2 {
+            color: var(--muted);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            margin-top: 1rem;
+        }
+
+        th, td {
+            padding: 0.625rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            background: #f1f5f9;
+            font-weight: 600;
+            color: var(--muted);
+        }
+
+        .nav {
+            position: sticky;
+            top: 0;
+            background: white;
+            padding: 1rem 2rem;
+            border-bottom: 1px solid var(--border);
+            z-index: 100;
+            display: flex;
+            gap: 1.5rem;
+        }
+
+        .nav a {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .nav a:hover {
+            text-decoration: underline;
+        }
+
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--muted);
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>IT Due Diligence Insights</h1>
+            <p class="subtitle">Target Company • Acquisition Analysis • January 30, 2026</p>
+        </div>
+    </header>
+
+    <nav class="nav">
+        <a href="#findings">Key Findings</a>
+        <a href="#dataflow">Data & Connectivity</a>
+        <a href="#implications">Deal Implications</a>
+        <a href="#actions">Recommended Actions</a>
+        <a href="#appendix">Appendix</a>
+    </nav>
+
+    <div class="container">
+        <div class="executive-summary">
+            <h2>Executive Summary</h2>
+            <p>Analysis of 33 applications and 2 infrastructure components reveals 17 key findings requiring attention.</p>
+            <div class="stat-row">
+                <div class="stat">
+                    <div class="stat-value critical">2</div>
+                    <div class="stat-label">Critical Findings</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value high">6</div>
+                    <div class="stat-label">High Priority</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value cost">$7,183,698</div>
+                    <div class="stat-label">Annual IT Spend</div>
+                </div>
+            </div>
+        </div>
+
+        
+    <section id="findings">
+        <h2>🎯 Key Findings</h2>
+        
+            <div class="finding high">
+                <div class="finding-header">
+                    <span class="severity-badge high">high</span>
+                    <h3>Dual ERP Environment Rationalization Risk</h3>
+                </div>
+                <p class="so-what"><strong>So What:</strong> Target operates two critical ERP systems - NetSuite (1,049 users, $309K annually) and SAP S/4HANA (1,917 users, $276K annually) - both marked as CRITICAL. This dual ERP environment indicates either incomplete prior M&A integration or deliberate business unit separation. The combined annual cost of $586K and 2,966 total users across both systems creates significant rationalization complexity.</p>
+                <p class="recommendation"><strong>Recommendation:</strong> Conduct detailed ERP rationalization study to determine consolidation path. Consider phased migration approach with one ERP as primary target. Establish data mapping and business process harmonization plan before attempting consolidation.</p>
+                <p class="evidence"><strong>Evidence:</strong> Based on inventory analysis</p>
+            </div>
+        
+            <div class="finding medium">
+                <div class="finding-header">
+                    <span class="severity-badge medium">medium</span>
+                    <h3>Dual CRM Platform Overlap</h3>
+                </div>
+                <p class="so-what"><strong>So What:</strong> Target operates both Salesforce Sales Cloud (1,308 users, $311K annually) and Microsoft Dynamics 365 Sales (1,074 users, $254K annually). This represents functional overlap with combined annual costs of $565K serving 2,382 users across two platforms. The different criticality ratings (LOW vs MEDIUM) suggest potential business unit separation or incomplete rationalization from prior acquisitions.</p>
+                <p class="recommendation"><strong>Recommendation:</strong> Analyze business unit usage patterns to determine consolidation approach. Consider migrating to single platform based on buyer's CRM strategy. Establish data migration plan for customer records and sales history.</p>
+                <p class="evidence"><strong>Evidence:</strong> Based on inventory analysis</p>
+            </div>
+        
+            <div class="finding medium">
+                <div class="finding-header">
+                    <span class="severity-badge medium">medium</span>
+                    <h3>Duck Creek Version Mismatch Risk</h3>
+                </div>
+                <p class="so-what"><strong>So What:</strong> Target's core insurance applications run on different Duck Creek versions - Policy Administration on version 12 and Claims Management on version 11. Both are on-premises deployments with high user counts (1,407 and 1,608 respectively) and significant annual costs ($546K and $435K). Version misalignment in core insurance systems creates integration complexity and potential upgrade coordination challenges.</p>
+                <p class="recommendation"><strong>Recommendation:</strong> Coordinate Duck Creek version alignment as part of modernization roadmap. Consider cloud migration path for both applications to latest Duck Creek versions. Ensure integration compatibility between Policy and Claims systems during any upgrade activities.</p>
+                <p class="evidence"><strong>Evidence:</strong> Based on inventory analysis</p>
+            </div>
+        
+            <div class="finding high">
+                <div class="finding-header">
+                    <span class="severity-badge high">high</span>
+                    <h3>Dual HCM Platform Complexity</h3>
+                </div>
+                <p class="so-what"><strong>So What:</strong> Target operates two HIGH criticality HCM systems - ADP Workforce Now (1,385 users, $281K annually) and Workday HCM (1,908 users, $197K annually). This dual HCM environment serving 3,293 total users with $478K combined annual costs suggests either geographic/business unit separation or incomplete system consolidation. HCM systems drive identity management and payroll processes critical for Day-1 operations.</p>
+                <p class="recommendation"><strong>Recommendation:</strong> Analyze HCM usage by geography/business unit to understand separation rationale. Establish identity federation approach to support single sign-on. Consider TSA for payroll processing if immediate consolidation is not feasible. Plan phased migration to single HCM platform aligned with buyer's strategy.</p>
+                <p class="evidence"><strong>Evidence:</strong> Based on inventory analysis</p>
+            </div>
+        
+            <div class="finding medium">
+                <div class="finding-header">
+                    <span class="severity-badge medium">medium</span>
+                    <h3>Multi-Data Center Complexity Creates Integration Overhead</h3>
+                </div>
+                <p class="so-what"><strong>So What:</strong> Target operates four geographically distributed data centers (Dallas primary, Seattle/Phoenix/Atlanta secondary) with mixed ownership models. This distributed architecture increases integration complexity as buyer must either maintain multiple sites or execute complex consolidation migrations. The mix of colocation and owned facilities creates different exit strategies and timelines.</p>
+                <p class="recommendation"><strong>Recommendation:</strong> Develop DC rationalization strategy during integration planning. Consider consolidating owned facilities (Phoenix/Atlanta) first as they have no lease constraints, then evaluate Dallas colocation lease timing for potential exit.</p>
+                <p class="evidence"><strong>Evidence:</strong> Based on inventory analysis</p>
+            </div>
+        
+            <div class="finding medium">
+                <div class="finding-header">
+                    <span class="severity-badge medium">medium</span>
+                    <h3>Dallas Colocation Lease Constraint Limits Integration Flexibility</h3>
+                </div>
+                <p class="so-what"><strong>So What:</strong> The primary Dallas data center has a non-cancellable 12-month lease constraint with nearly $1M annual cost. This creates timeline pressure for integration decisions and limits the buyer's ability to quickly consolidate infrastructure. Any consolidation strategy must account for this committed spend.</p>
+                <p class="recommendation"><strong>Recommendation:</strong> Factor the $992K annual Dallas DC cost into integration timeline planning. Consider maintaining Dallas as primary site during transition if buyer's infrastructure can accommodate, or negotiate lease assignment/early termination with colocation provider.</p>
+                <p class="evidence"><strong>Evidence:</strong> Based on inventory analysis</p>
+            </div>
+        
+            <div class="finding high">
+                <div class="finding-header">
+                    <span class="severity-badge high">high</span>
+                    <h3>Incomplete Infrastructure Visibility Impedes Integration Planning</h3>
+                </div>
+                <p class="so-what"><strong>So What:</strong> Critical infrastructure details are missing including server inventory, virtualization platform, storage architecture, and specific tooling details. Without knowing the target's compute and storage platforms, the buyer cannot assess platform alignment, migration complexity, or integration costs accurately.</p>
+                <p class="recommendation"><strong>Recommendation:</strong> Immediately request detailed infrastructure inventory including: virtualization platform (VMware/Hyper-V version), server count and specifications, storage architecture (SAN/NAS), and monitoring/management tooling. This is prerequisite for integration planning.</p>
+                <p class="evidence"><strong>Evidence:</strong> Based on inventory analysis</p>
+            </div>
+        
+            <div class="finding critical">
+                <div class="finding-header">
+                    <span class="severity-badge critical">critical</span>
+                    <h3>Critical Security Visibility Gaps Create Blind Spot Risk</h3>
+                </div>
+                <p class="so-what"><strong>So What:</strong> Multiple critical security monitoring gaps exist: no documented vulnerability management (G-CYBER-001), no incident response plan (G-CYBER-003), and incomplete SIEM deployment with Elastic SIEM primary but Splunk Enterprise Security as secondary tool (F-CYBER-004). This creates a compound visibility problem where threats may go undetected and unresponded to. The combination of no vulnerability management + no IR plan + fragmented SIEM means the organization is operating with significant blind spots.</p>
+                <p class="recommendation"><strong>Recommendation:</strong> Immediate deployment of vulnerability scanning (Nessus/Rapid7), formalization of incident response procedures, and SIEM consolidation decision. Estimate 60-90 days for basic capability establishment.</p>
+                <p class="evidence"><strong>Evidence:</strong> Based on inventory analysis</p>
+            </div>
+        
+            <div class="finding medium">
+                <div class="finding-header">
+                    <span class="severity-badge medium">medium</span>
+                    <h3>Security Tool Stack Misalignment Increases Integration Complexity</h3>
+                </div>
+                <p class="so-what"><strong>So What:</strong> Target's security stack shows potential platform misalignment issues for bolt-on integration. The documented tools (CrowdStrike Falcon EDR, SentinelOne endpoint protection, Juniper firewall, Elastic SIEM, Okta MFA) represent a diverse vendor mix that may not align with buyer's standardized security platform. Running parallel security tools during integration creates operational overhead, split security team attention, and potential coverage gaps.</p>
+                <p class="recommendation"><strong>Recommendation:</strong> Conduct security tool alignment assessment within 30 days of close. Develop 12-18 month consolidation roadmap prioritizing critical security functions first (EDR, SIEM, MFA). Consider keeping best-of-breed tools where target's solution is superior.</p>
+                <p class="evidence"><strong>Evidence:</strong> Based on inventory analysis</p>
+            </div>
+        
+            <div class="finding critical">
+                <div class="finding-header">
+                    <span class="severity-badge critical">critical</span>
+                    <h3>Critical Network Discovery Gaps</h3>
+                </div>
+                <p class="so-what"><strong>So What:</strong> The network inventory contains only 2 facts (Microsoft Entra ID and Juniper Firewall) with 6 high/medium priority gaps including no WAN connectivity details, no LAN/switching infrastructure, no DNS/DHCP details, no load balancing, and no network management tools. This represents a fundamental lack of network architecture visibility required for Day 1 planning and integration.</p>
+                <p class="recommendation"><strong>Recommendation:</strong> Conduct immediate detailed network discovery including network diagrams, WAN topology, IP addressing schemes, circuit inventory, and equipment specifications before proceeding with integration planning.</p>
+                <p class="evidence"><strong>Evidence:</strong> Based on inventory analysis</p>
+            </div>
+        
+            <div class="finding medium">
+                <div class="finding-header">
+                    <span class="severity-badge medium">medium</span>
+                    <h3>Firewall Vendor Alignment Unknown</h3>
+                </div>
+                <p class="so-what"><strong>So What:</strong> Target uses Juniper firewalls, but deployment details, version, configuration, and high availability setup are not documented. Without knowing the buyer's firewall standard, this creates potential platform misalignment requiring firewall replacement or parallel management during integration.</p>
+                <p class="recommendation"><strong>Recommendation:</strong> Document current Juniper firewall deployment details and compare against buyer's security platform standards. Plan for potential firewall standardization or policy translation requirements.</p>
+                <p class="evidence"><strong>Evidence:</strong> Based on inventory analysis</p>
+            </div>
+        
+            <div class="finding high">
+                <div class="finding-header">
+                    <span class="severity-badge high">high</span>
+                    <h3>Critical Identity Governance Gap</h3>
+                </div>
+                <p class="so-what"><strong>So What:</strong> Target has no documented identity governance framework, user provisioning process, or access review procedures. With 1,357 users in Azure AD and 1,638 privileged accounts in CyberArk, this represents a significant compliance and security exposure during integration.</p>
+                <p class="recommendation"><strong>Recommendation:</strong> Implement identity governance platform (IGA) with automated provisioning, access reviews, and role-based access controls before integration begins</p>
+                <p class="evidence"><strong>Evidence:</strong> Based on inventory analysis</p>
+            </div>
+        
+            <div class="finding high">
+                <div class="finding-header">
+                    <span class="severity-badge high">high</span>
+                    <h3>Service Account Management Blind Spot</h3>
+                </div>
+                <p class="so-what"><strong>So What:</strong> No service account management approach or count is documented despite having 1,638 privileged accounts in CyberArk. Service accounts are critical for application functionality and often become orphaned during M&A integrations, creating both security and operational risks.</p>
+                <p class="recommendation"><strong>Recommendation:</strong> Conduct service account discovery and implement automated rotation before application migration begins</p>
+                <p class="evidence"><strong>Evidence:</strong> Based on inventory analysis</p>
+            </div>
+        
+            <div class="finding medium">
+                <div class="finding-header">
+                    <span class="severity-badge medium">medium</span>
+                    <h3>External Access Governance Gap</h3>
+                </div>
+                <p class="so-what"><strong>So What:</strong> No external access method or governance process is documented, creating security exposure for vendor, partner, and contractor access during the integration period when external relationships may change.</p>
+                <p class="recommendation"><strong>Recommendation:</strong> Document external access patterns and implement guest user governance before integration activities begin</p>
+                <p class="evidence"><strong>Evidence:</strong> Based on inventory analysis</p>
+            </div>
+        
+            <div class="finding high">
+                <div class="finding-header">
+                    <span class="severity-badge high">high</span>
+                    <h3>Key Person Knowledge Concentration Risk</h3>
+                </div>
+                <p class="so-what"><strong>So What:</strong> The organization shows significant gaps in documenting key individuals and their unique knowledge (G-ORG-001, G-ORG-008). With only 2 VP-level leaders documented and 141 total IT staff, there's likely concentrated knowledge in undocumented key personnel. The applications team of 46 people (F-ORG-003) managing 33 applications suggests potential single points of failure for critical systems.</p>
+                <p class="recommendation"><strong>Recommendation:</strong> Conduct immediate key person identification, implement retention packages for critical staff, and initiate knowledge transfer documentation before integration activities begin.</p>
+                <p class="evidence"><strong>Evidence:</strong> Based on inventory analysis</p>
+            </div>
+        
+            <div class="finding medium">
+                <div class="finding-header">
+                    <span class="severity-badge medium">medium</span>
+                    <h3>MSP Contract Continuity Risk</h3>
+                </div>
+                <p class="so-what"><strong>So What:</strong> CGI provides critical infrastructure and service desk services for $623,830 annually (F-ORG-005). This managed service contract may have change-of-control clauses that could trigger renegotiation or termination upon acquisition. The target's lean IT structure with significant outsourcing creates dependency on this single vendor for core operations.</p>
+                <p class="recommendation"><strong>Recommendation:</strong> Review CGI contract for change-of-control provisions, negotiate assignment or novation pre-close, and develop contingency plan for service continuity if contract cannot be transferred.</p>
+                <p class="evidence"><strong>Evidence:</strong> Based on inventory analysis</p>
+            </div>
+        
+            <div class="finding medium">
+                <div class="finding-header">
+                    <span class="severity-badge medium">medium</span>
+                    <h3>Integration Capacity Constraint</h3>
+                </div>
+                <p class="so-what"><strong>So What:</strong> The target has a lean IT organization with 141 staff supporting $500M+ in revenue (4.4% of revenue for IT budget suggests ~$500M revenue). The applications team of 46 people managing 33 applications while maintaining current operations will have limited capacity to support bolt-on integration activities without additional resources or external support.</p>
+                <p class="recommendation"><strong>Recommendation:</strong> Augment target IT team with integration specialists, prioritize integration activities, or extend integration timeline to accommodate capacity constraints.</p>
+                <p class="evidence"><strong>Evidence:</strong> Based on inventory analysis</p>
+            </div>
+        
+    </section>
+    
+
+        
+    <section id="dataflow">
+        <h2>🔄 Data Flow & Connectivity</h2>
+        <p>Critical data flows are shown with bold arrows. These represent the highest separation complexity.</p>
+
+        <div class="mermaid">
+flowchart LR
+    NetSuite["NetSuite"] ==>|"Customer Data"| Salesforce_Sales_Cloud["Salesforce Sales Cloud"]
+    ADP_Workforce_Now["ADP Workforce Now"] -->|"Employee Data"| NetSuite["NetSuite"]
+        </div>
+        <p class="diagram-caption">Application connectivity map • 1 critical flows identified</p>
+
+        <h3 style="margin-top: 1.5rem;">Critical Data Flows</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Source</th>
+                    <th>Target</th>
+                    <th>Data Type</th>
+                    <th>Frequency</th>
+                    <th>Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+                <tr>
+                    <td>NetSuite</td>
+                    <td>Salesforce Sales Cloud</td>
+                    <td>Customer Data</td>
+                    <td>batch</td>
+                    <td>Inferred - needs validation</td>
+                </tr>
+                
+            </tbody>
+        </table>
+    </section>
+    
+
+        
+    <section id="implications">
+        <h2>💼 Deal Implications</h2>
+        
+            <div class="action-item">
+                <div class="action-number">i</div>
+                <div class="action-content">
+                    <h4>Standard Due Diligence</h4>
+                    <p>No unusual implications identified. Proceed with standard integration planning.</p>
+                </div>
+            </div>
+        
+    </section>
+    
+
+        
+    <section id="actions">
+        <h2>✅ Recommended Actions</h2>
+        
+            <div class="action-item">
+                <div class="action-number">1</div>
+                <div class="action-content">
+                    <h4>Immediate deployment of vulnerability scanning (Nessus/Rapid7), formalization of incident response procedures, and SIEM consolidation decision. Estimate 60-90 days for basic capability establishment.</h4>
+                    <p>Priority: Critical</p>
+                </div>
+            </div>
+        
+            <div class="action-item">
+                <div class="action-number">2</div>
+                <div class="action-content">
+                    <h4>Conduct immediate detailed network discovery including network diagrams, WAN topology, IP addressing schemes, circuit inventory, and equipment specifications before proceeding with integration planning.</h4>
+                    <p>Priority: Critical</p>
+                </div>
+            </div>
+        
+            <div class="action-item">
+                <div class="action-number">3</div>
+                <div class="action-content">
+                    <h4>Conduct detailed ERP rationalization study to determine consolidation path. Consider phased migration approach with one ERP as primary target. Establish data mapping and business process harmonization plan before attempting consolidation.</h4>
+                    <p>Priority: High</p>
+                </div>
+            </div>
+        
+            <div class="action-item">
+                <div class="action-number">4</div>
+                <div class="action-content">
+                    <h4>Analyze HCM usage by geography/business unit to understand separation rationale. Establish identity federation approach to support single sign-on. Consider TSA for payroll processing if immediate consolidation is not feasible. Plan phased migration to single HCM platform aligned with buyer's strategy.</h4>
+                    <p>Priority: High</p>
+                </div>
+            </div>
+        
+            <div class="action-item">
+                <div class="action-number">5</div>
+                <div class="action-content">
+                    <h4>Immediately request detailed infrastructure inventory including: virtualization platform (VMware/Hyper-V version), server count and specifications, storage architecture (SAN/NAS), and monitoring/management tooling. This is prerequisite for integration planning.</h4>
+                    <p>Priority: High</p>
+                </div>
+            </div>
+        
+            <div class="action-item">
+                <div class="action-number">6</div>
+                <div class="action-content">
+                    <h4>Implement identity governance platform (IGA) with automated provisioning, access reviews, and role-based access controls before integration begins</h4>
+                    <p>Priority: High</p>
+                </div>
+            </div>
+        
+            <div class="action-item">
+                <div class="action-number">7</div>
+                <div class="action-content">
+                    <h4>Conduct service account discovery and implement automated rotation before application migration begins</h4>
+                    <p>Priority: High</p>
+                </div>
+            </div>
+        
+    </section>
+    
+
+        
+    <section id="appendix" class="appendix">
+        <h2>📎 Appendix: Supporting Inventory</h2>
+        <p style="color: var(--muted); margin-bottom: 1rem;">Top 20 applications by cost. Full inventory available in separate export.</p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Application</th>
+                    <th>Vendor</th>
+                    <th style="text-align: right;">Annual Cost</th>
+                    <th>Criticality</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+            <tr>
+                <td><code>I-APP-b79922</code></td>
+                <td>Duck Creek Policy</td>
+                <td>Duck Creek</td>
+                <td style="text-align: right;">$546,257</td>
+                <td>CRITICAL fileciteturn3file1L11-L16</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-d918ca</code></td>
+                <td>Majesco Policy for L&A</td>
+                <td>Majesco</td>
+                <td style="text-align: right;">$440,225</td>
+                <td>CRITICAL fileciteturn3file1L11-L13</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-70b895</code></td>
+                <td>Duck Creek Claims</td>
+                <td>Duck Creek</td>
+                <td style="text-align: right;">$435,426</td>
+                <td>CRITICAL fileciteturn3file1L13-L15</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-2bd27c</code></td>
+                <td>Guidewire ClaimCenter</td>
+                <td>Guidewire</td>
+                <td style="text-align: right;">$421,687</td>
+                <td>CRITICAL fileciteturn3file1L13-L16</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-272704</code></td>
+                <td>Guidewire PolicyCenter</td>
+                <td>Guidewire</td>
+                <td style="text-align: right;">$413,263</td>
+                <td>CRITICAL fileciteturn3file1L14-L16</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-90354a</code></td>
+                <td>CSG Ascendon</td>
+                <td>CSG</td>
+                <td style="text-align: right;">$343,532</td>
+                <td>HIGH fileciteturn3file1L15-L17</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-54101e</code></td>
+                <td>Salesforce Sales Cloud</td>
+                <td>Salesforce</td>
+                <td style="text-align: right;">$311,556</td>
+                <td>LOW fileciteturn3file1L16-L18</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-6f43e0</code></td>
+                <td>NetSuite</td>
+                <td>Oracle</td>
+                <td style="text-align: right;">$309,562</td>
+                <td>CRITICAL fileciteturn3file1L17-L19</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-8f9561</code></td>
+                <td>ADP Workforce Now</td>
+                <td>ADP</td>
+                <td style="text-align: right;">$281,181</td>
+                <td>HIGH fileciteturn3file1L18-L20</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-036063</code></td>
+                <td>Netcracker Revenue Management</td>
+                <td>NEC/Netcracker</td>
+                <td style="text-align: right;">$279,087</td>
+                <td>HIGH fileciteturn3file1L19-L21</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-606bed</code></td>
+                <td>SAP S/4HANA</td>
+                <td>SAP</td>
+                <td style="text-align: right;">$276,449</td>
+                <td>CRITICAL fileciteturn5file0L79-L81</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-a63af8</code></td>
+                <td>Microsoft Dynamics 365 Sales</td>
+                <td>Microsoft</td>
+                <td style="text-align: right;">$254,244</td>
+                <td>MEDIUM fileciteturn5file0L80-L82</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-539d25</code></td>
+                <td>BlackLine</td>
+                <td>BlackLine</td>
+                <td style="text-align: right;">$240,728</td>
+                <td>HIGH fileciteturn5file0L81-L83</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-c5c5f6</code></td>
+                <td>Amdocs Revenue Management</td>
+                <td>Amdocs</td>
+                <td style="text-align: right;">$215,194</td>
+                <td>HIGH fileciteturn5file0L84-L86</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-6b6079</code></td>
+                <td>Workday HCM</td>
+                <td>Workday</td>
+                <td style="text-align: right;">$196,910</td>
+                <td>HIGH fileciteturn5file0L85-L87</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-2d76c6</code></td>
+                <td>Qlik Sense</td>
+                <td>Qlik</td>
+                <td style="text-align: right;">$195,736</td>
+                <td>MEDIUM fileciteturn5file0L86-L88</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-41f173</code></td>
+                <td>Box Enterprise</td>
+                <td>Box</td>
+                <td style="text-align: right;">$170,462</td>
+                <td>LOW fileciteturn5file0L87-L89</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-2b5bfe</code></td>
+                <td>Microsoft 365 E3</td>
+                <td>Microsoft</td>
+                <td style="text-align: right;">$162,259</td>
+                <td>MEDIUM fileciteturn5file0L88-L90</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-6c796d</code></td>
+                <td>Microsoft Power BI Premium</td>
+                <td>Microsoft</td>
+                <td style="text-align: right;">$160,093</td>
+                <td>MEDIUM fileciteturn5file0L89-L91</td>
+            </tr>
+        
+            <tr>
+                <td><code>I-APP-de2123</code></td>
+                <td>Microsoft Exchange Online</td>
+                <td>Microsoft</td>
+                <td style="text-align: right;">$155,967</td>
+                <td>MEDIUM fileciteturn5file0L90-L92</td>
+            </tr>
+        
+            </tbody>
+        </table>
+    </section>
+    
+    </div>
+
+    <footer>
+        <p>Generated by IT Due Diligence Agent • "So What" Report v1.0</p>
+        <p>Data is deterministic from inventory import. Analysis is AI-assisted.</p>
+    </footer>
+</body>
+</html>

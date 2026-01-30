@@ -6,6 +6,18 @@ AI-powered IT due diligence analysis for M&A transactions. Uses Claude to analyz
 
 ---
 
+> ⚠️ **Active Development: Inventory System Upgrade**
+>
+> We are transitioning from 100% LLM-based extraction to a hybrid architecture:
+> - **Structured inputs** (ToltIQ tables, Excel) → Deterministic parsing → **InventoryStore**
+> - **Unstructured inputs** (prose, meeting notes) → LLM discovery → **FactStore**
+>
+> Key changes: InventoryStore + FactStore separation, content-based IDs, Application Intelligence layer.
+>
+> See **[Inventory System Upgrade Plan](docs/INVENTORY_SYSTEM_UPGRADE_PLAN.md)** for full details.
+
+---
+
 ## Quick Start
 
 ### Option 1: Docker (Recommended)

@@ -1325,6 +1325,8 @@
             <a href="{{ url_for('infrastructure_overview') }}" class="nav-link {{ 'active' if request.endpoint and 'infrastructure' in request.endpoint }}" {% if request.endpoint and 'infrastructure' in request.endpoint %}aria-current="page"{% endif %}>Infrastructure</a>
             <a href="{{ url_for('review_queue_page') }}" class="nav-link nav-link-review {{ 'active' if request.endpoint == 'review_queue_page' }}" {% if request.endpoint == 'review_queue_page' %}aria-current="page"{% endif %}>Review</a>
             <a href="{{ url_for('documents_page') }}" class="nav-link nav-link-docs {{ 'active' if request.endpoint == 'documents_page' }}" {% if request.endpoint == 'documents_page' %}aria-current="page"{% endif %}>Documents</a>
+            <a href="{{ url_for('inventory.inventory_home') }}" class="nav-link nav-link-inventory {{ 'active' if request.endpoint and 'inventory' in request.endpoint }}" {% if request.endpoint and 'inventory' in request.endpoint %}aria-current="page"{% endif %}>Inventory</a>
+            <a href="{{ url_for('costs.cost_center') }}" class="nav-link nav-link-costs {{ 'active' if request.endpoint and 'costs' in request.endpoint }}" {% if request.endpoint and 'costs' in request.endpoint %}aria-current="page"{% endif %}>Costs</a>
         </div>
         <div class="nav-search">
             <span class="nav-search-icon" aria-hidden="true">

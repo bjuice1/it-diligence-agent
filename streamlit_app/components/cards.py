@@ -221,6 +221,7 @@ def fact_card(
     fact: Any,
     show_details: bool = True,
     show_evidence: bool = True,
+    show_confidence: bool = True,
 ) -> None:
     """
     Render a fact card using Streamlit components.
@@ -229,6 +230,7 @@ def fact_card(
         fact: Fact object
         show_details: Whether to show detail fields
         show_evidence: Whether to show source quote
+        show_confidence: Whether to show confidence score
     """
     fact_id = getattr(fact, "fact_id", "")
     item = getattr(fact, "item", "")
@@ -238,12 +240,27 @@ def fact_card(
     entity = getattr(fact, "entity", "target")
     details = getattr(fact, "details", {})
     evidence = getattr(fact, "evidence", {})
+    confidence = getattr(fact, "confidence_score", 1.0)
+    needs_review = getattr(fact, "needs_review", False)
 
     entity_badge = "🎯" if entity == "target" else "🏢"
     status_icon = {"documented": "✅", "partial": "⚠️", "gap": "❌"}.get(status, "")
 
-    # Header
-    st.markdown(f"**{fact_id}** {entity_badge} {status_icon} `{item}`")
+    # Review indicator
+    review_badge = ""
+    if needs_review:
+        review_badge = " 🔴"
+    elif confidence < 0.6:
+        review_badge = " 🟠"
+
+    # Header with prominent ID
+    st.markdown(f"**`{fact_id}`** {entity_badge} {status_icon}{review_badge}")
+    st.markdown(f"**{item}**")
+
+    # Confidence indicator
+    if show_confidence and confidence < 1.0:
+        conf_pct = int(confidence * 100)
+        st.progress(confidence, text=f"Confidence: {conf_pct}%")
 
     # Synthesized statement
     statement = _synthesize_fact_statement(fact)

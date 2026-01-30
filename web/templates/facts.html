@@ -77,7 +77,9 @@
                 data-status="{{ fact.status }}"
                 data-details="{{ fact.details|tojson|e if fact.details else '{}' }}"
                 data-evidence="{{ fact.evidence.exact_quote|e if fact.evidence and fact.evidence.exact_quote else '' }}"
-                data-source="{{ fact.evidence.source_section|e if fact.evidence and fact.evidence.source_section else '' }}">
+                data-source="{{ fact.evidence.source_section|e if fact.evidence and fact.evidence.source_section else '' }}"
+                data-source-doc="{{ fact.source_document|e if fact.source_document else '' }}"
+                data-confidence="{{ fact.confidence_score|default(0) }}">
                 <td class="font-mono text-sm">{{ fact.fact_id }}</td>
                 <td>
                     {% if fact.entity == 'buyer' %}
@@ -154,6 +156,64 @@
 {% endblock %}
 
 {% block scripts %}
+<style>
+.evidence-chain {
+    background: var(--bg-surface-sunken);
+    padding: var(--space-4);
+    border-radius: var(--radius-md);
+    margin-top: var(--space-3);
+}
+.evidence-box {
+    background: white;
+    border: 1px solid var(--border-muted);
+    border-radius: var(--radius-sm);
+    padding: var(--space-3);
+    margin-bottom: var(--space-3);
+}
+.evidence-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    display: block;
+    margin-bottom: var(--space-2);
+}
+.evidence-quote {
+    border-left: 3px solid var(--accent);
+    padding-left: var(--space-3);
+    margin: 0;
+    font-style: italic;
+    color: var(--text);
+    background: var(--bg-surface);
+    padding: var(--space-2) var(--space-3);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.evidence-source {
+    margin-top: var(--space-2);
+    font-size: 0.875rem;
+}
+.evidence-source .evidence-label {
+    display: inline;
+    margin-right: var(--space-2);
+}
+.evidence-confidence {
+    margin-top: var(--space-3);
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--border-muted);
+}
+.source-docs-list {
+    margin-top: var(--space-2);
+}
+.source-doc-item {
+    font-size: 0.8rem;
+    padding: var(--space-1) var(--space-2);
+    background: white;
+    border: 1px solid var(--border-muted);
+    border-radius: var(--radius-sm);
+    margin-bottom: var(--space-1);
+}
+</style>
 <script>
     // Handle row selection and open drawer
     document.addEventListener('rowSelected', function(e) {
@@ -171,11 +231,27 @@
         }
         if (!detailsHtml) detailsHtml = '<span class="text-muted">No additional details</span>';
 
+        // Format confidence as percentage
+        const confidence = parseFloat(data.confidence) || 0;
+        const confidencePct = Math.round(confidence * 100);
+        const confidenceClass = confidence >= 0.8 ? 'badge-low' : confidence >= 0.6 ? 'badge-medium' : 'badge-critical';
+
+        // Format source document(s)
+        let sourceDocsHtml = '<span class="text-muted">Unknown source</span>';
+        if (data.sourceDoc) {
+            const docs = data.sourceDoc.split(', ').filter(d => d.trim());
+            sourceDocsHtml = docs.map(doc => {
+                // Extract readable name from hash_filename format
+                const readable = doc.replace(/^[a-f0-9]+_/, '').replace(/_/g, ' ').replace('.md', '');
+                return `<div class="source-doc-item">${readable}</div>`;
+            }).join('');
+        }
+
         openDrawer(
             data.item,
             `
             <div class="drawer-section">
-                <div class="drawer-section-title">ID</div>
+                <div class="drawer-section-title">Fact ID</div>
                 <div class="drawer-section-content font-mono">${data.id}</div>
             </div>
             <div class="drawer-section">
@@ -196,13 +272,28 @@
                 <div class="drawer-section-title">Details</div>
                 <div class="drawer-section-content">${detailsHtml}</div>
             </div>
-            <div class="drawer-section">
-                <div class="drawer-section-title">Evidence</div>
+            <div class="drawer-section evidence-chain">
+                <div class="drawer-section-title">Evidence Chain</div>
                 <div class="drawer-section-content">
-                    <blockquote style="border-left: 3px solid var(--border-muted); padding-left: var(--space-3); margin: 0; font-style: italic;">
-                        ${data.evidence || 'No evidence quote available'}
-                    </blockquote>
-                    ${data.source ? `<div class="text-muted text-xs mt-2">Source: ${data.source}</div>` : ''}
+                    <div class="evidence-box">
+                        <div class="evidence-label">Exact Quote from Document</div>
+                        <blockquote class="evidence-quote">
+                            ${data.evidence || 'No evidence quote available'}
+                        </blockquote>
+                    </div>
+                    ${data.source ? `
+                    <div class="evidence-source">
+                        <span class="evidence-label">Section:</span> ${data.source}
+                    </div>
+                    ` : ''}
+                    <div class="evidence-source">
+                        <span class="evidence-label">Source Document(s):</span>
+                        <div class="source-docs-list">${sourceDocsHtml}</div>
+                    </div>
+                    <div class="evidence-confidence">
+                        <span class="evidence-label">Confidence:</span>
+                        <span class="badge ${confidenceClass}">${confidencePct}%</span>
+                    </div>
                 </div>
             </div>
             `,

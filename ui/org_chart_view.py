@@ -6,13 +6,16 @@ Visualizes organizational structure with:
 - Dropdown filters for departments/roles/teams
 - Headcount breakdown by team
 - Links to organizational facts and findings
+
+UPDATED: Now uses organization_bridge to get StaffMember data with
+individual names, compensation, and hierarchy information.
 """
 
 import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 # Import our modules
 import sys
@@ -21,6 +24,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 try:
     from tools_v2.fact_store import FactStore
     from tools_v2.reasoning_tools import ReasoningStore
+    from services.organization_bridge import build_organization_from_facts
+    from models.organization_models import RoleCategory
+    from models.organization_stores import OrganizationDataStore
 except ImportError as e:
     st.error(f"Import error: {e}")
 
@@ -86,49 +92,82 @@ SAMPLE_ORG_STRUCTURE = {
 
 def extract_org_from_facts(fact_store: FactStore) -> Dict[str, Any]:
     """
-    Extract organizational structure from facts.
+    Extract organizational structure from facts via organization bridge.
+
+    This now calls build_organization_from_facts to get StaffMember objects
+    with individual names, compensation, and hierarchy data, then converts
+    to the format expected by the render functions.
     """
     if not fact_store:
         return {}
 
-    org_facts = [f for f in fact_store.facts if f.domain == "organization"]
-
-    if not org_facts:
+    # Call organization bridge to get StaffMember data
+    try:
+        store, status = build_organization_from_facts(fact_store)
+        if not store or not store.staff_members:
+            return {}
+        return _convert_store_to_org_structure(store)
+    except Exception as e:
+        st.warning(f"Could not load organization data via bridge: {e}")
         return {}
 
-    # Group by category
+
+def _convert_store_to_org_structure(store: OrganizationDataStore) -> Dict[str, Any]:
+    """
+    Convert OrganizationDataStore to the legacy org_structure format
+    expected by render_mermaid_chart and render_org_dropdown_explorer.
+    """
+    category_icons = {
+        RoleCategory.LEADERSHIP: "👔",
+        RoleCategory.INFRASTRUCTURE: "🖥️",
+        RoleCategory.APPLICATIONS: "💻",
+        RoleCategory.SECURITY: "🔒",
+        RoleCategory.SERVICE_DESK: "🎧",
+        RoleCategory.DATA: "📊",
+        RoleCategory.PROJECT_MANAGEMENT: "📋",
+        RoleCategory.OTHER: "👤",
+    }
+
     org_structure = {}
 
-    for fact in org_facts:
-        category = fact.category.replace("_", " ").title()
+    for category in RoleCategory:
+        # Get staff in this category
+        staff_in_cat = store.get_staff_by_category(category) if hasattr(store, 'get_staff_by_category') else [
+            s for s in store.staff_members if s.role_category == category
+        ]
 
-        if category not in org_structure:
-            org_structure[category] = {
-                "icon": "👤",
-                "roles": [],
-                "total": 0,
-                "facts": []
-            }
+        if not staff_in_cat:
+            continue
 
-        # Extract headcount from details
-        headcount = 1
-        if fact.details:
-            headcount = fact.details.get("headcount") or fact.details.get("count") or fact.details.get("fte") or 1
-            if isinstance(headcount, str):
-                try:
-                    headcount = int(headcount)
-                except (ValueError, TypeError):
-                    headcount = 1
+        # Build roles list with individual data
+        roles = []
+        total_compensation = 0
 
-        org_structure[category]["roles"].append({
-            "title": fact.item,
-            "name": fact.details.get("name", "") if fact.details else "",
-            "headcount": headcount,
-            "fact_id": fact.fact_id,
-            "verified": fact.verified
-        })
-        org_structure[category]["total"] += headcount
-        org_structure[category]["facts"].append(fact)
+        for staff in staff_in_cat:
+            roles.append({
+                "title": staff.role_title,
+                "name": staff.name or "-",
+                "headcount": 1,  # Individual record
+                "compensation": staff.base_compensation or 0,
+                "is_key_person": staff.is_key_person,
+                "key_person_reason": staff.key_person_reason,
+                "reports_to": staff.reports_to,
+                "location": staff.location,
+                "verified": True,
+                "staff_id": staff.id,
+            })
+            total_compensation += staff.base_compensation or 0
+
+        # Get display name for category
+        display_name = category.display_name if hasattr(category, 'display_name') else category.value.replace("_", " ").title()
+
+        org_structure[display_name] = {
+            "icon": category_icons.get(category, "👤"),
+            "roles": roles,
+            "total": len(roles),
+            "total_compensation": total_compensation,
+            "facts": [],  # Legacy field, kept for compatibility
+        }
 
     return org_structure
 
@@ -243,14 +282,25 @@ def render_org_dropdown_explorer(org_structure: Dict):
         if roles:
             st.markdown("#### Team Breakdown")
 
-            # Create a table of roles
+            # Show total compensation for department
+            total_comp = dept_data.get("total_compensation", 0)
+            if total_comp > 0:
+                st.markdown(f"**Total Compensation:** ${total_comp:,.0f}")
+
+            # Create a table of roles with individual data
             role_data = []
             for role in roles:
+                comp = role.get("compensation", 0)
+                comp_str = f"${comp:,.0f}" if comp else "-"
+                key_badge = "⭐" if role.get("is_key_person") else ""
+
                 role_data.append({
                     "Role/Team": role.get("title", "Unknown"),
                     "Name": role.get("name", "-"),
-                    "Headcount": role.get("headcount", 1),
-                    "Verified": "✅" if role.get("verified", False) else "⚠️"
+                    "Compensation": comp_str,
+                    "Key": key_badge,
+                    "Reports To": role.get("reports_to", "-") or "-",
+                    "Location": role.get("location", "-") or "-",
                 })
 
             df = pd.DataFrame(role_data)
@@ -262,8 +312,11 @@ def render_org_dropdown_explorer(org_structure: Dict):
                 hide_index=True,
                 column_config={
                     "Role/Team": st.column_config.TextColumn("Role/Team", width="medium"),
-                    "Headcount": st.column_config.NumberColumn("Headcount", width="small"),
-                    "Verified": st.column_config.TextColumn("Status", width="small")
+                    "Name": st.column_config.TextColumn("Name", width="medium"),
+                    "Compensation": st.column_config.TextColumn("Compensation", width="small"),
+                    "Key": st.column_config.TextColumn("Key", width="small"),
+                    "Reports To": st.column_config.TextColumn("Reports To", width="medium"),
+                    "Location": st.column_config.TextColumn("Location", width="small"),
                 }
             )
 
@@ -289,11 +342,18 @@ def render_org_dropdown_explorer(org_structure: Dict):
                     icon = dept_data.get("icon", "📁")
                     total = dept_data.get("total", 0)
                     role_count = len(dept_data.get("roles", []))
+                    total_comp = dept_data.get("total_compensation", 0)
+                    comp_str = f"${total_comp:,.0f}" if total_comp else ""
+
+                    # Count key persons
+                    key_count = sum(1 for r in dept_data.get("roles", []) if r.get("is_key_person"))
+                    key_str = f" | ⭐ {key_count} Key" if key_count > 0 else ""
 
                     st.markdown(f"""
                     <div style="border:1px solid #ddd; border-radius:8px; padding:15px; margin:5px 0;">
                         <h4>{icon} {dept_name}</h4>
-                        <p><strong>{total}</strong> FTE across <strong>{role_count}</strong> roles</p>
+                        <p><strong>{total}</strong> FTE across <strong>{role_count}</strong> roles{key_str}</p>
+                        <p style="color:#666; font-size:0.9em;">{comp_str}</p>
                     </div>
                     """, unsafe_allow_html=True)
 

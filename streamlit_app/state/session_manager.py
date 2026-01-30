@@ -377,16 +377,30 @@ class SessionManager:
         return session
 
     @classmethod
-    def reset(cls, preserve_features: bool = True) -> SessionState:
+    def reset(cls, preserve_features: bool = True, clear_data: bool = True) -> SessionState:
         """
         Reset session state to defaults.
 
         Args:
             preserve_features: If True, keeps feature flags from old session
+            clear_data: If True, also clears analysis data from session state
         """
         old_features = {}
         if preserve_features and cls.SESSION_KEY in st.session_state:
             old_features = st.session_state[cls.SESSION_KEY].features
+
+        # Clear analysis data from session state
+        if clear_data:
+            keys_to_clear = [
+                "fact_store",
+                "reasoning_store",
+                "analysis_result",
+                "current_view",
+                "inventory_store",
+            ]
+            for key in keys_to_clear:
+                if key in st.session_state:
+                    del st.session_state[key]
 
         session = cls.init(force_new=True)
 

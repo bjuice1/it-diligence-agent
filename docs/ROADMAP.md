@@ -47,6 +47,29 @@
 
 ## Near-Term (Next 3-6 Months)
 
+### Inventory System Upgrade (Priority: Critical - In Progress)
+
+> **See [INVENTORY_SYSTEM_UPGRADE_PLAN.md](INVENTORY_SYSTEM_UPGRADE_PLAN.md) for full implementation details.**
+
+**Current State:** 100% LLM-based extraction, single FactStore, sequential IDs
+
+**Target State:** Hybrid architecture separating structured inventory from observational facts
+
+| Component | Description |
+|-----------|-------------|
+| InventoryStore | Structured records for apps, infrastructure, org - directly editable |
+| FactStore | Observations with evidence from unstructured content - immutable |
+| Deterministic Parsing | Regex/table parsing for ToltIQ outputs (100% accuracy) |
+| Content-Based IDs | Hash of key fields for stability across re-imports |
+| Application Intelligence | Categorize apps as standard, vertical-specific, niche, custom, unknown |
+
+**Why This Matters:**
+- Eliminates extraction errors for structured data (33/33 apps vs probabilistic LLM)
+- Enables "brain on top" positioning - analysis layer over reliable data
+- Supports direct Excel/table imports from ToltIQ without LLM lossyness
+
+---
+
 ### Web-Based User Interface (Priority: High)
 
 **Current State:** CLI-based, input via folder structure, outputs as files

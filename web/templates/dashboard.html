@@ -188,7 +188,9 @@
                 {% if entity_summary.target.by_domain %}
                 <div class="entity-domains">
                     {% for domain, count in entity_summary.target.by_domain.items() %}
+                    {% if domain != 'applications' %}
                     <span class="domain-chip">{{ domain }}: {{ count }}</span>
+                    {% endif %}
                     {% endfor %}
                 </div>
                 {% endif %}
@@ -287,6 +289,36 @@
     }
 }
 </style>
+{% endif %}
+
+<!-- Inventory Summary -->
+{% if inventory_summary %}
+<div class="card mb-4" style="border-left: 4px solid #2563eb;">
+    <div class="card-header">
+        <span class="card-title">Application Inventory</span>
+        <a href="{{ url_for('inventory.inventory_home') }}" class="text-sm" style="color: var(--accent);">View Details →</a>
+    </div>
+    <div class="card-body">
+        <div class="flex gap-6 items-center">
+            <div class="text-center">
+                <div style="font-size: 2rem; font-weight: 700; color: var(--accent);">{{ inventory_summary.applications }}</div>
+                <div class="text-muted text-sm">Applications</div>
+            </div>
+            <div class="text-center">
+                <div style="font-size: 2rem; font-weight: 700; color: var(--accent);">${{ "{:,.0f}".format(inventory_summary.total_cost / 1000) }}K</div>
+                <div class="text-muted text-sm">Annual Cost</div>
+            </div>
+            <div class="text-center">
+                <div style="font-size: 2rem; font-weight: 700; color: var(--danger);">{{ inventory_summary.critical }}</div>
+                <div class="text-muted text-sm">Critical Apps</div>
+            </div>
+            <div style="flex: 1; text-align: right;">
+                <a href="{{ url_for('inventory.diagram') }}" class="btn btn-secondary btn-sm">View Data Flow Diagram</a>
+                <a href="{{ url_for('inventory.insights') }}" class="btn btn-primary btn-sm" style="margin-left: 8px;">Insights Report</a>
+            </div>
+        </div>
+    </div>
+</div>
 {% endif %}
 
 <!-- Domain Coverage -->
@@ -502,6 +534,15 @@
             <line x1="16" y1="17" x2="8" y2="17"/>
         </svg>
         Generate VDR Request
+    </a>
+    <a href="{{ url_for('inventory.inventory_home') }}" class="btn btn-secondary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7"/>
+            <rect x="14" y="3" width="7" height="7"/>
+            <rect x="14" y="14" width="7" height="7"/>
+            <rect x="3" y="14" width="7" height="7"/>
+        </svg>
+        Inventory &amp; Data Flows
     </a>
 </div>
 

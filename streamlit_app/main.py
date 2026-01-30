@@ -17,7 +17,7 @@ PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 # Import local modules
-from streamlit_app.state import SessionManager, init_session, get_session
+from streamlit_app.state import SessionManager, init_session, get_session, reset_session
 from streamlit_app.config import (
     get_config,
     is_api_configured,
@@ -95,6 +95,11 @@ def render_sidebar():
         if session.analysis.is_complete():
             st.success(f"✓ {session.analysis.target_name}")
             st.caption(f"{session.analysis.fact_count} facts | {session.analysis.risk_count} risks")
+
+            # NEW ANALYSIS button - prominently placed when analysis is loaded
+            if st.button("🔄 New Analysis", type="secondary", use_container_width=True, key="new_analysis_btn"):
+                _start_new_session()
+
         elif session.analysis.is_running():
             st.info("⏳ Analysis running...")
             st.progress(session.analysis.progress_percent)
@@ -197,8 +202,24 @@ def render_sidebar():
                 st.json(session.to_dict())
 
 
+def _start_new_session():
+    """Start a completely new analysis session, clearing all previous data."""
+    from streamlit_app.state import reset_session
+
+    # Reset session state (this clears fact_store, reasoning_store, etc.)
+    reset_session(preserve_features=True)
+
+    # Force navigation to setup
+    st.session_state["current_view"] = "setup"
+
+    st.rerun()
+
+
 def _render_load_options():
     """Render options to load previous analysis."""
+    # Warning about data isolation
+    st.warning("⚠️ Loading previous analysis will replace current data", icon="⚠️")
+
     # Check for saved files
     output_dir = Path("output")
 
@@ -268,11 +289,32 @@ def _load_analysis(timestamp: str):
 
 def render_setup_view():
     """Render the setup/upload view."""
+    session = get_session()
+
     page_header(
         title="IT Due Diligence Agent",
         subtitle="Upload documents to analyze",
         icon="🔍",
     )
+
+    # Show session info - important for data isolation
+    with st.expander("ℹ️ Session Info", expanded=False):
+        st.caption(f"Session ID: `{session.session_id}`")
+        st.caption(f"Created: {session.created_at}")
+
+        # Check if there's leftover data
+        has_old_data = (
+            "fact_store" in st.session_state or
+            "reasoning_store" in st.session_state or
+            session.analysis.fact_count > 0
+        )
+
+        if has_old_data:
+            st.warning("Previous analysis data detected in session")
+            if st.button("🗑️ Clear All Data & Start Fresh", key="clear_session_setup"):
+                _start_new_session()
+        else:
+            st.success("Clean session - no previous data loaded")
 
     # Check API
     if not is_api_configured():

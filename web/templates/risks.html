@@ -172,6 +172,13 @@
         const row = e.detail.row;
         const data = row.dataset;
 
+        // Format reasoning with arrow chain highlighting
+        let reasoningHtml = data.reasoning || 'No reasoning provided';
+        if (reasoningHtml && reasoningHtml !== 'No reasoning provided') {
+            // Highlight the reasoning chain arrows
+            reasoningHtml = reasoningHtml.replace(/→/g, '<span class="reasoning-arrow">→</span>');
+        }
+
         openDrawer(
             data.title,
             `
@@ -197,13 +204,15 @@
                 <div class="drawer-section-title">Mitigation</div>
                 <div class="drawer-section-content">${data.mitigation || 'No mitigation specified'}</div>
             </div>
-            <div class="drawer-section">
-                <div class="drawer-section-title">Reasoning</div>
-                <div class="drawer-section-content">${data.reasoning || 'No reasoning provided'}</div>
-            </div>
-            <div class="drawer-section">
-                <div class="drawer-section-title">Based On Facts</div>
-                <div class="drawer-section-content font-mono text-sm">${formatFactLinks(data.basedOn)}</div>
+            <div class="drawer-section evidence-chain-section">
+                <div class="drawer-section-title">Why This Conclusion? (Evidence Chain)</div>
+                <div class="drawer-section-content">
+                    <div class="reasoning-chain">${reasoningHtml}</div>
+                    <div class="supporting-facts">
+                        <div class="supporting-facts-label">Supporting Facts (click to see source evidence):</div>
+                        <div class="font-mono text-sm">${formatFactLinks(data.basedOn)}</div>
+                    </div>
+                </div>
             </div>
             `,
             `
@@ -251,6 +260,37 @@
     flex-wrap: wrap;
     gap: 4px;
     align-items: center;
+}
+.evidence-chain-section {
+    background: var(--bg-surface-sunken);
+    padding: var(--space-4);
+    border-radius: var(--radius-md);
+    margin-top: var(--space-3);
+}
+.reasoning-chain {
+    background: white;
+    border: 1px solid var(--border-muted);
+    border-radius: var(--radius-sm);
+    padding: var(--space-3);
+    line-height: 1.8;
+    margin-bottom: var(--space-3);
+}
+.reasoning-arrow {
+    color: var(--accent);
+    font-weight: bold;
+    padding: 0 var(--space-1);
+}
+.supporting-facts {
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--border-muted);
+}
+.supporting-facts-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--space-2);
 }
 </style>
 {% endblock %}

@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IT Due Diligence Agent - How It Works</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #fafafa;
+            color: #1a1a2e;
+            line-height: 1.6;
+        }
+
+        .slide {
+            min-height: 100vh;
+            padding: 50px 70px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            border-bottom: 1px solid #e0e0e0;
+            position: relative;
+        }
+
+        .slide-1 { background: linear-gradient(135deg, #ffffff 0%, #f0f4ff 100%); }
+        .slide-2 { background: linear-gradient(135deg, #f8fffe 0%, #f0f4ff 100%); }
+        .slide-3 { background: linear-gradient(135deg, #fff8f0 0%, #fff0f5 100%); }
+
+        .slide-number {
+            position: absolute;
+            top: 25px;
+            right: 35px;
+            font-size: 13px;
+            color: #9ca3af;
+            font-weight: 500;
+        }
+
+        .slide-label {
+            position: absolute;
+            top: 25px;
+            left: 35px;
+            font-size: 11px;
+            color: #6366f1;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        h1 {
+            font-size: 2.8rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #6366f1 0%, #ec4899 50%, #f59e0b 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        h2 {
+            font-size: 1.5rem;
+            font-weight: 500;
+            color: #4b5563;
+            margin-bottom: 35px;
+        }
+
+        h3 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #6366f1;
+            margin: 30px 0 15px 0;
+        }
+
+        p {
+            color: #4b5563;
+            font-size: 1.05rem;
+            margin-bottom: 15px;
+        }
+
+        .flow-diagram {
+            display: flex;
+            align-items: stretch;
+            gap: 0;
+            margin: 30px 0;
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+        }
+
+        .flow-stage {
+            flex: 1;
+            padding: 30px 25px;
+            border-right: 1px solid #e5e7eb;
+            position: relative;
+        }
+
+        .flow-stage:last-child {
+            border-right: none;
+        }
+
+        .flow-stage.input { background: #f8fafc; }
+        .flow-stage.brain { background: linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(236,72,153,0.08) 100%); }
+        .flow-stage.output { background: #f0fdf4; }
+
+        .flow-stage .stage-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: #9ca3af;
+            margin-bottom: 8px;
+        }
+
+        .flow-stage.brain .stage-label { color: #6366f1; }
+        .flow-stage.output .stage-label { color: #059669; }
+
+        .flow-stage .stage-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #1a1a2e;
+            margin-bottom: 12px;
+        }
+
+        .flow-stage.brain .stage-title { color: #6366f1; }
+        .flow-stage.output .stage-title { color: #059669; }
+
+        .flow-stage ul {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .flow-stage li {
+            padding: 6px 0;
+            color: #4b5563;
+            font-size: 0.95rem;
+            padding-left: 18px;
+            position: relative;
+        }
+
+        .flow-stage li::before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #9ca3af;
+        }
+
+        .flow-stage.brain li::before { color: #ec4899; }
+        .flow-stage.output li::before { color: #10b981; }
+
+        .flow-arrow {
+            position: absolute;
+            right: -12px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 1.5rem;
+            color: #6366f1;
+            z-index: 10;
+        }
+
+        .so-what-box {
+            background: linear-gradient(135deg, rgba(245,158,11,0.08) 0%, rgba(236,72,153,0.08) 100%);
+            border-left: 4px solid #f59e0b;
+            padding: 20px 25px;
+            margin: 25px 0;
+            border-radius: 0 12px 12px 0;
+        }
+
+        .so-what-box .label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: #d97706;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .so-what-box p {
+            margin: 0;
+            color: #374151;
+            font-size: 1.05rem;
+        }
+
+        .detail-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+            margin: 25px 0;
+        }
+
+        .detail-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+        }
+
+        .detail-card h4 {
+            font-size: 1.1rem;
+            color: #1a1a2e;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .detail-card .icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+        }
+
+        .detail-card .icon.purple { background: rgba(99,102,241,0.1); }
+        .detail-card .icon.green { background: rgba(16,185,129,0.1); }
+        .detail-card .icon.amber { background: rgba(245,158,11,0.1); }
+        .detail-card .icon.pink { background: rgba(236,72,153,0.1); }
+
+        .detail-card table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .detail-card td {
+            padding: 8px 0;
+            border-bottom: 1px solid #f3f4f6;
+            font-size: 0.95rem;
+        }
+
+        .detail-card td:first-child {
+            color: #6b7280;
+        }
+
+        .detail-card td:last-child {
+            text-align: right;
+            font-weight: 600;
+            color: #1a1a2e;
+        }
+
+        .detail-card .total td {
+            border-top: 2px solid #e5e7eb;
+            border-bottom: none;
+            padding-top: 12px;
+            font-weight: 700;
+        }
+
+        .detail-card .total td:last-child {
+            color: #6366f1;
+        }
+
+        .evidence-example {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 25px;
+            margin: 25px 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+        }
+
+        .evidence-example h4 {
+            font-size: 1rem;
+            color: #6366f1;
+            margin-bottom: 15px;
+        }
+
+        .evidence-chain {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .chain-item {
+            background: #f8fafc;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 12px 16px;
+            text-align: center;
+            min-width: 140px;
+        }
+
+        .chain-item.highlight {
+            background: linear-gradient(135deg, rgba(99,102,241,0.1) 0%, rgba(236,72,153,0.1) 100%);
+            border-color: #6366f1;
+        }
+
+        .chain-item .type {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #9ca3af;
+        }
+
+        .chain-item.highlight .type { color: #6366f1; }
+
+        .chain-item .value {
+            font-size: 0.9rem;
+            color: #1a1a2e;
+            font-weight: 500;
+            margin-top: 4px;
+        }
+
+        .chain-arrow {
+            color: #ec4899;
+            font-size: 1.2rem;
+        }
+
+        .key-point {
+            background: rgba(99,102,241,0.06);
+            border-radius: 12px;
+            padding: 20px 25px;
+            margin: 20px 0;
+        }
+
+        .key-point p {
+            margin: 0;
+            color: #374151;
+        }
+
+        .key-point strong {
+            color: #6366f1;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #9ca3af;
+            font-size: 0.85rem;
+            background: #f9fafb;
+        }
+    </style>
+</head>
+<body>
+
+<!-- SLIDE 1: The Flow -->
+<div class="slide slide-1">
+    <div class="slide-number">1 / 3</div>
+    <div class="slide-label">The Flow</div>
+
+    <h1>How It Works</h1>
+    <h2>ToltIQ extracts data. We analyze what it means.</h2>
+
+    <div class="flow-diagram">
+        <div class="flow-stage input">
+            <div class="stage-label">Step 1: Input</div>
+            <div class="stage-title">ToltIQ / VDR Docs</div>
+            <ul>
+                <li>Application inventory (Excel)</li>
+                <li>IT assessment (Word/PDF)</li>
+                <li>Org chart, security review</li>
+                <li>Vendor contracts</li>
+            </ul>
+            <p style="margin-top: 15px; font-size: 0.85rem; color: #6b7280;">
+                Raw data: "SAP exists", "500 users", "$1.2M license"
+            </p>
+            <div class="flow-arrow">→</div>
+        </div>
+
+        <div class="flow-stage brain">
+            <div class="stage-label">Step 2: The Brain</div>
+            <div class="stage-title">Analysis Layer</div>
+            <ul>
+                <li>Extract facts with exact quotes</li>
+                <li>Identify patterns across docs</li>
+                <li>Flag risks with M&A lens</li>
+                <li>Calculate costs by phase</li>
+                <li>Generate work items</li>
+            </ul>
+            <p style="margin-top: 15px; font-size: 0.85rem; color: #6366f1;">
+                This is what we do. ToltIQ doesn't do this.
+            </p>
+            <div class="flow-arrow">→</div>
+        </div>
+
+        <div class="flow-stage output">
+            <div class="stage-label">Step 3: Output</div>
+            <div class="stage-title">Deal-Ready Insights</div>
+            <ul>
+                <li>Cost Center (run-rate + one-time)</li>
+                <li>Risk Register with evidence</li>
+                <li>Integration work items by phase</li>
+                <li>Synergy opportunities</li>
+            </ul>
+            <p style="margin-top: 15px; font-size: 0.85rem; color: #059669;">
+                Ready for deal model and IC memo
+            </p>
+        </div>
+    </div>
+
+    <div class="so-what-box">
+        <div class="label">So What</div>
+        <p><strong>ToltIQ tells you what exists.</strong> We tell you what it means for the deal. "SAP with 500 users" becomes "SAP handles 80% of transactions, heavy customization, migration would cost $2-4M and take 18-24 months, TSA exposure is significant."</p>
+    </div>
+
+    <div class="key-point">
+        <p><strong>The gap we fill:</strong> Data extraction tools stop at "here's what we found." We continue to "here's what you should do about it and what it will cost."</p>
+    </div>
+</div>
+
+<!-- SLIDE 2: What The Brain Produces -->
+<div class="slide slide-2">
+    <div class="slide-number">2 / 3</div>
+    <div class="slide-label">The Output</div>
+
+    <h1>What The Brain Produces</h1>
+    <h2>Four things you need for every deal</h2>
+
+    <div class="detail-grid">
+        <div class="detail-card">
+            <h4><span class="icon purple">📊</span> Cost Center</h4>
+            <table>
+                <tr>
+                    <td>Headcount (80 FTE × role avg)</td>
+                    <td>$28.9M</td>
+                </tr>
+                <tr>
+                    <td>Applications (33 apps)</td>
+                    <td>$7.2M</td>
+                </tr>
+                <tr class="total">
+                    <td>Run-Rate Total</td>
+                    <td>$36.1M/yr</td>
+                </tr>
+            </table>
+            <div style="margin-top: 15px; padding-top: 12px; border-top: 1px solid #e5e7eb;">
+                <table>
+                    <tr>
+                        <td>One-Time Integration</td>
+                        <td>$2.2M - $8.4M</td>
+                    </tr>
+                    <tr>
+                        <td>Synergy Potential</td>
+                        <td style="color: #10b981;">$1.2M/yr</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="detail-card">
+            <h4><span class="icon pink">⚠️</span> Risk Register</h4>
+            <table>
+                <tr>
+                    <td>Critical/High Risks</td>
+                    <td>12</td>
+                </tr>
+                <tr>
+                    <td>Medium Risks</td>
+                    <td>8</td>
+                </tr>
+                <tr>
+                    <td>Evidence-Backed</td>
+                    <td>100%</td>
+                </tr>
+            </table>
+            <p style="margin-top: 15px; font-size: 0.85rem; color: #6b7280;">
+                Every risk includes: description, severity, M&A implication ("so what"), mitigation, and citing facts.
+            </p>
+        </div>
+
+        <div class="detail-card">
+            <h4><span class="icon amber">📋</span> Work Items by Phase</h4>
+            <table>
+                <tr>
+                    <td>Day 1 (close date)</td>
+                    <td>5 items</td>
+                </tr>
+                <tr>
+                    <td>Day 100</td>
+                    <td>10 items</td>
+                </tr>
+                <tr>
+                    <td>Post-100</td>
+                    <td>6 items</td>
+                </tr>
+            </table>
+            <p style="margin-top: 15px; font-size: 0.85rem; color: #6b7280;">
+                Each item has: owner, cost estimate, dependencies, and which risk triggered it.
+            </p>
+        </div>
+
+        <div class="detail-card">
+            <h4><span class="icon green">🔗</span> Evidence Chain</h4>
+            <p style="color: #374151; font-size: 0.95rem;">Every conclusion traces back to source:</p>
+            <p style="color: #6b7280; font-size: 0.9rem; margin-bottom: 0;">
+                Risk → cites Facts → Facts have exact quotes → Quotes link to documents
+            </p>
+            <p style="margin-top: 15px; font-size: 0.85rem; color: #059669;">
+                Click any finding → see the receipt → verify yourself
+            </p>
+        </div>
+    </div>
+
+    <div class="so-what-box">
+        <div class="label">So What</div>
+        <p>These four outputs answer the two questions every IC asks: <strong>"What does IT actually cost?"</strong> and <strong>"What will integration cost?"</strong> — with evidence they can trace.</p>
+    </div>
+</div>
+
+<!-- SLIDE 3: The Evidence Chain -->
+<div class="slide slide-3">
+    <div class="slide-number">3 / 3</div>
+    <div class="slide-label">The Evidence</div>
+
+    <h1>How Evidence Works</h1>
+    <h2>Every conclusion traces to source. No black box.</h2>
+
+    <div class="evidence-example">
+        <h4>Example: How a risk gets created</h4>
+        <div class="evidence-chain">
+            <div class="chain-item">
+                <div class="type">Document</div>
+                <div class="value">Application_Inventory.xlsx</div>
+            </div>
+            <div class="chain-arrow">→</div>
+            <div class="chain-item">
+                <div class="type">Exact Quote</div>
+                <div class="value">"SAP S/4HANA... 500 users... 80% of transactions"</div>
+            </div>
+            <div class="chain-arrow">→</div>
+            <div class="chain-item">
+                <div class="type">Extracted Fact</div>
+                <div class="value">F-APP-001</div>
+            </div>
+            <div class="chain-arrow">→</div>
+            <div class="chain-item highlight">
+                <div class="type">Risk Generated</div>
+                <div class="value">R-APP-001: ERP Concentration</div>
+            </div>
+        </div>
+    </div>
+
+    <h3>What makes this different</h3>
+
+    <div class="detail-grid">
+        <div class="detail-card">
+            <h4>Discovery Phase (Fast AI)</h4>
+            <p style="color: #374151;">Reads every document. Extracts every fact. Links each fact to an exact quote from the source.</p>
+            <p style="color: #6b7280; font-size: 0.9rem;"><strong>Rule:</strong> No inference. Only explicit statements become facts. "SAP has 500 users" = fact. "SAP is probably critical" = not a fact.</p>
+        </div>
+
+        <div class="detail-card">
+            <h4>Reasoning Phase (Smart AI)</h4>
+            <p style="color: #374151;">Analyzes facts through M&A lens. Generates risks and work items. Calculates cost implications.</p>
+            <p style="color: #6b7280; font-size: 0.9rem;"><strong>Rule:</strong> Every risk must cite specific facts. No conclusion without evidence. The "so what" is required.</p>
+        </div>
+    </div>
+
+    <div class="so-what-box">
+        <div class="label">So What</div>
+        <p>You're not trusting AI. You're trusting documents you already have. The AI just reads faster and connects dots across documents. <strong>Every finding shows its work.</strong> Click any risk → see the facts → see the exact quote → verify in the original doc.</p>
+    </div>
+
+    <div class="key-point">
+        <p><strong>The promise:</strong> No hallucination. No unsupported conclusions. If we say "SAP handles 80% of transactions," we show you exactly where the document says that.</p>
+    </div>
+</div>
+
+<div class="footer">
+    IT Due Diligence Agent | How It Works | January 2026
+</div>
+
+</body>
+</html>

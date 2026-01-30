@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block title %}Data Flow Diagram - IT Due Diligence{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true, theme:'neutral', flowchart: {curve: 'basis'}});</script>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="flex justify-between items-start">
+        <div>
+            <h1>Data Flow Diagram</h1>
+            <p>Application connectivity map for validation calls</p>
+        </div>
+        <div class="flex gap-2">
+            <a href="{{ url_for('inventory.inventory_home') }}" class="btn btn-secondary">
+                ← Back to Inventory
+            </a>
+            <a href="{{ url_for('inventory.insights') }}" class="btn btn-primary">
+                Insights Report
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Instructions -->
+<div class="card mb-4" style="border-left: 4px solid var(--accent); background: rgba(37, 99, 235, 0.05);">
+    <div class="card-body">
+        <strong style="color: var(--accent);">Use this diagram in calls:</strong>
+        <span class="text-muted">
+            Bring this to target/buyer calls. Ask "Is this how your systems connect?"
+            Update the diagram live based on their feedback. Capture what's NOT in the documents.
+        </span>
+    </div>
+</div>
+
+<!-- Diagram -->
+<div class="card mb-4">
+    <div class="card-header">
+        <span class="card-title">Application Connectivity Map</span>
+        <button class="btn btn-sm btn-secondary" onclick="window.print()">Print</button>
+    </div>
+    <div class="card-body">
+        <div class="mermaid" style="display: flex; justify-content: center; padding: 2rem;">
+{{ mermaid_code | safe }}
+        </div>
+
+        <!-- Legend -->
+        <div class="flex gap-4 mt-4 pt-4" style="border-top: 1px solid var(--border-default);">
+            <div class="flex items-center gap-2">
+                <div style="width: 16px; height: 16px; background: #fecaca; border: 2px solid #dc2626; border-radius: 4px;"></div>
+                <span class="text-sm text-muted">Critical Applications</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <div style="width: 16px; height: 16px; background: #fed7aa; border: 2px solid #ea580c; border-radius: 4px;"></div>
+                <span class="text-sm text-muted">High Priority</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <div style="width: 16px; height: 16px; background: #e2e8f0; border: 2px solid #64748b; border-radius: 4px;"></div>
+                <span class="text-sm text-muted">Other Applications</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Apps List -->
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">Applications in Diagram ({{ apps|length }})</span>
+    </div>
+    <div class="card-body">
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
+            {% for app in apps[:12] %}
+            <div style="padding: 10px; background: var(--bg-surface-sunken); border-radius: 6px;">
+                <strong style="display: block;">{{ app.name }}</strong>
+                <span class="text-sm text-muted">
+                    {{ app.data.get('vendor', 'Unknown vendor') }}
+                    {% if app.cost %} • ${{ "{:,.0f}".format(app.cost) }}{% endif %}
+                </span>
+            </div>
+            {% endfor %}
+            {% if apps|length > 12 %}
+            <div style="padding: 10px; text-align: center; color: var(--text-muted);">
+                +{{ apps|length - 12 }} more
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

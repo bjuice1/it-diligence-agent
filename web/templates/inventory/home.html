@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+
+{% block title %}Inventory - IT Due Diligence{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="flex justify-between items-start">
+        <div>
+            <h1>Application Inventory</h1>
+            <p>Structured data from document imports and ToltIQ exports</p>
+        </div>
+        <div class="flex gap-2">
+            <a href="{{ url_for('inventory.insights') }}" class="btn btn-primary">
+                View Insights Report
+            </a>
+            <a href="{{ url_for('inventory.diagram') }}" class="btn btn-secondary">
+                Data Flow Diagram
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Stats Row -->
+<div class="metrics-row">
+    <div class="metric-card">
+        <span class="metric-label">Total Items</span>
+        <span class="metric-value">{{ total_count }}</span>
+    </div>
+    <div class="metric-card">
+        <span class="metric-label">Applications</span>
+        <span class="metric-value">{{ apps|length }}</span>
+    </div>
+    <div class="metric-card">
+        <span class="metric-label">Annual IT Spend</span>
+        <span class="metric-value" style="color: var(--accent);">${{ "{:,.0f}".format(total_cost) }}</span>
+    </div>
+    <div class="metric-card {{ 'metric-warning' if flagged_count > 0 else '' }}">
+        <span class="metric-label">Need Investigation</span>
+        <span class="metric-value">{{ flagged_count }}</span>
+    </div>
+</div>
+
+<!-- Actions -->
+<div class="flex gap-2 mb-4">
+    <form action="{{ url_for('inventory.enrich_inventory') }}" method="post" style="display: inline;">
+        <button type="submit" class="btn btn-secondary">
+            Enrich with AI
+        </button>
+    </form>
+    <form action="{{ url_for('inventory.clear_inventory') }}" method="post" style="display: inline;"
+          onsubmit="return confirm('Clear all inventory data?');">
+        <button type="submit" class="btn" style="background: var(--danger); color: white;">
+            Clear Inventory
+        </button>
+    </form>
+</div>
+
+{% if total_count == 0 %}
+<!-- Empty State -->
+<div class="card" style="text-align: center; padding: 60px 40px;">
+    <div style="font-size: 4em; margin-bottom: 20px;">📦</div>
+    <h2 style="margin-bottom: 10px;">No Inventory Data</h2>
+    <p class="text-muted" style="margin-bottom: 30px; max-width: 400px; margin-left: auto; margin-right: auto;">
+        Upload an Excel, Word, or Markdown file to get started.
+    </p>
+    <form action="{{ url_for('inventory.upload_inventory') }}" method="post" enctype="multipart/form-data">
+        <input type="file" name="file" accept=".xlsx,.xls,.docx,.md,.csv" required style="margin-bottom: 1rem;">
+        <br>
+        <button type="submit" class="btn btn-primary btn-lg">Upload Inventory File</button>
+    </form>
+</div>
+{% else %}
+
+<!-- Applications Table -->
+<div class="card mb-4">
+    <div class="card-header">
+        <span class="card-title">Applications ({{ apps|length }})</span>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        {% if apps %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Application</th>
+                    <th>Vendor</th>
+                    <th>Category</th>
+                    <th>Annual Cost</th>
+                    <th>Criticality</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for app in apps[:25] %}
+                <tr>
+                    <td><strong>{{ app.name }}</strong></td>
+                    <td>{{ app.data.get('vendor', '—') }}</td>
+                    <td>{{ app.data.get('category', '—') }}</td>
+                    <td>{% if app.cost %}${{ "{:,.0f}".format(app.cost) }}{% else %}—{% endif %}</td>
+                    <td>
+                        {% set crit = app.data.get('criticality', '') %}
+                        {% if crit %}
+                            <span class="badge badge-{{ crit.lower() if crit.lower() in ['critical', 'high', 'medium', 'low'] else 'default' }}">
+                                {{ crit }}
+                            </span>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if app.needs_investigation %}
+                            <span class="badge badge-warning">Investigate</span>
+                        {% elif app.is_enriched %}
+                            <span class="badge badge-success">Enriched</span>
+                        {% else %}—{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% if apps|length > 25 %}
+        <p style="text-align: center; padding: 1rem; color: var(--text-muted);">
+            Showing 25 of {{ apps|length }} applications
+        </p>
+        {% endif %}
+        {% else %}
+        <p style="padding: 2rem; text-align: center; color: var(--text-muted);">No applications in inventory.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Infrastructure Table -->
+<div class="card mb-4">
+    <div class="card-header">
+        <span class="card-title">Infrastructure ({{ infra|length }})</span>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        {% if infra %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>OS</th>
+                    <th>Environment</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in infra[:15] %}
+                <tr>
+                    <td><strong>{{ item.name }}</strong></td>
+                    <td>{{ item.data.get('type', '—') }}</td>
+                    <td>{{ item.data.get('os', '—') }}</td>
+                    <td>{{ item.data.get('environment', '—') }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p style="padding: 2rem; text-align: center; color: var(--text-muted);">No infrastructure in inventory.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Upload More -->
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">Upload More Data</span>
+    </div>
+    <div class="card-body">
+        <form action="{{ url_for('inventory.upload_inventory') }}" method="post" enctype="multipart/form-data">
+            <div class="flex gap-3 items-center">
+                <input type="file" name="file" accept=".xlsx,.xls,.docx,.md,.csv" required>
+                <button type="submit" class="btn btn-primary">Upload File</button>
+            </div>
+            <p class="text-muted text-sm" style="margin-top: 0.5rem;">
+                Supports Excel (.xlsx), Word (.docx), Markdown (.md), CSV
+            </p>
+        </form>
+    </div>
+</div>
+
+{% endif %}
+
+<style>
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.data-table th,
+.data-table td {
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-default);
+}
+.data-table th {
+    background: var(--bg-surface-sunken);
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.data-table tr:hover {
+    background: var(--bg-surface-sunken);
+}
+.badge-critical { background: rgba(220, 38, 38, 0.1); color: #dc2626; }
+.badge-high { background: rgba(234, 88, 12, 0.1); color: #ea580c; }
+.badge-medium { background: rgba(202, 138, 4, 0.1); color: #ca8a04; }
+.badge-low { background: rgba(22, 163, 74, 0.1); color: #16a34a; }
+.badge-warning { background: rgba(234, 179, 8, 0.1); color: #b45309; }
+.badge-success { background: rgba(22, 163, 74, 0.1); color: #16a34a; }
+</style>
+{% endblock %}

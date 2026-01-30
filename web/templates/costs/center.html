@@ -1,0 +1,834 @@
+{% extends "base.html" %}
+
+{% block title %}Cost Center - IT Due Diligence{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Cost Center</h1>
+    <p>Financial analysis of IT costs for deal modeling</p>
+</div>
+
+<!-- Executive Summary -->
+<div class="cost-summary-banner">
+    <div class="summary-section">
+        <div class="summary-label">Total Run-Rate (Annual)</div>
+        <div class="summary-value">${{ "{:,.0f}".format(run_rate.total) }}</div>
+    </div>
+    <div class="summary-divider"></div>
+    <div class="summary-section">
+        <div class="summary-label">One-Time Costs (Range)</div>
+        <div class="summary-value">
+            {% if one_time.total_low > 0 %}
+            ${{ "{:,.0f}".format(one_time.total_low) }} - ${{ "{:,.0f}".format(one_time.total_high) }}
+            {% else %}
+            <span class="text-muted">Not estimated</span>
+            {% endif %}
+        </div>
+    </div>
+    <div class="summary-divider"></div>
+    <div class="summary-section">
+        <div class="summary-label">Synergy Potential</div>
+        <div class="summary-value synergy-value">
+            {% set total_synergy = synergies|map(attribute='annual_savings_high')|sum %}
+            {% if total_synergy > 0 %}
+            ${{ "{:,.0f}".format(total_synergy) }}/yr
+            {% else %}
+            <span class="text-muted">Analyzing...</span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Data Quality Indicator -->
+<div class="data-quality-bar">
+    <span class="quality-label">Data Quality:</span>
+    {% for source, quality in data_quality.items() %}
+    <span class="quality-chip quality-{{ quality }}">
+        {{ source|replace('_', ' ')|title }}: {{ quality|title }}
+    </span>
+    {% endfor %}
+</div>
+
+<!-- Insights Alert Bar -->
+{% if insights %}
+<div class="insights-alert-bar">
+    {% for insight in insights %}
+    {% if insight.priority == 'high' %}
+    <div class="insight-alert insight-{{ insight.category }}">
+        <span class="insight-icon">
+            {% if insight.category == 'concern' %}⚠️{% elif insight.category == 'opportunity' %}💡{% else %}📊{% endif %}
+        </span>
+        <span class="insight-text">{{ insight.title }}</span>
+        <span class="insight-impact">{{ insight.impact }}</span>
+    </div>
+    {% endif %}
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Main Content Tabs -->
+<div class="cost-tabs">
+    <div class="tab-nav">
+        <button class="tab-btn active" data-tab="run-rate">Run-Rate Costs</button>
+        <button class="tab-btn" data-tab="one-time">One-Time Costs</button>
+        <button class="tab-btn" data-tab="synergies">Synergies</button>
+        <button class="tab-btn" data-tab="insights">Insights</button>
+    </div>
+
+    <!-- Run-Rate Tab -->
+    <div class="tab-content active" id="run-rate">
+        <div class="cost-breakdown">
+            <!-- Headcount -->
+            <div class="cost-card">
+                <div class="cost-card-header">
+                    <span class="cost-icon">👥</span>
+                    <h3>IT Headcount Costs</h3>
+                    <span class="cost-total">${{ "{:,.0f}".format(run_rate.headcount.total) }}/yr</span>
+                </div>
+                <div class="cost-card-body">
+                    {% if run_rate.headcount.items %}
+                    <table class="cost-table">
+                        <thead>
+                            <tr>
+                                <th>Category</th>
+                                <th class="text-right">Headcount</th>
+                                <th class="text-right">Annual Cost</th>
+                                <th>Source</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in run_rate.headcount.items %}
+                            <tr>
+                                <td>{{ item.name }}</td>
+                                <td class="text-right">{{ item.item_count }}</td>
+                                <td class="text-right">${{ "{:,.0f}".format(item.amount) }}</td>
+                                <td class="text-muted text-sm">{{ item.source }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr class="total-row">
+                                <td><strong>Total Headcount</strong></td>
+                                <td class="text-right"><strong>{{ run_rate.headcount.items|map(attribute='item_count')|sum }}</strong></td>
+                                <td class="text-right"><strong>${{ "{:,.0f}".format(run_rate.headcount.total) }}</strong></td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                    {% else %}
+                    <div class="empty-state-small">No headcount data available</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Applications -->
+            <div class="cost-card">
+                <div class="cost-card-header">
+                    <span class="cost-icon">📱</span>
+                    <h3>Application License Costs</h3>
+                    <span class="cost-total">${{ "{:,.0f}".format(run_rate.applications.total) }}/yr</span>
+                </div>
+                <div class="cost-card-body">
+                    {% if run_rate.applications.items %}
+                    <table class="cost-table">
+                        <thead>
+                            <tr>
+                                <th>Category</th>
+                                <th class="text-right">Count</th>
+                                <th class="text-right">Annual Cost</th>
+                                <th>Includes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in run_rate.applications.items %}
+                            <tr>
+                                <td>{{ item.name }}</td>
+                                <td class="text-right">{{ item.item_count }}</td>
+                                <td class="text-right">${{ "{:,.0f}".format(item.amount) }}</td>
+                                <td class="text-muted text-sm" title="{{ item.notes }}">
+                                    {{ item.notes[:50] }}{% if item.notes|length > 50 %}...{% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr class="total-row">
+                                <td><strong>Total Applications</strong></td>
+                                <td class="text-right"><strong>{{ run_rate.applications.items|map(attribute='item_count')|sum }}</strong></td>
+                                <td class="text-right"><strong>${{ "{:,.0f}".format(run_rate.applications.total) }}</strong></td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                    {% else %}
+                    <div class="empty-state-small">No application cost data available</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Infrastructure -->
+            <div class="cost-card">
+                <div class="cost-card-header">
+                    <span class="cost-icon">🏢</span>
+                    <h3>Infrastructure Costs</h3>
+                    <span class="cost-total">${{ "{:,.0f}".format(run_rate.infrastructure.total) }}/yr</span>
+                </div>
+                <div class="cost-card-body">
+                    {% if run_rate.infrastructure.items %}
+                    <table class="cost-table">
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th class="text-right">Annual Cost</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in run_rate.infrastructure.items %}
+                            <tr>
+                                <td>{{ item.name }}</td>
+                                <td class="text-right">${{ "{:,.0f}".format(item.amount) }}</td>
+                                <td class="text-muted text-sm">{{ item.notes }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <div class="empty-state-small">Infrastructure costs not yet captured in inventory</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Run-Rate Summary -->
+            <div class="run-rate-summary">
+                <h3>Run-Rate Summary</h3>
+                <div class="summary-breakdown">
+                    <div class="breakdown-item">
+                        <span class="breakdown-label">Headcount</span>
+                        <span class="breakdown-bar" style="width: {{ (run_rate.headcount.total / run_rate.total * 100) if run_rate.total > 0 else 0 }}%"></span>
+                        <span class="breakdown-value">${{ "{:,.0f}".format(run_rate.headcount.total) }}</span>
+                        <span class="breakdown-pct">{{ "{:.0f}".format(run_rate.headcount.total / run_rate.total * 100) if run_rate.total > 0 else 0 }}%</span>
+                    </div>
+                    <div class="breakdown-item">
+                        <span class="breakdown-label">Applications</span>
+                        <span class="breakdown-bar apps" style="width: {{ (run_rate.applications.total / run_rate.total * 100) if run_rate.total > 0 else 0 }}%"></span>
+                        <span class="breakdown-value">${{ "{:,.0f}".format(run_rate.applications.total) }}</span>
+                        <span class="breakdown-pct">{{ "{:.0f}".format(run_rate.applications.total / run_rate.total * 100) if run_rate.total > 0 else 0 }}%</span>
+                    </div>
+                    <div class="breakdown-item">
+                        <span class="breakdown-label">Infrastructure</span>
+                        <span class="breakdown-bar infra" style="width: {{ (run_rate.infrastructure.total / run_rate.total * 100) if run_rate.total > 0 else 0 }}%"></span>
+                        <span class="breakdown-value">${{ "{:,.0f}".format(run_rate.infrastructure.total) }}</span>
+                        <span class="breakdown-pct">{{ "{:.0f}".format(run_rate.infrastructure.total / run_rate.total * 100) if run_rate.total > 0 else 0 }}%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- One-Time Tab -->
+    <div class="tab-content" id="one-time">
+        <div class="one-time-summary">
+            <div class="range-display">
+                <div class="range-label">Estimated One-Time Costs</div>
+                <div class="range-values">
+                    <span class="range-low">${{ "{:,.0f}".format(one_time.total_low) }}</span>
+                    <span class="range-mid">${{ "{:,.0f}".format(one_time.total_mid) }}</span>
+                    <span class="range-high">${{ "{:,.0f}".format(one_time.total_high) }}</span>
+                </div>
+                <div class="range-labels">
+                    <span>Conservative</span>
+                    <span>Midpoint</span>
+                    <span>High</span>
+                </div>
+            </div>
+        </div>
+
+        {% if one_time.by_phase %}
+        <h3>By Phase</h3>
+        <div class="phase-cards">
+            {% for phase, category in one_time.by_phase.items() %}
+            <div class="phase-card">
+                <div class="phase-header">
+                    <span class="phase-name">{{ phase|replace('_', ' ')|title }}</span>
+                    <span class="phase-range">${{ "{:,.0f}".format(category.total_low) }} - ${{ "{:,.0f}".format(category.total_high) }}</span>
+                </div>
+                <div class="phase-items">
+                    {% for item in category.items[:5] %}
+                    <div class="phase-item">
+                        <span class="item-name">{{ item.name[:40] }}{% if item.name|length > 40 %}...{% endif %}</span>
+                        <span class="item-range">${{ "{:,.0f}".format(item.amount_low) }} - ${{ "{:,.0f}".format(item.amount_high) }}</span>
+                    </div>
+                    {% endfor %}
+                    {% if category.items|length > 5 %}
+                    <div class="phase-item more">+{{ category.items|length - 5 }} more items</div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state-small">Run analysis to generate one-time cost estimates</div>
+        {% endif %}
+    </div>
+
+    <!-- Synergies Tab -->
+    <div class="tab-content" id="synergies">
+        {% if synergies %}
+        <div class="synergies-list">
+            {% for synergy in synergies %}
+            <div class="synergy-card">
+                <div class="synergy-header">
+                    <span class="synergy-category">{{ synergy.category|title }}</span>
+                    <h4>{{ synergy.name }}</h4>
+                </div>
+                <div class="synergy-metrics">
+                    <div class="metric">
+                        <span class="metric-label">Annual Savings</span>
+                        <span class="metric-value positive">${{ "{:,.0f}".format(synergy.annual_savings_low) }} - ${{ "{:,.0f}".format(synergy.annual_savings_high) }}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Cost to Achieve</span>
+                        <span class="metric-value negative">${{ "{:,.0f}".format(synergy.cost_to_achieve_low) }} - ${{ "{:,.0f}".format(synergy.cost_to_achieve_high) }}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Timeframe</span>
+                        <span class="metric-value">{{ synergy.timeframe }}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">3-Year Net Benefit</span>
+                        <span class="metric-value {{ 'positive' if synergy.net_benefit_low > 0 else 'negative' }}">${{ "{:,.0f}".format(synergy.net_benefit_low) }} - ${{ "{:,.0f}".format(synergy.net_benefit_high) }}</span>
+                    </div>
+                </div>
+                {% if synergy.affected_items %}
+                <div class="synergy-items">
+                    <span class="items-label">Affected:</span>
+                    {% for item in synergy.affected_items %}
+                    <span class="item-chip">{{ item }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                <div class="synergy-confidence">
+                    Confidence: <span class="badge badge-{{ 'low' if synergy.confidence == 'high' else 'medium' if synergy.confidence == 'medium' else 'high' }}">{{ synergy.confidence|upper }}</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state-small">
+            <p>Analyzing inventory for consolidation opportunities...</p>
+            <p class="text-muted">Synergies are identified from duplicate platforms and optimization opportunities.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Insights Tab -->
+    <div class="tab-content" id="insights">
+        {% if insights %}
+        <div class="insights-list">
+            {% for insight in insights %}
+            <div class="insight-card insight-{{ insight.category }}">
+                <div class="insight-header">
+                    <span class="insight-type">
+                        {% if insight.category == 'concern' %}⚠️ Concern{% elif insight.category == 'opportunity' %}💡 Opportunity{% else %}📊 Observation{% endif %}
+                    </span>
+                    <span class="insight-priority badge badge-{{ 'critical' if insight.priority == 'high' else 'medium' if insight.priority == 'medium' else 'low' }}">{{ insight.priority|upper }}</span>
+                </div>
+                <h4>{{ insight.title }}</h4>
+                <p>{{ insight.description }}</p>
+                <div class="insight-impact">
+                    <strong>Impact:</strong> {{ insight.impact }}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state-small">Cost insights will appear here once data is analyzed.</div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+/* Cost Summary Banner */
+.cost-summary-banner {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+    color: white;
+    padding: var(--space-6);
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--space-4);
+}
+
+.summary-section {
+    text-align: center;
+}
+
+.summary-label {
+    font-size: 0.875rem;
+    opacity: 0.9;
+    margin-bottom: var(--space-1);
+}
+
+.summary-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+}
+
+.summary-value.synergy-value {
+    color: #4ade80;
+}
+
+.summary-divider {
+    width: 1px;
+    height: 60px;
+    background: rgba(255,255,255,0.3);
+}
+
+/* Data Quality Bar */
+.data-quality-bar {
+    display: flex;
+    gap: var(--space-2);
+    align-items: center;
+    padding: var(--space-2) var(--space-3);
+    background: var(--bg-surface-sunken);
+    border-radius: var(--radius-sm);
+    margin-bottom: var(--space-3);
+    font-size: 0.8rem;
+}
+
+.quality-label {
+    color: var(--text-muted);
+}
+
+.quality-chip {
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+}
+
+.quality-high { background: #dcfce7; color: #166534; }
+.quality-medium { background: #fef3c7; color: #92400e; }
+.quality-low { background: #fee2e2; color: #991b1b; }
+.quality-none { background: #f3f4f6; color: #6b7280; }
+
+/* Insights Alert Bar */
+.insights-alert-bar {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
+}
+
+.insight-alert {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
+    font-size: 0.9rem;
+}
+
+.insight-alert.insight-concern {
+    background: #fef2f2;
+    border-left: 4px solid #dc2626;
+}
+
+.insight-alert.insight-opportunity {
+    background: #f0fdf4;
+    border-left: 4px solid #16a34a;
+}
+
+.insight-alert.insight-observation {
+    background: #eff6ff;
+    border-left: 4px solid #2563eb;
+}
+
+.insight-impact {
+    margin-left: auto;
+    font-weight: 600;
+}
+
+/* Tabs */
+.cost-tabs {
+    background: var(--bg-surface);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-muted);
+}
+
+.tab-nav {
+    display: flex;
+    border-bottom: 1px solid var(--border-muted);
+}
+
+.tab-btn {
+    flex: 1;
+    padding: var(--space-3) var(--space-4);
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    border-bottom: 2px solid transparent;
+}
+
+.tab-btn:hover {
+    color: var(--text);
+}
+
+.tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    font-weight: 600;
+}
+
+.tab-content {
+    display: none;
+    padding: var(--space-4);
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* Cost Cards */
+.cost-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-muted);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-4);
+}
+
+.cost-card-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--border-muted);
+    background: var(--bg-surface-sunken);
+}
+
+.cost-card-header h3 {
+    flex: 1;
+    margin: 0;
+    font-size: 1rem;
+}
+
+.cost-icon {
+    font-size: 1.25rem;
+}
+
+.cost-total {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+.cost-card-body {
+    padding: var(--space-3);
+}
+
+/* Cost Tables */
+.cost-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.cost-table th,
+.cost-table td {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--border-muted);
+}
+
+.cost-table th {
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+}
+
+.cost-table .total-row {
+    background: var(--bg-surface-sunken);
+}
+
+.cost-table .total-row td {
+    border-bottom: none;
+}
+
+/* Run-Rate Summary */
+.run-rate-summary {
+    background: var(--bg-surface-sunken);
+    padding: var(--space-4);
+    border-radius: var(--radius-md);
+}
+
+.run-rate-summary h3 {
+    margin: 0 0 var(--space-3) 0;
+    font-size: 1rem;
+}
+
+.breakdown-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-2);
+}
+
+.breakdown-label {
+    width: 100px;
+    font-size: 0.875rem;
+}
+
+.breakdown-bar {
+    flex: 1;
+    height: 20px;
+    background: var(--accent);
+    border-radius: var(--radius-sm);
+    max-width: 60%;
+}
+
+.breakdown-bar.apps { background: #8b5cf6; }
+.breakdown-bar.infra { background: #06b6d4; }
+
+.breakdown-value {
+    width: 100px;
+    text-align: right;
+    font-weight: 600;
+}
+
+.breakdown-pct {
+    width: 50px;
+    text-align: right;
+    color: var(--text-muted);
+}
+
+/* One-Time Summary */
+.one-time-summary {
+    text-align: center;
+    padding: var(--space-6);
+    background: var(--bg-surface-sunken);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-4);
+}
+
+.range-label {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    margin-bottom: var(--space-2);
+}
+
+.range-values {
+    display: flex;
+    justify-content: center;
+    gap: var(--space-6);
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.range-low { color: #16a34a; }
+.range-mid { color: var(--accent); }
+.range-high { color: #dc2626; }
+
+.range-labels {
+    display: flex;
+    justify-content: center;
+    gap: var(--space-6);
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: var(--space-1);
+}
+
+.range-labels span {
+    width: 100px;
+    text-align: center;
+}
+
+/* Phase Cards */
+.phase-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: var(--space-4);
+}
+
+.phase-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-muted);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.phase-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-3);
+    background: var(--bg-surface-sunken);
+    border-bottom: 1px solid var(--border-muted);
+}
+
+.phase-name {
+    font-weight: 600;
+}
+
+.phase-range {
+    font-size: 0.875rem;
+    color: var(--accent);
+}
+
+.phase-items {
+    padding: var(--space-3);
+}
+
+.phase-item {
+    display: flex;
+    justify-content: space-between;
+    padding: var(--space-1) 0;
+    font-size: 0.8rem;
+}
+
+.phase-item.more {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* Synergy Cards */
+.synergy-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-muted);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    margin-bottom: var(--space-3);
+}
+
+.synergy-header {
+    margin-bottom: var(--space-3);
+}
+
+.synergy-category {
+    font-size: 0.75rem;
+    background: #e0e7ff;
+    color: #4338ca;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+}
+
+.synergy-header h4 {
+    margin: var(--space-2) 0 0 0;
+}
+
+.synergy-metrics {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+}
+
+.metric {
+    text-align: center;
+}
+
+.metric-label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.metric-value {
+    font-weight: 600;
+    font-size: 0.875rem;
+}
+
+.metric-value.positive { color: #16a34a; }
+.metric-value.negative { color: #dc2626; }
+
+.synergy-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+    align-items: center;
+    margin-bottom: var(--space-2);
+}
+
+.items-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.item-chip {
+    font-size: 0.75rem;
+    background: var(--bg-surface-sunken);
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+}
+
+/* Insight Cards */
+.insight-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-muted);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    margin-bottom: var(--space-3);
+}
+
+.insight-card.insight-concern {
+    border-left: 4px solid #dc2626;
+}
+
+.insight-card.insight-opportunity {
+    border-left: 4px solid #16a34a;
+}
+
+.insight-card.insight-observation {
+    border-left: 4px solid #2563eb;
+}
+
+.insight-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-2);
+}
+
+.insight-type {
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.insight-card h4 {
+    margin: 0 0 var(--space-2) 0;
+}
+
+.insight-card p {
+    margin: 0 0 var(--space-2) 0;
+    color: var(--text-muted);
+}
+
+.empty-state-small {
+    text-align: center;
+    padding: var(--space-6);
+    color: var(--text-muted);
+}
+</style>
+
+<script>
+// Tab switching
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const tabId = btn.dataset.tab;
+
+        // Update buttons
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        // Update content
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+    });
+});
+</script>
+{% endblock %}
