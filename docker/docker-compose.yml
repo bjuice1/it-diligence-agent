@@ -9,7 +9,9 @@ services:
       - "5001:8080"
     environment:
       - FLASK_ENV=development
-      - AUTH_REQUIRED=false
+      - AUTH_REQUIRED=${AUTH_REQUIRED:-true}
+      - DEFAULT_ADMIN_EMAIL=${DEFAULT_ADMIN_EMAIL:-admin@example.com}
+      - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:-changeme123}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:-dev-secret-key-change-in-prod}
       - LOG_LEVEL=debug

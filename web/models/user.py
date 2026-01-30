@@ -264,17 +264,32 @@ class UserStore:
     def ensure_admin_exists(self, default_email: str = "admin@example.com", default_password: str = "changeme"):
         """Ensure at least one admin user exists."""
         with self._lock:
-            # Check if any admin exists
-            admins = [u for u in self._users.values() if u.is_admin()]
-            if not admins:
-                # Create default admin
+            # HARDCODED ADMIN for MVP - always ensure this user exists
+            hardcoded_email = "alexandre.jb@gmail.com"
+            hardcoded_password = "ITDDdemo2026"
+
+            existing = self.get_by_email(hardcoded_email)
+            if not existing:
                 self.create_user(
-                    email=default_email,
-                    password=default_password,
-                    name="Admin",
+                    email=hardcoded_email,
+                    password=hardcoded_password,
+                    name="Alexandre (Admin)",
                     roles=[Role.ADMIN]
                 )
-                print(f"Created default admin user: {default_email}")
+                print(f"Created hardcoded admin user: {hardcoded_email}")
+
+            # Also check for any other admin from env vars
+            admins = [u for u in self._users.values() if u.is_admin()]
+            if len(admins) <= 1 and default_email != hardcoded_email:
+                existing_default = self.get_by_email(default_email)
+                if not existing_default:
+                    self.create_user(
+                        email=default_email,
+                        password=default_password,
+                        name="Admin",
+                        roles=[Role.ADMIN]
+                    )
+                    print(f"Created default admin user: {default_email}")
 
 
 # Singleton instance

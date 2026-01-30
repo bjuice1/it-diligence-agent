@@ -254,6 +254,24 @@ def before_first_request():
         init_auth()
         app._auth_initialized = True
 
+# Require authentication for all routes (except auth routes and static files)
+@app.before_request
+def require_authentication():
+    """Require authentication for protected routes."""
+    if not AUTH_REQUIRED:
+        return None
+
+    # Public routes that don't require authentication
+    public_prefixes = ('/auth/', '/static/', '/api/health')
+    if any(request.path.startswith(prefix) for prefix in public_prefixes):
+        return None
+
+    # Check if user is authenticated
+    if not current_user.is_authenticated:
+        return login_manager.unauthorized()
+
+    return None
+
 # =============================================================================
 # End Phase 2 Authentication Setup
 # =============================================================================

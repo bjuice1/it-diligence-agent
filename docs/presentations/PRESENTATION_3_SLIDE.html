@@ -94,7 +94,7 @@
 
         .flow-stage {
             flex: 1;
-            padding: 30px 25px;
+            padding: 28px 22px;
             border-right: 1px solid #e5e7eb;
             position: relative;
         }
@@ -105,27 +105,30 @@
 
         .flow-stage.input { background: #f8fafc; }
         .flow-stage.brain { background: linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(236,72,153,0.08) 100%); }
+        .flow-stage.review { background: rgba(245,158,11,0.06); }
         .flow-stage.output { background: #f0fdf4; }
 
         .flow-stage .stage-label {
-            font-size: 0.7rem;
+            font-size: 0.65rem;
             text-transform: uppercase;
             letter-spacing: 2px;
             color: #9ca3af;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
 
         .flow-stage.brain .stage-label { color: #6366f1; }
+        .flow-stage.review .stage-label { color: #d97706; }
         .flow-stage.output .stage-label { color: #059669; }
 
         .flow-stage .stage-title {
-            font-size: 1.3rem;
+            font-size: 1.15rem;
             font-weight: 600;
             color: #1a1a2e;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
         }
 
         .flow-stage.brain .stage-title { color: #6366f1; }
+        .flow-stage.review .stage-title { color: #d97706; }
         .flow-stage.output .stage-title { color: #059669; }
 
         .flow-stage ul {
@@ -135,10 +138,10 @@
         }
 
         .flow-stage li {
-            padding: 6px 0;
+            padding: 5px 0;
             color: #4b5563;
-            font-size: 0.95rem;
-            padding-left: 18px;
+            font-size: 0.9rem;
+            padding-left: 16px;
             position: relative;
         }
 
@@ -150,6 +153,7 @@
         }
 
         .flow-stage.brain li::before { color: #ec4899; }
+        .flow-stage.review li::before { color: #f59e0b; }
         .flow-stage.output li::before { color: #10b981; }
 
         .flow-arrow {
@@ -185,78 +189,133 @@
             font-size: 1.05rem;
         }
 
-        .detail-grid {
+        .deliverable-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 25px;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
             margin: 25px 0;
         }
 
-        .detail-card {
+        .deliverable-card {
             background: white;
             border: 1px solid #e5e7eb;
             border-radius: 12px;
-            padding: 25px;
+            padding: 22px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.04);
         }
 
-        .detail-card h4 {
-            font-size: 1.1rem;
+        .deliverable-card h4 {
+            font-size: 1rem;
             color: #1a1a2e;
-            margin-bottom: 15px;
+            margin-bottom: 12px;
             display: flex;
             align-items: center;
             gap: 10px;
         }
 
-        .detail-card .icon {
-            width: 32px;
-            height: 32px;
-            border-radius: 8px;
+        .deliverable-card .icon {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1rem;
+            font-size: 0.9rem;
         }
 
-        .detail-card .icon.purple { background: rgba(99,102,241,0.1); }
-        .detail-card .icon.green { background: rgba(16,185,129,0.1); }
-        .detail-card .icon.amber { background: rgba(245,158,11,0.1); }
-        .detail-card .icon.pink { background: rgba(236,72,153,0.1); }
+        .deliverable-card .icon.purple { background: rgba(99,102,241,0.1); }
+        .deliverable-card .icon.green { background: rgba(16,185,129,0.1); }
+        .deliverable-card .icon.amber { background: rgba(245,158,11,0.1); }
+        .deliverable-card .icon.pink { background: rgba(236,72,153,0.1); }
+        .deliverable-card .icon.blue { background: rgba(59,130,246,0.1); }
 
-        .detail-card table {
-            width: 100%;
-            border-collapse: collapse;
+        .deliverable-card ul {
+            list-style: none;
+            margin: 0;
+            padding: 0;
         }
 
-        .detail-card td {
-            padding: 8px 0;
-            border-bottom: 1px solid #f3f4f6;
-            font-size: 0.95rem;
+        .deliverable-card li {
+            padding: 4px 0;
+            color: #4b5563;
+            font-size: 0.85rem;
+            padding-left: 14px;
+            position: relative;
         }
 
-        .detail-card td:first-child {
+        .deliverable-card li::before {
+            content: "•";
+            position: absolute;
+            left: 0;
+            color: #ec4899;
+        }
+
+        .deliverable-card .format {
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px solid #f3f4f6;
+            font-size: 0.8rem;
             color: #6b7280;
         }
 
-        .detail-card td:last-child {
-            text-align: right;
-            font-weight: 600;
+        .stakeholder-row {
+            display: flex;
+            gap: 25px;
+            margin: 25px 0;
+        }
+
+        .stakeholder-card {
+            flex: 1;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 22px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+        }
+
+        .stakeholder-card h4 {
+            font-size: 1rem;
+            margin-bottom: 10px;
             color: #1a1a2e;
         }
 
-        .detail-card .total td {
-            border-top: 2px solid #e5e7eb;
-            border-bottom: none;
-            padding-top: 12px;
-            font-weight: 700;
+        .stakeholder-card.staff { border-top: 3px solid #f59e0b; }
+        .stakeholder-card.leadership { border-top: 3px solid #6366f1; }
+        .stakeholder-card.client { border-top: 3px solid #10b981; }
+
+        .stakeholder-card .role {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
         }
 
-        .detail-card .total td:last-child {
-            color: #6366f1;
+        .stakeholder-card.staff .role { color: #d97706; }
+        .stakeholder-card.leadership .role { color: #6366f1; }
+        .stakeholder-card.client .role { color: #059669; }
+
+        .stakeholder-card ul {
+            list-style: none;
+            margin: 0;
+            padding: 0;
         }
 
-        .evidence-example {
+        .stakeholder-card li {
+            padding: 5px 0;
+            color: #4b5563;
+            font-size: 0.9rem;
+            padding-left: 16px;
+            position: relative;
+        }
+
+        .stakeholder-card li::before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #9ca3af;
+        }
+
+        .workflow-diagram {
             background: white;
             border: 1px solid #e5e7eb;
             border-radius: 12px;
@@ -265,50 +324,56 @@
             box-shadow: 0 2px 10px rgba(0,0,0,0.04);
         }
 
-        .evidence-example h4 {
-            font-size: 1rem;
-            color: #6366f1;
-            margin-bottom: 15px;
-        }
-
-        .evidence-chain {
+        .workflow-row {
             display: flex;
             align-items: center;
             gap: 15px;
-            flex-wrap: wrap;
+            margin: 15px 0;
         }
 
-        .chain-item {
+        .workflow-step {
             background: #f8fafc;
             border: 1px solid #e5e7eb;
             border-radius: 8px;
-            padding: 12px 16px;
+            padding: 12px 18px;
             text-align: center;
             min-width: 140px;
         }
 
-        .chain-item.highlight {
+        .workflow-step.highlight {
             background: linear-gradient(135deg, rgba(99,102,241,0.1) 0%, rgba(236,72,153,0.1) 100%);
             border-color: #6366f1;
         }
 
-        .chain-item .type {
-            font-size: 0.65rem;
+        .workflow-step.review-step {
+            background: rgba(245,158,11,0.1);
+            border-color: #f59e0b;
+        }
+
+        .workflow-step.final {
+            background: rgba(16,185,129,0.1);
+            border-color: #10b981;
+        }
+
+        .workflow-step .step-label {
+            font-size: 0.6rem;
             text-transform: uppercase;
             letter-spacing: 1px;
             color: #9ca3af;
         }
 
-        .chain-item.highlight .type { color: #6366f1; }
+        .workflow-step.highlight .step-label { color: #6366f1; }
+        .workflow-step.review-step .step-label { color: #d97706; }
+        .workflow-step.final .step-label { color: #059669; }
 
-        .chain-item .value {
+        .workflow-step .step-title {
             font-size: 0.9rem;
             color: #1a1a2e;
             font-weight: 500;
             margin-top: 4px;
         }
 
-        .chain-arrow {
+        .workflow-arrow {
             color: #ec4899;
             font-size: 1.2rem;
         }
@@ -346,220 +411,220 @@
     <div class="slide-label">The Flow</div>
 
     <h1>How It Works</h1>
-    <h2>ToltIQ extracts data. We analyze what it means.</h2>
+    <h2>ToltIQ extracts data. We analyze what it means. Staff reviews. Leadership gets the package.</h2>
 
     <div class="flow-diagram">
         <div class="flow-stage input">
-            <div class="stage-label">Step 1: Input</div>
+            <div class="stage-label">Step 1</div>
             <div class="stage-title">ToltIQ / VDR Docs</div>
             <ul>
-                <li>Application inventory (Excel)</li>
-                <li>IT assessment (Word/PDF)</li>
-                <li>Org chart, security review</li>
-                <li>Vendor contracts</li>
+                <li>Application inventory</li>
+                <li>IT assessment</li>
+                <li>Org chart</li>
+                <li>Security review</li>
             </ul>
-            <p style="margin-top: 15px; font-size: 0.85rem; color: #6b7280;">
-                Raw data: "SAP exists", "500 users", "$1.2M license"
-            </p>
             <div class="flow-arrow">→</div>
         </div>
 
         <div class="flow-stage brain">
-            <div class="stage-label">Step 2: The Brain</div>
-            <div class="stage-title">Analysis Layer</div>
+            <div class="stage-label">Step 2</div>
+            <div class="stage-title">The Brain</div>
             <ul>
-                <li>Extract facts with exact quotes</li>
-                <li>Identify patterns across docs</li>
-                <li>Flag risks with M&A lens</li>
-                <li>Calculate costs by phase</li>
+                <li>Extract facts + quotes</li>
+                <li>Flag risks (M&A lens)</li>
+                <li>Calculate costs</li>
                 <li>Generate work items</li>
             </ul>
-            <p style="margin-top: 15px; font-size: 0.85rem; color: #6366f1;">
-                This is what we do. ToltIQ doesn't do this.
-            </p>
+            <div class="flow-arrow">→</div>
+        </div>
+
+        <div class="flow-stage review">
+            <div class="stage-label">Step 3</div>
+            <div class="stage-title">Staff Review</div>
+            <ul>
+                <li>Validate AI findings</li>
+                <li>Correct errors</li>
+                <li>Add context</li>
+                <li>Confirm or reject</li>
+            </ul>
             <div class="flow-arrow">→</div>
         </div>
 
         <div class="flow-stage output">
-            <div class="stage-label">Step 3: Output</div>
-            <div class="stage-title">Deal-Ready Insights</div>
+            <div class="stage-label">Step 4</div>
+            <div class="stage-title">Deliverable Package</div>
             <ul>
-                <li>Cost Center (run-rate + one-time)</li>
-                <li>Risk Register with evidence</li>
-                <li>Integration work items by phase</li>
-                <li>Synergy opportunities</li>
+                <li>Report sections</li>
+                <li>Appendix materials</li>
+                <li>Cost model data</li>
+                <li>Presentation-ready views</li>
             </ul>
-            <p style="margin-top: 15px; font-size: 0.85rem; color: #059669;">
-                Ready for deal model and IC memo
-            </p>
         </div>
     </div>
 
     <div class="so-what-box">
         <div class="label">So What</div>
-        <p><strong>ToltIQ tells you what exists.</strong> We tell you what it means for the deal. "SAP with 500 users" becomes "SAP handles 80% of transactions, heavy customization, migration would cost $2-4M and take 18-24 months, TSA exposure is significant."</p>
+        <p><strong>ToltIQ tells you what exists.</strong> The Brain tells you what it means for the deal. Staff validates before anything goes to leadership. The output is a package ready for your IC deck and deal memo — not raw data to process.</p>
     </div>
 
     <div class="key-point">
-        <p><strong>The gap we fill:</strong> Data extraction tools stop at "here's what we found." We continue to "here's what you should do about it and what it will cost."</p>
+        <p><strong>Human in the loop:</strong> AI generates draft findings. Staff reviews and confirms before it becomes deliverable. We're building the review interface so analysts can validate, correct, and approve findings before they reach leadership or clients.</p>
     </div>
 </div>
 
-<!-- SLIDE 2: What The Brain Produces -->
+<!-- SLIDE 2: What Gets Delivered -->
 <div class="slide slide-2">
     <div class="slide-number">2 / 3</div>
-    <div class="slide-label">The Output</div>
+    <div class="slide-label">The Deliverables</div>
 
-    <h1>What The Brain Produces</h1>
-    <h2>Four things you need for every deal</h2>
+    <h1>What Leadership Gets</h1>
+    <h2>Report-ready outputs, not raw data to process</h2>
 
-    <div class="detail-grid">
-        <div class="detail-card">
-            <h4><span class="icon purple">📊</span> Cost Center</h4>
-            <table>
-                <tr>
-                    <td>Headcount (80 FTE × role avg)</td>
-                    <td>$28.9M</td>
-                </tr>
-                <tr>
-                    <td>Applications (33 apps)</td>
-                    <td>$7.2M</td>
-                </tr>
-                <tr class="total">
-                    <td>Run-Rate Total</td>
-                    <td>$36.1M/yr</td>
-                </tr>
-            </table>
-            <div style="margin-top: 15px; padding-top: 12px; border-top: 1px solid #e5e7eb;">
-                <table>
-                    <tr>
-                        <td>One-Time Integration</td>
-                        <td>$2.2M - $8.4M</td>
-                    </tr>
-                    <tr>
-                        <td>Synergy Potential</td>
-                        <td style="color: #10b981;">$1.2M/yr</td>
-                    </tr>
-                </table>
-            </div>
+    <div class="deliverable-grid">
+        <div class="deliverable-card">
+            <h4><span class="icon purple">📄</span> Report Sections</h4>
+            <ul>
+                <li>IT Overview narrative</li>
+                <li>Key Findings summary</li>
+                <li>Risk summary table</li>
+                <li>Cost summary (run-rate + one-time)</li>
+                <li>Integration considerations</li>
+            </ul>
+            <div class="format">Format: PPT slides, Word sections, or HTML</div>
         </div>
 
-        <div class="detail-card">
-            <h4><span class="icon pink">⚠️</span> Risk Register</h4>
-            <table>
-                <tr>
-                    <td>Critical/High Risks</td>
-                    <td>12</td>
-                </tr>
-                <tr>
-                    <td>Medium Risks</td>
-                    <td>8</td>
-                </tr>
-                <tr>
-                    <td>Evidence-Backed</td>
-                    <td>100%</td>
-                </tr>
-            </table>
-            <p style="margin-top: 15px; font-size: 0.85rem; color: #6b7280;">
-                Every risk includes: description, severity, M&A implication ("so what"), mitigation, and citing facts.
-            </p>
+        <div class="deliverable-card">
+            <h4><span class="icon amber">📊</span> Appendix Materials</h4>
+            <ul>
+                <li>Full application inventory</li>
+                <li>Infrastructure inventory</li>
+                <li>Detailed risk register</li>
+                <li>Work items by phase</li>
+                <li>Evidence citations</li>
+            </ul>
+            <div class="format">Format: Excel tables + formatted appendix pages</div>
         </div>
 
-        <div class="detail-card">
-            <h4><span class="icon amber">📋</span> Work Items by Phase</h4>
-            <table>
-                <tr>
-                    <td>Day 1 (close date)</td>
-                    <td>5 items</td>
-                </tr>
-                <tr>
-                    <td>Day 100</td>
-                    <td>10 items</td>
-                </tr>
-                <tr>
-                    <td>Post-100</td>
-                    <td>6 items</td>
-                </tr>
-            </table>
-            <p style="margin-top: 15px; font-size: 0.85rem; color: #6b7280;">
-                Each item has: owner, cost estimate, dependencies, and which risk triggered it.
-            </p>
-        </div>
-
-        <div class="detail-card">
-            <h4><span class="icon green">🔗</span> Evidence Chain</h4>
-            <p style="color: #374151; font-size: 0.95rem;">Every conclusion traces back to source:</p>
-            <p style="color: #6b7280; font-size: 0.9rem; margin-bottom: 0;">
-                Risk → cites Facts → Facts have exact quotes → Quotes link to documents
-            </p>
-            <p style="margin-top: 15px; font-size: 0.85rem; color: #059669;">
-                Click any finding → see the receipt → verify yourself
-            </p>
+        <div class="deliverable-card">
+            <h4><span class="icon green">💰</span> Deal Model Inputs</h4>
+            <ul>
+                <li>Run-rate IT costs breakdown</li>
+                <li>One-time costs by phase</li>
+                <li>Synergy opportunities</li>
+                <li>Cost ranges (low/mid/high)</li>
+            </ul>
+            <div class="format">Format: Excel with formulas, ready for model</div>
         </div>
     </div>
 
-    <div class="so-what-box">
-        <div class="label">So What</div>
-        <p>These four outputs answer the two questions every IC asks: <strong>"What does IT actually cost?"</strong> and <strong>"What will integration cost?"</strong> — with evidence they can trace.</p>
+    <h3>Who Gets What</h3>
+
+    <div class="stakeholder-row">
+        <div class="stakeholder-card staff">
+            <div class="role">Staff / Analysts</div>
+            <h4>Review Interface</h4>
+            <ul>
+                <li>AI-generated findings (draft)</li>
+                <li>Evidence chain to validate</li>
+                <li>Approve / correct / reject workflow</li>
+                <li>Add notes and context</li>
+            </ul>
+        </div>
+
+        <div class="stakeholder-card leadership">
+            <div class="role">Deal Team / IC</div>
+            <h4>Report Package</h4>
+            <ul>
+                <li>Validated findings only</li>
+                <li>Report sections (PPT/Word)</li>
+                <li>Appendix materials</li>
+                <li>Cost model data</li>
+            </ul>
+        </div>
+
+        <div class="stakeholder-card client">
+            <div class="role">Ultimate Stakeholder</div>
+            <h4>Client / Portfolio Co</h4>
+            <ul>
+                <li>Integration roadmap</li>
+                <li>Day 1 checklist</li>
+                <li>Risk mitigation plan</li>
+                <li>IT budget inputs</li>
+            </ul>
+        </div>
     </div>
 </div>
 
-<!-- SLIDE 3: The Evidence Chain -->
+<!-- SLIDE 3: The Review Workflow -->
 <div class="slide slide-3">
     <div class="slide-number">3 / 3</div>
-    <div class="slide-label">The Evidence</div>
+    <div class="slide-label">The Workflow</div>
 
-    <h1>How Evidence Works</h1>
-    <h2>Every conclusion traces to source. No black box.</h2>
+    <h1>How Review Works</h1>
+    <h2>AI drafts. Staff validates. Leadership gets confirmed output.</h2>
 
-    <div class="evidence-example">
-        <h4>Example: How a risk gets created</h4>
-        <div class="evidence-chain">
-            <div class="chain-item">
-                <div class="type">Document</div>
-                <div class="value">Application_Inventory.xlsx</div>
+    <div class="workflow-diagram">
+        <h4 style="color: #6366f1; margin-bottom: 15px;">From Document to Deliverable</h4>
+
+        <div class="workflow-row">
+            <div class="workflow-step">
+                <div class="step-label">Source</div>
+                <div class="step-title">VDR Document</div>
             </div>
-            <div class="chain-arrow">→</div>
-            <div class="chain-item">
-                <div class="type">Exact Quote</div>
-                <div class="value">"SAP S/4HANA... 500 users... 80% of transactions"</div>
+            <div class="workflow-arrow">→</div>
+            <div class="workflow-step highlight">
+                <div class="step-label">AI Extracts</div>
+                <div class="step-title">Facts + Quotes</div>
             </div>
-            <div class="chain-arrow">→</div>
-            <div class="chain-item">
-                <div class="type">Extracted Fact</div>
-                <div class="value">F-APP-001</div>
+            <div class="workflow-arrow">→</div>
+            <div class="workflow-step highlight">
+                <div class="step-label">AI Generates</div>
+                <div class="step-title">Risks + Work Items</div>
             </div>
-            <div class="chain-arrow">→</div>
-            <div class="chain-item highlight">
-                <div class="type">Risk Generated</div>
-                <div class="value">R-APP-001: ERP Concentration</div>
+            <div class="workflow-arrow">→</div>
+            <div class="workflow-step review-step">
+                <div class="step-label">Staff Reviews</div>
+                <div class="step-title">Validate / Correct</div>
+            </div>
+            <div class="workflow-arrow">→</div>
+            <div class="workflow-step final">
+                <div class="step-label">Confirmed</div>
+                <div class="step-title">Ready for Report</div>
             </div>
         </div>
     </div>
 
-    <h3>What makes this different</h3>
-
-    <div class="detail-grid">
-        <div class="detail-card">
-            <h4>Discovery Phase (Fast AI)</h4>
-            <p style="color: #374151;">Reads every document. Extracts every fact. Links each fact to an exact quote from the source.</p>
-            <p style="color: #6b7280; font-size: 0.9rem;"><strong>Rule:</strong> No inference. Only explicit statements become facts. "SAP has 500 users" = fact. "SAP is probably critical" = not a fact.</p>
+    <div class="stakeholder-row">
+        <div class="deliverable-card" style="flex: 1;">
+            <h4><span class="icon amber">👁️</span> What Staff Reviews</h4>
+            <ul>
+                <li>Each finding shows: claim + evidence + source quote</li>
+                <li>Staff clicks to see original document</li>
+                <li>Approve if correct, correct if wrong, reject if invalid</li>
+                <li>Add notes for context leadership needs</li>
+            </ul>
+            <div class="format">Only confirmed findings flow to deliverables</div>
         </div>
 
-        <div class="detail-card">
-            <h4>Reasoning Phase (Smart AI)</h4>
-            <p style="color: #374151;">Analyzes facts through M&A lens. Generates risks and work items. Calculates cost implications.</p>
-            <p style="color: #6b7280; font-size: 0.9rem;"><strong>Rule:</strong> Every risk must cite specific facts. No conclusion without evidence. The "so what" is required.</p>
+        <div class="deliverable-card" style="flex: 1;">
+            <h4><span class="icon green">📦</span> The Final Package</h4>
+            <ul>
+                <li>Report sections → drop into IC deck or memo</li>
+                <li>Appendix tables → attach to report</li>
+                <li>Cost model → feed deal model</li>
+                <li>Work items → share with client post-close</li>
+            </ul>
+            <div class="format">Everything traced back to source documents</div>
         </div>
     </div>
 
     <div class="so-what-box">
         <div class="label">So What</div>
-        <p>You're not trusting AI. You're trusting documents you already have. The AI just reads faster and connects dots across documents. <strong>Every finding shows its work.</strong> Click any risk → see the facts → see the exact quote → verify in the original doc.</p>
+        <p><strong>AI accelerates, humans validate.</strong> Nothing reaches leadership without staff review. The deliverable package is report-ready — slides for the IC deck, tables for the appendix, numbers for the model. Not a data dump to figure out.</p>
     </div>
 
     <div class="key-point">
-        <p><strong>The promise:</strong> No hallucination. No unsupported conclusions. If we say "SAP handles 80% of transactions," we show you exactly where the document says that.</p>
+        <p><strong>The output:</strong> Report language and structured appendices that go directly into your existing deliverable format. Staff spends time validating findings, not formatting documents.</p>
     </div>
 </div>
 
