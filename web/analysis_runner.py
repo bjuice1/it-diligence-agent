@@ -67,7 +67,7 @@ def persist_to_database(session, deal_id: str, timestamp: str) -> Dict[str, int]
         source_doc = fact.source_document or ''
         # Safety: if column is still VARCHAR(255), store first doc or truncate
         # This allows graceful handling until DB migration runs
-        if len(source_doc) > 1000:
+        if len(source_doc) > 250:
             # Store just the document names in a sensible way
             docs = [d.strip() for d in source_doc.split(',')]
             source_doc = ', '.join(docs[:3])  # First 3 docs
