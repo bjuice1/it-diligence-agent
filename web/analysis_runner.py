@@ -304,12 +304,13 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable) -> Dict[str, A
     if not ANTHROPIC_API_KEY:
         raise ValueError("ANTHROPIC_API_KEY not configured. Set it in .env file or environment.")
 
-    # Create session
-    session = Session()
+    # Create session with deal_id for proper data isolation
+    deal_context = task.deal_context or {}
+    session = Session(deal_id=deal_context.get('deal_id'))
 
     # Add deal context - properly populate the dict for reasoning agents
-    deal_context = task.deal_context or {}
     session.deal_context = {
+        'deal_id': deal_context.get('deal_id'),  # CRITICAL: Required for database persistence
         'deal_type': deal_context.get('deal_type', 'bolt_on'),
         'target_name': deal_context.get('target_name', 'Target Company'),
         'buyer_name': deal_context.get('buyer_name', ''),
