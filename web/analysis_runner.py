@@ -90,53 +90,62 @@ def persist_to_database(session, deal_id: str, timestamp: str) -> Dict[str, int]
         result['facts_count'] += 1
 
     # Persist findings (risks)
+    # Note: Risk is a dataclass, access via attributes not dict
     for risk in session.reasoning_store.risks:
-        finding_id = risk.get('risk_id') or f"R-{uuid4().hex[:8].upper()}"
+        # Risk dataclass has 'finding_id' attribute
+        finding_id = getattr(risk, 'finding_id', None) or f"R-{uuid4().hex[:8].upper()}"
         db_finding = Finding(
             id=finding_id,
             deal_id=deal_id,
             analysis_run_id=analysis_run_id,
             finding_type='risk',
-            domain=risk.get('domain', 'general'),
-            title=risk.get('title', ''),
-            description=risk.get('description', ''),
-            severity=risk.get('severity', 'medium'),
-            category=risk.get('category', ''),
-            phase=risk.get('phase'),
-            mitigation=risk.get('mitigation', ''),
-            cost_estimate=risk.get('cost_estimate_bucket', ''),
-            based_on_facts=risk.get('based_on_facts', []),
+            domain=getattr(risk, 'domain', 'general'),
+            title=getattr(risk, 'title', ''),
+            description=getattr(risk, 'description', ''),
+            severity=getattr(risk, 'severity', 'medium'),
+            category=getattr(risk, 'category', ''),
+            phase=getattr(risk, 'timeline', None),  # Risk uses 'timeline' not 'phase'
+            mitigation=getattr(risk, 'mitigation', ''),
+            integration_dependent=getattr(risk, 'integration_dependent', False),
+            confidence=getattr(risk, 'confidence', 'medium'),
+            reasoning=getattr(risk, 'reasoning', ''),
+            mna_lens=getattr(risk, 'mna_lens', ''),
+            mna_implication=getattr(risk, 'mna_implication', ''),
+            based_on_facts=getattr(risk, 'based_on_facts', []),
             extra_data={
-                'likelihood': risk.get('likelihood'),
-                'impact': risk.get('impact'),
-                'cost_estimate_low': risk.get('cost_estimate', {}).get('low') if isinstance(risk.get('cost_estimate'), dict) else None,
-                'cost_estimate_high': risk.get('cost_estimate', {}).get('high') if isinstance(risk.get('cost_estimate'), dict) else None,
-                'full_risk': risk,
+                'full_risk': risk.to_dict() if hasattr(risk, 'to_dict') else str(risk),
             },
         )
         db.session.add(db_finding)
         result['findings_count'] += 1
 
     # Persist findings (work items)
+    # Note: WorkItem is a dataclass, access via attributes not dict
     for wi in session.reasoning_store.work_items:
-        finding_id = wi.get('work_item_id') or f"WI-{uuid4().hex[:8].upper()}"
+        # WorkItem dataclass has 'finding_id' attribute
+        finding_id = getattr(wi, 'finding_id', None) or f"WI-{uuid4().hex[:8].upper()}"
         db_finding = Finding(
             id=finding_id,
             deal_id=deal_id,
             analysis_run_id=analysis_run_id,
             finding_type='work_item',
-            domain=wi.get('domain', 'general'),
-            title=wi.get('title', ''),
-            description=wi.get('description', ''),
-            priority=wi.get('priority', 'medium'),
-            phase=wi.get('phase'),
-            owner_type=wi.get('owner'),
-            cost_estimate=wi.get('cost_estimate_bucket', ''),
-            based_on_facts=wi.get('based_on_facts', []),
+            domain=getattr(wi, 'domain', 'general'),
+            title=getattr(wi, 'title', ''),
+            description=getattr(wi, 'description', ''),
+            priority=getattr(wi, 'priority', 'medium'),
+            phase=getattr(wi, 'phase', None),
+            owner_type=getattr(wi, 'owner_type', 'shared'),  # WorkItem uses 'owner_type' not 'owner'
+            cost_estimate=getattr(wi, 'cost_estimate', ''),
+            confidence=getattr(wi, 'confidence', 'medium'),
+            reasoning=getattr(wi, 'reasoning', ''),
+            mna_lens=getattr(wi, 'mna_lens', ''),
+            mna_implication=getattr(wi, 'mna_implication', ''),
+            triggered_by_risks=getattr(wi, 'triggered_by_risks', []),
+            dependencies=getattr(wi, 'dependencies', []),
+            based_on_facts=getattr(wi, 'based_on_facts', []),
             extra_data={
-                'cost_estimate_low': wi.get('cost_estimate', {}).get('low') if isinstance(wi.get('cost_estimate'), dict) else None,
-                'cost_estimate_high': wi.get('cost_estimate', {}).get('high') if isinstance(wi.get('cost_estimate'), dict) else None,
-                'full_work_item': wi,
+                'triggered_by': getattr(wi, 'triggered_by', []),
+                'full_work_item': wi.to_dict() if hasattr(wi, 'to_dict') else str(wi),
             },
         )
         db.session.add(db_finding)

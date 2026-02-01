@@ -737,6 +737,26 @@
             fetch(statusUrl)
                 .then(r => r.json())
                 .then(data => {
+                    // Handle error responses (even if not marked complete)
+                    if (data.error) {
+                        clearInterval(pollInterval);
+                        if (data.error === 'missing_task_id') {
+                            // Task ID lost - likely session/Redis issue
+                            showError('Session lost. Please start a new analysis.');
+                            document.getElementById('cancel-btn').textContent = 'Start New Analysis';
+                        } else if (data.error === 'task_not_found') {
+                            // Task may have completed or server restarted
+                            document.getElementById('phase-text').textContent = 'Task completed or server restarted';
+                            showError(data.message || 'Task not found. Check the dashboard for results.');
+                            // Add a "View Dashboard" option
+                            document.getElementById('partial-btn').style.display = 'inline-block';
+                            document.getElementById('partial-btn').textContent = 'View Dashboard';
+                        } else {
+                            showError(data.error || data.message || 'Analysis failed');
+                        }
+                        return;
+                    }
+
                     if (data.complete) {
                         clearInterval(pollInterval);
 

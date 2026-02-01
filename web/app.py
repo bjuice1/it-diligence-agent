@@ -985,37 +985,33 @@ def analysis_status():
         flask_session.modified = True
 
     if not task_id:
-        # No task - check for existing results in both locations
-        from config_v2 import FACTS_DIR, OUTPUT_DIR
-        facts_files = list(FACTS_DIR.glob("facts_*.json")) + list(OUTPUT_DIR.glob("facts_*.json"))
-        if facts_files:
-            return jsonify({
-                'complete': True,
-                'success': True,
-                'status': 'complete',
-                'message': 'Previous analysis results available',
-                'redirect': '/dashboard'
-            })
+        # No task_id - this is an error state, don't pretend old results are valid
+        # The task_id should come from the URL query param (set when analysis starts)
+        logger.warning("analysis_status called without task_id - possible session/Redis issue")
         return jsonify({
-            'complete': True,
+            'complete': False,
             'success': False,
             'status': 'no_task',
-            'message': 'No analysis task found'
+            'message': 'No analysis task found. Please start a new analysis.',
+            'error': 'missing_task_id'
         })
 
     # Get task status from task manager
     status = task_manager.get_task_status(task_id)
 
     if not status:
-        # Clear stale task_id from session
+        # Task not found in task_manager - this means:
+        # 1. Task completed and was cleaned up, OR
+        # 2. Server restarted and lost in-memory task state
+        # Don't auto-redirect - let the user know the task state is unknown
+        logger.warning(f"Task {task_id} not found in task_manager - may have completed or server restarted")
         flask_session.pop('current_task_id', None)
-        # Redirect to dashboard instead of showing error
         return jsonify({
-            'complete': True,
-            'success': True,
-            'status': 'redirecting',
-            'message': 'Loading existing analysis results',
-            'redirect': '/dashboard'
+            'complete': False,
+            'success': False,
+            'status': 'task_not_found',
+            'message': 'Task not found. It may have completed - check the dashboard, or start a new analysis.',
+            'error': 'task_not_found'
         })
 
     # If completed successfully, load results into session and invalidate all caches
