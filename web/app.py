@@ -1003,14 +1003,37 @@ def analysis_status():
         # Task not found in task_manager - this means:
         # 1. Task completed and was cleaned up, OR
         # 2. Server restarted and lost in-memory task state
-        # Don't auto-redirect - let the user know the task state is unknown
-        logger.warning(f"Task {task_id} not found in task_manager - may have completed or server restarted")
+        # Check if there's data in the database for this deal
+        logger.warning(f"Task {task_id} not found in task_manager - checking database for results")
         flask_session.pop('current_task_id', None)
+
+        # Check if we have data in the database for the current deal
+        current_deal_id = flask_session.get('current_deal_id')
+        if current_deal_id:
+            try:
+                from web.database import Fact, Finding
+                facts_count = Fact.query.filter_by(deal_id=current_deal_id, deleted_at=None).count()
+                findings_count = Finding.query.filter_by(deal_id=current_deal_id, deleted_at=None).count()
+
+                if facts_count > 0 or findings_count > 0:
+                    # Data exists in database - analysis likely completed before restart
+                    logger.info(f"Found {facts_count} facts and {findings_count} findings in DB for deal {current_deal_id}")
+                    return jsonify({
+                        'complete': True,
+                        'success': True,
+                        'status': 'recovered',
+                        'message': f'Analysis data recovered: {facts_count} facts, {findings_count} findings',
+                        'redirect': '/dashboard'
+                    })
+            except Exception as e:
+                logger.warning(f"Error checking database for deal {current_deal_id}: {e}")
+
+        # No data found - analysis was interrupted
         return jsonify({
             'complete': False,
             'success': False,
             'status': 'task_not_found',
-            'message': 'Task not found. It may have completed - check the dashboard, or start a new analysis.',
+            'message': 'Analysis was interrupted (server restart). Please start a new analysis.',
             'error': 'task_not_found'
         })
 

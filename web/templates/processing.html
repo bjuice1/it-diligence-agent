@@ -772,7 +772,13 @@
                             const redirectUrl = data.redirect || '/dashboard';
 
                             // If redirecting to existing results, show appropriate message
-                            if (data.status === 'redirecting') {
+                            if (data.status === 'recovered') {
+                                // Data recovered from database after server restart
+                                document.getElementById('phase-text').textContent = 'Data recovered! Redirecting...';
+                                setTimeout(() => {
+                                    window.location.href = redirectUrl;
+                                }, 1000);
+                            } else if (data.status === 'redirecting') {
                                 document.getElementById('phase-text').textContent = 'Loading existing results...';
                                 window.location.href = redirectUrl;
                             } else {
