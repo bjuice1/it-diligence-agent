@@ -34,120 +34,118 @@ def persist_to_database(session, deal_id: str, timestamp: str) -> Dict[str, int]
         Dict with counts of persisted items
     """
     from web.database import db, Fact, Finding, AnalysisRun
-    from web.app import app  # Import Flask app for context
     from uuid import uuid4
 
     result = {'facts_count': 0, 'findings_count': 0, 'analysis_run_id': None}
 
-    # Wrap in app context for background thread execution
-    with app.app_context():
-        # Create an AnalysisRun record
-        # Get next run number for this deal
-        from sqlalchemy import func
-        max_run = db.session.query(func.max(AnalysisRun.run_number)).filter_by(deal_id=deal_id).scalar()
-        next_run_number = (max_run or 0) + 1
+    # Note: Assumes caller has established Flask app context (task_manager does this)
 
-        analysis_run_id = str(uuid4())
-        analysis_run = AnalysisRun(
-            id=analysis_run_id,
+    # Get next run number for this deal
+    from sqlalchemy import func
+    max_run = db.session.query(func.max(AnalysisRun.run_number)).filter_by(deal_id=deal_id).scalar()
+    next_run_number = (max_run or 0) + 1
+
+    analysis_run_id = str(uuid4())
+    analysis_run = AnalysisRun(
+        id=analysis_run_id,
+        deal_id=deal_id,
+        run_number=next_run_number,
+        run_type='full',
+        status='completed',
+        domains=list(set(f.domain for f in session.fact_store.facts)),
+        facts_created=len(session.fact_store.facts),
+        findings_created=len(session.reasoning_store.risks) + len(session.reasoning_store.work_items),
+        started_at=datetime.utcnow(),
+        completed_at=datetime.utcnow(),
+    )
+    db.session.add(analysis_run)
+    result['analysis_run_id'] = analysis_run_id
+
+    # Persist facts
+    for fact in session.fact_store.facts:
+        db_fact = Fact(
+            id=fact.fact_id,
             deal_id=deal_id,
-            run_number=next_run_number,
-            run_type='full',
-            status='completed',
-            domains=list(set(f.domain for f in session.fact_store.facts)),
-            facts_created=len(session.fact_store.facts),
-            findings_created=len(session.reasoning_store.risks) + len(session.reasoning_store.work_items),
-            started_at=datetime.utcnow(),
-            completed_at=datetime.utcnow(),
+            analysis_run_id=analysis_run_id,
+            domain=fact.domain,
+            category=fact.category or '',
+            entity=fact.entity,
+            item=fact.item,
+            status=fact.status,
+            details=fact.details or {},
+            evidence=fact.evidence or {},
+            source_document=fact.source_document or '',
+            source_quote=fact.evidence.get('exact_quote', '') if fact.evidence else '',
+            confidence_score=getattr(fact, 'confidence_score', 0.5),
+            verified=getattr(fact, 'verified', False),
+            verification_status=getattr(fact, 'verification_status', 'pending'),
+            needs_review=getattr(fact, 'needs_review', False),
+            needs_review_reason=getattr(fact, 'needs_review_reason', ''),
+            analysis_phase=getattr(fact, 'analysis_phase', 'target_extraction'),
+            is_integration_insight=getattr(fact, 'is_integration_insight', False),
+            related_domains=getattr(fact, 'related_domains', []),
+            change_type='new',
         )
-        db.session.add(analysis_run)
-        result['analysis_run_id'] = analysis_run_id
+        db.session.add(db_fact)
+        result['facts_count'] += 1
 
-        # Persist facts
-        for fact in session.fact_store.facts:
-            db_fact = Fact(
-                id=fact.fact_id,
-                deal_id=deal_id,
-                analysis_run_id=analysis_run_id,
-                domain=fact.domain,
-                category=fact.category or '',
-                entity=fact.entity,
-                item=fact.item,
-                status=fact.status,
-                details=fact.details or {},
-                evidence=fact.evidence or {},
-                source_document=fact.source_document or '',
-                source_quote=fact.evidence.get('exact_quote', '') if fact.evidence else '',
-                confidence_score=getattr(fact, 'confidence_score', 0.5),
-                verified=getattr(fact, 'verified', False),
-                verification_status=getattr(fact, 'verification_status', 'pending'),
-                needs_review=getattr(fact, 'needs_review', False),
-                needs_review_reason=getattr(fact, 'needs_review_reason', ''),
-                analysis_phase=getattr(fact, 'analysis_phase', 'target_extraction'),
-                is_integration_insight=getattr(fact, 'is_integration_insight', False),
-                related_domains=getattr(fact, 'related_domains', []),
-                change_type='new',
-            )
-            db.session.add(db_fact)
-            result['facts_count'] += 1
+    # Persist findings (risks)
+    for risk in session.reasoning_store.risks:
+        finding_id = risk.get('risk_id') or f"R-{uuid4().hex[:8].upper()}"
+        db_finding = Finding(
+            id=finding_id,
+            deal_id=deal_id,
+            analysis_run_id=analysis_run_id,
+            finding_type='risk',
+            domain=risk.get('domain', 'general'),
+            title=risk.get('title', ''),
+            description=risk.get('description', ''),
+            severity=risk.get('severity', 'medium'),
+            category=risk.get('category', ''),
+            phase=risk.get('phase'),
+            mitigation=risk.get('mitigation', ''),
+            cost_estimate=risk.get('cost_estimate_bucket', ''),
+            based_on_facts=risk.get('based_on_facts', []),
+            extra_data={
+                'likelihood': risk.get('likelihood'),
+                'impact': risk.get('impact'),
+                'cost_estimate_low': risk.get('cost_estimate', {}).get('low') if isinstance(risk.get('cost_estimate'), dict) else None,
+                'cost_estimate_high': risk.get('cost_estimate', {}).get('high') if isinstance(risk.get('cost_estimate'), dict) else None,
+                'full_risk': risk,
+            },
+        )
+        db.session.add(db_finding)
+        result['findings_count'] += 1
 
-        # Persist findings (risks)
-        for risk in session.reasoning_store.risks:
-            finding_id = risk.get('risk_id') or f"R-{uuid4().hex[:8].upper()}"
-            db_finding = Finding(
-                id=finding_id,
-                deal_id=deal_id,
-                analysis_run_id=analysis_run_id,
-                finding_type='risk',
-                domain=risk.get('domain', 'general'),
-                title=risk.get('title', ''),
-                description=risk.get('description', ''),
-                severity=risk.get('severity', 'medium'),
-                category=risk.get('category', ''),
-                phase=risk.get('phase'),
-                mitigation=risk.get('mitigation', ''),
-                cost_estimate=risk.get('cost_estimate_bucket', ''),
-                based_on_facts=risk.get('based_on_facts', []),
-                extra_data={
-                    'likelihood': risk.get('likelihood'),
-                    'impact': risk.get('impact'),
-                    'cost_estimate_low': risk.get('cost_estimate', {}).get('low') if isinstance(risk.get('cost_estimate'), dict) else None,
-                    'cost_estimate_high': risk.get('cost_estimate', {}).get('high') if isinstance(risk.get('cost_estimate'), dict) else None,
-                    'full_risk': risk,
-                },
-            )
-            db.session.add(db_finding)
-            result['findings_count'] += 1
+    # Persist findings (work items)
+    for wi in session.reasoning_store.work_items:
+        finding_id = wi.get('work_item_id') or f"WI-{uuid4().hex[:8].upper()}"
+        db_finding = Finding(
+            id=finding_id,
+            deal_id=deal_id,
+            analysis_run_id=analysis_run_id,
+            finding_type='work_item',
+            domain=wi.get('domain', 'general'),
+            title=wi.get('title', ''),
+            description=wi.get('description', ''),
+            priority=wi.get('priority', 'medium'),
+            phase=wi.get('phase'),
+            owner_type=wi.get('owner'),
+            cost_estimate=wi.get('cost_estimate_bucket', ''),
+            based_on_facts=wi.get('based_on_facts', []),
+            extra_data={
+                'cost_estimate_low': wi.get('cost_estimate', {}).get('low') if isinstance(wi.get('cost_estimate'), dict) else None,
+                'cost_estimate_high': wi.get('cost_estimate', {}).get('high') if isinstance(wi.get('cost_estimate'), dict) else None,
+                'full_work_item': wi,
+            },
+        )
+        db.session.add(db_finding)
+        result['findings_count'] += 1
 
-        # Persist findings (work items)
-        for wi in session.reasoning_store.work_items:
-            finding_id = wi.get('work_item_id') or f"WI-{uuid4().hex[:8].upper()}"
-            db_finding = Finding(
-                id=finding_id,
-                deal_id=deal_id,
-                analysis_run_id=analysis_run_id,
-                finding_type='work_item',
-                domain=wi.get('domain', 'general'),
-                title=wi.get('title', ''),
-                description=wi.get('description', ''),
-                priority=wi.get('priority', 'medium'),
-                phase=wi.get('phase'),
-                owner_type=wi.get('owner'),
-                cost_estimate=wi.get('cost_estimate_bucket', ''),
-                based_on_facts=wi.get('based_on_facts', []),
-                extra_data={
-                    'cost_estimate_low': wi.get('cost_estimate', {}).get('low') if isinstance(wi.get('cost_estimate'), dict) else None,
-                    'cost_estimate_high': wi.get('cost_estimate', {}).get('high') if isinstance(wi.get('cost_estimate'), dict) else None,
-                    'full_work_item': wi,
-                },
-            )
-            db.session.add(db_finding)
-            result['findings_count'] += 1
+    # Commit all changes
+    db.session.commit()
 
-        # Commit all changes
-        db.session.commit()
-
-        logger.info(f"Database persistence complete: run={analysis_run_id}, facts={result['facts_count']}, findings={result['findings_count']}")
+    logger.info(f"Database persistence complete: run={analysis_run_id}, facts={result['facts_count']}, findings={result['findings_count']}")
 
     return result
 

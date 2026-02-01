@@ -326,27 +326,32 @@ class AnalysisTaskManager:
         start_time = time.time()
 
         try:
-            # Run the actual analysis
-            result = run_analysis_fn(
-                task=task,
-                progress_callback=lambda p: self._update_progress(task.task_id, p)
-            )
+            # Import Flask app for context in background thread
+            from web.app import app
 
-            # Check for timeout
-            if time.time() - start_time > self._task_timeout:
-                task.status = TaskStatus.TIMEOUT
-                task.error_message = f"Analysis timed out after {self._task_timeout} seconds"
-            elif task._cancelled:
-                task.status = TaskStatus.CANCELLED
-            else:
-                task.status = TaskStatus.COMPLETED
-                task.progress.update_phase(AnalysisPhase.COMPLETE)
+            # Wrap entire analysis in app context for database access
+            with app.app_context():
+                # Run the actual analysis
+                result = run_analysis_fn(
+                    task=task,
+                    progress_callback=lambda p: self._update_progress(task.task_id, p)
+                )
 
-                # Store result paths
-                if result:
-                    task.facts_file = result.get("facts_file")
-                    task.findings_file = result.get("findings_file")
-                    task.result_path = result.get("result_path")
+                # Check for timeout
+                if time.time() - start_time > self._task_timeout:
+                    task.status = TaskStatus.TIMEOUT
+                    task.error_message = f"Analysis timed out after {self._task_timeout} seconds"
+                elif task._cancelled:
+                    task.status = TaskStatus.CANCELLED
+                else:
+                    task.status = TaskStatus.COMPLETED
+                    task.progress.update_phase(AnalysisPhase.COMPLETE)
+
+                    # Store result paths
+                    if result:
+                        task.facts_file = result.get("facts_file")
+                        task.findings_file = result.get("findings_file")
+                        task.result_path = result.get("result_path")
 
         except Exception as e:
             task.status = TaskStatus.FAILED
