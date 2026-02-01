@@ -443,10 +443,10 @@ def log_activity(action: str, details: dict):
 
 
 def get_session():
-    """Get the analysis session for the current user.
+    """Get the analysis session for the current user and current deal.
 
-    IMPORTANT: This function now checks for newer files on disk and invalidates
-    cached sessions if newer data exists. This fixes the stale cache issue.
+    IMPORTANT: This function is now DEAL-AWARE. It only loads data for the
+    currently active deal, preventing data leakage between deals.
     """
     import logging
     logger = logging.getLogger(__name__)
@@ -454,37 +454,105 @@ def get_session():
     session_id = get_or_create_session_id(flask_session)
     user_session = session_store.get_session(session_id)
 
-    # First, find the newest valid facts file on disk
-    from config_v2 import OUTPUT_DIR
+    # Get the current deal_id - this is critical for data isolation
+    current_deal_id = flask_session.get('current_deal_id')
 
-    facts_files = sorted(OUTPUT_DIR.glob("facts_*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
-    findings_files = sorted(OUTPUT_DIR.glob("findings_*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
-
-    newest_facts_file = None
-    newest_facts_mtime = 0
-
-    for f in facts_files:
-        if f.stat().st_size > 500:  # Skip empty files
-            newest_facts_file = f
-            newest_facts_mtime = f.stat().st_mtime
-            break
-
-    # Check if we have a cached session and if it's still valid
+    # Check if cached session matches current deal
     if user_session and user_session.analysis_session:
         cached = user_session.analysis_session
-        if cached.fact_store and len(cached.fact_store.facts) > 0:
-            # Check if cache is newer than files (cache is valid)
-            cache_time = getattr(user_session, '_cache_mtime', 0)
-            if cache_time >= newest_facts_mtime:
-                logger.debug(f"Using cached session with {len(cached.fact_store.facts)} facts (cache valid)")
-                return cached
-            else:
-                logger.info(f"Cache stale: cache_time={cache_time}, newest_file_time={newest_facts_mtime}")
-                # Clear stale cache
-                user_session.analysis_session = None
-                clear_organization_cache()  # Also clear org cache when session cache invalidated
+        cached_deal_id = getattr(user_session, '_cached_deal_id', None)
 
-    # Try to load from task results if available
+        # If cached session is for a DIFFERENT deal, invalidate it
+        if cached_deal_id and cached_deal_id != current_deal_id:
+            logger.info(f"Deal mismatch: cached={cached_deal_id}, current={current_deal_id} - clearing cache")
+            user_session.analysis_session = None
+            user_session._cached_deal_id = None
+            clear_organization_cache()
+        elif cached.fact_store and len(cached.fact_store.facts) > 0:
+            logger.debug(f"Using cached session for deal {current_deal_id} with {len(cached.fact_store.facts)} facts")
+            return cached
+
+    # If no deal selected, return empty session
+    if not current_deal_id:
+        logger.debug("No deal selected - returning empty session")
+        analysis_session = session_store.get_or_create_analysis_session(session_id)
+        return analysis_session if analysis_session else Session()
+
+    # Try to load from database for the current deal
+    try:
+        from web.database import db, Fact, Finding, AnalysisRun
+
+        # Get facts for this specific deal from database
+        facts_query = Fact.query.filter_by(deal_id=current_deal_id, deleted_at=None).all()
+        findings_query = Finding.query.filter_by(deal_id=current_deal_id, deleted_at=None).all()
+
+        if facts_query or findings_query:
+            logger.info(f"Loading {len(facts_query)} facts and {len(findings_query)} findings from DB for deal {current_deal_id}")
+
+            # Create session with database data AND deal_id for isolation
+            analysis_session = Session(deal_id=current_deal_id)
+
+            # Convert DB facts to session format
+            for db_fact in facts_query:
+                from stores.fact_store import Fact as FactModel
+                fact = FactModel(
+                    id=db_fact.id,
+                    domain=db_fact.domain,
+                    text=db_fact.text,
+                    quote=db_fact.quote,
+                    source_file=db_fact.source_file,
+                    source_page=db_fact.source_page,
+                    confidence=db_fact.confidence or 0.8,
+                    metadata=db_fact.metadata or {}
+                )
+                # Set entity if available
+                if hasattr(db_fact, 'entity') and db_fact.entity:
+                    fact.metadata['entity'] = db_fact.entity
+                analysis_session.fact_store.facts.append(fact)
+
+            # Convert DB findings to session format (risks and work items)
+            for db_finding in findings_query:
+                if db_finding.finding_type == 'risk':
+                    from stores.reasoning_store import Risk
+                    risk = Risk(
+                        id=db_finding.id,
+                        category=db_finding.category,
+                        title=db_finding.title,
+                        description=db_finding.description or '',
+                        severity=db_finding.severity,
+                        likelihood=db_finding.likelihood,
+                        impact_areas=db_finding.impact_areas or [],
+                        source_facts=db_finding.source_facts or [],
+                        status=db_finding.status or 'open'
+                    )
+                    analysis_session.reasoning_store.risks.append(risk)
+                elif db_finding.finding_type == 'work_item':
+                    from stores.reasoning_store import WorkItem
+                    work_item = WorkItem(
+                        id=db_finding.id,
+                        category=db_finding.category,
+                        title=db_finding.title,
+                        description=db_finding.description or '',
+                        priority=db_finding.priority,
+                        phase=db_finding.phase,
+                        estimated_effort=db_finding.estimated_effort,
+                        source_facts=db_finding.source_facts or [],
+                        status=db_finding.status or 'open'
+                    )
+                    analysis_session.reasoning_store.work_items.append(work_item)
+
+            # Cache with deal_id tracking
+            if user_session:
+                user_session.analysis_session = analysis_session
+                user_session._cached_deal_id = current_deal_id
+
+            return analysis_session
+
+    except Exception as e:
+        logger.warning(f"Error loading from database for deal {current_deal_id}: {e}")
+        # Fall through to file-based loading
+
+    # Fallback: Try to load from task results if available
     task_id = flask_session.get('current_task_id')
     if task_id:
         task = task_manager.get_task(task_id)
@@ -497,37 +565,20 @@ def get_session():
             )
             if analysis_session and analysis_session.fact_store and len(analysis_session.fact_store.facts) > 0:
                 logger.info(f"Loaded {len(analysis_session.fact_store.facts)} facts from task")
-                # Track when this was cached
                 if user_session:
-                    user_session._cache_mtime = newest_facts_mtime
+                    user_session.analysis_session = analysis_session
+                    user_session._cached_deal_id = current_deal_id
                 return analysis_session
         elif not task:
-            # Clear stale task_id if task no longer exists
             flask_session.pop('current_task_id', None)
 
-    # Load from most recent NON-EMPTY facts file
-    logger.debug(f"Found {len(facts_files)} facts files in {OUTPUT_DIR}")
-
-    if newest_facts_file:
-        logger.info(f"Loading from facts file: {newest_facts_file} ({newest_facts_file.stat().st_size} bytes)")
-        analysis_session = Session.load_from_files(
-            facts_file=newest_facts_file,
-            findings_file=findings_files[0] if findings_files else None
-        )
-        if analysis_session and analysis_session.fact_store and len(analysis_session.fact_store.facts) > 0:
-            logger.info(f"Loaded {len(analysis_session.fact_store.facts)} facts from {newest_facts_file.name}")
-            # Store in session store for future access with timestamp
-            if user_session:
-                user_session.analysis_session = analysis_session
-                user_session._cache_mtime = newest_facts_mtime
-            return analysis_session
-        else:
-            logger.warning(f"File {newest_facts_file.name} had no facts")
-
-    logger.warning("No valid facts files found, creating empty session")
-    # Create new empty session
+    logger.debug(f"No data found for deal {current_deal_id} - returning empty session")
     analysis_session = session_store.get_or_create_analysis_session(session_id)
-    return analysis_session if analysis_session else Session()
+    if analysis_session:
+        analysis_session.deal_id = current_deal_id  # Set deal_id on session
+    if user_session:
+        user_session._cached_deal_id = current_deal_id
+    return analysis_session if analysis_session else Session(deal_id=current_deal_id)
 
 
 @app.route('/')
@@ -1696,28 +1747,29 @@ def search():
 # Organization Module Routes
 # =============================================================================
 
-# Global organization analysis result cache
-_org_analysis_result = None
-_org_facts_count = 0  # Track fact count to detect new analyses
-_org_cache_session_id = None  # Track which session the cache belongs to
-_org_data_source = "unknown"  # Track data source for UI display
+# DEAL-SCOPED organization analysis cache
+# Key: deal_id -> cached data
+_org_cache_by_deal: dict = {}
 
 
 def get_organization_analysis():
     """Get or run the organization analysis.
 
-    IMPORTANT: This function now ALWAYS rebuilds from the current session's facts.
-    This ensures we never show stale organization data after a new analysis runs.
+    IMPORTANT: This cache is now DEAL-SCOPED. Each deal has its own cache entry
+    to prevent data leakage between deals.
     """
-    global _org_analysis_result, _org_facts_count, _org_data_source, _org_cache_session_id
+    global _org_cache_by_deal
 
     import logging
     logger = logging.getLogger(__name__)
 
+    # Get current deal_id - this is CRITICAL for isolation
+    current_deal_id = flask_session.get('current_deal_id') or 'no_deal'
+
     # First, get the current session (this handles cache invalidation)
     try:
         s = get_session()
-        logger.info(f"get_organization_analysis: session has fact_store={s.fact_store is not None}")
+        logger.info(f"get_organization_analysis: deal={current_deal_id}, session has fact_store={s.fact_store is not None}")
 
         if s and s.fact_store:
             total_facts = len(s.fact_store.facts)
@@ -1725,22 +1777,28 @@ def get_organization_analysis():
             current_org_count = len(org_facts)
 
             # Generate a session fingerprint based on fact content
-            # This ensures we rebuild if facts changed, not just count
             fact_ids = sorted([f.fact_id for f in s.fact_store.facts]) if s.fact_store.facts else []
             session_fingerprint = hash(tuple(fact_ids)) if fact_ids else 0
 
             logger.info(f"Session has {total_facts} total facts, {current_org_count} org facts")
-            logger.info(f"Session fingerprint: {session_fingerprint}, cached: {_org_cache_session_id}")
 
-            # Check if we need to rebuild (different session or different facts)
+            # Get cached data for THIS DEAL only
+            deal_cache = _org_cache_by_deal.get(current_deal_id, {})
+            cached_fingerprint = deal_cache.get('fingerprint')
+            cached_org_count = deal_cache.get('org_count', 0)
+            cached_result = deal_cache.get('result')
+
+            logger.info(f"Deal {current_deal_id}: fingerprint={session_fingerprint}, cached={cached_fingerprint}")
+
+            # Check if we need to rebuild for THIS DEAL
             needs_rebuild = (
-                _org_analysis_result is None or
-                _org_cache_session_id != session_fingerprint or
-                _org_facts_count != current_org_count
+                cached_result is None or
+                cached_fingerprint != session_fingerprint or
+                cached_org_count != current_org_count
             )
 
             if needs_rebuild and total_facts > 0:
-                logger.info(f"Rebuilding organization data (needs_rebuild={needs_rebuild})")
+                logger.info(f"Rebuilding organization data for deal {current_deal_id}")
 
                 from services.organization_bridge import build_organization_result
                 deal_context = s.deal_context or {}
@@ -1749,71 +1807,77 @@ def get_organization_analysis():
                 logger.info(f"Building org result for target: {target_name}")
                 result, status = build_organization_result(s.fact_store, s.reasoning_store, target_name)
 
-                # Update cache with new data
-                _org_cache_session_id = session_fingerprint
-                _org_facts_count = current_org_count
+                # Update DEAL-SCOPED cache
+                _org_cache_by_deal[current_deal_id] = {
+                    'fingerprint': session_fingerprint,
+                    'org_count': current_org_count,
+                    'result': result,
+                    'source': 'analysis' if status == "success" else 'analysis_no_org'
+                }
 
                 if status == "success" and result.total_it_headcount > 0:
-                    _org_analysis_result = result
-                    _org_data_source = "analysis"
                     logger.info(f"SUCCESS: Built org analysis with {result.total_it_headcount} headcount from {current_org_count} org facts")
-                    return _org_analysis_result
+                    return result
                 elif status == "no_org_facts":
-                    # Analysis ran but no org data found - show empty state, not demo
                     logger.warning(f"Analysis ran with {total_facts} facts but no organization facts found")
-                    _org_analysis_result = result  # Empty result
-                    _org_data_source = "analysis_no_org"
-                    return _org_analysis_result
+                    return result
                 else:
                     logger.warning(f"build_organization_result returned status={status}, headcount={result.total_it_headcount}")
-                    # Still cache this result to avoid rebuilding every time
-                    _org_analysis_result = result
-                    _org_data_source = "analysis"
-                    return _org_analysis_result
+                    return result
 
-            elif _org_analysis_result is not None:
-                # Cache is valid, return cached result
-                logger.debug(f"Using cached org result ({_org_facts_count} org facts)")
-                return _org_analysis_result
+            elif cached_result is not None:
+                # Cache is valid for THIS DEAL, return cached result
+                logger.debug(f"Using cached org result for deal {current_deal_id} ({cached_org_count} org facts)")
+                return cached_result
 
     except Exception as e:
         import traceback
         logger.error(f"Could not build org from facts: {e}")
         logger.error(traceback.format_exc())
 
-    # Fall back to empty result (no demo data) if we have nothing
-    if _org_analysis_result is None:
-        logger.info("No organization data available - showing empty state")
-        _org_analysis_result = _create_empty_organization_result()
-        _org_data_source = "no_data"
-        _org_cache_session_id = None
-        _org_facts_count = 0
+    # Fall back to empty result (no demo data) if we have nothing for this deal
+    deal_cache = _org_cache_by_deal.get(current_deal_id, {})
+    if deal_cache.get('result') is None:
+        logger.info(f"No organization data available for deal {current_deal_id} - showing empty state")
+        empty_result = _create_empty_organization_result()
+        _org_cache_by_deal[current_deal_id] = {
+            'fingerprint': 0,
+            'org_count': 0,
+            'result': empty_result,
+            'source': 'no_data'
+        }
+        return empty_result
 
-    return _org_analysis_result
+    return deal_cache.get('result')
 
 
 def get_org_data_source():
-    """Get whether org data is from analysis or demo."""
-    global _org_data_source
-    return _org_data_source
+    """Get whether org data is from analysis or demo for current deal."""
+    global _org_cache_by_deal
+    current_deal_id = flask_session.get('current_deal_id') or 'no_deal'
+    deal_cache = _org_cache_by_deal.get(current_deal_id, {})
+    return deal_cache.get('source', 'unknown')
 
 
 def clear_organization_cache():
-    """Clear the organization cache to force rebuild."""
-    global _org_analysis_result, _org_facts_count, _org_cache_session_id, _org_data_source
-    _org_analysis_result = None
-    _org_facts_count = 0
-    _org_cache_session_id = None
-    _org_data_source = "unknown"
+    """Clear the organization cache for current deal to force rebuild."""
+    global _org_cache_by_deal
+    current_deal_id = flask_session.get('current_deal_id') or 'no_deal'
+    if current_deal_id in _org_cache_by_deal:
+        del _org_cache_by_deal[current_deal_id]
+        import logging
+        logging.getLogger(__name__).info(f"Cleared org cache for deal {current_deal_id}")
 
 
 def invalidate_all_caches():
-    """Invalidate all caches - call this after new analysis completes."""
+    """Invalidate all caches for current deal - call this after new analysis completes."""
     import logging
     logger = logging.getLogger(__name__)
-    logger.info("Invalidating all caches after analysis")
 
-    # Clear organization cache
+    current_deal_id = flask_session.get('current_deal_id') or 'no_deal'
+    logger.info(f"Invalidating all caches for deal {current_deal_id}")
+
+    # Clear organization cache for this deal
     clear_organization_cache()
 
     # Clear session store caches
@@ -1823,7 +1887,7 @@ def invalidate_all_caches():
         if user_session:
             user_session.analysis_session = None
             user_session._cache_mtime = 0
-    _org_facts_count = 0
+            user_session._cached_deal_id = None
 
 
 def _create_demo_organization_data():

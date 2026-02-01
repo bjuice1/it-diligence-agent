@@ -39,15 +39,21 @@ def persist_to_database(session, deal_id: str, timestamp: str) -> Dict[str, int]
     result = {'facts_count': 0, 'findings_count': 0, 'analysis_run_id': None}
 
     # Create an AnalysisRun record
+    # Get next run number for this deal
+    from sqlalchemy import func
+    max_run = db.session.query(func.max(AnalysisRun.run_number)).filter_by(deal_id=deal_id).scalar()
+    next_run_number = (max_run or 0) + 1
+
     analysis_run_id = str(uuid4())
     analysis_run = AnalysisRun(
         id=analysis_run_id,
         deal_id=deal_id,
+        run_number=next_run_number,
         run_type='full',
         status='completed',
-        domains_analyzed=list(set(f.domain for f in session.fact_store.facts)),
-        facts_extracted=len(session.fact_store.facts),
-        findings_generated=len(session.reasoning_store.risks) + len(session.reasoning_store.work_items),
+        domains=list(set(f.domain for f in session.fact_store.facts)),  # Fixed: was domains_analyzed
+        facts_created=len(session.fact_store.facts),  # Fixed: was facts_extracted
+        findings_created=len(session.reasoning_store.risks) + len(session.reasoning_store.work_items),  # Fixed: was findings_generated
         started_at=datetime.utcnow(),
         completed_at=datetime.utcnow(),
     )
@@ -94,14 +100,18 @@ def persist_to_database(session, deal_id: str, timestamp: str) -> Dict[str, int]
             title=risk.get('title', ''),
             description=risk.get('description', ''),
             severity=risk.get('severity', 'medium'),
-            likelihood=risk.get('likelihood'),
-            impact=risk.get('impact'),
+            category=risk.get('category', ''),
             phase=risk.get('phase'),
             mitigation=risk.get('mitigation', ''),
-            cost_estimate_low=risk.get('cost_estimate', {}).get('low') if isinstance(risk.get('cost_estimate'), dict) else None,
-            cost_estimate_high=risk.get('cost_estimate', {}).get('high') if isinstance(risk.get('cost_estimate'), dict) else None,
-            supporting_facts=risk.get('based_on_facts', []),
-            metadata=risk,
+            cost_estimate=risk.get('cost_estimate_bucket', ''),  # Use the bucket field
+            based_on_facts=risk.get('based_on_facts', []),
+            extra_data={
+                'likelihood': risk.get('likelihood'),
+                'impact': risk.get('impact'),
+                'cost_estimate_low': risk.get('cost_estimate', {}).get('low') if isinstance(risk.get('cost_estimate'), dict) else None,
+                'cost_estimate_high': risk.get('cost_estimate', {}).get('high') if isinstance(risk.get('cost_estimate'), dict) else None,
+                'full_risk': risk,
+            },
         )
         db.session.add(db_finding)
         result['findings_count'] += 1
@@ -117,13 +127,16 @@ def persist_to_database(session, deal_id: str, timestamp: str) -> Dict[str, int]
             domain=wi.get('domain', 'general'),
             title=wi.get('title', ''),
             description=wi.get('description', ''),
-            severity=wi.get('priority', 'medium'),
+            priority=wi.get('priority', 'medium'),
             phase=wi.get('phase'),
-            owner=wi.get('owner'),
-            cost_estimate_low=wi.get('cost_estimate', {}).get('low') if isinstance(wi.get('cost_estimate'), dict) else None,
-            cost_estimate_high=wi.get('cost_estimate', {}).get('high') if isinstance(wi.get('cost_estimate'), dict) else None,
-            supporting_facts=wi.get('based_on_facts', []),
-            metadata=wi,
+            owner_type=wi.get('owner'),
+            cost_estimate=wi.get('cost_estimate_bucket', ''),
+            based_on_facts=wi.get('based_on_facts', []),
+            extra_data={
+                'cost_estimate_low': wi.get('cost_estimate', {}).get('low') if isinstance(wi.get('cost_estimate'), dict) else None,
+                'cost_estimate_high': wi.get('cost_estimate', {}).get('high') if isinstance(wi.get('cost_estimate'), dict) else None,
+                'full_work_item': wi,
+            },
         )
         db.session.add(db_finding)
         result['findings_count'] += 1

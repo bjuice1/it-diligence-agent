@@ -23,24 +23,55 @@ logger = logging.getLogger(__name__)
 
 inventory_bp = Blueprint('inventory', __name__, url_prefix='/inventory')
 
-# Global inventory store (per-session in production)
-_inventory_store = None
+# Deal-scoped inventory stores
+_inventory_stores: dict = {}
 
 
 def get_inventory_store() -> InventoryStore:
-    """Get or create the inventory store."""
-    global _inventory_store
-    if _inventory_store is None:
-        _inventory_store = InventoryStore()
-        # Try to load from default location
-        default_path = Path("data/inventory_store.json")
-        if default_path.exists():
-            try:
-                _inventory_store.load(default_path)
-                logger.info(f"Loaded inventory store with {len(_inventory_store)} items")
-            except Exception as e:
-                logger.warning(f"Could not load inventory store: {e}")
-    return _inventory_store
+    """Get or create the inventory store for the current deal.
+
+    IMPORTANT: Inventory is now deal-scoped to prevent data leakage between deals.
+    """
+    from flask import session
+
+    current_deal_id = session.get('current_deal_id')
+
+    # Use deal_id as key, or 'default' for no deal
+    store_key = current_deal_id or 'default'
+
+    if store_key not in _inventory_stores:
+        _inventory_stores[store_key] = InventoryStore()
+
+        # Try to load from deal-specific path first, then default
+        if current_deal_id:
+            deal_path = Path(f"data/deals/{current_deal_id}/inventory_store.json")
+            if deal_path.exists():
+                try:
+                    _inventory_stores[store_key].load(deal_path)
+                    logger.info(f"Loaded inventory store for deal {current_deal_id} with {len(_inventory_stores[store_key])} items")
+                except Exception as e:
+                    logger.warning(f"Could not load deal inventory store: {e}")
+            else:
+                logger.debug(f"No inventory file for deal {current_deal_id}")
+        else:
+            # Fallback to default location for no-deal context
+            default_path = Path("data/inventory_store.json")
+            if default_path.exists():
+                try:
+                    _inventory_stores[store_key].load(default_path)
+                    logger.info(f"Loaded default inventory store with {len(_inventory_stores[store_key])} items")
+                except Exception as e:
+                    logger.warning(f"Could not load inventory store: {e}")
+
+    return _inventory_stores[store_key]
+
+
+def clear_inventory_store_for_deal(deal_id: str = None):
+    """Clear the cached inventory store for a specific deal."""
+    store_key = deal_id or 'default'
+    if store_key in _inventory_stores:
+        del _inventory_stores[store_key]
+        logger.debug(f"Cleared inventory store for deal {store_key}")
 
 
 @inventory_bp.route('/')

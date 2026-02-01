@@ -370,6 +370,12 @@ class DealService:
         if not deal:
             return False
 
+        # Check if we're switching deals - if so, clear the analysis cache
+        old_deal_id = session.get('current_deal_id')
+        if old_deal_id and old_deal_id != deal_id:
+            logger.info(f"Switching deals from {old_deal_id} to {deal_id} - clearing analysis cache")
+            self._clear_analysis_cache_for_session()
+
         session['current_deal_id'] = deal_id
 
         # Update last accessed
@@ -378,6 +384,40 @@ class DealService:
 
         logger.debug(f"Set active deal to {deal_id}")
         return True
+
+    def _clear_analysis_cache_for_session(self):
+        """Clear cached analysis session data when switching deals."""
+        try:
+            # Clear the analysis session from session store
+            from stores.session_store import session_store
+            from web.app import get_or_create_session_id, clear_organization_cache
+            from flask import session as flask_session
+
+            session_id = get_or_create_session_id(flask_session)
+            user_session = session_store.get_session(session_id)
+
+            if user_session:
+                user_session.analysis_session = None
+                user_session._cache_mtime = 0
+                user_session._cached_deal_id = None
+                logger.debug(f"Cleared analysis cache for session {session_id}")
+
+            # Also clear organization cache
+            clear_organization_cache()
+
+            # Clear inventory store cache (deal-scoped)
+            try:
+                from web.blueprints.inventory import clear_inventory_store_for_deal
+                # Clear both old and new deal stores to be safe
+                clear_inventory_store_for_deal()
+            except Exception:
+                pass  # Inventory blueprint may not be loaded
+
+            # Clear task reference
+            flask_session.pop('current_task_id', None)
+
+        except Exception as e:
+            logger.warning(f"Error clearing analysis cache: {e}")
 
     def clear_active_deal(self, session_id: str = None):
         """Clear the active deal for a session."""

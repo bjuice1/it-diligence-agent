@@ -482,6 +482,10 @@ def deal_detail_page(deal_id):
     if not deal:
         return redirect(url_for('deals.deals_list_page'))
 
+    # IMPORTANT: Set this as the active deal to ensure proper data isolation
+    # This ensures get_session() loads the correct deal's data
+    service.set_active_deal_for_session(deal_id)
+
     summary = service.get_deal_summary(deal_id)
     progress = service.get_deal_progress(deal_id)
 
@@ -503,6 +507,9 @@ def deal_settings_page(deal_id):
 
     if not deal:
         return redirect(url_for('deals.deals_list_page'))
+
+    # Ensure deal context is set
+    service.set_active_deal_for_session(deal_id)
 
     return render_template('deals/settings.html', deal=deal)
 

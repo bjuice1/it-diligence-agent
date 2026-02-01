@@ -46,17 +46,20 @@ class Session:
     - Modification history for undo support
     - Deal context
     - Unsaved changes tracking
+    - Deal ID for data isolation
     """
 
     def __init__(
         self,
         fact_store: Optional[FactStore] = None,
         reasoning_store: Optional[ReasoningStore] = None,
-        deal_context: Optional[Dict] = None
+        deal_context: Optional[Dict] = None,
+        deal_id: Optional[str] = None
     ):
         self.fact_store = fact_store or FactStore()
         self.reasoning_store = reasoning_store or ReasoningStore(fact_store=self.fact_store)
         self.deal_context = deal_context or {}
+        self.deal_id = deal_id  # CRITICAL: Track which deal this session belongs to
 
         self.modifications: List[Modification] = []
         self._last_save_modification_count = 0
@@ -632,10 +635,25 @@ class Session:
             with open(context_file) as f:
                 deal_context = json.load(f)
 
+        # Extract deal_id from context if available
+        deal_id = deal_context.get('deal_id') if isinstance(deal_context, dict) else None
+
+        # Also try to get from metadata
+        if not deal_id:
+            metadata_file = paths.root / "metadata.json"
+            if metadata_file.exists():
+                try:
+                    with open(metadata_file) as f:
+                        metadata = json.load(f)
+                    deal_id = metadata.get('deal_id')
+                except Exception:
+                    pass
+
         session = cls(
             fact_store=fact_store,
             reasoning_store=reasoning_store,
-            deal_context=deal_context
+            deal_context=deal_context,
+            deal_id=deal_id
         )
         session.source_files['run_id'] = run_id
 

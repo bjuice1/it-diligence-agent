@@ -56,13 +56,15 @@ def run_analysis_task(
     try:
         # Create analysis run record
         repo = AnalysisRunRepository()
-        run = repo.create(
+        run = repo.create_run(
             deal_id=deal_id,
             run_type='full' if len(domains) > 2 else 'partial',
-            status='running',
-            domains_analyzed=domains,
-            metadata={'user_id': user_id, 'entity': entity, 'options': options}
+            domains=domains,  # Fixed: was domains_analyzed, use create_run method
+            entity=entity,
+            initiated_by=user_id
         )
+        # Start the run
+        run = repo.start_run(run)
         run_id = run.id
 
         # Update progress: starting
