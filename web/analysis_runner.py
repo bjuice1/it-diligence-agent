@@ -818,7 +818,9 @@ def run_analysis_simple(task: AnalysisTask, progress_callback: Callable) -> Dict
     if not ANTHROPIC_API_KEY:
         raise ValueError("ANTHROPIC_API_KEY not configured")
 
-    session = Session()
+    # Get deal_id from task context for deal-scoped session
+    deal_id = task.deal_context.get('deal_id') if task.deal_context else None
+    session = Session(deal_id=deal_id)
 
     # Parse documents
     progress_callback({"phase": AnalysisPhase.PARSING_DOCUMENTS})
@@ -882,6 +884,17 @@ def run_analysis_simple(task: AnalysisTask, progress_callback: Callable) -> Dict
     progress_callback({"phase": AnalysisPhase.FINALIZING})
 
     saved_files = session.save_to_files(OUTPUT_DIR, timestamp)
+
+    # DATABASE PERSISTENCE - Critical for UI to display facts
+    if deal_id:
+        try:
+            db_result = persist_to_database(session=session, deal_id=deal_id, timestamp=timestamp)
+            logger.info(f"[run_analysis_simple] Persisted to database: {db_result.get('facts_count', 0)} facts, {db_result.get('findings_count', 0)} findings for deal {deal_id}")
+        except Exception as e:
+            logger.error(f"[run_analysis_simple] Database persistence failed for deal {deal_id}: {e}")
+            # Continue - file-based results are still available
+    else:
+        logger.warning("[run_analysis_simple] No deal_id available - skipping database persistence")
 
     # Get the actual saved file paths from the saved_files dict
     facts_file = saved_files.get('facts')
