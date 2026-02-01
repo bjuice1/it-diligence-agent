@@ -640,7 +640,7 @@ class Fact(SoftDeleteMixin, db.Model):
 
     # Evidence / Provenance
     evidence = Column(JSON, default=dict)  # exact_quote, source_section
-    source_document = Column(String(255), default='')  # Filename
+    source_document = Column(Text, default='')  # Filename(s) - can be long for multi-doc facts
     source_page_numbers = Column(JSON, default=list)  # [1, 2, 5] - pages where found
     source_quote = Column(Text, default='')  # Exact quote from document
 
@@ -1223,10 +1223,43 @@ class Notification(db.Model):
 # HELPER FUNCTIONS
 # =============================================================================
 
+def _run_migrations():
+    """Run lightweight schema migrations.
+
+    These are idempotent migrations that can safely run multiple times.
+    For more complex migrations, use Alembic.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    try:
+        # Migration 1: Change facts.source_document from VARCHAR(255) to TEXT
+        # This allows storing multiple document names without truncation
+        result = db.session.execute(db.text("""
+            SELECT data_type FROM information_schema.columns
+            WHERE table_name = 'facts' AND column_name = 'source_document'
+        """))
+        row = result.fetchone()
+        if row and row[0] == 'character varying':
+            logger.info("Migrating facts.source_document to TEXT...")
+            db.session.execute(db.text("""
+                ALTER TABLE facts ALTER COLUMN source_document TYPE TEXT
+            """))
+            db.session.commit()
+            logger.info("Migration complete: facts.source_document is now TEXT")
+        else:
+            logger.debug("facts.source_document already TEXT or table doesn't exist")
+    except Exception as e:
+        logger.warning(f"Migration check failed (non-fatal): {e}")
+        db.session.rollback()
+
+
 def create_all_tables(app):
-    """Create all database tables."""
+    """Create all database tables and run migrations."""
     with app.app_context():
         db.create_all()
+        # Run lightweight migrations for schema changes
+        _run_migrations()
 
 
 def log_audit(action: str, resource_type: str = None, resource_id: str = None,

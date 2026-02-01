@@ -63,6 +63,17 @@ def persist_to_database(session, deal_id: str, timestamp: str) -> Dict[str, int]
 
     # Persist facts
     for fact in session.fact_store.facts:
+        # Get source_document - may be very long if fact cites multiple docs
+        source_doc = fact.source_document or ''
+        # Safety: if column is still VARCHAR(255), store first doc or truncate
+        # This allows graceful handling until DB migration runs
+        if len(source_doc) > 1000:
+            # Store just the document names in a sensible way
+            docs = [d.strip() for d in source_doc.split(',')]
+            source_doc = ', '.join(docs[:3])  # First 3 docs
+            if len(docs) > 3:
+                source_doc += f' (+{len(docs) - 3} more)'
+
         db_fact = Fact(
             id=fact.fact_id,
             deal_id=deal_id,
@@ -74,7 +85,7 @@ def persist_to_database(session, deal_id: str, timestamp: str) -> Dict[str, int]
             status=fact.status,
             details=fact.details or {},
             evidence=fact.evidence or {},
-            source_document=fact.source_document or '',
+            source_document=source_doc,
             source_quote=fact.evidence.get('exact_quote', '') if fact.evidence else '',
             confidence_score=getattr(fact, 'confidence_score', 0.5),
             verified=getattr(fact, 'verified', False),
