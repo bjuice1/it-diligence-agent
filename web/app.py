@@ -496,48 +496,66 @@ def get_session():
             for db_fact in facts_query:
                 from stores.fact_store import Fact as FactModel
                 fact = FactModel(
-                    id=db_fact.id,
+                    fact_id=db_fact.id,
                     domain=db_fact.domain,
-                    text=db_fact.text,
-                    quote=db_fact.quote,
-                    source_file=db_fact.source_file,
-                    source_page=db_fact.source_page,
-                    confidence=db_fact.confidence or 0.8,
-                    metadata=db_fact.metadata or {}
+                    category=db_fact.category or '',
+                    item=db_fact.item or '',
+                    details=db_fact.details or {},
+                    status=db_fact.status or 'documented',
+                    evidence=db_fact.evidence or {},
+                    entity=db_fact.entity or 'target',
+                    analysis_phase=db_fact.analysis_phase or 'target_extraction',
+                    is_integration_insight=db_fact.is_integration_insight or False,
+                    source_document=db_fact.source_document or '',
+                    confidence_score=db_fact.confidence_score or 0.5,
+                    verified=db_fact.verified or False,
+                    verification_status=db_fact.verification_status or 'pending',
+                    needs_review=db_fact.needs_review or False,
+                    needs_review_reason=db_fact.needs_review_reason or '',
+                    related_domains=db_fact.related_domains or [],
                 )
-                # Set entity if available
-                if hasattr(db_fact, 'entity') and db_fact.entity:
-                    fact.metadata['entity'] = db_fact.entity
                 analysis_session.fact_store.facts.append(fact)
 
             # Convert DB findings to session format (risks and work items)
             for db_finding in findings_query:
                 if db_finding.finding_type == 'risk':
-                    from stores.reasoning_store import Risk
+                    from tools_v2.reasoning_tools import Risk
                     risk = Risk(
-                        id=db_finding.id,
-                        category=db_finding.category,
-                        title=db_finding.title,
+                        finding_id=db_finding.id,
+                        domain=db_finding.domain or 'general',
+                        title=db_finding.title or '',
                         description=db_finding.description or '',
-                        severity=db_finding.severity,
-                        likelihood=db_finding.likelihood,
-                        impact_areas=db_finding.impact_areas or [],
-                        source_facts=db_finding.source_facts or [],
-                        status=db_finding.status or 'open'
+                        category=db_finding.category or '',
+                        severity=db_finding.severity or 'medium',
+                        integration_dependent=db_finding.integration_dependent or False,
+                        mitigation=db_finding.mitigation or '',
+                        based_on_facts=db_finding.based_on_facts or [],
+                        confidence=db_finding.confidence or 'medium',
+                        reasoning=db_finding.reasoning or '',
+                        mna_lens=db_finding.mna_lens or '',
+                        mna_implication=db_finding.mna_implication or '',
+                        timeline=db_finding.timeline,
                     )
                     analysis_session.reasoning_store.risks.append(risk)
                 elif db_finding.finding_type == 'work_item':
-                    from stores.reasoning_store import WorkItem
+                    from tools_v2.reasoning_tools import WorkItem
                     work_item = WorkItem(
-                        id=db_finding.id,
-                        category=db_finding.category,
-                        title=db_finding.title,
+                        finding_id=db_finding.id,
+                        domain=db_finding.domain or 'general',
+                        title=db_finding.title or '',
                         description=db_finding.description or '',
-                        priority=db_finding.priority,
-                        phase=db_finding.phase,
-                        estimated_effort=db_finding.estimated_effort,
-                        source_facts=db_finding.source_facts or [],
-                        status=db_finding.status or 'open'
+                        phase=db_finding.phase or 'Day_100',
+                        priority=db_finding.priority or 'medium',
+                        owner_type=db_finding.owner_type or 'shared',
+                        triggered_by=db_finding.based_on_facts or [],  # Use based_on_facts as triggered_by
+                        based_on_facts=db_finding.based_on_facts or [],
+                        confidence=db_finding.confidence or 'medium',
+                        reasoning=db_finding.reasoning or '',
+                        cost_estimate=db_finding.cost_estimate or 'unknown',
+                        triggered_by_risks=db_finding.triggered_by_risks or [],
+                        mna_lens=db_finding.mna_lens or '',
+                        mna_implication=db_finding.mna_implication or '',
+                        dependencies=db_finding.dependencies or [],
                     )
                     analysis_session.reasoning_store.work_items.append(work_item)
 
