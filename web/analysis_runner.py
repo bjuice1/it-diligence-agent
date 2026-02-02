@@ -3,6 +3,10 @@ Analysis Runner - Connects web app to the analysis pipeline.
 
 This module bridges the Flask web interface with the V2 analysis pipeline.
 Includes robust error handling and fallback modes.
+
+INCREMENTAL PERSISTENCE: Facts, gaps, and findings are written to the database
+immediately after extraction (not at the end). This provides crash durability -
+if the process crashes, all data up to the last commit is preserved.
 """
 
 import sys
@@ -21,6 +25,286 @@ from web.task_manager import AnalysisTask, AnalysisPhase, TaskStatus
 logger = logging.getLogger(__name__)
 
 
+# =============================================================================
+# INCREMENTAL DATABASE WRITER INTEGRATION
+# =============================================================================
+
+class IncrementalPersistence:
+    """
+    Helper class to track and persist facts/findings incrementally during analysis.
+
+    Tracks what has already been written to avoid duplicates.
+    """
+
+    def __init__(self, app, deal_id: str, run_id: str):
+        self.app = app
+        self.deal_id = deal_id
+        self.run_id = run_id
+        self._written_fact_ids = set()
+        self._written_gap_ids = set()
+        self._written_finding_ids = set()
+        self._writer = None
+
+    def _get_writer(self):
+        """Lazy init writer to avoid import issues."""
+        if self._writer is None:
+            from stores.db_writer import get_db_writer
+            self._writer = get_db_writer(self.app)
+        return self._writer
+
+    def persist_new_facts(self, session_fact_store) -> int:
+        """
+        Persist any facts not yet written to database.
+
+        Args:
+            session_fact_store: The analysis session's fact store
+
+        Returns:
+            Number of new facts persisted
+        """
+        writer = self._get_writer()
+        new_count = 0
+
+        with writer.session_scope() as db_session:
+            for fact in session_fact_store.facts:
+                fact_id = getattr(fact, 'fact_id', None)
+                if not fact_id or fact_id in self._written_fact_ids:
+                    continue
+
+                fact_data = {
+                    'fact_id': fact_id,
+                    'domain': getattr(fact, 'domain', 'general'),
+                    'category': getattr(fact, 'category', ''),
+                    'entity': getattr(fact, 'entity', 'target'),
+                    'item': getattr(fact, 'item', ''),
+                    'status': getattr(fact, 'status', 'documented'),
+                    'details': getattr(fact, 'details', {}),
+                    'evidence': getattr(fact, 'evidence', {}),
+                    'source_document': getattr(fact, 'source_document', ''),
+                    'source_page_numbers': getattr(fact, 'source_page_numbers', []),
+                    'source_quote': fact.evidence.get('exact_quote', '') if fact.evidence else '',
+                    'confidence_score': getattr(fact, 'confidence_score', 0.5),
+                }
+
+                # Write without commit (batch at end of this method)
+                if writer.write_fact(db_session, fact_data, self.deal_id, self.run_id, commit=False):
+                    self._written_fact_ids.add(fact_id)
+                    new_count += 1
+
+            # Single commit for all new facts
+            if new_count > 0:
+                db_session.commit()
+                logger.debug(f"Persisted {new_count} new facts incrementally")
+
+        return new_count
+
+    def persist_new_gaps(self, session_fact_store) -> int:
+        """Persist any gaps not yet written to database."""
+        writer = self._get_writer()
+        new_count = 0
+
+        with writer.session_scope() as db_session:
+            for gap in session_fact_store.gaps:
+                gap_id = getattr(gap, 'gap_id', None)
+                if not gap_id or gap_id in self._written_gap_ids:
+                    continue
+
+                gap_data = {
+                    'gap_id': gap_id,
+                    'domain': getattr(gap, 'domain', 'general'),
+                    'category': getattr(gap, 'category', ''),
+                    'entity': getattr(gap, 'entity', 'target'),
+                    'description': getattr(gap, 'description', ''),
+                    'importance': getattr(gap, 'importance', 'medium'),
+                    'requested_item': getattr(gap, 'requested_item', ''),
+                    'source_document': getattr(gap, 'source_document', ''),
+                    'related_facts': getattr(gap, 'related_facts', []),
+                }
+
+                if writer.write_gap(db_session, gap_data, self.deal_id, self.run_id, commit=False):
+                    self._written_gap_ids.add(gap_id)
+                    new_count += 1
+
+            if new_count > 0:
+                db_session.commit()
+                logger.debug(f"Persisted {new_count} new gaps incrementally")
+
+        return new_count
+
+    def persist_new_findings(self, session_reasoning_store) -> int:
+        """Persist any findings (risks, work items, etc.) not yet written."""
+        writer = self._get_writer()
+        new_count = 0
+
+        with writer.session_scope() as db_session:
+            # Persist risks
+            for risk in session_reasoning_store.risks:
+                finding_id = getattr(risk, 'finding_id', None)
+                if not finding_id or finding_id in self._written_finding_ids:
+                    continue
+
+                finding_data = {
+                    'finding_id': finding_id,
+                    'finding_type': 'risk',
+                    'domain': getattr(risk, 'domain', 'general'),
+                    'title': getattr(risk, 'title', ''),
+                    'description': getattr(risk, 'description', ''),
+                    'severity': getattr(risk, 'severity', 'medium'),
+                    'category': getattr(risk, 'category', ''),
+                    'mitigation': getattr(risk, 'mitigation', ''),
+                    'integration_dependent': getattr(risk, 'integration_dependent', False),
+                    'timeline': getattr(risk, 'timeline', None),
+                    'confidence': getattr(risk, 'confidence', 'medium'),
+                    'reasoning': getattr(risk, 'reasoning', ''),
+                    'based_on_facts': getattr(risk, 'based_on_facts', []),
+                }
+
+                if writer.write_finding(db_session, finding_data, self.deal_id, self.run_id, commit=False):
+                    self._written_finding_ids.add(finding_id)
+                    new_count += 1
+
+            # Persist work items
+            for wi in session_reasoning_store.work_items:
+                finding_id = getattr(wi, 'finding_id', None)
+                if not finding_id or finding_id in self._written_finding_ids:
+                    continue
+
+                finding_data = {
+                    'finding_id': finding_id,
+                    'finding_type': 'work_item',
+                    'domain': getattr(wi, 'domain', 'general'),
+                    'title': getattr(wi, 'title', ''),
+                    'description': getattr(wi, 'description', ''),
+                    'phase': getattr(wi, 'phase', None),
+                    'priority': getattr(wi, 'priority', 'medium'),
+                    'owner_type': getattr(wi, 'owner_type', 'shared'),
+                    'cost_estimate': getattr(wi, 'cost_estimate', ''),
+                    'triggered_by_risks': getattr(wi, 'triggered_by_risks', []),
+                    'dependencies': getattr(wi, 'dependencies', []),
+                    'confidence': getattr(wi, 'confidence', 'medium'),
+                    'reasoning': getattr(wi, 'reasoning', ''),
+                    'based_on_facts': getattr(wi, 'based_on_facts', []),
+                }
+
+                if writer.write_finding(db_session, finding_data, self.deal_id, self.run_id, commit=False):
+                    self._written_finding_ids.add(finding_id)
+                    new_count += 1
+
+            # Persist strategic considerations
+            for sc in session_reasoning_store.strategic_considerations:
+                finding_id = getattr(sc, 'finding_id', None)
+                if not finding_id or finding_id in self._written_finding_ids:
+                    continue
+
+                finding_data = {
+                    'finding_id': finding_id,
+                    'finding_type': 'strategic_consideration',
+                    'domain': getattr(sc, 'domain', 'general'),
+                    'title': getattr(sc, 'title', ''),
+                    'description': getattr(sc, 'description', ''),
+                    'lens': getattr(sc, 'lens', ''),
+                    'implication': getattr(sc, 'implication', ''),
+                    'confidence': getattr(sc, 'confidence', 'medium'),
+                    'reasoning': getattr(sc, 'reasoning', ''),
+                    'mna_lens': getattr(sc, 'mna_lens', ''),
+                    'mna_implication': getattr(sc, 'mna_implication', ''),
+                    'based_on_facts': getattr(sc, 'based_on_facts', []),
+                }
+
+                if writer.write_finding(db_session, finding_data, self.deal_id, self.run_id, commit=False):
+                    self._written_finding_ids.add(finding_id)
+                    new_count += 1
+
+            # Persist recommendations
+            for rec in session_reasoning_store.recommendations:
+                finding_id = getattr(rec, 'finding_id', None)
+                if not finding_id or finding_id in self._written_finding_ids:
+                    continue
+
+                finding_data = {
+                    'finding_id': finding_id,
+                    'finding_type': 'recommendation',
+                    'domain': getattr(rec, 'domain', 'general'),
+                    'title': getattr(rec, 'title', ''),
+                    'description': getattr(rec, 'description', ''),
+                    'action_type': getattr(rec, 'action_type', ''),
+                    'urgency': getattr(rec, 'urgency', ''),
+                    'rationale': getattr(rec, 'rationale', ''),
+                    'confidence': getattr(rec, 'confidence', 'medium'),
+                    'reasoning': getattr(rec, 'reasoning', ''),
+                    'mna_lens': getattr(rec, 'mna_lens', ''),
+                    'mna_implication': getattr(rec, 'mna_implication', ''),
+                    'based_on_facts': getattr(rec, 'based_on_facts', []),
+                }
+
+                if writer.write_finding(db_session, finding_data, self.deal_id, self.run_id, commit=False):
+                    self._written_finding_ids.add(finding_id)
+                    new_count += 1
+
+            if new_count > 0:
+                db_session.commit()
+                logger.debug(f"Persisted {new_count} new findings incrementally")
+
+        return new_count
+
+    def update_progress(self, progress: float, current_step: str = ''):
+        """Update analysis run progress (throttled)."""
+        writer = self._get_writer()
+        with writer.session_scope() as db_session:
+            writer.update_analysis_progress(
+                db_session,
+                self.run_id,
+                progress=progress,
+                current_step=current_step,
+                facts_created=len(self._written_fact_ids),
+                findings_created=len(self._written_finding_ids)
+            )
+
+    def complete(self, status: str = 'completed', error_message: str = ''):
+        """Mark analysis run as complete."""
+        writer = self._get_writer()
+        with writer.session_scope() as db_session:
+            writer.complete_analysis_run(
+                db_session,
+                self.run_id,
+                status=status,
+                error_message=error_message,
+                facts_created=len(self._written_fact_ids),
+                findings_created=len(self._written_finding_ids)
+            )
+
+    def get_stats(self) -> Dict[str, int]:
+        """Get counts of what's been persisted."""
+        return {
+            'facts': len(self._written_fact_ids),
+            'gaps': len(self._written_gap_ids),
+            'findings': len(self._written_finding_ids),
+        }
+
+
+def create_analysis_run(app, deal_id: str, task_id: str = None) -> Optional[str]:
+    """
+    Create an analysis run record at the START of analysis.
+
+    Returns the run_id, or None on failure.
+    """
+    try:
+        from stores.db_writer import get_db_writer
+        writer = get_db_writer(app)
+
+        with writer.session_scope() as session:
+            run_id = writer.create_analysis_run(
+                session,
+                deal_id=deal_id,
+                task_id=task_id,
+                run_type='full'
+            )
+            return run_id
+    except Exception as e:
+        logger.error(f"Failed to create analysis run: {e}")
+        return None
+
+
 def persist_to_database(session, deal_id: str, timestamp: str) -> Dict[str, int]:
     """
     Persist session facts and findings to database.
@@ -33,7 +317,7 @@ def persist_to_database(session, deal_id: str, timestamp: str) -> Dict[str, int]
     Returns:
         Dict with counts of persisted items
     """
-    from web.database import db, Fact, Finding, AnalysisRun
+    from web.database import db, Fact, Finding, AnalysisRun, Gap
     from uuid import uuid4
 
     result = {'facts_count': 0, 'findings_count': 0, 'analysis_run_id': None}
@@ -162,10 +446,31 @@ def persist_to_database(session, deal_id: str, timestamp: str) -> Dict[str, int]
         db.session.add(db_finding)
         result['findings_count'] += 1
 
+    # Persist gaps
+    result['gaps_count'] = 0
+    for gap in session.fact_store.gaps:
+        gap_id = getattr(gap, 'gap_id', None) or f"GAP-{uuid4().hex[:8].upper()}"
+        db_gap = Gap(
+            id=gap_id,
+            deal_id=deal_id,
+            analysis_run_id=analysis_run_id,
+            domain=getattr(gap, 'domain', 'general'),
+            category=getattr(gap, 'category', ''),
+            entity=getattr(gap, 'entity', 'target'),
+            description=getattr(gap, 'description', ''),
+            importance=getattr(gap, 'importance', 'medium'),
+            requested_item=getattr(gap, 'requested_item', ''),
+            source_document=getattr(gap, 'source_document', ''),
+            related_facts=getattr(gap, 'related_facts', []),
+            status='open',
+        )
+        db.session.add(db_gap)
+        result['gaps_count'] += 1
+
     # Commit all changes
     db.session.commit()
 
-    logger.info(f"Database persistence complete: run={analysis_run_id}, facts={result['facts_count']}, findings={result['findings_count']}")
+    logger.info(f"Database persistence complete: run={analysis_run_id}, facts={result['facts_count']}, findings={result['findings_count']}, gaps={result['gaps_count']}")
 
     return result
 
@@ -285,7 +590,7 @@ def _combine_documents_for_entity(documents: List[Dict], entity: str) -> str:
     return "\n\n---\n\n".join(content_parts)
 
 
-def run_analysis(task: AnalysisTask, progress_callback: Callable) -> Dict[str, Any]:
+def run_analysis(task: AnalysisTask, progress_callback: Callable, app=None) -> Dict[str, Any]:
     """
     Run the full TWO-PHASE analysis pipeline.
 
@@ -295,9 +600,14 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable) -> Dict[str, A
     This prevents entity contamination by ensuring the LLM only sees
     one entity's documents at a time.
 
+    INCREMENTAL PERSISTENCE: Facts and findings are written to database
+    immediately after extraction. If analysis crashes, data up to the
+    last successful write is preserved.
+
     Args:
         task: The analysis task with file paths and configuration
         progress_callback: Callback to report progress updates
+        app: Flask app instance (for incremental DB writes)
 
     Returns:
         Dict with result file paths
@@ -313,6 +623,27 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable) -> Dict[str, A
     ensure_directories()
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    deal_context = task.deal_context or {}
+    deal_id = deal_context.get('deal_id')
+
+    # ==========================================================================
+    # INCREMENTAL PERSISTENCE SETUP
+    # ==========================================================================
+    incremental = None
+    run_id = None
+
+    if app and deal_id:
+        try:
+            # Create analysis run record FIRST (before any work)
+            task_id = f"analysis_{timestamp}"
+            run_id = create_analysis_run(app, deal_id, task_id)
+            if run_id:
+                incremental = IncrementalPersistence(app, deal_id, run_id)
+                logger.info(f"Incremental persistence enabled: run_id={run_id}")
+            else:
+                logger.warning("Could not create analysis run - falling back to batch persistence")
+        except Exception as e:
+            logger.warning(f"Incremental persistence setup failed: {e} - falling back to batch")
 
     # Initialize progress
     progress_callback({
@@ -323,11 +654,12 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable) -> Dict[str, A
 
     # Check for API key
     if not ANTHROPIC_API_KEY:
+        if incremental:
+            incremental.complete('failed', 'ANTHROPIC_API_KEY not configured')
         raise ValueError("ANTHROPIC_API_KEY not configured. Set it in .env file or environment.")
 
     # Create session with deal_id for proper data isolation
-    deal_context = task.deal_context or {}
-    session = Session(deal_id=deal_context.get('deal_id'))
+    session = Session(deal_id=deal_id)
 
     # Add deal context - properly populate the dict for reasoning agents
     session.deal_context = {
@@ -397,6 +729,8 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable) -> Dict[str, A
 
         for domain in domains_to_analyze:
             if task._cancelled:
+                if incremental:
+                    incremental.complete('cancelled')
                 return {}
 
             phase = discovery_phases.get(domain, AnalysisPhase.DISCOVERY_INFRASTRUCTURE)
@@ -408,6 +742,12 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable) -> Dict[str, A
                     domain, target_content, session, target_doc_names,
                     entity="target", analysis_phase="target_extraction"
                 )
+
+                # INCREMENTAL WRITE: Persist facts/gaps immediately after each domain
+                if incremental:
+                    incremental.persist_new_facts(session.fact_store)
+                    incremental.persist_new_gaps(session.fact_store)
+                    incremental.update_progress(20.0, f"TARGET {domain} complete")
 
                 progress_callback({
                     "facts_extracted": len(session.fact_store.facts),
@@ -446,6 +786,8 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable) -> Dict[str, A
 
         for domain in domains_to_analyze:
             if task._cancelled:
+                if incremental:
+                    incremental.complete('cancelled')
                 return {}
 
             phase = buyer_discovery_phases.get(domain, AnalysisPhase.BUYER_DISCOVERY_INFRASTRUCTURE)
@@ -458,6 +800,12 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable) -> Dict[str, A
                     entity="buyer", analysis_phase="buyer_extraction",
                     target_context=target_snapshot
                 )
+
+                # INCREMENTAL WRITE: Persist BUYER facts/gaps immediately
+                if incremental:
+                    incremental.persist_new_facts(session.fact_store)
+                    incremental.persist_new_gaps(session.fact_store)
+                    incremental.update_progress(50.0, f"BUYER {domain} complete")
 
                 progress_callback({
                     "facts_extracted": len(session.fact_store.facts),
@@ -475,10 +823,17 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable) -> Dict[str, A
 
     for domain in domains_to_analyze:
         if task._cancelled:
+            if incremental:
+                incremental.complete('cancelled')
             return {}
 
         try:
             run_reasoning_for_domain(domain, session)
+
+            # INCREMENTAL WRITE: Persist findings immediately after each domain
+            if incremental:
+                incremental.persist_new_findings(session.reasoning_store)
+                incremental.update_progress(75.0, f"Reasoning {domain} complete")
 
             progress_callback({
                 "risks_identified": len(session.reasoning_store.risks),
@@ -517,17 +872,25 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable) -> Dict[str, A
     saved_files = session.save_to_files(OUTPUT_DIR, timestamp)
 
     # ==========================================================================
-    # DATABASE PERSISTENCE: Save facts and findings to database with deal_id
+    # DATABASE PERSISTENCE: Finalize or fall back to batch
     # ==========================================================================
-    deal_id = deal_context.get('deal_id')
-    if deal_id:
+    if incremental:
+        # Incremental mode: data already written, just mark complete
+        try:
+            incremental.complete('completed')
+            stats = incremental.get_stats()
+            logger.info(f"Incremental persistence complete: {stats['facts']} facts, {stats['findings']} findings, {stats['gaps']} gaps")
+        except Exception as e:
+            logger.error(f"Failed to complete analysis run: {e}")
+    elif deal_id:
+        # Fallback: batch persistence at end (legacy mode)
         try:
             db_result = persist_to_database(
                 session=session,
                 deal_id=deal_id,
                 timestamp=timestamp
             )
-            logger.info(f"Persisted to database: {db_result['facts_count']} facts, {db_result['findings_count']} findings")
+            logger.info(f"Batch persisted to database: {db_result['facts_count']} facts, {db_result['findings_count']} findings")
         except Exception as e:
             logger.error(f"Database persistence failed (non-fatal): {e}")
             # Continue - JSON files are already saved as backup

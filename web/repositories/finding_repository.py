@@ -24,12 +24,33 @@ class FindingRepository(BaseRepository[Finding]):
     def get_by_deal(
         self,
         deal_id: str,
+        run_id: str = None,
         finding_type: str = None,
         domain: str = None,
-        severity: str = None
+        severity: str = None,
+        include_orphaned: bool = True
     ) -> List[Finding]:
-        """Get findings for a deal with optional filters."""
+        """
+        Get findings for a deal with optional filters.
+
+        Args:
+            include_orphaned: If True (default), includes findings with NULL
+                analysis_run_id when filtering by run_id (for legacy data).
+        """
         query = self.query().filter(Finding.deal_id == deal_id)
+
+        # Scope by analysis run (Phase 2: latest completed run)
+        # Also include orphaned findings (NULL run_id) to ensure legacy data is visible
+        if run_id:
+            if include_orphaned:
+                query = query.filter(
+                    or_(
+                        Finding.analysis_run_id == run_id,
+                        Finding.analysis_run_id.is_(None)
+                    )
+                )
+            else:
+                query = query.filter(Finding.analysis_run_id == run_id)
 
         if finding_type:
             query = query.filter(Finding.finding_type == finding_type)
@@ -42,12 +63,23 @@ class FindingRepository(BaseRepository[Finding]):
 
         return query.order_by(Finding.id).all()
 
-    def get_risks(self, deal_id: str, severity: str = None) -> List[Finding]:
+    def get_risks(self, deal_id: str, run_id: str = None, severity: str = None, include_orphaned: bool = True) -> List[Finding]:
         """Get all risks for a deal."""
         query = self.query().filter(
             Finding.deal_id == deal_id,
             Finding.finding_type == 'risk'
         )
+
+        if run_id:
+            if include_orphaned:
+                query = query.filter(
+                    or_(
+                        Finding.analysis_run_id == run_id,
+                        Finding.analysis_run_id.is_(None)
+                    )
+                )
+            else:
+                query = query.filter(Finding.analysis_run_id == run_id)
 
         if severity:
             query = query.filter(Finding.severity == severity)
@@ -56,36 +88,155 @@ class FindingRepository(BaseRepository[Finding]):
         severity_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}
         return sorted(query.all(), key=lambda r: severity_order.get(r.severity, 4))
 
-    def get_work_items(self, deal_id: str, phase: str = None) -> List[Finding]:
+    def get_work_items(self, deal_id: str, run_id: str = None, phase: str = None, include_orphaned: bool = True) -> List[Finding]:
         """Get all work items for a deal."""
         query = self.query().filter(
             Finding.deal_id == deal_id,
             Finding.finding_type == 'work_item'
         )
 
+        if run_id:
+            if include_orphaned:
+                query = query.filter(
+                    or_(
+                        Finding.analysis_run_id == run_id,
+                        Finding.analysis_run_id.is_(None)
+                    )
+                )
+            else:
+                query = query.filter(Finding.analysis_run_id == run_id)
+
         if phase:
             query = query.filter(Finding.phase == phase)
 
         return query.order_by(Finding.phase, Finding.priority).all()
 
-    def get_recommendations(self, deal_id: str, urgency: str = None) -> List[Finding]:
+    def get_recommendations(self, deal_id: str, run_id: str = None, urgency: str = None, include_orphaned: bool = True) -> List[Finding]:
         """Get all recommendations for a deal."""
         query = self.query().filter(
             Finding.deal_id == deal_id,
             Finding.finding_type == 'recommendation'
         )
 
+        if run_id:
+            if include_orphaned:
+                query = query.filter(
+                    or_(
+                        Finding.analysis_run_id == run_id,
+                        Finding.analysis_run_id.is_(None)
+                    )
+                )
+            else:
+                query = query.filter(Finding.analysis_run_id == run_id)
+
         if urgency:
             query = query.filter(Finding.urgency == urgency)
 
         return query.all()
 
-    def get_strategic_considerations(self, deal_id: str) -> List[Finding]:
+    def get_strategic_considerations(self, deal_id: str, run_id: str = None, include_orphaned: bool = True) -> List[Finding]:
         """Get all strategic considerations for a deal."""
-        return self.query().filter(
+        query = self.query().filter(
             Finding.deal_id == deal_id,
             Finding.finding_type == 'strategic_consideration'
-        ).all()
+        )
+
+        if run_id:
+            if include_orphaned:
+                query = query.filter(
+                    or_(
+                        Finding.analysis_run_id == run_id,
+                        Finding.analysis_run_id.is_(None)
+                    )
+                )
+            else:
+                query = query.filter(Finding.analysis_run_id == run_id)
+
+        return query.all()
+
+    def get_top_risks(self, deal_id: str, run_id: str = None, limit: int = 5, include_orphaned: bool = True) -> List[Finding]:
+        """Get highest severity risks for dashboard."""
+        from sqlalchemy import case
+
+        query = self.query().filter(
+            Finding.deal_id == deal_id,
+            Finding.finding_type == 'risk'
+        )
+
+        if run_id:
+            if include_orphaned:
+                query = query.filter(
+                    or_(
+                        Finding.analysis_run_id == run_id,
+                        Finding.analysis_run_id.is_(None)
+                    )
+                )
+            else:
+                query = query.filter(Finding.analysis_run_id == run_id)
+
+        # Order by severity (critical > high > medium > low)
+        severity_order = case(
+            (Finding.severity == 'critical', 1),
+            (Finding.severity == 'high', 2),
+            (Finding.severity == 'medium', 3),
+            (Finding.severity == 'low', 4),
+            else_=5
+        )
+        return query.order_by(severity_order).limit(limit).all()
+
+    def get_paginated(
+        self,
+        deal_id: str,
+        run_id: str = None,
+        finding_type: str = None,
+        severity: str = None,
+        search: str = None,
+        page: int = 1,
+        per_page: int = 50,
+        include_orphaned: bool = True
+    ):
+        """
+        Get paginated findings with filtering in SQL.
+
+        Args:
+            include_orphaned: If True (default), includes findings with NULL
+                analysis_run_id when filtering by run_id.
+
+        Returns:
+            Tuple of (items, total_count)
+        """
+        query = self.query().filter(Finding.deal_id == deal_id)
+
+        if run_id:
+            if include_orphaned:
+                query = query.filter(
+                    or_(
+                        Finding.analysis_run_id == run_id,
+                        Finding.analysis_run_id.is_(None)
+                    )
+                )
+            else:
+                query = query.filter(Finding.analysis_run_id == run_id)
+        if finding_type:
+            query = query.filter(Finding.finding_type == finding_type)
+        if severity:
+            query = query.filter(Finding.severity == severity)
+        if search:
+            search_term = f"%{search}%"
+            query = query.filter(
+                or_(
+                    Finding.title.ilike(search_term),
+                    Finding.description.ilike(search_term)
+                )
+            )
+
+        total = query.count()
+        items = query.order_by(Finding.created_at.desc()) \
+                     .offset((page - 1) * per_page) \
+                     .limit(per_page) \
+                     .all()
+
+        return items, total
 
     def get_by_analysis_run(self, analysis_run_id: str) -> List[Finding]:
         """Get all findings from an analysis run."""
@@ -95,9 +246,9 @@ class FindingRepository(BaseRepository[Finding]):
     # SUMMARY & STATISTICS
     # =========================================================================
 
-    def get_risk_summary(self, deal_id: str) -> Dict[str, int]:
+    def get_risk_summary(self, deal_id: str, run_id: str = None) -> Dict[str, int]:
         """Get risk counts by severity."""
-        risks = self.get_risks(deal_id)
+        risks = self.get_risks(deal_id, run_id=run_id)
 
         summary = {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'total': 0}
         for risk in risks:
@@ -107,9 +258,9 @@ class FindingRepository(BaseRepository[Finding]):
 
         return summary
 
-    def get_work_item_summary(self, deal_id: str) -> Dict[str, int]:
+    def get_work_item_summary(self, deal_id: str, run_id: str = None) -> Dict[str, int]:
         """Get work item counts by phase."""
-        work_items = self.get_work_items(deal_id)
+        work_items = self.get_work_items(deal_id, run_id=run_id)
 
         summary = {'Day_1': 0, 'Day_100': 0, 'Post_100': 0, 'total': 0}
         for wi in work_items:
@@ -119,9 +270,9 @@ class FindingRepository(BaseRepository[Finding]):
 
         return summary
 
-    def get_summary_by_domain(self, deal_id: str) -> Dict[str, Dict[str, int]]:
+    def get_summary_by_domain(self, deal_id: str, run_id: str = None) -> Dict[str, Dict[str, int]]:
         """Get finding counts by domain and type."""
-        findings = self.get_by_deal(deal_id)
+        findings = self.get_by_deal(deal_id, run_id=run_id)
 
         summary = {}
         for finding in findings:
@@ -171,11 +322,32 @@ class FindingRepository(BaseRepository[Finding]):
     # FACT RELATIONSHIPS
     # =========================================================================
 
-    def get_linked_facts(self, finding_id: str) -> List[str]:
-        """Get IDs of facts linked to this finding."""
-        links = FactFindingLink.query.filter(
-            FactFindingLink.finding_id == finding_id
-        ).all()
+    def get_linked_facts(self, finding_id: str, exclude_deleted: bool = True) -> List[str]:
+        """
+        Get IDs of facts linked to this finding.
+
+        Args:
+            finding_id: The finding ID to get linked facts for
+            exclude_deleted: If True (default), excludes links to soft-deleted facts
+
+        Returns:
+            List of fact IDs
+        """
+        from web.database import Fact
+
+        if exclude_deleted:
+            # Join with Fact to filter out soft-deleted facts
+            links = db.session.query(FactFindingLink).join(
+                Fact, FactFindingLink.fact_id == Fact.id
+            ).filter(
+                FactFindingLink.finding_id == finding_id,
+                Fact.deleted_at.is_(None)
+            ).all()
+        else:
+            links = FactFindingLink.query.filter(
+                FactFindingLink.finding_id == finding_id
+            ).all()
+
         return [link.fact_id for link in links]
 
     def link_facts(

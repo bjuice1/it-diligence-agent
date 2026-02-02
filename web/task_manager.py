@@ -339,9 +339,11 @@ class AnalysisTaskManager:
             # Wrap entire analysis in app context for database access
             with app.app_context():
                 # Run the actual analysis
+                # Pass app for incremental database writes
                 result = run_analysis_fn(
                     task=task,
-                    progress_callback=lambda p: self._update_progress(task.task_id, p)
+                    progress_callback=lambda p: self._update_progress(task.task_id, p),
+                    app=app
                 )
 
                 # Check for timeout

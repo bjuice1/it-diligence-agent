@@ -573,6 +573,23 @@ def get_session():
                     )
                     analysis_session.reasoning_store.work_items.append(work_item)
 
+            # Load gaps from database into session
+            from web.database import Gap as DbGap
+            from stores.fact_store import Gap as GapModel
+            gaps_query = DbGap.query.filter_by(deal_id=current_deal_id, deleted_at=None).all()
+            logger.debug(f"Loading {len(gaps_query)} gaps from database for deal {current_deal_id}")
+            for db_gap in gaps_query:
+                gap = GapModel(
+                    gap_id=db_gap.id,
+                    domain=db_gap.domain or 'general',
+                    category=db_gap.category or '',
+                    description=db_gap.description or '',
+                    importance=db_gap.importance or 'medium',
+                    entity=db_gap.entity or 'target',
+                )
+                analysis_session.fact_store.gaps.append(gap)
+            logger.info(f"Loaded {len(gaps_query)} gaps from database")
+
             # Cache with deal_id tracking
             if user_session:
                 user_session.analysis_session = analysis_session
@@ -1088,36 +1105,85 @@ def cancel_analysis():
 @app.route('/dashboard')
 @auth_optional
 def dashboard():
-    """Main dashboard view."""
+    """Main dashboard view.
+
+    Phase 2: Tries database-first via DealData, falls back to session.
+    """
     from config_v2 import OUTPUT_DIR
     import json as json_module
 
+    # Phase 2: Try database first
+    current_deal_id = flask_session.get('current_deal_id')
+    db_data = None
+    if current_deal_id:
+        try:
+            from web.deal_data import DealData
+            from web.context import load_deal_context
+
+            load_deal_context(current_deal_id)
+            db_data = DealData()
+            logger.info(f"Dashboard: Using Phase 2 database path for deal {current_deal_id}")
+        except Exception as e:
+            logger.warning(f"Dashboard: Phase 2 DB path failed, falling back to session: {e}")
+
+    # Get session as fallback or for legacy data
     s = get_session()
-    summary = s.get_summary()
 
-    # Get top risks
-    top_risks = sorted(s.reasoning_store.risks,
-                       key=lambda r: {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}.get(r.severity, 4))[:5]
-
-    # Get recent work items by phase
-    day1_items = [w for w in s.reasoning_store.work_items if w.phase == 'Day_1'][:5]
+    # Build summary - prefer database if available
+    if db_data:
+        summary = db_data.get_dashboard_summary()
+        # Adapt summary format to match session.get_summary() output
+        summary = {
+            'facts': sum(summary.get('fact_counts', {}).values()),
+            'gaps': sum(summary.get('gap_counts', {}).values()),
+            'risks': summary.get('risk_summary', {}).get('total', 0),
+            'work_items': summary.get('work_item_summary', {}).get('total', 0),
+        }
+        top_risks = db_data.get_top_risks(5)
+        day1_items = [w for w in db_data.get_work_items() if w.phase == 'Day_1'][:5]
+    else:
+        summary = s.get_summary()
+        top_risks = sorted(s.reasoning_store.risks,
+                           key=lambda r: {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}.get(r.severity, 4))[:5]
+        day1_items = [w for w in s.reasoning_store.work_items if w.phase == 'Day_1'][:5]
 
     # Get analysis metadata - show what data is currently being displayed
     analysis_metadata = None
-    task_id = flask_session.get('current_task_id')
-    if task_id:
-        task = task_manager.get_task(task_id)
-        if task:
-            from datetime import datetime
-            analysis_metadata = {
-                'file_count': len(task.file_paths),
-                'timestamp': task.completed_at[:10] if task.completed_at else None,
-                'domains': task.domains,
-                'task_id': task_id,
-                'source': 'current_analysis',
-            }
 
-    # If no current task, show info about loaded data
+    # Phase 2: Try to get analysis run info from database first
+    if db_data:
+        try:
+            run = db_data.get_analysis_run()
+            if run:
+                from datetime import datetime
+                analysis_metadata = {
+                    'run_id': run.id,
+                    'run_number': run.run_number,
+                    'timestamp': run.completed_at.strftime('%Y-%m-%d') if run.completed_at else None,
+                    'domains': run.domains or [],
+                    'source': 'database',
+                    'fact_count': run.facts_created or 0,
+                    'finding_count': run.findings_created or 0,
+                }
+        except Exception as e:
+            logger.debug(f"Could not get analysis run from DB: {e}")
+
+    # Fallback: Check task manager
+    if not analysis_metadata:
+        task_id = flask_session.get('current_task_id')
+        if task_id:
+            task = task_manager.get_task(task_id)
+            if task:
+                from datetime import datetime
+                analysis_metadata = {
+                    'file_count': len(task.file_paths),
+                    'timestamp': task.completed_at[:10] if task.completed_at else None,
+                    'domains': task.domains,
+                    'task_id': task_id,
+                    'source': 'current_analysis',
+                }
+
+    # Fallback: Show info about loaded data from session
     if not analysis_metadata and s and s.fact_store and len(s.fact_store.facts) > 0:
         # Find the source from fact_store metadata
         from datetime import datetime
@@ -1158,17 +1224,54 @@ def dashboard():
 
     # Get entity summary (target vs buyer breakdown)
     entity_summary = None
-    if s and s.fact_store and len(s.fact_store.facts) > 0:
-        # Use facts list directly, not get_all_facts() which returns a dict
+
+    def domain_breakdown(facts):
+        breakdown = {}
+        for f in facts:
+            domain = getattr(f, 'domain', 'unknown')
+            breakdown[domain] = breakdown.get(domain, 0) + 1
+        return breakdown
+
+    # Phase 2: Try database first for entity summary
+    if db_data:
+        try:
+            all_facts = db_data.get_all_facts()
+            if all_facts:
+                target_facts = [f for f in all_facts if getattr(f, 'entity', 'target') == 'target']
+                buyer_facts = [f for f in all_facts if getattr(f, 'entity', '') == 'buyer']
+
+                # Get document counts from DocumentStore
+                target_doc_count = 0
+                buyer_doc_count = 0
+                try:
+                    from tools_v2.document_store import DocumentStore
+                    doc_store = DocumentStore.get_instance()
+                    stats = doc_store.get_statistics()
+                    target_doc_count = stats["by_entity"]["target"]
+                    buyer_doc_count = stats["by_entity"]["buyer"]
+                except Exception:
+                    pass
+
+                entity_summary = {
+                    "target": {
+                        "fact_count": len(target_facts),
+                        "document_count": target_doc_count,
+                        "by_domain": domain_breakdown(target_facts)
+                    },
+                    "buyer": {
+                        "fact_count": len(buyer_facts),
+                        "document_count": buyer_doc_count,
+                        "by_domain": domain_breakdown(buyer_facts)
+                    }
+                }
+        except Exception as e:
+            logger.debug(f"Could not get entity summary from DB: {e}")
+
+    # Fallback: Use session
+    if entity_summary is None and s and s.fact_store and len(s.fact_store.facts) > 0:
         all_facts = list(s.fact_store.facts)
         target_facts = [f for f in all_facts if getattr(f, 'entity', 'target') == 'target']
         buyer_facts = [f for f in all_facts if getattr(f, 'entity', '') == 'buyer']
-
-        def domain_breakdown(facts):
-            breakdown = {}
-            for f in facts:
-                breakdown[f.domain] = breakdown.get(f.domain, 0) + 1
-            return breakdown
 
         # Get document counts from DocumentStore
         target_doc_count = 0
@@ -1557,8 +1660,10 @@ def adjust_work_item(wi_id):
 @app.route('/facts')
 @auth_optional
 def facts():
-    """List all facts with pagination."""
-    s = get_session()
+    """List all facts with pagination.
+
+    Phase 2: Uses database pagination when available.
+    """
     domain_filter = request.args.get('domain', '')
     category_filter = request.args.get('category', '')
     entity_filter = request.args.get('entity', '')
@@ -1566,6 +1671,56 @@ def facts():
     page = request.args.get('page', 1, type=int)
     per_page = 50
 
+    # Phase 2: Try database-first with SQL pagination
+    current_deal_id = flask_session.get('current_deal_id')
+    if current_deal_id:
+        try:
+            from web.deal_data import DealData
+            from web.context import load_deal_context
+
+            load_deal_context(current_deal_id)
+            data = DealData()
+
+            # Use repository pagination (filtering done in SQL)
+            paginated_facts, total = data.get_facts_paginated(
+                domain=domain_filter or None,
+                status=None,
+                search=search_query or None,
+                page=page,
+                per_page=per_page
+            )
+
+            # Apply category and entity filters (may need to add to repository later)
+            if category_filter:
+                paginated_facts = [f for f in paginated_facts if f.category == category_filter]
+            if entity_filter:
+                paginated_facts = [f for f in paginated_facts if getattr(f, 'entity', 'target') == entity_filter]
+
+            total_pages = (total + per_page - 1) // per_page
+
+            # Get unique domains/categories from all facts for filter dropdowns
+            all_facts = data.get_all_facts()
+            domains = list(set(f.domain for f in all_facts))
+            categories = list(set(f.category for f in all_facts if f.category))
+
+            return render_template('facts.html',
+                                 facts=paginated_facts,
+                                 all_facts=all_facts,
+                                 domains=domains,
+                                 categories=categories,
+                                 domain_filter=domain_filter,
+                                 category_filter=category_filter,
+                                 entity_filter=entity_filter,
+                                 search_query=search_query,
+                                 page=page,
+                                 total_pages=total_pages,
+                                 total=total,
+                                 data_source='database')
+        except Exception as e:
+            logger.warning(f"Facts page: Phase 2 DB path failed, falling back to session: {e}")
+
+    # Fallback: Session-based approach
+    s = get_session()
     facts_list = list(s.fact_store.facts)
 
     # Apply filters
@@ -1637,21 +1792,51 @@ def fact_detail(fact_id):
 @app.route('/gaps')
 @auth_optional
 def gaps():
-    """List all gaps with pagination."""
-    s = get_session()
+    """List all gaps with pagination.
+
+    Database-first: Reads from database if deal is selected, falls back to in-memory.
+    """
     domain_filter = request.args.get('domain', '')
     importance_filter = request.args.get('importance', '')
     search_query = request.args.get('q', '').lower()
     page = request.args.get('page', 1, type=int)
     per_page = 50
 
-    gaps_list = list(s.fact_store.gaps)
+    gaps_list = []
+    domains = []
 
-    # Apply filters
-    if domain_filter:
-        gaps_list = [g for g in gaps_list if g.domain == domain_filter]
-    if importance_filter:
-        gaps_list = [g for g in gaps_list if g.importance == importance_filter]
+    # Try database first if we have a deal_id
+    deal_id = flask_session.get('current_deal_id')
+    if deal_id and USE_DATABASE:
+        try:
+            from web.repositories.gap_repository import GapRepository
+            repo = GapRepository()
+            db_gaps = repo.get_by_deal(
+                deal_id=deal_id,
+                domain=domain_filter if domain_filter else None,
+                importance=importance_filter if importance_filter else None
+            )
+            # Convert to gap-like objects for template compatibility
+            gaps_list = db_gaps
+            domains = repo.get_domains(deal_id)
+            logger.debug(f"Retrieved {len(gaps_list)} gaps from database for deal {deal_id}")
+        except Exception as e:
+            logger.warning(f"Database query failed, falling back to in-memory: {e}")
+            gaps_list = []
+
+    # Fallback to in-memory session store
+    if not gaps_list:
+        s = get_session()
+        gaps_list = list(s.fact_store.gaps)
+        domains = list(set(g.domain for g in s.fact_store.gaps))
+
+        # Apply filters (already filtered for database)
+        if domain_filter:
+            gaps_list = [g for g in gaps_list if g.domain == domain_filter]
+        if importance_filter:
+            gaps_list = [g for g in gaps_list if g.importance == importance_filter]
+
+    # Apply search filter
     if search_query:
         gaps_list = [g for g in gaps_list if search_query in g.description.lower()]
 
@@ -1665,8 +1850,6 @@ def gaps():
     start = (page - 1) * per_page
     end = start + per_page
     paginated_gaps = gaps_list[start:end]
-
-    domains = list(set(g.domain for g in s.fact_store.gaps))
 
     return render_template('gaps.html',
                          gaps=paginated_gaps,
@@ -1806,6 +1989,7 @@ _org_cache_by_deal: dict = {}
 def get_organization_analysis():
     """Get or run the organization analysis.
 
+    Phase 2: Now reads from database via DealData first, with fallback to session.
     IMPORTANT: This cache is now DEAL-SCOPED. Each deal has its own cache entry
     to prevent data leakage between deals.
     """
@@ -1817,10 +2001,87 @@ def get_organization_analysis():
     # Get current deal_id - this is CRITICAL for isolation
     current_deal_id = flask_session.get('current_deal_id') or 'no_deal'
 
-    # First, get the current session (this handles cache invalidation)
+    # Phase 2: Try database first via DealData
+    if current_deal_id and current_deal_id != 'no_deal':
+        try:
+            from web.deal_data import DealData, create_store_adapters_from_deal_data
+            from web.context import load_deal_context
+
+            load_deal_context(current_deal_id)
+            data = DealData()
+
+            all_facts = data.get_all_facts()
+            org_facts = [f for f in all_facts if f.domain == "organization"]
+
+            if all_facts:
+                total_facts = len(all_facts)
+                current_org_count = len(org_facts)
+
+                # Generate fingerprint based on fact IDs
+                fact_ids = sorted([f.id for f in all_facts])
+                session_fingerprint = hash(tuple(fact_ids))
+
+                logger.info(f"Phase 2 DB: {total_facts} total facts, {current_org_count} org facts for deal {current_deal_id}")
+
+                # Get cached data for THIS DEAL only
+                deal_cache = _org_cache_by_deal.get(current_deal_id, {})
+                cached_fingerprint = deal_cache.get('fingerprint')
+                cached_org_count = deal_cache.get('org_count', 0)
+                cached_result = deal_cache.get('result')
+
+                # Check if we need to rebuild
+                needs_rebuild = (
+                    cached_result is None or
+                    cached_fingerprint != session_fingerprint or
+                    cached_org_count != current_org_count
+                )
+
+                if needs_rebuild and total_facts > 0:
+                    logger.info(f"Phase 2: Rebuilding organization data from DB for deal {current_deal_id}")
+
+                    from services.organization_bridge import build_organization_result
+
+                    # Get target name from deal
+                    from flask import g
+                    target_name = getattr(g, 'deal', None)
+                    target_name = target_name.target_name if target_name and hasattr(target_name, 'target_name') else 'Target'
+
+                    # Create adapters for bridge function
+                    fact_adapter, reasoning_adapter = create_store_adapters_from_deal_data(data)
+
+                    logger.info(f"Building org result for target: {target_name}")
+                    result, status = build_organization_result(fact_adapter, reasoning_adapter, target_name)
+
+                    # Update DEAL-SCOPED cache
+                    _org_cache_by_deal[current_deal_id] = {
+                        'fingerprint': session_fingerprint,
+                        'org_count': current_org_count,
+                        'result': result,
+                        'source': 'database' if status == "success" else 'database_no_org'
+                    }
+
+                    if status == "success" and result.total_it_headcount > 0:
+                        logger.info(f"SUCCESS: Built org analysis from DB with {result.total_it_headcount} headcount")
+                        return result
+                    elif status == "no_org_facts":
+                        logger.warning(f"Analysis in DB has {total_facts} facts but no organization facts")
+                        return result
+                    else:
+                        return result
+
+                elif cached_result is not None:
+                    logger.debug(f"Using cached org result for deal {current_deal_id}")
+                    return cached_result
+
+        except Exception as e:
+            import traceback
+            logger.warning(f"Phase 2 DB path failed, falling back to session: {e}")
+            logger.debug(traceback.format_exc())
+
+    # Fallback: Use session-based path (legacy)
     try:
         s = get_session()
-        logger.info(f"get_organization_analysis: deal={current_deal_id}, session has fact_store={s.fact_store is not None}")
+        logger.info(f"get_organization_analysis (fallback): deal={current_deal_id}, session has fact_store={s.fact_store is not None}")
 
         if s and s.fact_store:
             total_facts = len(s.fact_store.facts)
@@ -2354,6 +2615,36 @@ def organization_staffing():
     result = get_organization_analysis()
     store = result.data_store
 
+    # Debug info for troubleshooting
+    data_source = get_org_data_source()
+    s = get_session()
+    org_facts_count = 0
+    total_facts_count = 0
+    org_categories = {}
+    org_fact_samples = []
+    if s and s.fact_store:
+        total_facts_count = len(s.fact_store.facts)
+        org_facts = [f for f in s.fact_store.facts if f.domain == "organization"]
+        org_facts_count = len(org_facts)
+        # Count facts by category to help diagnose why staff_members might be empty
+        for f in org_facts:
+            cat = f.category or 'unknown'
+            org_categories[cat] = org_categories.get(cat, 0) + 1
+            # Sample first 3 facts for debugging
+            if len(org_fact_samples) < 3:
+                org_fact_samples.append({'item': f.item, 'category': f.category, 'has_details': bool(f.details)})
+
+    debug_info = {
+        'data_source': data_source,
+        'total_facts': total_facts_count,
+        'org_facts': org_facts_count,
+        'org_categories': org_categories,  # Shows breakdown by category
+        'org_samples': org_fact_samples,   # Sample facts for debugging
+        'staff_members': len(store.staff_members) if store else 0,
+        'deal_id': flask_session.get('current_deal_id', 'none')
+    }
+    logger.info(f"Organization staffing debug: {debug_info}")
+
     # Build categories dict for template by grouping staff members
     categories = {}
     role_groups = {}  # role_title -> list of members
@@ -2401,7 +2692,8 @@ def organization_staffing():
                          fte_count=store.total_internal_fte,
                          contractor_count=store.total_contractor,
                          key_person_count=len(store.get_key_persons()),
-                         msp_relationships=msp_relationships)
+                         msp_relationships=msp_relationships,
+                         debug_info=debug_info)
 
 
 @app.route('/organization/benchmark')
@@ -2450,57 +2742,127 @@ def organization_shared_services():
 @app.route('/applications')
 @auth_optional
 def applications_overview():
-    """Applications inventory overview."""
+    """Applications inventory overview.
+
+    Phase 2: Now reads from database via DealData, with fallback to InventoryStore.
+    """
     from services.applications_bridge import build_applications_inventory, build_applications_from_inventory_store, ApplicationsInventory
+    from web.deal_data import DealData, wrap_db_facts
+    from web.context import load_deal_context
+
+    # Debug info to help diagnose missing applications
+    debug_info = {
+        'inventory_store_count': 0,
+        'inventory_apps_target': 0,
+        'inventory_apps_all': 0,
+        'fact_store_app_facts': 0,
+        'fact_store_app_by_entity': {},
+        'data_source': 'none'
+    }
 
     # First try InventoryStore (structured data from imports)
     try:
         from web.blueprints.inventory import get_inventory_store
         inv_store = get_inventory_store()
+        debug_info['inventory_store_count'] = len(inv_store)
         if len(inv_store) > 0:
-            apps = inv_store.get_items(inventory_type="application", entity="target", status="active")
-            if apps:
+            # Check all apps vs target-only apps
+            all_apps = inv_store.get_items(inventory_type="application", status="active")
+            target_apps = inv_store.get_items(inventory_type="application", entity="target", status="active")
+            debug_info['inventory_apps_all'] = len(all_apps) if all_apps else 0
+            debug_info['inventory_apps_target'] = len(target_apps) if target_apps else 0
+
+            if target_apps:
                 inventory, status = build_applications_from_inventory_store(inv_store)
                 data_source = "inventory"
+                debug_info['data_source'] = data_source
+                logger.info(f"Applications debug: {debug_info}")
                 return render_template('applications/overview.html',
                                       inventory=inventory,
                                       status=status,
-                                      data_source=data_source)
+                                      data_source=data_source,
+                                      debug_info=debug_info)
     except Exception as e:
         logger.warning(f"Could not load from InventoryStore: {e}")
 
-    # Fall back to FactStore (facts from discovery agents)
-    session = get_session()
+    # Phase 2: Read from database via DealData
+    current_deal_id = flask_session.get('current_deal_id')
 
-    if session and session.fact_store:
-        inventory, status = build_applications_inventory(session.fact_store)
-        data_source = "analysis"
-    else:
-        # Return empty inventory
-        inventory = ApplicationsInventory()
-        status = "no_facts"
-        data_source = "none"
+    if current_deal_id:
+        try:
+            load_deal_context(current_deal_id)
+            data = DealData()
+
+            # Get all facts for this deal/run, then filter for applications
+            all_facts = data.get_all_facts()
+            app_facts = [f for f in all_facts if f.domain == "applications"]
+            debug_info['fact_store_app_facts'] = len(app_facts)
+
+            for f in app_facts:
+                entity = f.entity or 'target'
+                debug_info['fact_store_app_by_entity'][entity] = debug_info['fact_store_app_by_entity'].get(entity, 0) + 1
+
+            if app_facts:
+                # Wrap DB facts in adapter for bridge function
+                fact_adapter = wrap_db_facts(all_facts)
+                inventory, status = build_applications_inventory(fact_adapter)
+                data_source = "database"
+                debug_info['data_source'] = data_source
+                logger.info(f"Applications debug (Phase 2 DB): {debug_info}")
+                return render_template('applications/overview.html',
+                                      inventory=inventory,
+                                      status=status,
+                                      data_source=data_source,
+                                      debug_info=debug_info)
+        except Exception as e:
+            logger.warning(f"Could not load from database: {e}")
+
+    # Fallback: Return empty inventory
+    inventory = ApplicationsInventory()
+    status = "no_facts"
+    data_source = "none"
+
+    debug_info['data_source'] = data_source
+    logger.info(f"Applications debug: {debug_info}")
 
     return render_template('applications/overview.html',
                           inventory=inventory,
                           status=status,
-                          data_source=data_source)
+                          data_source=data_source,
+                          debug_info=debug_info)
 
 
 @app.route('/applications/<category>')
 @auth_optional
 def applications_category(category):
-    """View applications in a specific category."""
-    from services.applications_bridge import build_applications_inventory
+    """View applications in a specific category.
 
-    session = get_session()
+    Phase 2: Now reads from database via DealData.
+    """
+    from services.applications_bridge import build_applications_inventory, ApplicationsInventory
+    from web.deal_data import DealData, wrap_db_facts
+    from web.context import load_deal_context
 
-    if session and session.fact_store:
-        inventory, status = build_applications_inventory(session.fact_store)
-    else:
-        from services.applications_bridge import ApplicationsInventory
+    inventory = None
+    status = "no_facts"
+
+    # Phase 2: Read from database via DealData
+    current_deal_id = flask_session.get('current_deal_id')
+
+    if current_deal_id:
+        try:
+            load_deal_context(current_deal_id)
+            data = DealData()
+            all_facts = data.get_all_facts()
+
+            if all_facts:
+                fact_adapter = wrap_db_facts(all_facts)
+                inventory, status = build_applications_inventory(fact_adapter)
+        except Exception as e:
+            logger.warning(f"Could not load from database: {e}")
+
+    if inventory is None:
         inventory = ApplicationsInventory()
-        status = "no_facts"
 
     # Get category summary
     cat_summary = inventory.by_category.get(category)
@@ -2520,8 +2882,13 @@ def applications_category(category):
 @app.route('/infrastructure')
 @auth_optional
 def infrastructure_overview():
-    """Infrastructure inventory overview."""
+    """Infrastructure inventory overview.
+
+    Phase 2: Now reads from database via DealData, with fallback to InventoryStore.
+    """
     from services.infrastructure_bridge import build_infrastructure_inventory, build_infrastructure_from_inventory_store, InfrastructureInventory
+    from web.deal_data import DealData, wrap_db_facts
+    from web.context import load_deal_context
 
     # First try InventoryStore (structured data from imports)
     try:
@@ -2539,17 +2906,30 @@ def infrastructure_overview():
     except Exception as e:
         logger.warning(f"Could not load from InventoryStore: {e}")
 
-    # Fall back to FactStore (facts from discovery agents)
-    session = get_session()
+    # Phase 2: Read from database via DealData
+    current_deal_id = flask_session.get('current_deal_id')
 
-    if session and session.fact_store:
-        inventory, status = build_infrastructure_inventory(session.fact_store)
-        data_source = "analysis"
-    else:
-        # Return empty inventory
-        inventory = InfrastructureInventory()
-        status = "no_facts"
-        data_source = "none"
+    if current_deal_id:
+        try:
+            load_deal_context(current_deal_id)
+            data = DealData()
+            all_facts = data.get_all_facts()
+
+            if all_facts:
+                fact_adapter = wrap_db_facts(all_facts)
+                inventory, status = build_infrastructure_inventory(fact_adapter)
+                data_source = "database"
+                return render_template('infrastructure/overview.html',
+                                      inventory=inventory,
+                                      status=status,
+                                      data_source=data_source)
+        except Exception as e:
+            logger.warning(f"Could not load from database: {e}")
+
+    # Fallback: Return empty inventory
+    inventory = InfrastructureInventory()
+    status = "no_facts"
+    data_source = "none"
 
     return render_template('infrastructure/overview.html',
                           inventory=inventory,
@@ -2560,10 +2940,16 @@ def infrastructure_overview():
 @app.route('/infrastructure/<category>')
 @auth_optional
 def infrastructure_category(category):
-    """View infrastructure in a specific category."""
+    """View infrastructure in a specific category.
+
+    Phase 2: Now reads from database via DealData.
+    """
     from services.infrastructure_bridge import build_infrastructure_inventory, build_infrastructure_from_inventory_store, InfrastructureInventory
+    from web.deal_data import DealData, wrap_db_facts
+    from web.context import load_deal_context
 
     inventory = None
+    status = "no_facts"
 
     # First try InventoryStore (structured data from imports)
     try:
@@ -2576,14 +2962,23 @@ def infrastructure_category(category):
     except Exception as e:
         logger.warning(f"Could not load from InventoryStore: {e}")
 
-    # Fall back to FactStore if no inventory data
+    # Phase 2: Read from database via DealData
     if inventory is None:
-        session = get_session()
-        if session and session.fact_store:
-            inventory, status = build_infrastructure_inventory(session.fact_store)
-        else:
-            inventory = InfrastructureInventory()
-            status = "no_facts"
+        current_deal_id = flask_session.get('current_deal_id')
+        if current_deal_id:
+            try:
+                load_deal_context(current_deal_id)
+                data = DealData()
+                all_facts = data.get_all_facts()
+
+                if all_facts:
+                    fact_adapter = wrap_db_facts(all_facts)
+                    inventory, status = build_infrastructure_inventory(fact_adapter)
+            except Exception as e:
+                logger.warning(f"Could not load from database: {e}")
+
+    if inventory is None:
+        inventory = InfrastructureInventory()
 
     # Get category summary
     cat_summary = inventory.by_category.get(category)
@@ -2737,6 +3132,83 @@ def pipeline_status():
             'reasoning_agents': status['reasoning_agents'],
         },
         'errors': status['errors'] if status['errors'] else None
+    })
+
+
+# =============================================================================
+# Phase 2: Deal Status Endpoint (Database-First)
+# =============================================================================
+
+@app.route('/api/deal/<deal_id>/status')
+@auth_optional
+def get_deal_analysis_status(deal_id):
+    """
+    Get analysis status for a deal from the database.
+
+    Phase 2 endpoint: reads from AnalysisRun table instead of in-memory task manager.
+    This survives server restarts and provides consistent status.
+
+    Returns:
+        JSON with status, progress, counts, and timestamps
+    """
+    from web.repositories import AnalysisRunRepository
+
+    run_repo = AnalysisRunRepository()
+
+    # Get latest run (any status) to show in-progress or completed analysis
+    run = run_repo.get_latest(deal_id)
+
+    if run:
+        return jsonify({
+            'status': run.status,
+            'progress': run.progress or 0,
+            'current_step': run.current_step or '',
+            'facts_created': run.facts_created or 0,
+            'findings_created': run.findings_created or 0,
+            'run_id': run.id,
+            'run_number': run.run_number,
+            'started_at': run.started_at.isoformat() if run.started_at else None,
+            'completed_at': run.completed_at.isoformat() if run.completed_at else None,
+            'duration_seconds': run.duration_seconds,
+            'error_message': run.error_message if run.status == 'failed' else None,
+        })
+
+    return jsonify({
+        'status': 'no_analysis',
+        'message': 'No analysis has been run for this deal'
+    })
+
+
+@app.route('/api/deal/<deal_id>/runs')
+@auth_optional
+def get_deal_analysis_runs(deal_id):
+    """
+    Get analysis run history for a deal.
+
+    Phase 2 endpoint: lists all runs for historical tracking.
+    """
+    from web.repositories import AnalysisRunRepository
+
+    run_repo = AnalysisRunRepository()
+    runs = run_repo.get_by_deal(deal_id, limit=10)
+
+    return jsonify({
+        'runs': [
+            {
+                'run_id': r.id,
+                'run_number': r.run_number,
+                'status': r.status,
+                'run_type': r.run_type,
+                'progress': r.progress or 0,
+                'facts_created': r.facts_created or 0,
+                'findings_created': r.findings_created or 0,
+                'started_at': r.started_at.isoformat() if r.started_at else None,
+                'completed_at': r.completed_at.isoformat() if r.completed_at else None,
+                'duration_seconds': r.duration_seconds,
+            }
+            for r in runs
+        ],
+        'total': len(runs)
     })
 
 

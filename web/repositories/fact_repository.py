@@ -24,15 +24,42 @@ class FactRepository(BaseRepository[Fact]):
     def get_by_deal(
         self,
         deal_id: str,
+        run_id: str = None,
         domain: str = None,
         entity: str = None,
         category: str = None,
         status: str = None,
         verified_only: bool = False,
-        needs_review: bool = None
+        needs_review: bool = None,
+        include_orphaned: bool = True
     ) -> List[Fact]:
-        """Get facts for a deal with optional filters."""
+        """
+        Get facts for a deal with optional filters.
+
+        Args:
+            deal_id: The deal ID
+            run_id: Filter by analysis run. If provided:
+                - If include_orphaned=True (default): Returns facts from this run
+                  PLUS facts with NULL analysis_run_id (legacy/orphaned data)
+                - If include_orphaned=False: Returns only facts from this exact run
+            include_orphaned: Whether to include facts with NULL analysis_run_id
+                when filtering by run_id. Defaults to True to ensure legacy data
+                is visible.
+        """
         query = self.query().filter(Fact.deal_id == deal_id)
+
+        # Scope by analysis run (Phase 2: latest completed run)
+        # Also include orphaned facts (NULL run_id) to ensure legacy data is visible
+        if run_id:
+            if include_orphaned:
+                query = query.filter(
+                    or_(
+                        Fact.analysis_run_id == run_id,
+                        Fact.analysis_run_id.is_(None)
+                    )
+                )
+            else:
+                query = query.filter(Fact.analysis_run_id == run_id)
 
         if domain:
             query = query.filter(Fact.domain == domain)
@@ -54,13 +81,38 @@ class FactRepository(BaseRepository[Fact]):
 
         return query.order_by(Fact.id).all()
 
-    def get_by_domain(self, deal_id: str, domain: str) -> List[Fact]:
+    def get_by_domain(self, deal_id: str, domain: str, run_id: str = None) -> List[Fact]:
         """Get all facts for a domain."""
-        return self.get_by_deal(deal_id, domain=domain)
+        return self.get_by_deal(deal_id, run_id=run_id, domain=domain)
 
-    def get_by_entity(self, deal_id: str, entity: str) -> List[Fact]:
+    def get_by_entity(self, deal_id: str, entity: str, run_id: str = None) -> List[Fact]:
         """Get all facts for an entity (target or buyer)."""
-        return self.get_by_deal(deal_id, entity=entity)
+        return self.get_by_deal(deal_id, run_id=run_id, entity=entity)
+
+    # Domain-specific convenience methods (for Phase 2 DealData facade)
+    def get_applications(self, deal_id: str, run_id: str = None) -> List[Fact]:
+        """Get all application facts."""
+        return self.get_by_domain(deal_id, 'applications', run_id)
+
+    def get_organization(self, deal_id: str, run_id: str = None) -> List[Fact]:
+        """Get all organization facts."""
+        return self.get_by_domain(deal_id, 'organization', run_id)
+
+    def get_infrastructure(self, deal_id: str, run_id: str = None) -> List[Fact]:
+        """Get all infrastructure facts."""
+        return self.get_by_domain(deal_id, 'infrastructure', run_id)
+
+    def get_cybersecurity(self, deal_id: str, run_id: str = None) -> List[Fact]:
+        """Get all cybersecurity facts."""
+        return self.get_by_domain(deal_id, 'cybersecurity', run_id)
+
+    def get_network(self, deal_id: str, run_id: str = None) -> List[Fact]:
+        """Get all network facts."""
+        return self.get_by_domain(deal_id, 'network', run_id)
+
+    def get_identity_access(self, deal_id: str, run_id: str = None) -> List[Fact]:
+        """Get all identity/access facts."""
+        return self.get_by_domain(deal_id, 'identity_access', run_id)
 
     def get_by_document(self, document_id: str) -> List[Fact]:
         """Get all facts extracted from a document."""
@@ -118,9 +170,9 @@ class FactRepository(BaseRepository[Fact]):
     # SUMMARY & STATISTICS
     # =========================================================================
 
-    def get_summary_by_domain(self, deal_id: str) -> Dict[str, Dict[str, int]]:
+    def get_summary_by_domain(self, deal_id: str, run_id: str = None) -> Dict[str, Dict[str, int]]:
         """Get fact counts by domain and status."""
-        facts = self.get_by_deal(deal_id)
+        facts = self.get_by_deal(deal_id, run_id=run_id)
 
         summary = {}
         for fact in facts:
@@ -132,6 +184,80 @@ class FactRepository(BaseRepository[Fact]):
                 summary[fact.domain][fact.status] += 1
 
         return summary
+
+    def count_by_domain(self, deal_id: str, run_id: str = None, include_orphaned: bool = True) -> Dict[str, int]:
+        """Get fact counts per domain for dashboard (SQL-level aggregation)."""
+        query = self.query().filter(Fact.deal_id == deal_id)
+        if run_id:
+            if include_orphaned:
+                query = query.filter(
+                    or_(
+                        Fact.analysis_run_id == run_id,
+                        Fact.analysis_run_id.is_(None)
+                    )
+                )
+            else:
+                query = query.filter(Fact.analysis_run_id == run_id)
+
+        results = query.with_entities(
+            Fact.domain, func.count(Fact.id)
+        ).group_by(Fact.domain).all()
+
+        return {domain: count for domain, count in results}
+
+    def get_paginated(
+        self,
+        deal_id: str,
+        run_id: str = None,
+        domain: str = None,
+        status: str = None,
+        search: str = None,
+        page: int = 1,
+        per_page: int = 50,
+        include_orphaned: bool = True
+    ):
+        """
+        Get paginated facts with all filtering done in SQL.
+
+        Args:
+            include_orphaned: If True (default), includes facts with NULL
+                analysis_run_id when filtering by run_id.
+
+        Returns:
+            Tuple of (items, total_count)
+        """
+        query = self.query().filter(Fact.deal_id == deal_id)
+
+        if run_id:
+            if include_orphaned:
+                query = query.filter(
+                    or_(
+                        Fact.analysis_run_id == run_id,
+                        Fact.analysis_run_id.is_(None)
+                    )
+                )
+            else:
+                query = query.filter(Fact.analysis_run_id == run_id)
+        if domain:
+            query = query.filter(Fact.domain == domain)
+        if status:
+            query = query.filter(Fact.status == status)
+        if search:
+            search_term = f"%{search}%"
+            query = query.filter(
+                or_(
+                    Fact.item.ilike(search_term),
+                    Fact.source_quote.ilike(search_term)
+                )
+            )
+
+        total = query.count()
+        items = query.order_by(Fact.created_at.desc()) \
+                     .offset((page - 1) * per_page) \
+                     .limit(per_page) \
+                     .all()
+
+        return items, total
 
     def get_review_queue(
         self,
@@ -267,11 +393,32 @@ class FactRepository(BaseRepository[Fact]):
         db.session.commit()
         return link
 
-    def get_linked_findings(self, fact_id: str) -> List[str]:
-        """Get IDs of findings linked to this fact."""
-        links = FactFindingLink.query.filter(
-            FactFindingLink.fact_id == fact_id
-        ).all()
+    def get_linked_findings(self, fact_id: str, exclude_deleted: bool = True) -> List[str]:
+        """
+        Get IDs of findings linked to this fact.
+
+        Args:
+            fact_id: The fact ID to get linked findings for
+            exclude_deleted: If True (default), excludes links to soft-deleted findings
+
+        Returns:
+            List of finding IDs
+        """
+        from web.database import Finding
+
+        if exclude_deleted:
+            # Join with Finding to filter out soft-deleted findings
+            links = db.session.query(FactFindingLink).join(
+                Finding, FactFindingLink.finding_id == Finding.id
+            ).filter(
+                FactFindingLink.fact_id == fact_id,
+                Finding.deleted_at.is_(None)
+            ).all()
+        else:
+            links = FactFindingLink.query.filter(
+                FactFindingLink.fact_id == fact_id
+            ).all()
+
         return [link.finding_id for link in links]
 
     # =========================================================================

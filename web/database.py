@@ -714,6 +714,68 @@ class Fact(SoftDeleteMixin, db.Model):
 
 
 # =============================================================================
+# GAP MODEL (Information gaps requiring VDR requests)
+# =============================================================================
+
+class Gap(SoftDeleteMixin, db.Model):
+    """An information gap identified during analysis."""
+    __tablename__ = 'gaps'
+
+    id = Column(String(50), primary_key=True)  # GAP-xxxx format
+    deal_id = Column(String(36), ForeignKey('deals.id', ondelete='CASCADE'), nullable=False)
+    analysis_run_id = Column(String(36), ForeignKey('analysis_runs.id', ondelete='SET NULL'), nullable=True)
+
+    # Gap identification
+    domain = Column(String(50), nullable=False)
+    category = Column(String(100), default='')
+    entity = Column(String(50), default='target')
+
+    # Content
+    description = Column(Text, nullable=False)
+    importance = Column(String(20), default='medium')  # critical, high, medium, low
+    requested_item = Column(Text, default='')  # What to request from VDR
+
+    # Source tracking
+    source_document = Column(String(500), default='')
+    related_facts = Column(JSON, default=list)  # Fact IDs that led to this gap
+
+    # Status
+    status = Column(String(50), default='open')  # open, resolved, pending_response
+    resolution_note = Column(Text, default='')
+    resolved_at = Column(DateTime, nullable=True)
+    resolved_by = Column(String(100), default='')
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationship to deal
+    deal = db.relationship('Deal', backref=db.backref('gaps', lazy='dynamic'))
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for API responses."""
+        return {
+            'gap_id': self.id,
+            'id': self.id,
+            'deal_id': self.deal_id,
+            'domain': self.domain,
+            'category': self.category,
+            'entity': self.entity,
+            'description': self.description,
+            'importance': self.importance,
+            'requested_item': self.requested_item,
+            'source_document': self.source_document,
+            'related_facts': self.related_facts,
+            'status': self.status,
+            'resolution_note': self.resolution_note,
+            'resolved_at': self.resolved_at.isoformat() if self.resolved_at else None,
+            'resolved_by': self.resolved_by,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+# =============================================================================
 # FINDING MODEL (Risks, Work Items, Recommendations, etc.)
 # =============================================================================
 

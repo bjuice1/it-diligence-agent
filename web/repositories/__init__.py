@@ -12,6 +12,7 @@ from .document_repository import DocumentRepository
 from .fact_repository import FactRepository
 from .finding_repository import FindingRepository
 from .analysis_run_repository import AnalysisRunRepository
+from .gap_repository import GapRepository
 
 __all__ = [
     'BaseRepository',
@@ -20,4 +21,5 @@ __all__ = [
     'FactRepository',
     'FindingRepository',
     'AnalysisRunRepository',
+    'GapRepository',
 ]
