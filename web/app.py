@@ -66,10 +66,9 @@ USE_DATABASE = os.environ.get('USE_DATABASE', 'false').lower() == 'true'
 
 if USE_DATABASE:
     init_db(app)
-    # Create tables on first run (will use migrations in production)
-    with app.app_context():
-        db.create_all()
-    logger.info("Database initialized")
+    # Create tables and run migrations (adds task_id column for UI resilience)
+    create_all_tables(app)
+    logger.info("Database initialized with migrations")
 
 # =============================================================================
 # Phase 4: Session & Task Configuration

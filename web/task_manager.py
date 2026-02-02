@@ -412,14 +412,21 @@ class AnalysisTaskManager:
 
     def _load_task_from_db(self, task_id: str) -> Optional[AnalysisTask]:
         """Load task state from database (for recovery after restart)."""
+        import logging
+        logger = logging.getLogger(__name__)
+
         try:
             from web.database import db, AnalysisRun
             from web.app import app
 
             with app.app_context():
+                logger.debug(f"Looking up task {task_id} in database...")
                 run = AnalysisRun.query.filter_by(task_id=task_id).first()
                 if not run:
+                    logger.info(f"Task {task_id} not found in database (new task or migration pending)")
                     return None
+
+                logger.info(f"Recovered task {task_id} from database: status={run.status}, progress={run.progress}%")
 
                 # Reconstruct task from database
                 task = AnalysisTask(
@@ -455,12 +462,17 @@ class AnalysisTaskManager:
                 return task
 
         except Exception as e:
-            import logging
-            logging.getLogger(__name__).warning(f"Failed to load task from DB: {e}")
+            logger.error(f"Failed to load task {task_id} from DB: {type(e).__name__}: {e}")
+            # Log if this might be a migration issue (column doesn't exist)
+            if 'task_id' in str(e).lower() or 'column' in str(e).lower():
+                logger.error("This may indicate the task_id migration hasn't run. Check database schema.")
             return None
 
     def _save_task_to_db(self, task: AnalysisTask, deal_id: str = None):
         """Save task state to database for resilience."""
+        import logging
+        logger = logging.getLogger(__name__)
+
         try:
             from web.database import db, AnalysisRun
             from web.app import app
@@ -474,6 +486,7 @@ class AnalysisTaskManager:
                     # Get deal_id from task context
                     deal_id = deal_id or task.deal_context.get('deal_id')
                     if not deal_id:
+                        logger.warning(f"Cannot save task {task.task_id} - no deal_id")
                         return  # Can't save without deal_id
 
                     # Get next run number
@@ -488,6 +501,7 @@ class AnalysisTaskManager:
                         domains=task.domains,
                     )
                     db.session.add(run)
+                    logger.info(f"Created DB record for task {task.task_id} (deal={deal_id}, run={run_number})")
 
                 # Update status
                 run.status = task.status.value
@@ -506,10 +520,13 @@ class AnalysisTaskManager:
                     run.error_message = task.error_message
 
                 db.session.commit()
+                logger.debug(f"Saved task {task.task_id} to DB: status={run.status}, progress={run.progress}%")
 
         except Exception as e:
-            import logging
-            logging.getLogger(__name__).warning(f"Failed to save task to DB: {e}")
+            logger.error(f"Failed to save task {task.task_id} to DB: {type(e).__name__}: {e}")
+            # Log if this might be a migration issue
+            if 'task_id' in str(e).lower() or 'column' in str(e).lower():
+                logger.error("This may indicate the task_id migration hasn't run. Check database schema.")
 
     def get_task_status(self, task_id: str) -> Optional[Dict[str, Any]]:
         """Get task status as dict for API response."""
