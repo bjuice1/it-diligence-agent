@@ -245,6 +245,105 @@ class StrategicConsideration:
         return cls(**data)
 
 
+# Estimation source types - tracks WHERE the cost estimate came from
+ESTIMATION_SOURCES = [
+    "benchmark",       # Industry benchmark/anchor from cost model
+    "inventory",       # Derived from actual inventory data (apps, users, etc.)
+    "vendor_quote",    # Actual vendor quote or proposal
+    "historical",      # Historical project costs from similar work
+    "ai_research",     # AI-driven research estimate (web search, market data)
+    "hybrid",          # Combination of multiple sources
+    "manual",          # Manual override/adjustment
+]
+
+
+@dataclass
+class CostBuildUp:
+    """
+    Detailed breakdown showing how a cost was estimated.
+
+    Provides full transparency for leadership by showing:
+    - Which cost anchor/benchmark was used
+    - The estimation method (per-user, per-app, fixed, etc.)
+    - Quantity and unit costs
+    - The SOURCE of the estimate (benchmark, inventory, vendor, AI research, etc.)
+    - Confidence level based on data quality
+    - Assumptions made
+    - Source facts that informed the estimate
+    """
+    anchor_key: str           # Key from COST_ANCHORS (e.g., "identity_separation")
+    anchor_name: str          # Human name (e.g., "Identity Separation")
+    estimation_method: str    # per_user, per_app, per_site, fixed, fixed_by_size, percentage
+    quantity: int             # Number of units (users, apps, sites) - 1 for fixed
+    unit_label: str           # "users", "applications", "sites", "organization"
+    unit_cost_low: float      # Low end per unit
+    unit_cost_high: float     # High end per unit
+    total_low: float          # quantity × unit_cost_low
+    total_high: float         # quantity × unit_cost_high
+    assumptions: List[str] = field(default_factory=list)    # List of assumptions made
+    source_facts: List[str] = field(default_factory=list)   # Fact IDs that informed the estimate
+    notes: str = ""           # Additional context
+    size_tier: str = ""       # For fixed_by_size: small, medium, large
+
+    # NEW: Estimation source tracking for transparency
+    estimation_source: str = "benchmark"  # One of ESTIMATION_SOURCES
+    source_details: str = ""              # Details about the source (vendor name, research URL, etc.)
+    confidence: str = "medium"            # high, medium, low - based on source quality
+    scale_factor: float = 1.0             # Adjustment for scale (e.g., 0.8 for volume discount)
+
+    def to_dict(self) -> Dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> "CostBuildUp":
+        return cls(**data)
+
+    def get_cost_range_key(self) -> str:
+        """Map total to standard cost range key for backwards compatibility."""
+        mid = (self.total_low + self.total_high) / 2
+        if mid < 25000:
+            return "under_25k"
+        elif mid < 100000:
+            return "25k_to_100k"
+        elif mid < 500000:
+            return "100k_to_500k"
+        elif mid < 1000000:
+            return "500k_to_1m"
+        else:
+            return "over_1m"
+
+    def format_summary(self) -> str:
+        """Format a human-readable summary of the cost build-up."""
+        if self.estimation_method in ("fixed", "fixed_by_size"):
+            base = f"{self.anchor_name}: ${self.total_low:,.0f} - ${self.total_high:,.0f}"
+        else:
+            base = (f"{self.anchor_name}: {self.quantity:,} {self.unit_label} × "
+                    f"${self.unit_cost_low:,.0f}-${self.unit_cost_high:,.0f} = "
+                    f"${self.total_low:,.0f} - ${self.total_high:,.0f}")
+
+        # Add source info
+        source_labels = {
+            "benchmark": "[Benchmark]",
+            "inventory": "[From Inventory]",
+            "vendor_quote": "[Vendor Quote]",
+            "historical": "[Historical]",
+            "ai_research": "[AI Research]",
+            "hybrid": "[Hybrid]",
+            "manual": "[Manual]",
+        }
+        source_label = source_labels.get(self.estimation_source, "")
+        return f"{base} {source_label}" if source_label else base
+
+    def get_confidence_color(self) -> str:
+        """Get color code for confidence level (for UI display)."""
+        colors = {
+            "high": "#28a745",    # Green
+            "medium": "#ffc107",  # Yellow
+            "low": "#dc3545",     # Red
+        }
+        return colors.get(self.confidence, "#6c757d")
+
+
 @dataclass
 class WorkItem:
     """An integration work item triggered by findings."""
@@ -263,6 +362,9 @@ class WorkItem:
     # NEW: Cost estimation
     cost_estimate: str  # One of COST_RANGES: under_25k, 25k_to_100k, etc.
 
+    # NEW: Detailed cost build-up (shows HOW the estimate was derived)
+    cost_buildup: Optional[CostBuildUp] = None  # Detailed breakdown for transparency
+
     # NEW: Link to risks that this work item addresses
     triggered_by_risks: List[str] = field(default_factory=list)  # Risk IDs (R-001, R-002)
 
@@ -274,10 +376,17 @@ class WorkItem:
     created_at: str = field(default_factory=lambda: _generate_timestamp())
 
     def to_dict(self) -> Dict:
-        return asdict(self)
+        result = asdict(self)
+        # Handle CostBuildUp serialization
+        if self.cost_buildup:
+            result['cost_buildup'] = self.cost_buildup.to_dict()
+        return result
 
     @classmethod
     def from_dict(cls, data: Dict) -> "WorkItem":
+        # Handle CostBuildUp deserialization
+        if data.get('cost_buildup') and isinstance(data['cost_buildup'], dict):
+            data['cost_buildup'] = CostBuildUp.from_dict(data['cost_buildup'])
         return cls(**data)
 
     def get_cost_range_values(self) -> Dict[str, int]:

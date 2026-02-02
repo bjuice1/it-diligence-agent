@@ -62,6 +62,7 @@ def export_to_excel(
     _create_facts_sheet(wb, fact_store, styles)
     _create_risks_sheet(wb, reasoning_store, styles)
     _create_work_items_sheet(wb, reasoning_store, styles)
+    _create_cost_buildup_sheet(wb, reasoning_store, styles)  # NEW: Cost transparency
     _create_recommendations_sheet(wb, reasoning_store, styles)
     _create_strategic_sheet(wb, reasoning_store, styles)
 
@@ -453,3 +454,243 @@ def _create_vdr_sheet(wb, vdr_pack, styles):
     ws.freeze_panes = 'A2'
     ws.auto_filter.ref = ws.dimensions
     _auto_size_columns(ws)
+
+
+def _create_cost_buildup_sheet(wb, reasoning_store, styles):
+    """
+    Create Cost Build-Up worksheet showing detailed cost estimation logic.
+
+    This worksheet provides full transparency into how costs were estimated,
+    showing the anchor used, estimation method, quantities, and calculations.
+    """
+    ws = wb.create_sheet("Cost Build-Up")
+
+    # Get work items with cost build-ups
+    work_items_with_buildup = [
+        wi for wi in reasoning_store.work_items
+        if hasattr(wi, 'cost_buildup') and wi.cost_buildup
+    ]
+
+    # Also include work items without build-up (show their simple estimates)
+    work_items_without_buildup = [
+        wi for wi in reasoning_store.work_items
+        if not (hasattr(wi, 'cost_buildup') and wi.cost_buildup)
+    ]
+
+    # Title row
+    ws.cell(row=1, column=1, value="COST BUILD-UP WORKSHEET")
+    ws.cell(row=1, column=1).font = Font(bold=True, size=16)
+    ws.merge_cells('A1:O1')
+
+    ws.cell(row=2, column=1, value=f"Generated: {datetime.now().strftime('%Y-%m-%d')}")
+    ws.cell(row=2, column=1).font = Font(italic=True)
+
+    # Headers - includes Source and Confidence for transparency
+    headers = [
+        "Work Item ID", "Title", "Phase", "Domain",
+        "Cost Anchor", "Source", "Confidence", "Method", "Qty", "Unit",
+        "Unit Cost (Low)", "Unit Cost (High)",
+        "Total (Low)", "Total (High)",
+        "Assumptions"
+    ]
+
+    header_row = 4
+    for col, header in enumerate(headers, 1):
+        ws.cell(row=header_row, column=col, value=header)
+    _apply_header_style(ws, header_row, styles, len(headers))
+
+    current_row = header_row + 1
+
+    # Import cost range values
+    from tools_v2.reasoning_tools import COST_RANGE_VALUES
+
+    # Group by phase
+    phases = ["Day_1", "Day_100", "Post_100"]
+    phase_totals = {phase: {"low": 0, "high": 0, "count": 0} for phase in phases}
+
+    for phase in phases:
+        phase_items = [wi for wi in work_items_with_buildup if wi.phase == phase]
+        phase_items_no_buildup = [wi for wi in work_items_without_buildup if wi.phase == phase]
+
+        if not phase_items and not phase_items_no_buildup:
+            continue
+
+        # Phase header
+        phase_display = phase.replace("_", " ").upper()
+        ws.cell(row=current_row, column=1, value=f"--- {phase_display} ---")
+        ws.cell(row=current_row, column=1).font = Font(bold=True, size=11)
+        ws.merge_cells(f'A{current_row}:O{current_row}')
+        _apply_phase_formatting(ws.cell(row=current_row, column=1), phase, styles)
+        current_row += 1
+
+        # Items with detailed build-up
+        for wi in phase_items:
+            bu = wi.cost_buildup
+
+            ws.cell(row=current_row, column=1, value=wi.finding_id)
+            ws.cell(row=current_row, column=2, value=wi.title[:50] + "..." if len(wi.title) > 50 else wi.title)
+            ws.cell(row=current_row, column=3, value=wi.phase)
+            ws.cell(row=current_row, column=4, value=wi.domain)
+            ws.cell(row=current_row, column=5, value=bu.anchor_name)
+            # NEW: Source and Confidence columns
+            source = getattr(bu, 'estimation_source', 'benchmark')
+            confidence = getattr(bu, 'confidence', 'medium')
+            ws.cell(row=current_row, column=6, value=source.replace('_', ' ').title())
+            conf_cell = ws.cell(row=current_row, column=7, value=confidence.title())
+            # Color-code confidence
+            if confidence == 'high':
+                conf_cell.fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+            elif confidence == 'low':
+                conf_cell.fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+
+            ws.cell(row=current_row, column=8, value=bu.estimation_method)
+            ws.cell(row=current_row, column=9, value=bu.quantity)
+            ws.cell(row=current_row, column=10, value=bu.unit_label)
+            ws.cell(row=current_row, column=11, value=bu.unit_cost_low)
+            ws.cell(row=current_row, column=12, value=bu.unit_cost_high)
+            ws.cell(row=current_row, column=13, value=bu.total_low)
+            ws.cell(row=current_row, column=14, value=bu.total_high)
+            ws.cell(row=current_row, column=15, value="; ".join(bu.assumptions) if bu.assumptions else "")
+
+            # Format currency columns
+            for col in [11, 12, 13, 14]:
+                ws.cell(row=current_row, column=col).number_format = '"$"#,##0'
+
+            # Apply borders
+            for col in range(1, len(headers) + 1):
+                ws.cell(row=current_row, column=col).border = styles['border']
+                ws.cell(row=current_row, column=col).alignment = styles['data_alignment']
+
+            # Track totals
+            phase_totals[phase]["low"] += bu.total_low
+            phase_totals[phase]["high"] += bu.total_high
+            phase_totals[phase]["count"] += 1
+
+            current_row += 1
+
+        # Items without detailed build-up (use simple cost_estimate)
+        for wi in phase_items_no_buildup:
+            cost_range = COST_RANGE_VALUES.get(wi.cost_estimate, {"low": 0, "high": 0})
+
+            ws.cell(row=current_row, column=1, value=wi.finding_id)
+            ws.cell(row=current_row, column=2, value=wi.title[:50] + "..." if len(wi.title) > 50 else wi.title)
+            ws.cell(row=current_row, column=3, value=wi.phase)
+            ws.cell(row=current_row, column=4, value=wi.domain)
+            ws.cell(row=current_row, column=5, value="(estimate)")
+            ws.cell(row=current_row, column=6, value="Benchmark")  # Source
+            ws.cell(row=current_row, column=7, value="Low")  # Confidence - low because no detailed build-up
+            ws.cell(row=current_row, column=8, value="range")
+            ws.cell(row=current_row, column=9, value=1)
+            ws.cell(row=current_row, column=10, value="item")
+            ws.cell(row=current_row, column=11, value=cost_range["low"])
+            ws.cell(row=current_row, column=12, value=cost_range["high"])
+            ws.cell(row=current_row, column=13, value=cost_range["low"])
+            ws.cell(row=current_row, column=14, value=cost_range["high"])
+            ws.cell(row=current_row, column=15, value=f"Based on {wi.cost_estimate} range")
+
+            # Format currency columns
+            for col in [11, 12, 13, 14]:
+                ws.cell(row=current_row, column=col).number_format = '"$"#,##0'
+
+            # Light gray background to indicate no detailed build-up
+            for col in range(1, len(headers) + 1):
+                ws.cell(row=current_row, column=col).border = styles['border']
+                ws.cell(row=current_row, column=col).alignment = styles['data_alignment']
+                ws.cell(row=current_row, column=col).fill = PatternFill(
+                    start_color="F0F0F0", end_color="F0F0F0", fill_type="solid"
+                )
+
+            # Track totals
+            phase_totals[phase]["low"] += cost_range["low"]
+            phase_totals[phase]["high"] += cost_range["high"]
+            phase_totals[phase]["count"] += 1
+
+            current_row += 1
+
+        # Phase subtotal row
+        ws.cell(row=current_row, column=1, value=f"SUBTOTAL - {phase_display}")
+        ws.cell(row=current_row, column=1).font = Font(bold=True)
+        ws.cell(row=current_row, column=9, value=phase_totals[phase]["count"])
+        ws.cell(row=current_row, column=10, value="items")
+        ws.cell(row=current_row, column=13, value=phase_totals[phase]["low"])
+        ws.cell(row=current_row, column=14, value=phase_totals[phase]["high"])
+
+        for col in [13, 14]:
+            ws.cell(row=current_row, column=col).number_format = '"$"#,##0'
+            ws.cell(row=current_row, column=col).font = Font(bold=True)
+
+        current_row += 2  # Extra space before next phase
+
+    # Grand total section
+    current_row += 1
+    ws.cell(row=current_row, column=1, value="SUMMARY")
+    ws.cell(row=current_row, column=1).font = Font(bold=True, size=12)
+    ws.merge_cells(f'A{current_row}:O{current_row}')
+    current_row += 1
+
+    # Summary headers
+    summary_headers = ["Phase", "Items", "Total (Low)", "Total (High)", "Midpoint"]
+    for col, header in enumerate(summary_headers, 1):
+        ws.cell(row=current_row, column=col, value=header)
+        ws.cell(row=current_row, column=col).font = Font(bold=True)
+        ws.cell(row=current_row, column=col).fill = styles['header_fill']
+        ws.cell(row=current_row, column=col).font = styles['header_font']
+    current_row += 1
+
+    grand_low = 0
+    grand_high = 0
+
+    for phase in phases:
+        if phase_totals[phase]["count"] > 0:
+            phase_display = phase.replace("_", " ")
+            ws.cell(row=current_row, column=1, value=phase_display)
+            ws.cell(row=current_row, column=2, value=phase_totals[phase]["count"])
+            ws.cell(row=current_row, column=3, value=phase_totals[phase]["low"])
+            ws.cell(row=current_row, column=4, value=phase_totals[phase]["high"])
+            midpoint = (phase_totals[phase]["low"] + phase_totals[phase]["high"]) / 2
+            ws.cell(row=current_row, column=5, value=midpoint)
+
+            for col in [3, 4, 5]:
+                ws.cell(row=current_row, column=col).number_format = '"$"#,##0'
+                ws.cell(row=current_row, column=col).border = styles['border']
+
+            grand_low += phase_totals[phase]["low"]
+            grand_high += phase_totals[phase]["high"]
+            current_row += 1
+
+    # Grand total row
+    ws.cell(row=current_row, column=1, value="GRAND TOTAL")
+    ws.cell(row=current_row, column=1).font = Font(bold=True)
+    total_count = sum(pt["count"] for pt in phase_totals.values())
+    ws.cell(row=current_row, column=2, value=total_count)
+    ws.cell(row=current_row, column=3, value=grand_low)
+    ws.cell(row=current_row, column=4, value=grand_high)
+    ws.cell(row=current_row, column=5, value=(grand_low + grand_high) / 2)
+
+    for col in [3, 4, 5]:
+        ws.cell(row=current_row, column=col).number_format = '"$"#,##0'
+        ws.cell(row=current_row, column=col).font = Font(bold=True)
+        ws.cell(row=current_row, column=col).fill = PatternFill(
+            start_color="FFF2CC", end_color="FFF2CC", fill_type="solid"
+        )
+
+    # Add legend
+    current_row += 3
+    ws.cell(row=current_row, column=1, value="ESTIMATION METHOD LEGEND")
+    ws.cell(row=current_row, column=1).font = Font(bold=True)
+    current_row += 1
+    ws.cell(row=current_row, column=1, value="• per_user: Cost scales with number of users (licenses, training, etc.)")
+    current_row += 1
+    ws.cell(row=current_row, column=1, value="• per_app: Cost per application (migration, integration)")
+    current_row += 1
+    ws.cell(row=current_row, column=1, value="• per_site: Cost per physical location (network, WAN)")
+    current_row += 1
+    ws.cell(row=current_row, column=1, value="• fixed_by_size: Fixed cost based on organization size tier")
+    current_row += 1
+    ws.cell(row=current_row, column=1, value="• range: Simple range estimate without detailed calculation")
+    current_row += 2
+    ws.cell(row=current_row, column=1, value="Gray rows indicate items without detailed cost build-up")
+
+    # Freeze header
+    ws.freeze_panes = f'A{header_row + 1}'
+    _auto_size_columns(ws, max_width=40)
