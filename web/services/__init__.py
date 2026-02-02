@@ -1,11 +1,13 @@
 """
-Services Package
+Service Layer for Business Logic
 
-Business logic layer for IT Due Diligence Agent.
-Services coordinate between repositories, handle complex operations,
-and implement business rules.
+Services coordinate between repositories and provide
+business logic, transaction management, and validation.
 """
 
-from web.services.deal_service import DealService
+from .auth_service import AuthService, get_auth_service
 
-__all__ = ['DealService']
+__all__ = [
+    'AuthService',
+    'get_auth_service',
+]

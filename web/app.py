@@ -221,12 +221,18 @@ login_manager.login_view = 'auth.login'
 login_manager.login_message = 'Please log in to access this page.'
 login_manager.login_message_category = 'info'
 
+# Phase 3: Feature flag for auth backend
+AUTH_BACKEND = os.environ.get('AUTH_BACKEND', 'json').lower()
+
 @login_manager.user_loader
 def load_user(user_id):
     """Load user by ID for Flask-Login."""
-    from web.models.user import get_user_store
-    user_store = get_user_store()
-    return user_store.get_by_id(user_id)
+    if AUTH_BACKEND == 'db':
+        from web.services.auth_service import get_auth_service
+        return get_auth_service().get_by_id(user_id)
+    else:
+        from web.models.user import get_user_store
+        return get_user_store().get_by_id(user_id)
 
 # Register authentication blueprint
 from web.auth import auth_bp
@@ -244,6 +250,10 @@ app.register_blueprint(inventory_bp)
 from web.blueprints.costs import costs_bp
 app.register_blueprint(costs_bp)
 
+# Phase 3: Register CLI commands for user management
+from web.cli import register_cli
+register_cli(app)
+
 # Check if authentication is required (can be disabled for development)
 AUTH_REQUIRED = os.environ.get('AUTH_REQUIRED', 'true').lower() != 'false'
 
@@ -260,15 +270,25 @@ def auth_optional(f):
 # Initialize user store and ensure admin exists
 def init_auth():
     """Initialize authentication system."""
-    from web.models.user import get_user_store
-    user_store = get_user_store()
+    if AUTH_BACKEND == 'db':
+        # Database backend - NO auto-bootstrap (use CLI: flask create-admin)
+        from web.services.auth_service import get_auth_service
+        auth = get_auth_service()
+        if not auth.admin_exists():
+            logger.warning(
+                "No admin user exists. Run 'flask create-admin --email <email>' to create one."
+            )
+    else:
+        # Legacy file-based auth
+        from web.models.user import get_user_store
+        user_store = get_user_store()
 
-    # Create default admin if no users exist
-    if user_store.user_count() == 0:
-        default_admin_email = os.environ.get('DEFAULT_ADMIN_EMAIL', 'admin@example.com')
-        default_admin_password = os.environ.get('DEFAULT_ADMIN_PASSWORD', 'changeme123')
-        user_store.ensure_admin_exists(default_admin_email, default_admin_password)
-        logger.info(f"Created default admin user: {default_admin_email}")
+        # Create default admin if no users exist
+        if user_store.user_count() == 0:
+            default_admin_email = os.environ.get('DEFAULT_ADMIN_EMAIL', 'admin@example.com')
+            default_admin_password = os.environ.get('DEFAULT_ADMIN_PASSWORD', 'changeme123')
+            user_store.ensure_admin_exists(default_admin_email, default_admin_password)
+            logger.info(f"Created default admin user: {default_admin_email}")
 
 # Initialize auth on first request
 @app.before_request

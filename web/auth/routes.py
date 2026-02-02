@@ -11,13 +11,30 @@ from flask_login import login_user, logout_user, login_required, current_user
 
 from web.auth import auth_bp
 from web.auth.forms import LoginForm, RegistrationForm, ChangePasswordForm
-from web.models.user import get_user_store, Role
 
 logger = logging.getLogger(__name__)
 
 # Phase 7: Rate limiting for auth routes
 USE_RATE_LIMITING = os.environ.get('USE_RATE_LIMITING', 'false').lower() == 'true'
 USE_AUDIT_LOGGING = os.environ.get('USE_AUDIT_LOGGING', 'true').lower() == 'true'
+
+# Phase 3: Feature flag for auth backend (json = file-based, db = database)
+AUTH_BACKEND = os.environ.get('AUTH_BACKEND', 'json').lower()
+
+
+def get_auth_backend():
+    """
+    Get the appropriate auth backend based on feature flag.
+
+    AUTH_BACKEND=json (default): Use file-based UserStore
+    AUTH_BACKEND=db: Use database-backed AuthService
+    """
+    if AUTH_BACKEND == 'db':
+        from web.services.auth_service import get_auth_service
+        return get_auth_service()
+    else:
+        from web.models.user import get_user_store
+        return get_user_store()
 
 
 def audit_auth_event(action, user_id=None, email=None, success=True, details=None):
@@ -51,8 +68,8 @@ def login():
     form = LoginForm()
 
     if form.validate_on_submit():
-        user_store = get_user_store()
-        user = user_store.authenticate(form.email.data, form.password.data)
+        auth = get_auth_backend()
+        user = auth.authenticate(form.email.data, form.password.data)
 
         if user:
             login_user(user, remember=form.remember_me.data)
@@ -105,15 +122,27 @@ def register():
     form = RegistrationForm()
 
     if form.validate_on_submit():
-        user_store = get_user_store()
+        auth = get_auth_backend()
 
-        # Create user
-        user = user_store.create_user(
-            email=form.email.data,
-            password=form.password.data,
-            name=form.name.data,
-            roles=[Role.ANALYST]  # Default role
-        )
+        # Create user - handle both old and new API
+        if AUTH_BACKEND == 'db':
+            user, error = auth.create_user(
+                email=form.email.data,
+                password=form.password.data,
+                name=form.name.data,
+                roles=['analyst']  # Default role
+            )
+            if error:
+                flash(error, 'error')
+                return render_template('auth/register.html', form=form)
+        else:
+            from web.models.user import Role
+            user = auth.create_user(
+                email=form.email.data,
+                password=form.password.data,
+                name=form.name.data,
+                roles=[Role.ANALYST]  # Default role
+            )
 
         if user:
             # Audit user creation
@@ -134,18 +163,30 @@ def change_password():
     form = ChangePasswordForm()
 
     if form.validate_on_submit():
-        if not current_user.check_password(form.current_password.data):
-            flash('Current password is incorrect.', 'error')
+        auth = get_auth_backend()
+
+        if AUTH_BACKEND == 'db':
+            # Use AuthService change_password
+            success, error = auth.change_password(
+                current_user,
+                form.current_password.data,
+                form.new_password.data
+            )
+            if success:
+                flash('Password updated successfully.', 'success')
+                return redirect(url_for('dashboard'))
+            else:
+                flash(error, 'error')
         else:
-            user_store = get_user_store()
-
-            # Update password
-            from web.models.user import User
-            current_user.password_hash = User.hash_password(form.new_password.data)
-            user_store.update_user(current_user)
-
-            flash('Password updated successfully.', 'success')
-            return redirect(url_for('dashboard'))
+            # Legacy file-based auth
+            if not current_user.check_password(form.current_password.data):
+                flash('Current password is incorrect.', 'error')
+            else:
+                from web.models.user import User
+                current_user.password_hash = User.hash_password(form.new_password.data)
+                auth.update_user(current_user)
+                flash('Password updated successfully.', 'success')
+                return redirect(url_for('dashboard'))
 
     return render_template('auth/change_password.html', form=form)
 
