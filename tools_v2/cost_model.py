@@ -328,6 +328,197 @@ RUN_RATE_DELTAS = {
 
 
 # =============================================================================
+# VOLUME DISCOUNT CURVES
+# =============================================================================
+# At scale, per-unit costs decrease due to:
+# - Vendor volume discounts
+# - Economies of scale in implementation
+# - Shared infrastructure/tools across users
+#
+# Format: List of (threshold, multiplier) tuples
+# Applied in order - first matching threshold wins
+
+VOLUME_DISCOUNT_CURVES = {
+    # Per-user costs (licenses, training, support)
+    "per_user": [
+        (0, 1.0),        # 0-99 users: full price
+        (100, 0.95),     # 100-499: 5% discount
+        (500, 0.85),     # 500-999: 15% discount
+        (1000, 0.75),    # 1000-2499: 25% discount
+        (2500, 0.65),    # 2500-4999: 35% discount
+        (5000, 0.55),    # 5000+: 45% discount (enterprise)
+    ],
+
+    # Per-application costs (migration, integration)
+    "per_app": [
+        (0, 1.0),        # 0-9 apps: full price
+        (10, 0.90),      # 10-24: 10% discount (tooling amortization)
+        (25, 0.80),      # 25-49: 20% discount
+        (50, 0.70),      # 50-99: 30% discount
+        (100, 0.60),     # 100+: 40% discount (factory approach)
+    ],
+
+    # Per-site costs (network, WAN)
+    "per_site": [
+        (0, 1.0),        # 0-4 sites: full price
+        (5, 0.90),       # 5-14: 10% discount
+        (15, 0.80),      # 15-29: 20% discount
+        (30, 0.70),      # 30-49: 30% discount
+        (50, 0.60),      # 50+: 40% discount
+    ],
+
+    # Per-server costs (migration, cloud)
+    "per_server": [
+        (0, 1.0),        # 0-24 servers: full price
+        (25, 0.90),      # 25-99: 10% discount
+        (100, 0.80),     # 100-249: 20% discount
+        (250, 0.70),     # 250-499: 30% discount
+        (500, 0.60),     # 500+: 40% discount
+    ],
+
+    # Per-vendor costs (contract transitions)
+    "per_vendor": [
+        (0, 1.0),        # 0-4 vendors: full price
+        (5, 0.85),       # 5-9: 15% discount (procurement efficiency)
+        (10, 0.75),      # 10+: 25% discount
+    ],
+}
+
+
+def get_volume_discount(unit_type: str, quantity: int) -> float:
+    """
+    Get the volume discount multiplier for a given quantity.
+
+    Args:
+        unit_type: Type of unit (per_user, per_app, per_site, per_server, per_vendor)
+        quantity: Number of units
+
+    Returns:
+        Multiplier (0.0-1.0) to apply to unit cost
+    """
+    curve = VOLUME_DISCOUNT_CURVES.get(unit_type)
+    if not curve:
+        return 1.0  # No discount if unit type not found
+
+    # Find the appropriate tier
+    multiplier = 1.0
+    for threshold, mult in curve:
+        if quantity >= threshold:
+            multiplier = mult
+        else:
+            break
+
+    return multiplier
+
+
+# =============================================================================
+# REGIONAL COST MULTIPLIERS
+# =============================================================================
+# Labor costs vary significantly by region. These multipliers adjust
+# cost estimates based on where the work will be performed.
+#
+# Base = US East Coast (1.0)
+
+REGIONAL_MULTIPLIERS = {
+    # United States
+    "us_east": 1.0,           # Base: NYC, Boston, DC
+    "us_west": 1.15,          # SF, Seattle, LA (15% premium)
+    "us_midwest": 0.85,       # Chicago, Denver, Dallas
+    "us_south": 0.80,         # Atlanta, Austin, Charlotte
+
+    # Europe
+    "uk": 1.10,               # London, Manchester
+    "western_europe": 1.05,   # Germany, France, Netherlands
+    "eastern_europe": 0.50,   # Poland, Czech Republic, Romania
+    "nordics": 1.20,          # Sweden, Norway, Denmark, Finland
+
+    # Asia Pacific
+    "india": 0.35,            # Major IT hub, significant savings
+    "india_tier1": 0.40,      # Bangalore, Mumbai, Delhi
+    "india_tier2": 0.30,      # Pune, Hyderabad, Chennai
+    "philippines": 0.40,      # Growing IT services hub
+    "singapore": 1.05,        # Premium APAC hub
+    "australia": 1.10,        # Sydney, Melbourne
+    "japan": 1.15,            # Tokyo
+
+    # Latin America
+    "mexico": 0.55,           # Nearshore, same timezone
+    "brazil": 0.50,           # Sao Paulo
+    "costa_rica": 0.50,       # Growing tech hub
+    "argentina": 0.45,        # Buenos Aires
+
+    # Other
+    "israel": 1.05,           # Strong tech sector
+    "south_africa": 0.45,     # Cape Town tech hub
+    "canada": 0.90,           # Toronto, Vancouver
+
+    # Special categories
+    "offshore": 0.40,         # Generic offshore (use specific region if known)
+    "nearshore": 0.55,        # Generic nearshore (Latin America)
+    "global_delivery": 0.60,  # Blended rate (onshore + offshore mix)
+}
+
+# Labor mix assumptions for different work types
+LABOR_MIX_BY_WORK_TYPE = {
+    # Format: {work_type: {"onshore": %, "nearshore": %, "offshore": %}}
+    "strategy": {"onshore": 1.0, "nearshore": 0.0, "offshore": 0.0},
+    "architecture": {"onshore": 0.8, "nearshore": 0.1, "offshore": 0.1},
+    "project_management": {"onshore": 0.7, "nearshore": 0.2, "offshore": 0.1},
+    "development": {"onshore": 0.3, "nearshore": 0.3, "offshore": 0.4},
+    "testing": {"onshore": 0.2, "nearshore": 0.3, "offshore": 0.5},
+    "migration": {"onshore": 0.4, "nearshore": 0.3, "offshore": 0.3},
+    "support": {"onshore": 0.3, "nearshore": 0.3, "offshore": 0.4},
+    "infrastructure": {"onshore": 0.5, "nearshore": 0.3, "offshore": 0.2},
+}
+
+
+def get_regional_multiplier(region: str) -> float:
+    """
+    Get the cost multiplier for a region.
+
+    Args:
+        region: Region code (e.g., "us_east", "india", "uk")
+
+    Returns:
+        Multiplier to apply to base cost
+    """
+    return REGIONAL_MULTIPLIERS.get(region.lower(), 1.0)
+
+
+def get_blended_rate_multiplier(
+    work_type: str,
+    onshore_region: str = "us_east",
+    nearshore_region: str = "mexico",
+    offshore_region: str = "india"
+) -> float:
+    """
+    Calculate blended rate multiplier based on work type and delivery mix.
+
+    Args:
+        work_type: Type of work (development, testing, migration, etc.)
+        onshore_region: Region for onshore work
+        nearshore_region: Region for nearshore work
+        offshore_region: Region for offshore work
+
+    Returns:
+        Blended multiplier based on labor mix
+    """
+    mix = LABOR_MIX_BY_WORK_TYPE.get(work_type, {"onshore": 1.0, "nearshore": 0.0, "offshore": 0.0})
+
+    onshore_mult = get_regional_multiplier(onshore_region)
+    nearshore_mult = get_regional_multiplier(nearshore_region)
+    offshore_mult = get_regional_multiplier(offshore_region)
+
+    blended = (
+        mix["onshore"] * onshore_mult +
+        mix["nearshore"] * nearshore_mult +
+        mix["offshore"] * offshore_mult
+    )
+
+    return blended
+
+
+# =============================================================================
 # ACQUISITION-SPECIFIC COST ANCHORS
 # =============================================================================
 

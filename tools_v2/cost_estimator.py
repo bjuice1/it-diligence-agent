@@ -27,7 +27,11 @@ Usage:
 import logging
 from typing import List, Optional, Dict, Any, Tuple
 
-from tools_v2.cost_model import COST_ANCHORS, RUN_RATE_ANCHORS, ACQUISITION_COSTS
+from tools_v2.cost_model import (
+    COST_ANCHORS, RUN_RATE_ANCHORS, ACQUISITION_COSTS,
+    get_volume_discount, get_regional_multiplier, get_blended_rate_multiplier,
+    REGIONAL_MULTIPLIERS, VOLUME_DISCOUNT_CURVES
+)
 from tools_v2.reasoning_tools import CostBuildUp
 
 logger = logging.getLogger(__name__)
@@ -168,7 +172,11 @@ def estimate_cost(
     estimation_source: str = "benchmark",
     source_details: str = "",
     confidence: str = "medium",
-    scale_factor: float = 1.0
+    scale_factor: float = 1.0,
+    # NEW: Volume discount and regional adjustments
+    apply_volume_discount: bool = True,
+    region: str = None,
+    work_type: str = None,  # For blended regional rates
 ) -> Optional[CostBuildUp]:
     """
     Create a detailed cost estimate with full transparency.
@@ -180,28 +188,26 @@ def estimate_cost(
         source_facts: Fact IDs that informed this estimate
         assumptions: List of assumptions made in the estimate
         notes: Additional context
+        estimation_source: Where the estimate came from (benchmark, vendor_quote, etc.)
+        source_details: Details about the source
+        confidence: high, medium, low
+        scale_factor: Manual adjustment factor
+        apply_volume_discount: Auto-apply volume discounts based on quantity (default: True)
+        region: Region code for labor cost adjustment (e.g., "us_east", "india", "uk")
+        work_type: Work type for blended rates (e.g., "development", "migration")
 
     Returns:
         CostBuildUp with full calculation transparency, or None if anchor not found
 
     Example:
-        # Per-user cost (e.g., license transition)
+        # Per-user cost with volume discount and regional adjustment
         buildup = estimate_cost(
             anchor_key="license_microsoft",
-            quantity=1500,  # users
-            source_facts=["F-001"],
-            assumptions=["Losing EA discount", "Moving to E3 tier"]
+            quantity=1500,
+            region="india",  # 35% of US cost
+            apply_volume_discount=True,  # Auto 25% discount at 1000+ users
+            assumptions=["Offshore delivery", "Volume pricing"]
         )
-        # Result: 1500 users × $180-$400 = $270,000 - $600,000
-
-        # Fixed-by-size cost (e.g., identity separation)
-        buildup = estimate_cost(
-            anchor_key="identity_separation",
-            quantity=1,
-            size_tier="medium",  # 1000-5000 users
-            assumptions=["Azure AD migration", "Clean separation"]
-        )
-        # Result: 1 medium org × $300,000-$800,000 = $300,000 - $800,000
     """
     anchor = get_anchor_info(anchor_key)
     if not anchor:
@@ -217,15 +223,57 @@ def estimate_cost(
     # Get unit label
     unit_label = UNIT_LABELS.get(estimation_method, "units")
 
+    # Initialize assumptions list
+    assumptions = assumptions or []
+
     # For fixed costs, quantity is always 1
-    if estimation_method in ("fixed", "fixed_by_size", "fixed_by_complexity", "fixed_by_gaps"):
+    is_fixed = estimation_method in ("fixed", "fixed_by_size", "fixed_by_complexity", "fixed_by_gaps")
+    if is_fixed:
         quantity = 1
         if size_tier:
             unit_label = f"{size_tier} organization"
 
-    # Calculate totals with scale factor
-    total_low = quantity * unit_cost_low * scale_factor
-    total_high = quantity * unit_cost_high * scale_factor
+    # Apply volume discount for per-unit costs
+    volume_discount = 1.0
+    if apply_volume_discount and not is_fixed and quantity > 1:
+        # Map estimation method to volume curve type
+        volume_type_map = {
+            "per_user": "per_user",
+            "per_user_annual": "per_user",
+            "per_app": "per_app",
+            "per_app_retired": "per_app",
+            "per_site": "per_site",
+            "per_site_annual": "per_site",
+            "per_server": "per_server",
+            "per_server_annual": "per_server",
+            "per_vendor": "per_vendor",
+        }
+        volume_type = volume_type_map.get(estimation_method)
+        if volume_type:
+            volume_discount = get_volume_discount(volume_type, quantity)
+            if volume_discount < 1.0:
+                discount_pct = (1 - volume_discount) * 100
+                assumptions.append(f"Volume discount: {discount_pct:.0f}% at {quantity:,} {unit_label}")
+
+    # Apply regional multiplier
+    regional_mult = 1.0
+    if region:
+        if work_type:
+            # Use blended rate based on work type
+            regional_mult = get_blended_rate_multiplier(work_type, onshore_region="us_east", offshore_region=region)
+            assumptions.append(f"Blended rate ({work_type}): {regional_mult:.0%} of US base")
+        else:
+            regional_mult = get_regional_multiplier(region)
+            if regional_mult != 1.0:
+                region_display = region.replace("_", " ").title()
+                assumptions.append(f"Regional adjustment ({region_display}): {regional_mult:.0%} of US base")
+
+    # Combine all multipliers
+    combined_multiplier = scale_factor * volume_discount * regional_mult
+
+    # Calculate totals
+    total_low = quantity * unit_cost_low * combined_multiplier
+    total_high = quantity * unit_cost_high * combined_multiplier
 
     return CostBuildUp(
         anchor_key=anchor_key,
@@ -233,18 +281,18 @@ def estimate_cost(
         estimation_method=estimation_method,
         quantity=quantity,
         unit_label=unit_label,
-        unit_cost_low=unit_cost_low,
-        unit_cost_high=unit_cost_high,
+        unit_cost_low=unit_cost_low * volume_discount * regional_mult,  # Adjusted unit cost
+        unit_cost_high=unit_cost_high * volume_discount * regional_mult,
         total_low=total_low,
         total_high=total_high,
-        assumptions=assumptions or [],
+        assumptions=assumptions,
         source_facts=source_facts or [],
         notes=notes,
         size_tier=size_tier or "",
         estimation_source=estimation_source,
         source_details=source_details,
         confidence=confidence,
-        scale_factor=scale_factor
+        scale_factor=combined_multiplier  # Store combined multiplier
     )
 
 
@@ -603,3 +651,345 @@ def create_hybrid_estimate(
         assumptions=list(set(all_assumptions)),  # Dedupe
         source_facts=list(set(all_facts)),
     )
+
+
+# =============================================================================
+# VENDOR QUOTE IMPORT
+# =============================================================================
+
+import csv
+import json
+from pathlib import Path
+from dataclasses import dataclass, field, asdict
+from datetime import datetime
+
+
+@dataclass
+class VendorQuote:
+    """A vendor quote for cost estimation."""
+    quote_id: str
+    vendor_name: str
+    activity_name: str
+    description: str
+    amount_low: float
+    amount_high: float
+    quantity: int = 1
+    unit: str = "item"
+    valid_until: str = ""  # ISO date
+    quote_date: str = ""
+    contact_name: str = ""
+    contact_email: str = ""
+    notes: str = ""
+    tags: List[str] = field(default_factory=list)  # e.g., ["identity", "migration"]
+
+    def to_dict(self) -> Dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> "VendorQuote":
+        return cls(**data)
+
+    def to_cost_buildup(self, **kwargs) -> CostBuildUp:
+        """Convert vendor quote to CostBuildUp."""
+        return estimate_from_vendor_quote(
+            activity_name=self.activity_name,
+            vendor_name=self.vendor_name,
+            quoted_low=self.amount_low,
+            quoted_high=self.amount_high,
+            quantity=self.quantity,
+            unit_label=self.unit,
+            notes=self.notes,
+            **kwargs
+        )
+
+
+class VendorQuoteStore:
+    """
+    Store and manage vendor quotes for cost estimation.
+
+    Supports:
+    - Import from CSV/JSON
+    - Search by activity/vendor/tags
+    - Export to file
+    """
+
+    def __init__(self):
+        self.quotes: Dict[str, VendorQuote] = {}
+        self._next_id = 1
+
+    def add_quote(self, quote: VendorQuote) -> str:
+        """Add a quote to the store."""
+        if not quote.quote_id:
+            quote.quote_id = f"VQ-{self._next_id:04d}"
+            self._next_id += 1
+        self.quotes[quote.quote_id] = quote
+        return quote.quote_id
+
+    def get_quote(self, quote_id: str) -> Optional[VendorQuote]:
+        """Get a quote by ID."""
+        return self.quotes.get(quote_id)
+
+    def search_quotes(
+        self,
+        activity_pattern: str = None,
+        vendor_name: str = None,
+        tags: List[str] = None,
+        min_amount: float = None,
+        max_amount: float = None
+    ) -> List[VendorQuote]:
+        """Search quotes by various criteria."""
+        results = []
+
+        for quote in self.quotes.values():
+            # Activity pattern match
+            if activity_pattern:
+                if activity_pattern.lower() not in quote.activity_name.lower():
+                    continue
+
+            # Vendor name match
+            if vendor_name:
+                if vendor_name.lower() not in quote.vendor_name.lower():
+                    continue
+
+            # Tags match (any tag)
+            if tags:
+                if not any(t in quote.tags for t in tags):
+                    continue
+
+            # Amount range
+            if min_amount and quote.amount_high < min_amount:
+                continue
+            if max_amount and quote.amount_low > max_amount:
+                continue
+
+            results.append(quote)
+
+        return results
+
+    def import_from_csv(self, file_path: str) -> int:
+        """
+        Import vendor quotes from CSV file.
+
+        Expected columns:
+        - vendor_name (required)
+        - activity_name (required)
+        - amount_low (required)
+        - amount_high (optional, defaults to amount_low * 1.2)
+        - description
+        - quantity
+        - unit
+        - valid_until
+        - quote_date
+        - contact_name
+        - contact_email
+        - notes
+        - tags (comma-separated)
+
+        Returns:
+            Number of quotes imported
+        """
+        count = 0
+        path = Path(file_path)
+
+        if not path.exists():
+            raise FileNotFoundError(f"CSV file not found: {file_path}")
+
+        with open(path, 'r', newline='', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+
+            for row in reader:
+                try:
+                    # Required fields
+                    vendor_name = row.get('vendor_name', '').strip()
+                    activity_name = row.get('activity_name', '').strip()
+                    amount_low_str = row.get('amount_low', row.get('amount', '')).strip()
+
+                    if not vendor_name or not activity_name or not amount_low_str:
+                        logger.warning(f"Skipping row - missing required fields: {row}")
+                        continue
+
+                    # Parse amounts (handle currency symbols and commas)
+                    amount_low = float(amount_low_str.replace('$', '').replace(',', ''))
+                    amount_high_str = row.get('amount_high', '').strip()
+                    if amount_high_str:
+                        amount_high = float(amount_high_str.replace('$', '').replace(',', ''))
+                    else:
+                        amount_high = amount_low * 1.2  # Default 20% buffer
+
+                    # Optional fields
+                    quantity = int(row.get('quantity', '1') or '1')
+                    unit = row.get('unit', 'item').strip() or 'item'
+                    tags_str = row.get('tags', '').strip()
+                    tags = [t.strip() for t in tags_str.split(',') if t.strip()]
+
+                    quote = VendorQuote(
+                        quote_id="",  # Will be auto-generated
+                        vendor_name=vendor_name,
+                        activity_name=activity_name,
+                        description=row.get('description', '').strip(),
+                        amount_low=amount_low,
+                        amount_high=amount_high,
+                        quantity=quantity,
+                        unit=unit,
+                        valid_until=row.get('valid_until', '').strip(),
+                        quote_date=row.get('quote_date', '').strip(),
+                        contact_name=row.get('contact_name', '').strip(),
+                        contact_email=row.get('contact_email', '').strip(),
+                        notes=row.get('notes', '').strip(),
+                        tags=tags
+                    )
+
+                    self.add_quote(quote)
+                    count += 1
+
+                except Exception as e:
+                    logger.warning(f"Error parsing row {row}: {e}")
+                    continue
+
+        logger.info(f"Imported {count} vendor quotes from {file_path}")
+        return count
+
+    def import_from_json(self, file_path: str) -> int:
+        """Import vendor quotes from JSON file."""
+        count = 0
+        path = Path(file_path)
+
+        if not path.exists():
+            raise FileNotFoundError(f"JSON file not found: {file_path}")
+
+        with open(path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        quotes_data = data if isinstance(data, list) else data.get('quotes', [])
+
+        for item in quotes_data:
+            try:
+                quote = VendorQuote.from_dict(item)
+                self.add_quote(quote)
+                count += 1
+            except Exception as e:
+                logger.warning(f"Error parsing quote {item}: {e}")
+                continue
+
+        logger.info(f"Imported {count} vendor quotes from {file_path}")
+        return count
+
+    def export_to_json(self, file_path: str) -> int:
+        """Export all quotes to JSON file."""
+        path = Path(file_path)
+        quotes_list = [q.to_dict() for q in self.quotes.values()]
+
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump({"quotes": quotes_list, "exported_at": datetime.now().isoformat()}, f, indent=2)
+
+        return len(quotes_list)
+
+    def export_to_csv(self, file_path: str) -> int:
+        """Export all quotes to CSV file."""
+        path = Path(file_path)
+
+        if not self.quotes:
+            return 0
+
+        fieldnames = [
+            'quote_id', 'vendor_name', 'activity_name', 'description',
+            'amount_low', 'amount_high', 'quantity', 'unit',
+            'valid_until', 'quote_date', 'contact_name', 'contact_email',
+            'notes', 'tags'
+        ]
+
+        with open(path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+
+            for quote in self.quotes.values():
+                row = quote.to_dict()
+                row['tags'] = ','.join(row['tags'])  # Convert list to comma-separated
+                writer.writerow(row)
+
+        return len(self.quotes)
+
+    def get_best_quote_for_activity(
+        self,
+        activity_pattern: str,
+        prefer_recent: bool = True
+    ) -> Optional[VendorQuote]:
+        """
+        Find the best matching quote for an activity.
+
+        Args:
+            activity_pattern: Pattern to match activity name
+            prefer_recent: Prefer more recent quotes
+
+        Returns:
+            Best matching VendorQuote or None
+        """
+        matches = self.search_quotes(activity_pattern=activity_pattern)
+
+        if not matches:
+            return None
+
+        if len(matches) == 1:
+            return matches[0]
+
+        # Sort by recency if we have dates
+        if prefer_recent:
+            dated_matches = [m for m in matches if m.quote_date]
+            if dated_matches:
+                dated_matches.sort(key=lambda q: q.quote_date, reverse=True)
+                return dated_matches[0]
+
+        # Otherwise return the one with lowest cost (conservative)
+        return min(matches, key=lambda q: q.amount_low)
+
+
+# Global vendor quote store
+vendor_quote_store = VendorQuoteStore()
+
+
+def import_vendor_quotes(file_path: str) -> int:
+    """
+    Import vendor quotes from file (CSV or JSON).
+
+    Args:
+        file_path: Path to CSV or JSON file
+
+    Returns:
+        Number of quotes imported
+    """
+    path = Path(file_path)
+
+    if path.suffix.lower() == '.csv':
+        return vendor_quote_store.import_from_csv(file_path)
+    elif path.suffix.lower() == '.json':
+        return vendor_quote_store.import_from_json(file_path)
+    else:
+        raise ValueError(f"Unsupported file format: {path.suffix}. Use .csv or .json")
+
+
+def get_vendor_quote_estimate(
+    activity_pattern: str,
+    fallback_anchor: str = None,
+    **kwargs
+) -> Optional[CostBuildUp]:
+    """
+    Get cost estimate from vendor quotes, with optional benchmark fallback.
+
+    Args:
+        activity_pattern: Pattern to match activity name
+        fallback_anchor: Anchor key to use if no vendor quote found
+        **kwargs: Additional arguments for CostBuildUp
+
+    Returns:
+        CostBuildUp from vendor quote or fallback benchmark
+    """
+    quote = vendor_quote_store.get_best_quote_for_activity(activity_pattern)
+
+    if quote:
+        return quote.to_cost_buildup(**kwargs)
+
+    if fallback_anchor:
+        logger.info(f"No vendor quote for '{activity_pattern}', using benchmark: {fallback_anchor}")
+        return estimate_cost(fallback_anchor, **kwargs)
+
+    return None
