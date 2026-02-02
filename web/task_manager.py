@@ -251,6 +251,9 @@ class AnalysisTaskManager:
         with self._tasks_lock:
             self._tasks[task_id] = task
 
+        # Persist to database for resilience (survives server restart)
+        self._save_task_to_db(task, deal_context.get('deal_id'))
+
         return task
 
     def start_task(self, task_id: str, run_analysis_fn: Callable, deal_id: str = None) -> bool:
@@ -317,6 +320,10 @@ class AnalysisTaskManager:
         task._thread = thread
         task.status = TaskStatus.RUNNING
         task.started_at = datetime.now().isoformat()
+
+        # Persist running status to database
+        self._save_task_to_db(task)
+
         thread.start()
 
         return True
@@ -369,6 +376,8 @@ class AnalysisTaskManager:
 
     def _update_progress(self, task_id: str, progress_update: Dict[str, Any]):
         """Update task progress from callback."""
+        should_save_to_db = False
+
         with self._tasks_lock:
             task = self._tasks.get(task_id)
             if not task:
@@ -379,16 +388,128 @@ class AnalysisTaskManager:
                 if isinstance(phase, str):
                     phase = AnalysisPhase(phase)
                 task.progress.update_phase(phase)
+                # Save to DB when phase changes (not too frequent)
+                should_save_to_db = True
 
             for key in ["current_document", "documents_processed", "total_documents",
                        "facts_extracted", "risks_identified", "work_items_created"]:
                 if key in progress_update:
                     setattr(task.progress, key, progress_update[key])
 
+        # Persist phase changes to database (outside lock to avoid deadlock)
+        if should_save_to_db:
+            self._save_task_to_db(task)
+
     def get_task(self, task_id: str) -> Optional[AnalysisTask]:
-        """Get task by ID."""
+        """Get task by ID (checks memory first, then database)."""
         with self._tasks_lock:
-            return self._tasks.get(task_id)
+            task = self._tasks.get(task_id)
+            if task:
+                return task
+
+        # Not in memory - check database (for recovery after server restart)
+        return self._load_task_from_db(task_id)
+
+    def _load_task_from_db(self, task_id: str) -> Optional[AnalysisTask]:
+        """Load task state from database (for recovery after restart)."""
+        try:
+            from web.database import db, AnalysisRun
+            from web.app import app
+
+            with app.app_context():
+                run = AnalysisRun.query.filter_by(task_id=task_id).first()
+                if not run:
+                    return None
+
+                # Reconstruct task from database
+                task = AnalysisTask(
+                    task_id=task_id,
+                    file_paths=[],  # Not stored in DB
+                    domains=run.domains or [],
+                    deal_context={'deal_id': run.deal_id},
+                )
+
+                # Map status
+                status_map = {
+                    'pending': TaskStatus.PENDING,
+                    'running': TaskStatus.RUNNING,
+                    'completed': TaskStatus.COMPLETED,
+                    'failed': TaskStatus.FAILED,
+                    'cancelled': TaskStatus.CANCELLED,
+                }
+                task.status = status_map.get(run.status, TaskStatus.PENDING)
+                task.started_at = run.started_at.isoformat() if run.started_at else None
+                task.completed_at = run.completed_at.isoformat() if run.completed_at else None
+                task.error_message = run.error_message or None
+
+                # Set progress
+                task.progress.percent_complete = int(run.progress or 0)
+                task.progress.phase_display = run.current_step or "Unknown"
+                task.progress.facts_extracted = run.facts_created or 0
+                task.progress.risks_identified = run.findings_created or 0
+
+                # Cache in memory for subsequent calls
+                with self._tasks_lock:
+                    self._tasks[task_id] = task
+
+                return task
+
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to load task from DB: {e}")
+            return None
+
+    def _save_task_to_db(self, task: AnalysisTask, deal_id: str = None):
+        """Save task state to database for resilience."""
+        try:
+            from web.database import db, AnalysisRun
+            from web.app import app
+            from sqlalchemy import func
+
+            with app.app_context():
+                # Check if run exists
+                run = AnalysisRun.query.filter_by(task_id=task.task_id).first()
+
+                if not run:
+                    # Get deal_id from task context
+                    deal_id = deal_id or task.deal_context.get('deal_id')
+                    if not deal_id:
+                        return  # Can't save without deal_id
+
+                    # Get next run number
+                    max_run = db.session.query(func.max(AnalysisRun.run_number)).filter_by(deal_id=deal_id).scalar()
+                    run_number = (max_run or 0) + 1
+
+                    run = AnalysisRun(
+                        deal_id=deal_id,
+                        task_id=task.task_id,
+                        run_number=run_number,
+                        run_type='full',
+                        domains=task.domains,
+                    )
+                    db.session.add(run)
+
+                # Update status
+                run.status = task.status.value
+                run.progress = task.progress.percent_complete
+                run.current_step = task.progress.phase_display
+                run.facts_created = task.progress.facts_extracted
+                run.findings_created = task.progress.risks_identified + task.progress.work_items_created
+
+                if task.started_at:
+                    from datetime import datetime
+                    run.started_at = datetime.fromisoformat(task.started_at)
+                if task.completed_at:
+                    from datetime import datetime
+                    run.completed_at = datetime.fromisoformat(task.completed_at)
+                if task.error_message:
+                    run.error_message = task.error_message
+
+                db.session.commit()
+
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to save task to DB: {e}")
 
     def get_task_status(self, task_id: str) -> Optional[Dict[str, Any]]:
         """Get task status as dict for API response."""
@@ -481,16 +602,18 @@ class AnalysisTaskManager:
         return False
 
     def _save_task_state(self, task: AnalysisTask):
-        """Save task state to disk for persistence."""
-        if not self._results_dir:
-            return
+        """Save task state to disk and database for persistence."""
+        # Save to JSON file (local backup)
+        if self._results_dir:
+            state_file = self._results_dir / f"{task.task_id}_state.json"
+            try:
+                with open(state_file, "w") as f:
+                    json.dump(task.to_dict(), f, indent=2)
+            except Exception:
+                pass  # Non-critical
 
-        state_file = self._results_dir / f"{task.task_id}_state.json"
-        try:
-            with open(state_file, "w") as f:
-                json.dump(task.to_dict(), f, indent=2)
-        except Exception:
-            pass  # Non-critical
+        # Save to database (survives server restarts on Railway)
+        self._save_task_to_db(task)
 
     def cleanup_old_tasks(self, max_age_hours: int = 24):
         """Remove completed tasks older than max_age_hours."""

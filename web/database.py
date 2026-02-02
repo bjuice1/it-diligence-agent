@@ -932,11 +932,15 @@ class AnalysisRun(db.Model):
     """
     Tracks each analysis run for a deal.
     Supports incremental updates and rollback.
+    Also stores task state for UI resilience (survives server restarts).
     """
     __tablename__ = 'analysis_runs'
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
     deal_id = Column(String(36), ForeignKey('deals.id', ondelete='CASCADE'), nullable=False)
+
+    # Task identification (for UI tracking - survives server restarts)
+    task_id = Column(String(50), unique=True, nullable=True, index=True)  # e.g., "analysis_abc123"
 
     # Run identification
     run_number = Column(Integer, nullable=False)  # Sequential per deal
@@ -1251,6 +1255,29 @@ def _run_migrations():
             logger.debug("facts.source_document already TEXT or table doesn't exist")
     except Exception as e:
         logger.warning(f"Migration check failed (non-fatal): {e}")
+        db.session.rollback()
+
+    # Migration 2: Add task_id column to analysis_runs for UI resilience
+    try:
+        result = db.session.execute(db.text("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'analysis_runs' AND column_name = 'task_id'
+        """))
+        row = result.fetchone()
+        if not row:
+            logger.info("Adding task_id column to analysis_runs...")
+            db.session.execute(db.text("""
+                ALTER TABLE analysis_runs ADD COLUMN task_id VARCHAR(50) UNIQUE
+            """))
+            db.session.execute(db.text("""
+                CREATE INDEX IF NOT EXISTS idx_analysis_runs_task_id ON analysis_runs(task_id)
+            """))
+            db.session.commit()
+            logger.info("Migration complete: analysis_runs.task_id added")
+        else:
+            logger.debug("analysis_runs.task_id already exists")
+    except Exception as e:
+        logger.warning(f"task_id migration failed (non-fatal): {e}")
         db.session.rollback()
 
 

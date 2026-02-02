@@ -75,49 +75,64 @@ if USE_DATABASE:
 # Phase 4: Session & Task Configuration
 # =============================================================================
 
-# Check if Redis is available for sessions
+# Session configuration - prioritize database sessions for Railway reliability
+# Redis is optional; SQLAlchemy sessions work reliably with PostgreSQL
 REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
 USE_REDIS_SESSIONS = os.environ.get('USE_REDIS_SESSIONS', 'false').lower() == 'true'
 
-if USE_REDIS_SESSIONS:
-    try:
-        import redis
-        # Test Redis connection
-        redis_client = redis.from_url(REDIS_URL)
-        redis_client.ping()
-
-        # Configure Flask-Session with Redis
-        app.config['SESSION_TYPE'] = 'redis'
-        app.config['SESSION_REDIS'] = redis_client
-        app.config['SESSION_PERMANENT'] = True
-        app.config['SESSION_USE_SIGNER'] = True
-        app.config['SESSION_KEY_PREFIX'] = 'diligence:'
-        app.config['PERMANENT_SESSION_LIFETIME'] = 86400  # 24 hours
-
-        FlaskSession(app)
-        logger.info("Redis sessions enabled")
-    except Exception as e:
-        logger.warning(f"Redis not available, using filesystem sessions: {e}")
-        app.config['SESSION_TYPE'] = 'filesystem'
-        app.config['SESSION_FILE_DIR'] = '/tmp/flask_session'
-        FlaskSession(app)
-elif USE_DATABASE:
-    # Use SQLAlchemy sessions when database is enabled (works on Railway)
+# Helper to configure SQLAlchemy sessions
+def _configure_db_sessions():
+    """Configure SQLAlchemy-backed sessions (reliable on Railway)."""
     app.config['SESSION_TYPE'] = 'sqlalchemy'
     app.config['SESSION_SQLALCHEMY'] = db
     app.config['SESSION_PERMANENT'] = True
     app.config['SESSION_USE_SIGNER'] = True
+    app.config['SESSION_KEY_PREFIX'] = 'session:'
     app.config['PERMANENT_SESSION_LIFETIME'] = 86400  # 24 hours
     FlaskSession(app)
-    logger.info("SQLAlchemy database sessions enabled")
-else:
-    # Use filesystem sessions by default (local development)
+    logger.info("SQLAlchemy database sessions enabled (Railway-compatible)")
+
+# Helper to configure filesystem sessions
+def _configure_fs_sessions():
+    """Configure filesystem sessions (local development only)."""
     app.config['SESSION_TYPE'] = 'filesystem'
     app.config['SESSION_FILE_DIR'] = '/tmp/flask_session'
     app.config['SESSION_PERMANENT'] = True
     app.config['PERMANENT_SESSION_LIFETIME'] = 86400  # 24 hours
     FlaskSession(app)
     logger.info("Filesystem sessions enabled")
+
+# Session priority: Redis (if enabled & working) > SQLAlchemy (if DB available) > Filesystem
+session_configured = False
+
+if USE_REDIS_SESSIONS:
+    try:
+        import redis
+        redis_client = redis.from_url(REDIS_URL)
+        redis_client.ping()
+
+        app.config['SESSION_TYPE'] = 'redis'
+        app.config['SESSION_REDIS'] = redis_client
+        app.config['SESSION_PERMANENT'] = True
+        app.config['SESSION_USE_SIGNER'] = True
+        app.config['SESSION_KEY_PREFIX'] = 'diligence:'
+        app.config['PERMANENT_SESSION_LIFETIME'] = 86400
+        FlaskSession(app)
+        logger.info("Redis sessions enabled")
+        session_configured = True
+    except Exception as e:
+        logger.warning(f"Redis connection failed: {e}")
+        # Fall through to try SQLAlchemy
+
+if not session_configured and USE_DATABASE:
+    # Use SQLAlchemy sessions - reliable on Railway with PostgreSQL
+    _configure_db_sessions()
+    session_configured = True
+
+if not session_configured:
+    # Last resort: filesystem sessions (won't persist on Railway restarts)
+    _configure_fs_sessions()
+    logger.warning("Using filesystem sessions - won't persist on server restart!")
 
 # Check if Celery is available for background tasks
 USE_CELERY = os.environ.get('USE_CELERY', 'false').lower() == 'true'
