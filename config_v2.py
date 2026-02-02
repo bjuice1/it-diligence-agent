@@ -38,7 +38,8 @@ DISCOVERY_MAX_TOKENS = 4096   # Extraction needs less
 REASONING_MAX_TOKENS = 8192   # Analysis needs more space
 
 # Iteration limits
-DISCOVERY_MAX_ITERATIONS = 30
+# Note: Applications domain often has many items - increase if truncation occurs
+DISCOVERY_MAX_ITERATIONS = 50  # Increased from 30 for better coverage of large inventories
 REASONING_MAX_ITERATIONS = 40
 
 # Temperature - SET TO 0 FOR DETERMINISTIC OUTPUT

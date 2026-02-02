@@ -564,6 +564,9 @@
     <script>
         const taskId = '{{ task_id or "" }}';
         let pollInterval = null;
+        let requestSequence = 0;  // Track request order to prevent out-of-order updates
+        let lastCompletedSequence = 0;  // Last successfully processed sequence
+        let pendingRequest = null;  // Track active request for abort
 
         const facts = [
             "Did you know? The average M&A IT due diligence uncovers 15-25 previously unknown risks.",
@@ -644,13 +647,38 @@
             'buyer_discovery_network', 'buyer_discovery_cybersecurity', 'buyer_discovery_applications',
             'buyer_discovery_identity', 'buyer_discovery_organization', 'buyer_analysis_complete'];
 
+        // Track highest progress seen to prevent backwards updates
+        let highestPercent = 0;
+        let highestStepIndex = -1;
+
         function updateProgress(status) {
             const progress = status.progress || {};
+            const newPercent = progress.percent_complete || 0;
             const phase = progress.phase || 'initializing';
-            const percent = progress.percent_complete || 0;
+            const stepOrder = ['step-parse', 'step-target-discovery', 'step-target-lock',
+                              'step-buyer-discovery', 'step-buyer-complete',
+                              'step-reasoning', 'step-synthesis'];
+            const newStepId = phaseStepMap[phase] || 'step-parse';
+            const newStepIndex = stepOrder.indexOf(newStepId);
+
+            // Prevent backwards progress (defense against stale data)
+            if (newPercent < highestPercent - 5 || newStepIndex < highestStepIndex) {
+                // Allow small fluctuations (up to 5%) but reject major backwards jumps
+                // This catches stale data from slow responses
+                console.log(`Rejecting backwards progress: ${newPercent}% (highest: ${highestPercent}%), step ${newStepIndex} (highest: ${highestStepIndex})`);
+                return;
+            }
+
+            // Update high water marks
+            if (newPercent > highestPercent) {
+                highestPercent = newPercent;
+            }
+            if (newStepIndex > highestStepIndex) {
+                highestStepIndex = newStepIndex;
+            }
 
             // Update progress bar
-            document.getElementById('progress-bar').style.width = percent + '%';
+            document.getElementById('progress-bar').style.width = newPercent + '%';
 
             // Update phase text
             document.getElementById('phase-text').textContent = progress.phase_display || 'Processing...';
@@ -705,21 +733,15 @@
                 document.getElementById('buyer-discovery-detail').textContent = buyerDiscoveryPhases[phase];
             }
 
-            // Update step states
-            const currentStepId = phaseStepMap[phase];
-            const stepOrder = ['step-parse', 'step-target-discovery', 'step-target-lock',
-                              'step-buyer-discovery', 'step-buyer-complete',
-                              'step-reasoning', 'step-synthesis'];
-            const currentIndex = stepOrder.indexOf(currentStepId);
-
+            // Update step states (using newStepId and newStepIndex from earlier)
             stepOrder.forEach((stepId, index) => {
                 const step = document.getElementById(stepId);
                 if (!step) return;
                 step.classList.remove('active', 'complete');
 
-                if (index < currentIndex) {
+                if (index < newStepIndex) {
                     step.classList.add('complete');
-                } else if (index === currentIndex) {
+                } else if (index === newStepIndex) {
                     step.classList.add('active');
                 }
             });
@@ -732,11 +754,31 @@
         }
 
         function checkStatus() {
+            // Increment sequence for this request
+            const currentSequence = ++requestSequence;
+
+            // Abort any pending request to prevent race conditions
+            if (pendingRequest) {
+                pendingRequest.abort();
+            }
+
+            // Create abort controller for this request
+            const controller = new AbortController();
+            pendingRequest = controller;
+
             // Include task_id in URL to handle session race conditions
             const statusUrl = taskId ? `/analysis/status?task_id=${taskId}` : '/analysis/status';
-            fetch(statusUrl)
+            fetch(statusUrl, { signal: controller.signal })
                 .then(r => r.json())
                 .then(data => {
+                    // Ignore out-of-order responses (older request completed after newer one)
+                    if (currentSequence < lastCompletedSequence) {
+                        console.log(`Ignoring stale response (seq ${currentSequence} < ${lastCompletedSequence})`);
+                        return;
+                    }
+                    lastCompletedSequence = currentSequence;
+                    pendingRequest = null;
+
                     // Handle error responses (even if not marked complete)
                     if (data.error) {
                         clearInterval(pollInterval);
@@ -798,6 +840,10 @@
                     }
                 })
                 .catch(err => {
+                    // Ignore aborted requests (expected when a newer request supersedes)
+                    if (err.name === 'AbortError') {
+                        return;
+                    }
                     console.error('Status check failed:', err);
                 });
         }

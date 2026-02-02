@@ -13,8 +13,30 @@
 </div>
 {% else %}
 <div class="data-source-banner data-source-analysis">
-    <strong>Analysis Data</strong> - Showing applications extracted from your documents.
+    <strong>Analysis Data</strong> - Showing applications extracted from your documents (Source: {{ data_source }}).
 </div>
+{% endif %}
+
+{% if debug_info %}
+<details style="margin-bottom: 15px; padding: 10px; background: var(--bg-surface-sunken); border-radius: 8px; font-size: 0.85em;">
+    <summary style="cursor: pointer; font-weight: bold;">Debug Info (click to expand)</summary>
+    <ul style="margin: 8px 0 0 0; padding-left: 20px;">
+        <li>Data Source: {{ debug_info.data_source }}</li>
+        <li>InventoryStore Items: {{ debug_info.inventory_store_count }}</li>
+        <li>InventoryStore Apps (all entities): {{ debug_info.inventory_apps_all }}</li>
+        <li>InventoryStore Apps (target only): {{ debug_info.inventory_apps_target }}</li>
+        <li>FactStore App Facts: {{ debug_info.fact_store_app_facts }}</li>
+        {% if debug_info.fact_store_app_by_entity %}
+        <li>FactStore Apps by Entity: {{ debug_info.fact_store_app_by_entity }}</li>
+        {% endif %}
+    </ul>
+    {% if debug_info.fact_store_app_facts > inventory.total_count %}
+    <p style="margin-top: 10px; color: var(--warning);">
+        <strong>Note:</strong> FactStore has {{ debug_info.fact_store_app_facts }} app facts but only {{ inventory.total_count }} shown.
+        This may indicate entity filtering or conversion issues.
+    </p>
+    {% endif %}
+</details>
 {% endif %}
 
 <!-- View Toggle and Entity Filter -->

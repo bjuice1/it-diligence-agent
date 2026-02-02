@@ -51,6 +51,7 @@
 
     <!-- Org Chart View (Mermaid) -->
     <div id="chart-view" class="view-content" style="display: none;">
+        {% if categories %}
         <div class="chart-controls">
             <label for="chart-level">Detail Level:</label>
             <select id="chart-level" onchange="updateChart()">
@@ -79,6 +80,13 @@
                 </div>
             </div>
         </div>
+        {% else %}
+        <div class="empty-state" style="text-align: center; padding: 60px 20px; color: var(--text-secondary);">
+            <div style="font-size: 64px; margin-bottom: 20px;">🏢</div>
+            <h3 style="margin: 0 0 12px 0; color: var(--text-primary);">No Org Chart Data</h3>
+            <p style="margin: 0;">Run analysis on documents with staffing information to generate the org chart.</p>
+        </div>
+        {% endif %}
     </div>
 
     <!-- Tree View (existing) -->
@@ -100,6 +108,56 @@
 
     <!-- Staffing Tree -->
     <div class="staffing-tree" id="staffing-tree">
+        {% if not categories %}
+        <div class="empty-state" style="text-align: center; padding: 40px 20px; color: var(--text-secondary);">
+            <div style="font-size: 48px; margin-bottom: 16px;">📊</div>
+            <h3 style="margin: 0 0 8px 0; color: var(--text-primary);">No Organization Data Available</h3>
+            <p style="margin: 0 0 16px 0;">Organization staffing data has not been extracted yet.</p>
+            <p style="margin: 0; font-size: 0.9em;">
+                Run an analysis on documents containing IT staffing information to populate this view.
+            </p>
+            <a href="{{ url_for('organization_refresh') }}" class="btn btn-primary" style="margin-top: 20px; display: inline-block; padding: 10px 20px; background: var(--accent); color: white; border-radius: 6px; text-decoration: none;">
+                ↻ Refresh Organization Data
+            </a>
+            {% if debug_info %}
+            <div style="margin-top: 30px; padding: 15px; background: var(--bg-surface-sunken); border-radius: 8px; text-align: left; font-size: 0.85em;">
+                <strong>Debug Info:</strong>
+                <ul style="margin: 8px 0 0 0; padding-left: 20px;">
+                    <li>Data Source: {{ debug_info.data_source }}</li>
+                    <li>Deal ID: {{ debug_info.deal_id }}</li>
+                    <li>Total Facts: {{ debug_info.total_facts }}</li>
+                    <li>Organization Facts: {{ debug_info.org_facts }}</li>
+                    <li>Staff Members: {{ debug_info.staff_members }}</li>
+                    {% if debug_info.org_categories %}
+                    <li>Org Categories Found: {{ debug_info.org_categories }}</li>
+                    {% endif %}
+                    {% if debug_info.org_samples %}
+                    <li>Sample Facts:
+                        <ul style="margin-top: 4px;">
+                        {% for sample in debug_info.org_samples %}
+                            <li>{{ sample.item }} (cat: {{ sample.category }}, has_details: {{ sample.has_details }})</li>
+                        {% endfor %}
+                        </ul>
+                    </li>
+                    {% endif %}
+                </ul>
+                {% if debug_info.org_facts == 0 %}
+                <p style="margin-top: 10px; color: var(--warning);">
+                    <strong>Issue:</strong> No organization-domain facts found. Check if analysis has been run and includes organization discovery.
+                </p>
+                {% elif debug_info.staff_members == 0 %}
+                <p style="margin-top: 10px; color: var(--warning);">
+                    <strong>Issue:</strong> Organization facts exist ({{ debug_info.org_facts }}) but no staff members were created.
+                    {% if debug_info.org_categories %}
+                    <br>Categories found: {{ debug_info.org_categories.keys()|list }}
+                    <br>Expected categories: leadership, central_it, roles, app_teams, outsourcing, embedded_it, key_individuals
+                    {% endif %}
+                </p>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
         {% for cat_name, category in categories.items() %}
         <div class="tree-category expanded" data-category="{{ cat_name }}">
             <div class="category-header" onclick="toggleCategory('{{ cat_name }}')">

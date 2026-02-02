@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IT DD Tool - Readiness Roadmap</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+        }
+
+        .slide {
+            min-height: 100vh;
+            padding: 60px 80px;
+            display: flex;
+            flex-direction: column;
+            page-break-after: always;
+        }
+
+        .slide-1 {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        }
+
+        .slide-2 {
+            background: linear-gradient(135deg, #16213e 0%, #1a1a2e 100%);
+        }
+
+        .slide-header {
+            margin-bottom: 40px;
+        }
+
+        .slide-number {
+            font-size: 14px;
+            color: #e94560;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 8px;
+        }
+
+        h1 {
+            font-size: 42px;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            font-size: 18px;
+            color: #888;
+        }
+
+        .content {
+            flex: 1;
+            display: flex;
+            gap: 40px;
+        }
+
+        .column {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 24px;
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .card-icon {
+            width: 40px;
+            height: 40px;
+            background: #e94560;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .card-icon.blue { background: #0f4c75; }
+        .card-icon.green { background: #1b998b; }
+        .card-icon.orange { background: #e76f51; }
+        .card-icon.purple { background: #7b2cbf; }
+
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .card-subtitle {
+            font-size: 13px;
+            color: #e94560;
+            font-weight: 500;
+        }
+
+        .card ul {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .card li {
+            font-size: 14px;
+            color: #ccc;
+            padding-left: 20px;
+            position: relative;
+            line-height: 1.5;
+        }
+
+        .card li::before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #e94560;
+        }
+
+        .timeline-bar {
+            margin-top: auto;
+            padding-top: 40px;
+        }
+
+        .timeline-label {
+            font-size: 12px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+        }
+
+        .timeline {
+            display: flex;
+            gap: 4px;
+            height: 48px;
+        }
+
+        .timeline-segment {
+            flex: 1;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .seg-current {
+            background: #e94560;
+            color: #fff;
+        }
+
+        .seg-next {
+            background: #0f4c75;
+            color: #fff;
+        }
+
+        .seg-future {
+            background: rgba(255,255,255,0.1);
+            color: #888;
+        }
+
+        .callout {
+            background: rgba(233, 69, 96, 0.15);
+            border-left: 3px solid #e94560;
+            padding: 16px 20px;
+            border-radius: 0 8px 8px 0;
+            margin-top: 20px;
+        }
+
+        .callout-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #e94560;
+            margin-bottom: 6px;
+        }
+
+        .callout-text {
+            font-size: 14px;
+            color: #ccc;
+            line-height: 1.5;
+        }
+
+        .metrics-row {
+            display: flex;
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        .metric {
+            flex: 1;
+            text-align: center;
+            padding: 16px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+        }
+
+        .metric-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #e94560;
+        }
+
+        .metric-label {
+            font-size: 11px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 4px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-ready { background: #1b998b; color: #fff; }
+        .status-pending { background: #e76f51; color: #fff; }
+        .status-blocked { background: #e94560; color: #fff; }
+
+        .divider {
+            width: 100%;
+            height: 1px;
+            background: rgba(255,255,255,0.1);
+            margin: 20px 0;
+        }
+
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .footer-text {
+            font-size: 12px;
+            color: #666;
+        }
+
+        @media print {
+            .slide {
+                height: 100vh;
+                overflow: hidden;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<!-- SLIDE 1: Functional Validation -->
+<div class="slide slide-1">
+    <div class="slide-header">
+        <div class="slide-number">Phase 1 of 2</div>
+        <h1>Functional Validation</h1>
+        <div class="subtitle">Confirm core tool logic with synthetic test scenarios</div>
+    </div>
+
+    <div class="content">
+        <div class="column">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon">1</div>
+                    <div>
+                        <div class="card-title">Test Coverage Matrix</div>
+                        <div class="card-subtitle">12 Scenarios Total</div>
+                    </div>
+                </div>
+                <ul>
+                    <li><strong>Deal Types:</strong> Carve-out (standalone) + Acquisition (integration)</li>
+                    <li><strong>Industries:</strong> Healthcare, Manufacturing, Financial Services, Retail, Technology, Professional Services</li>
+                    <li><strong>Approach:</strong> Synthetic VDR documents generated via AI with realistic imperfections</li>
+                    <li><strong>Testers:</strong> 6 team members, each owns one industry vertical</li>
+                </ul>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon blue">2</div>
+                    <div>
+                        <div class="card-title">Validation Criteria</div>
+                        <div class="card-subtitle">Scored 1-5 Scale</div>
+                    </div>
+                </div>
+                <ul>
+                    <li><strong>Fact Extraction:</strong> Accurate capture of headcount, apps, infrastructure, costs</li>
+                    <li><strong>Risk Identification:</strong> Specific, fact-based, appropriate severity</li>
+                    <li><strong>Gap Detection:</strong> Actionable VDR requests for missing information</li>
+                    <li><strong>Cost Estimation:</strong> Reasonable ranges with transparent build-up</li>
+                    <li><strong>Output Quality:</strong> Professional exports, coherent narratives</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="column">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon green">3</div>
+                    <div>
+                        <div class="card-title">Activities & Deliverables</div>
+                        <div class="card-subtitle">10 Business Days</div>
+                    </div>
+                </div>
+                <ul>
+                    <li><strong>Days 1-2:</strong> Create synthetic document sets (AI-assisted)</li>
+                    <li><strong>Days 3-5:</strong> Round 1 testing - execute all 12 scenarios</li>
+                    <li><strong>Day 6:</strong> Team triage - prioritize bugs and issues</li>
+                    <li><strong>Days 7-8:</strong> Bug fixes + Round 2 retest</li>
+                    <li><strong>Days 9-10:</strong> Compile final report with recommendations</li>
+                </ul>
+
+                <div class="metrics-row">
+                    <div class="metric">
+                        <div class="metric-value">12</div>
+                        <div class="metric-label">Scenarios</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value">6</div>
+                        <div class="metric-label">Industries</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value">2</div>
+                        <div class="metric-label">Deal Types</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="callout">
+                <div class="callout-title">Go / No-Go Criteria</div>
+                <div class="callout-text">
+                    Average extraction score ≥ 4.0 | Average risk score ≥ 3.5 | No critical bugs | Excel exports functional for all scenarios
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="timeline-bar">
+        <div class="timeline-label">Phase 1 Timeline</div>
+        <div class="timeline">
+            <div class="timeline-segment seg-current">Week 1-2: Testing</div>
+            <div class="timeline-segment seg-next">Gate Review</div>
+            <div class="timeline-segment seg-future">→ Phase 2</div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <div class="footer-text">IT Due Diligence Tool - Readiness Roadmap</div>
+        <div class="footer-text">February 2026</div>
+    </div>
+</div>
+
+<!-- SLIDE 2: Commercial Readiness -->
+<div class="slide slide-2">
+    <div class="slide-header">
+        <div class="slide-number">Phase 2 of 2</div>
+        <h1>Commercial Readiness</h1>
+        <div class="subtitle">Enterprise deployment, compliance, and benchmarking data for client use</div>
+    </div>
+
+    <div class="content">
+        <div class="column">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon orange">A</div>
+                    <div>
+                        <div class="card-title">Infrastructure & Security</div>
+                        <div class="card-subtitle">8-12 Weeks</div>
+                    </div>
+                </div>
+                <ul>
+                    <li><strong>Cloud Deployment:</strong> Migrate to PwC-approved infrastructure (Azure likely)</li>
+                    <li><strong>InfoSec Review:</strong> Penetration testing, security questionnaire, code review</li>
+                    <li><strong>Access Controls:</strong> SSO integration, role-based permissions, audit logging</li>
+                    <li><strong>Data Handling:</strong> Encryption, retention policies, client data isolation</li>
+                </ul>
+                <div style="margin-top: 12px;">
+                    <span class="status-badge status-pending">Requires InfoSec Engagement</span>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon purple">B</div>
+                    <div>
+                        <div class="card-title">AI Governance & Compliance</div>
+                        <div class="card-subtitle">Critical Path Item</div>
+                    </div>
+                </div>
+                <ul>
+                    <li><strong>AI Provider Approval:</strong> Confirm Anthropic on approved list OR identify alternative</li>
+                    <li><strong>Prompt/Output Logging:</strong> Audit trail for all AI interactions</li>
+                    <li><strong>Client Disclosure:</strong> Engagement letter language for AI-assisted analysis</li>
+                    <li><strong>Human Review:</strong> All AI outputs reviewed before client delivery</li>
+                </ul>
+                <div style="margin-top: 12px;">
+                    <span class="status-badge status-blocked">Start Conversation Now</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="column">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon green">C</div>
+                    <div>
+                        <div class="card-title">Benchmarking Data</div>
+                        <div class="card-subtitle">Foundation for Cost Estimates</div>
+                    </div>
+                </div>
+                <ul>
+                    <li><strong>Cost Anchors:</strong> 30+ cost benchmarks need source attribution (Gartner, vendor pricing, PwC deal data)</li>
+                    <li><strong>Industry Modifiers:</strong> Healthcare 1.25x, FinServ 1.3x, Gov 1.4x - need defensible sources</li>
+                    <li><strong>Regional Rates:</strong> India 0.35x, US West 1.15x - validate against ISG/Everest data</li>
+                    <li><strong>PwC Proprietary:</strong> Engage Deals practice for historical cost actuals (highest defensibility)</li>
+                    <li><strong>Governance:</strong> Quarterly review cadence, admin UI for updates, audit trail</li>
+                </ul>
+                <div style="margin-top: 12px;">
+                    <span class="status-badge status-pending">Needs Data Sourcing</span>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon blue">D</div>
+                    <div>
+                        <div class="card-title">Pilot & Rollout</div>
+                        <div class="card-subtitle">4-8 Weeks</div>
+                    </div>
+                </div>
+                <ul>
+                    <li><strong>Pilot Deal:</strong> 1-2 real engagements with experienced team + safety net</li>
+                    <li><strong>Success Metrics:</strong> 30%+ time savings, "usable with minor edits" quality</li>
+                    <li><strong>Training:</strong> User onboarding materials, practitioner guide</li>
+                    <li><strong>Support Model:</strong> Defined ownership for bugs, questions, enhancements</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="callout">
+        <div class="callout-title">Critical Path: AI Governance + InfoSec</div>
+        <div class="callout-text">
+            These two workstreams typically take longest. Begin conversations immediately - don't wait for Phase 1 completion.
+            Benchmarking data sourcing can run in parallel and should include PwC proprietary data where available.
+        </div>
+    </div>
+
+    <div class="timeline-bar">
+        <div class="timeline-label">Commercial Readiness Timeline (Realistic)</div>
+        <div class="timeline">
+            <div class="timeline-segment seg-current">Wk 1-2<br/>Testing</div>
+            <div class="timeline-segment seg-next">Wk 3-14<br/>Infra + Security</div>
+            <div class="timeline-segment seg-next">Wk 8-14<br/>AI Approval</div>
+            <div class="timeline-segment seg-next">Wk 12-18<br/>Benchmarks</div>
+            <div class="timeline-segment seg-future">Wk 15-22<br/>Pilot</div>
+            <div class="timeline-segment seg-future">Wk 20+<br/>Rollout</div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <div class="footer-text">Estimated 5-7 months to first client engagement</div>
+        <div class="footer-text">February 2026</div>
+    </div>
+</div>
+
+</body>
+</html>
