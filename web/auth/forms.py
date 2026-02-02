@@ -10,7 +10,7 @@ from wtforms import StringField, PasswordField, BooleanField, SubmitField
 from wtforms.validators import DataRequired, Email, Length, EqualTo, ValidationError
 
 # Phase 3: Feature flag for auth backend
-AUTH_BACKEND = os.environ.get('AUTH_BACKEND', 'json').lower()
+AUTH_BACKEND = os.environ.get('AUTH_BACKEND', 'db').lower()
 
 
 def get_auth_backend():

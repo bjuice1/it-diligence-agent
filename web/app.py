@@ -222,7 +222,7 @@ login_manager.login_message = 'Please log in to access this page.'
 login_manager.login_message_category = 'info'
 
 # Phase 3: Feature flag for auth backend
-AUTH_BACKEND = os.environ.get('AUTH_BACKEND', 'json').lower()
+AUTH_BACKEND = os.environ.get('AUTH_BACKEND', 'db').lower()
 
 @login_manager.user_loader
 def load_user(user_id):

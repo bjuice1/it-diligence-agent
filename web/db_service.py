@@ -18,7 +18,7 @@ from datetime import datetime
 USE_DATABASE = os.environ.get('USE_DATABASE', 'false').lower() == 'true'
 
 # Phase 3: Auth backend flag (separate from USE_DATABASE for gradual migration)
-AUTH_BACKEND = os.environ.get('AUTH_BACKEND', 'json').lower()
+AUTH_BACKEND = os.environ.get('AUTH_BACKEND', 'db').lower()
 
 
 class FactService:

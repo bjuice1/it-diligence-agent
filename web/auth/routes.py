@@ -19,7 +19,7 @@ USE_RATE_LIMITING = os.environ.get('USE_RATE_LIMITING', 'false').lower() == 'tru
 USE_AUDIT_LOGGING = os.environ.get('USE_AUDIT_LOGGING', 'true').lower() == 'true'
 
 # Phase 3: Feature flag for auth backend (json = file-based, db = database)
-AUTH_BACKEND = os.environ.get('AUTH_BACKEND', 'json').lower()
+AUTH_BACKEND = os.environ.get('AUTH_BACKEND', 'db').lower()
 
 
 def get_auth_backend():
