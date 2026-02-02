@@ -17,6 +17,9 @@ from datetime import datetime
 # Check if database is enabled
 USE_DATABASE = os.environ.get('USE_DATABASE', 'false').lower() == 'true'
 
+# Phase 3: Auth backend flag (separate from USE_DATABASE for gradual migration)
+AUTH_BACKEND = os.environ.get('AUTH_BACKEND', 'json').lower()
+
 
 class FactService:
     """Service for accessing facts."""
@@ -336,14 +339,14 @@ class DealService:
 
 
 class UserService:
-    """Service for managing users."""
+    """Service for managing users. Uses AUTH_BACKEND flag for storage selection."""
 
     @staticmethod
     def get_all() -> List[Dict]:
         """Get all users."""
-        if USE_DATABASE:
-            from web.database import User
-            return [u.to_dict() for u in User.query.all()]
+        if AUTH_BACKEND == 'db':
+            from web.services.auth_service import get_auth_service
+            return [u.to_dict() for u in get_auth_service().list_users()]
         else:
             from web.models.user import get_user_store
             return [u.to_dict() for u in get_user_store().list_users()]
@@ -351,9 +354,9 @@ class UserService:
     @staticmethod
     def get_by_id(user_id: str) -> Optional[Dict]:
         """Get a user by ID."""
-        if USE_DATABASE:
-            from web.database import User
-            user = User.query.filter_by(id=user_id).first()
+        if AUTH_BACKEND == 'db':
+            from web.services.auth_service import get_auth_service
+            user = get_auth_service().get_by_id(user_id)
             return user.to_dict() if user else None
         else:
             from web.models.user import get_user_store
@@ -363,9 +366,9 @@ class UserService:
     @staticmethod
     def get_by_email(email: str) -> Optional[Dict]:
         """Get a user by email."""
-        if USE_DATABASE:
-            from web.database import User
-            user = User.query.filter_by(email=email.lower()).first()
+        if AUTH_BACKEND == 'db':
+            from web.services.auth_service import get_auth_service
+            user = get_auth_service().get_by_email(email)
             return user.to_dict() if user else None
         else:
             from web.models.user import get_user_store
@@ -374,4 +377,4 @@ class UserService:
 
 
 # Export services
-__all__ = ['FactService', 'FindingService', 'DealService', 'UserService', 'USE_DATABASE']
+__all__ = ['FactService', 'FindingService', 'DealService', 'UserService', 'USE_DATABASE', 'AUTH_BACKEND']

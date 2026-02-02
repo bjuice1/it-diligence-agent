@@ -4,11 +4,23 @@ Authentication Forms
 WTForms for login, registration, and password management.
 """
 
+import os
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, BooleanField, SubmitField
 from wtforms.validators import DataRequired, Email, Length, EqualTo, ValidationError
 
-from web.models.user import get_user_store
+# Phase 3: Feature flag for auth backend
+AUTH_BACKEND = os.environ.get('AUTH_BACKEND', 'json').lower()
+
+
+def get_auth_backend():
+    """Get the appropriate auth backend for validation."""
+    if AUTH_BACKEND == 'db':
+        from web.services.auth_service import get_auth_service
+        return get_auth_service()
+    else:
+        from web.models.user import get_user_store
+        return get_user_store()
 
 
 class LoginForm(FlaskForm):
@@ -48,8 +60,8 @@ class RegistrationForm(FlaskForm):
 
     def validate_email(self, field):
         """Check if email is already registered."""
-        user_store = get_user_store()
-        if user_store.get_by_email(field.data):
+        auth = get_auth_backend()
+        if auth.get_by_email(field.data):
             raise ValidationError('This email is already registered.')
 
 
