@@ -90,29 +90,29 @@ class FactRepository(BaseRepository[Fact]):
         return self.get_by_deal(deal_id, run_id=run_id, entity=entity)
 
     # Domain-specific convenience methods (for Phase 2 DealData facade)
-    def get_applications(self, deal_id: str, run_id: str = None) -> List[Fact]:
-        """Get all application facts."""
-        return self.get_by_domain(deal_id, 'applications', run_id)
+    def get_applications(self, deal_id: str, run_id: str = None, entity: str = None) -> List[Fact]:
+        """Get all application facts, optionally filtered by entity."""
+        return self.get_by_deal(deal_id, run_id=run_id, domain='applications', entity=entity)
 
-    def get_organization(self, deal_id: str, run_id: str = None) -> List[Fact]:
-        """Get all organization facts."""
-        return self.get_by_domain(deal_id, 'organization', run_id)
+    def get_organization(self, deal_id: str, run_id: str = None, entity: str = None) -> List[Fact]:
+        """Get all organization facts, optionally filtered by entity."""
+        return self.get_by_deal(deal_id, run_id=run_id, domain='organization', entity=entity)
 
-    def get_infrastructure(self, deal_id: str, run_id: str = None) -> List[Fact]:
-        """Get all infrastructure facts."""
-        return self.get_by_domain(deal_id, 'infrastructure', run_id)
+    def get_infrastructure(self, deal_id: str, run_id: str = None, entity: str = None) -> List[Fact]:
+        """Get all infrastructure facts, optionally filtered by entity."""
+        return self.get_by_deal(deal_id, run_id=run_id, domain='infrastructure', entity=entity)
 
-    def get_cybersecurity(self, deal_id: str, run_id: str = None) -> List[Fact]:
-        """Get all cybersecurity facts."""
-        return self.get_by_domain(deal_id, 'cybersecurity', run_id)
+    def get_cybersecurity(self, deal_id: str, run_id: str = None, entity: str = None) -> List[Fact]:
+        """Get all cybersecurity facts, optionally filtered by entity."""
+        return self.get_by_deal(deal_id, run_id=run_id, domain='cybersecurity', entity=entity)
 
-    def get_network(self, deal_id: str, run_id: str = None) -> List[Fact]:
-        """Get all network facts."""
-        return self.get_by_domain(deal_id, 'network', run_id)
+    def get_network(self, deal_id: str, run_id: str = None, entity: str = None) -> List[Fact]:
+        """Get all network facts, optionally filtered by entity."""
+        return self.get_by_deal(deal_id, run_id=run_id, domain='network', entity=entity)
 
-    def get_identity_access(self, deal_id: str, run_id: str = None) -> List[Fact]:
-        """Get all identity/access facts."""
-        return self.get_by_domain(deal_id, 'identity_access', run_id)
+    def get_identity_access(self, deal_id: str, run_id: str = None, entity: str = None) -> List[Fact]:
+        """Get all identity/access facts, optionally filtered by entity."""
+        return self.get_by_deal(deal_id, run_id=run_id, domain='identity_access', entity=entity)
 
     def get_by_document(self, document_id: str) -> List[Fact]:
         """Get all facts extracted from a document."""
@@ -185,7 +185,7 @@ class FactRepository(BaseRepository[Fact]):
 
         return summary
 
-    def count_by_domain(self, deal_id: str, run_id: str = None, include_orphaned: bool = True) -> Dict[str, int]:
+    def count_by_domain(self, deal_id: str, run_id: str = None, entity: str = None, include_orphaned: bool = True) -> Dict[str, int]:
         """Get fact counts per domain for dashboard (SQL-level aggregation)."""
         query = self.query().filter(Fact.deal_id == deal_id)
         if run_id:
@@ -198,6 +198,8 @@ class FactRepository(BaseRepository[Fact]):
                 )
             else:
                 query = query.filter(Fact.analysis_run_id == run_id)
+        if entity:
+            query = query.filter(Fact.entity == entity)
 
         results = query.with_entities(
             Fact.domain, func.count(Fact.id)
@@ -210,6 +212,7 @@ class FactRepository(BaseRepository[Fact]):
         deal_id: str,
         run_id: str = None,
         domain: str = None,
+        entity: str = None,
         status: str = None,
         search: str = None,
         page: int = 1,
@@ -220,6 +223,7 @@ class FactRepository(BaseRepository[Fact]):
         Get paginated facts with all filtering done in SQL.
 
         Args:
+            entity: Filter by entity ('target' or 'buyer')
             include_orphaned: If True (default), includes facts with NULL
                 analysis_run_id when filtering by run_id.
 
@@ -240,6 +244,8 @@ class FactRepository(BaseRepository[Fact]):
                 query = query.filter(Fact.analysis_run_id == run_id)
         if domain:
             query = query.filter(Fact.domain == domain)
+        if entity:
+            query = query.filter(Fact.entity == entity)
         if status:
             query = query.filter(Fact.status == status)
         if search:

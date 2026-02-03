@@ -33,19 +33,27 @@ class DealData:
 
     Uses flask.g context for deal/run context when available,
     or accepts explicit deal_id/run_id parameters.
+
+    Entity Filtering:
+        By default, methods return data for BOTH target and buyer.
+        Pass entity='target' or entity='buyer' to filter by entity.
+        Use convenience methods like get_target_applications() for entity-specific queries.
     """
 
-    def __init__(self, deal_id: str = None, run_id: str = None):
+    def __init__(self, deal_id: str = None, run_id: str = None, entity: str = None):
         """
         Initialize DealData.
 
         Args:
             deal_id: Deal ID (uses flask.g.deal_id if not provided)
             run_id: Analysis run ID to scope data (uses flask.g.run_id if not provided)
+            entity: Default entity filter ('target' or 'buyer'). If set, all queries
+                    will filter by this entity unless overridden in method calls.
         """
         # Use flask.g context if available, otherwise use explicit params
         self.deal_id = deal_id or getattr(g, 'deal_id', None)
         self.run_id = run_id or getattr(g, 'run_id', None)
+        self.default_entity = entity  # Store default entity filter
 
         if not self.deal_id:
             raise ValueError("deal_id required - either pass explicitly or call load_deal_context() first")
@@ -60,37 +68,44 @@ class DealData:
     # FACTS - Domain-specific accessors
     # =========================================================================
 
-    def get_applications(self) -> List:
-        """Get all application facts for this deal/run."""
-        return self._fact_repo.get_applications(self.deal_id, self.run_id)
+    def _resolve_entity(self, entity: str = None) -> str:
+        """Resolve entity parameter, using default_entity if not specified."""
+        if entity is not None:
+            return entity
+        return self.default_entity  # May be None (return all)
 
-    def get_organization(self) -> List:
-        """Get all organization facts for this deal/run."""
-        return self._fact_repo.get_organization(self.deal_id, self.run_id)
+    def get_applications(self, entity: str = None) -> List:
+        """Get application facts for this deal/run, optionally filtered by entity."""
+        return self._fact_repo.get_applications(self.deal_id, self.run_id, entity=self._resolve_entity(entity))
 
-    def get_infrastructure(self) -> List:
-        """Get all infrastructure facts for this deal/run."""
-        return self._fact_repo.get_infrastructure(self.deal_id, self.run_id)
+    def get_organization(self, entity: str = None) -> List:
+        """Get organization facts for this deal/run, optionally filtered by entity."""
+        return self._fact_repo.get_organization(self.deal_id, self.run_id, entity=self._resolve_entity(entity))
 
-    def get_cybersecurity(self) -> List:
-        """Get all cybersecurity facts for this deal/run."""
-        return self._fact_repo.get_cybersecurity(self.deal_id, self.run_id)
+    def get_infrastructure(self, entity: str = None) -> List:
+        """Get infrastructure facts for this deal/run, optionally filtered by entity."""
+        return self._fact_repo.get_infrastructure(self.deal_id, self.run_id, entity=self._resolve_entity(entity))
 
-    def get_network(self) -> List:
-        """Get all network facts for this deal/run."""
-        return self._fact_repo.get_network(self.deal_id, self.run_id)
+    def get_cybersecurity(self, entity: str = None) -> List:
+        """Get cybersecurity facts for this deal/run, optionally filtered by entity."""
+        return self._fact_repo.get_cybersecurity(self.deal_id, self.run_id, entity=self._resolve_entity(entity))
 
-    def get_identity_access(self) -> List:
-        """Get all identity/access facts for this deal/run."""
-        return self._fact_repo.get_identity_access(self.deal_id, self.run_id)
+    def get_network(self, entity: str = None) -> List:
+        """Get network facts for this deal/run, optionally filtered by entity."""
+        return self._fact_repo.get_network(self.deal_id, self.run_id, entity=self._resolve_entity(entity))
 
-    def get_facts_by_domain(self, domain: str) -> List:
-        """Get facts for a specific domain."""
-        return self._fact_repo.get_by_domain(self.deal_id, domain, self.run_id)
+    def get_identity_access(self, entity: str = None) -> List:
+        """Get identity/access facts for this deal/run, optionally filtered by entity."""
+        return self._fact_repo.get_identity_access(self.deal_id, self.run_id, entity=self._resolve_entity(entity))
+
+    def get_facts_by_domain(self, domain: str, entity: str = None) -> List:
+        """Get facts for a specific domain, optionally filtered by entity."""
+        return self._fact_repo.get_by_deal(self.deal_id, run_id=self.run_id, domain=domain, entity=self._resolve_entity(entity))
 
     def get_facts_paginated(
         self,
         domain: str = None,
+        entity: str = None,
         status: str = None,
         search: str = None,
         page: int = 1,
@@ -99,6 +114,9 @@ class DealData:
         """
         Get paginated facts with filtering.
 
+        Args:
+            entity: Filter by entity ('target' or 'buyer')
+
         Returns:
             Tuple of (items, total_count)
         """
@@ -106,15 +124,52 @@ class DealData:
             deal_id=self.deal_id,
             run_id=self.run_id,
             domain=domain,
+            entity=self._resolve_entity(entity),
             status=status,
             search=search,
             page=page,
             per_page=per_page
         )
 
-    def get_all_facts(self) -> List:
-        """Get all facts for this deal/run."""
-        return self._fact_repo.get_by_deal(self.deal_id, run_id=self.run_id)
+    def get_all_facts(self, entity: str = None) -> List:
+        """Get all facts for this deal/run, optionally filtered by entity."""
+        return self._fact_repo.get_by_deal(self.deal_id, run_id=self.run_id, entity=self._resolve_entity(entity))
+
+    # =========================================================================
+    # FACTS - Entity-specific convenience methods
+    # =========================================================================
+
+    def get_target_applications(self) -> List:
+        """Get only TARGET application facts."""
+        return self.get_applications(entity='target')
+
+    def get_buyer_applications(self) -> List:
+        """Get only BUYER application facts."""
+        return self.get_applications(entity='buyer')
+
+    def get_target_organization(self) -> List:
+        """Get only TARGET organization facts."""
+        return self.get_organization(entity='target')
+
+    def get_buyer_organization(self) -> List:
+        """Get only BUYER organization facts."""
+        return self.get_organization(entity='buyer')
+
+    def get_target_infrastructure(self) -> List:
+        """Get only TARGET infrastructure facts."""
+        return self.get_infrastructure(entity='target')
+
+    def get_buyer_infrastructure(self) -> List:
+        """Get only BUYER infrastructure facts."""
+        return self.get_infrastructure(entity='buyer')
+
+    def get_target_facts(self) -> List:
+        """Get all TARGET facts across all domains."""
+        return self.get_all_facts(entity='target')
+
+    def get_buyer_facts(self) -> List:
+        """Get all BUYER facts across all domains."""
+        return self.get_all_facts(entity='buyer')
 
     # =========================================================================
     # FINDINGS - Risks, Work Items, etc.
@@ -204,15 +259,19 @@ class DealData:
     # SUMMARIES - Dashboard & aggregations
     # =========================================================================
 
-    def get_dashboard_summary(self) -> Dict[str, Any]:
+    def get_dashboard_summary(self, entity: str = None) -> Dict[str, Any]:
         """
         Get aggregated data for the deal dashboard.
+
+        Args:
+            entity: Filter facts by entity ('target' or 'buyer')
 
         Returns:
             Dict with fact_counts, top_risks, gap_counts, analysis_run
         """
+        resolved_entity = self._resolve_entity(entity)
         return {
-            'fact_counts': self._fact_repo.count_by_domain(self.deal_id, self.run_id),
+            'fact_counts': self._fact_repo.count_by_domain(self.deal_id, self.run_id, entity=resolved_entity),
             'top_risks': self.get_top_risks(5),
             'gap_counts': self._gap_repo.count_by_importance(self.deal_id, self.run_id),
             'risk_summary': self._finding_repo.get_risk_summary(self.deal_id, self.run_id),
@@ -289,17 +348,28 @@ class EmptyDealData:
 
     deal_id = None
     run_id = None
+    default_entity = None
 
-    # Facts
-    def get_applications(self): return []
-    def get_organization(self): return []
-    def get_infrastructure(self): return []
-    def get_cybersecurity(self): return []
-    def get_network(self): return []
-    def get_identity_access(self): return []
-    def get_facts_by_domain(self, domain): return []
+    # Facts - with entity support
+    def get_applications(self, entity=None): return []
+    def get_organization(self, entity=None): return []
+    def get_infrastructure(self, entity=None): return []
+    def get_cybersecurity(self, entity=None): return []
+    def get_network(self, entity=None): return []
+    def get_identity_access(self, entity=None): return []
+    def get_facts_by_domain(self, domain, entity=None): return []
     def get_facts_paginated(self, **kwargs): return [], 0
-    def get_all_facts(self): return []
+    def get_all_facts(self, entity=None): return []
+
+    # Entity-specific convenience methods
+    def get_target_applications(self): return []
+    def get_buyer_applications(self): return []
+    def get_target_organization(self): return []
+    def get_buyer_organization(self): return []
+    def get_target_infrastructure(self): return []
+    def get_buyer_infrastructure(self): return []
+    def get_target_facts(self): return []
+    def get_buyer_facts(self): return []
 
     # Findings
     def get_risks(self, severity=None): return []
@@ -316,7 +386,7 @@ class EmptyDealData:
     def get_critical_gaps(self): return []
 
     # Summaries
-    def get_dashboard_summary(self):
+    def get_dashboard_summary(self, entity=None):
         return {
             'fact_counts': {},
             'top_risks': [],

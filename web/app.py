@@ -1803,25 +1803,24 @@ def facts():
         load_deal_context(current_deal_id)
         data = DealData()
 
-        # Use repository pagination (filtering done in SQL)
+        # Use repository pagination with entity filtering (filtering done in SQL)
         paginated_facts, total = data.get_facts_paginated(
             domain=domain_filter or None,
+            entity=entity_filter or None,  # Filter by entity at SQL level
             status=None,
             search=search_query or None,
             page=page,
             per_page=per_page
         )
 
-        # Apply category and entity filters (may need to add to repository later)
+        # Apply category filter (may need to add to repository later)
         if category_filter:
             paginated_facts = [f for f in paginated_facts if f.category == category_filter]
-        if entity_filter:
-            paginated_facts = [f for f in paginated_facts if getattr(f, 'entity', 'target') == entity_filter]
 
         total_pages = (total + per_page - 1) // per_page
 
         # Get unique domains/categories from all facts for filter dropdowns
-        all_facts = data.get_all_facts()
+        all_facts = data.get_all_facts()  # Keep getting all for filter dropdowns
         domains = list(set(f.domain for f in all_facts))
         categories = list(set(f.category for f in all_facts if f.category))
 
@@ -2120,9 +2119,10 @@ def export():
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         saved_files = []
 
-        # Export facts
+        # Export facts (include entity for filtering)
         facts_data = [{
             'id': getattr(f, 'id', '') or getattr(f, 'fact_id', ''),
+            'entity': getattr(f, 'entity', 'target'),
             'domain': f.domain,
             'category': f.category,
             'item': f.item,
@@ -2134,9 +2134,10 @@ def export():
             json.dump(facts_data, f, indent=2, default=str)
         saved_files.append(facts_file)
 
-        # Export gaps
+        # Export gaps (include entity for filtering)
         gaps_data = [{
             'id': getattr(g, 'id', '') or getattr(g, 'gap_id', ''),
+            'entity': getattr(g, 'entity', 'target'),
             'domain': g.domain,
             'category': g.category,
             'description': g.description,
@@ -2304,7 +2305,8 @@ def get_organization_analysis():
             load_deal_context(current_deal_id)
             data = DealData()
 
-            all_facts = data.get_all_facts()
+            # Get TARGET facts only for organization analysis (not buyer facts)
+            all_facts = data.get_all_facts(entity='target')
             org_facts = [f for f in all_facts if f.domain == "organization"]
 
             if all_facts:
@@ -3087,8 +3089,8 @@ def applications_overview():
             load_deal_context(current_deal_id)
             data = DealData()
 
-            # Get all facts for this deal/run, then filter for applications
-            all_facts = data.get_all_facts()
+            # Get TARGET facts only for applications overview (not buyer facts)
+            all_facts = data.get_all_facts(entity='target')
             app_facts = [f for f in all_facts if f.domain == "applications"]
             debug_info['fact_store_app_facts'] = len(app_facts)
 
@@ -3147,7 +3149,8 @@ def applications_category(category):
         try:
             load_deal_context(current_deal_id)
             data = DealData()
-            all_facts = data.get_all_facts()
+            # Get TARGET facts only for applications category (not buyer facts)
+            all_facts = data.get_all_facts(entity='target')
 
             if all_facts:
                 fact_adapter = wrap_db_facts(all_facts)
@@ -3207,7 +3210,8 @@ def infrastructure_overview():
         try:
             load_deal_context(current_deal_id)
             data = DealData()
-            all_facts = data.get_all_facts()
+            # Get TARGET facts only for infrastructure overview (not buyer facts)
+            all_facts = data.get_all_facts(entity='target')
 
             if all_facts:
                 fact_adapter = wrap_db_facts(all_facts)
@@ -3263,7 +3267,8 @@ def infrastructure_category(category):
             try:
                 load_deal_context(current_deal_id)
                 data = DealData()
-                all_facts = data.get_all_facts()
+                # Get TARGET facts only for infrastructure category (not buyer facts)
+                all_facts = data.get_all_facts(entity='target')
 
                 if all_facts:
                     fact_adapter = wrap_db_facts(all_facts)
