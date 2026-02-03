@@ -653,6 +653,7 @@ def _execute_flag_gap(
         category = input_data.get("category")
         description = input_data.get("description")
         importance = input_data.get("importance", "medium")
+        entity = input_data.get("entity", "target")  # Extract entity for two-phase support
 
         if not all([domain, category, description]):
             return {
@@ -670,19 +671,21 @@ def _execute_flag_gap(
                     "message": f"Similar gap already exists: {duplicate['gap_id']}"
                 }
 
-        # Add gap to store
+        # Add gap to store with entity (critical for two-phase separation)
         gap_id = fact_store.add_gap(
             domain=domain,
             category=category,
             description=description,
-            importance=importance
+            importance=importance,
+            entity=entity  # Pass entity to maintain target/buyer separation
         )
 
-        logger.debug(f"Flagged gap: {gap_id} - {description[:50]}...")
+        logger.debug(f"Flagged gap: {gap_id} [{entity}] - {description[:50]}...")
 
         return {
             "status": "success",
             "gap_id": gap_id,
+            "entity": entity,
             "message": f"Gap flagged: {description[:50]}..."
         }
 
