@@ -1044,8 +1044,8 @@ def run_discovery_for_domain(
         result = agent.discover(
             analysis_content,
             document_name=document_names,
-            # Pass entity info for fact tagging
-            # Note: This requires agent to support these params or we handle in tools
+            entity=entity,  # CRITICAL: Pass entity to enforce target vs buyer
+            analysis_phase=analysis_phase
         )
 
         # Calculate what was added in this run
