@@ -1835,6 +1835,7 @@ def facts():
                              entity_filter=entity_filter,
                              search_query=search_query,
                              page=page,
+                             per_page=per_page,
                              total_pages=total_pages,
                              total=total,
                              data_source='database')
