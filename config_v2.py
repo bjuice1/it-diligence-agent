@@ -249,8 +249,9 @@ CIRCUIT_BREAKER_TIMEOUT = 10.0          # Seconds before retrying (was 60 - too 
 MIN_EVIDENCE_QUOTE_LENGTH = 10     # Minimum characters for exact_quote
 MAX_EVIDENCE_QUOTE_LENGTH = 500    # Maximum characters (truncate if longer)
 
-# Duplicate detection
-DUPLICATE_SIMILARITY_THRESHOLD = 0.85  # 0.0-1.0, higher = stricter matching
+# Duplicate detection - set HIGH to only catch true duplicates
+# 0.85 was filtering legitimate items like "Salesforce Sales Cloud" vs "Salesforce Service Cloud"
+DUPLICATE_SIMILARITY_THRESHOLD = 0.95  # Only near-exact matches are duplicates
 
 # Quote validation (fuzzy match against source document)
 QUOTE_VALIDATION_THRESHOLD = 0.85  # Minimum similarity to consider quote valid
