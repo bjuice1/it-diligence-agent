@@ -82,13 +82,29 @@ class BaseDiscoveryAgent(ABC):
         self,
         fact_store: FactStore,
         api_key: str,
-        model: str = "claude-3-5-haiku-20241022",
-        max_tokens: int = 4096,
-        max_iterations: int = 30,
+        model: str = None,
+        max_tokens: int = None,
+        max_iterations: int = None,
         target_name: Optional[str] = None
     ):
         if not api_key:
             raise ValueError("API key must be provided")
+
+        # Import config values - use them as defaults if not explicitly provided
+        try:
+            from config_v2 import (
+                DISCOVERY_MODEL,
+                DISCOVERY_MAX_TOKENS,
+                DISCOVERY_MAX_ITERATIONS
+            )
+            model = model or DISCOVERY_MODEL
+            max_tokens = max_tokens or DISCOVERY_MAX_TOKENS
+            max_iterations = max_iterations or DISCOVERY_MAX_ITERATIONS
+        except ImportError:
+            # Fallback defaults if config not available
+            model = model or "claude-3-5-haiku-20241022"
+            max_tokens = max_tokens or 4096
+            max_iterations = max_iterations or 30
 
         self.client = anthropic.Anthropic(api_key=api_key)
         self.fact_store = fact_store

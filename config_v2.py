@@ -34,12 +34,15 @@ DISCOVERY_MODEL = "claude-3-5-haiku-20241022"  # Fast, cheap for extraction
 REASONING_MODEL = "claude-sonnet-4-20250514"   # Capable for analysis
 
 # Token limits
-DISCOVERY_MAX_TOKENS = 4096   # Extraction needs less
+# CRITICAL: Discovery needs MORE tokens when extracting large inventories (30+ apps)
+# Each create_inventory_entry tool call uses ~100-200 tokens in the response
+DISCOVERY_MAX_TOKENS = 8192   # Increased from 4096 - needed for 30+ item inventories
 REASONING_MAX_TOKENS = 8192   # Analysis needs more space
 
 # Iteration limits
-# Note: Applications domain often has many items - increase if truncation occurs
-DISCOVERY_MAX_ITERATIONS = 50  # Increased from 30 for better coverage of large inventories
+# CRITICAL: Large inventories (30+ items) need more iterations
+# Each iteration typically extracts 3-5 items, so 50+ needed for completeness
+DISCOVERY_MAX_ITERATIONS = 60  # Increased from 50 for better coverage of large inventories
 REASONING_MAX_ITERATIONS = 40
 
 # Temperature - SET TO 0 FOR DETERMINISTIC OUTPUT
