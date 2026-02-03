@@ -2342,8 +2342,8 @@ def get_organization_analysis():
                     target_name = getattr(g, 'deal', None)
                     target_name = target_name.target_name if target_name and hasattr(target_name, 'target_name') else 'Target'
 
-                    # Create adapters for bridge function
-                    fact_adapter, reasoning_adapter = create_store_adapters_from_deal_data(data)
+                    # Create adapters for bridge function (CRITICAL: filter by target entity)
+                    fact_adapter, reasoning_adapter = create_store_adapters_from_deal_data(data, entity='target')
 
                     logger.info(f"Building org result for target: {target_name}")
                     result, status = build_organization_result(fact_adapter, reasoning_adapter, target_name, deal_id=current_deal_id)
@@ -3056,32 +3056,7 @@ def applications_overview():
         'data_source': 'none'
     }
 
-    # First try InventoryStore (structured data from imports)
-    try:
-        from web.blueprints.inventory import get_inventory_store
-        inv_store = get_inventory_store()
-        debug_info['inventory_store_count'] = len(inv_store)
-        if len(inv_store) > 0:
-            # Check all apps vs target-only apps
-            all_apps = inv_store.get_items(inventory_type="application", status="active")
-            target_apps = inv_store.get_items(inventory_type="application", entity="target", status="active")
-            debug_info['inventory_apps_all'] = len(all_apps) if all_apps else 0
-            debug_info['inventory_apps_target'] = len(target_apps) if target_apps else 0
-
-            if target_apps:
-                inventory, status = build_applications_from_inventory_store(inv_store)
-                data_source = "inventory"
-                debug_info['data_source'] = data_source
-                logger.info(f"Applications debug: {debug_info}")
-                return render_template('applications/overview.html',
-                                      inventory=inventory,
-                                      status=status,
-                                      data_source=data_source,
-                                      debug_info=debug_info)
-    except Exception as e:
-        logger.warning(f"Could not load from InventoryStore: {e}")
-
-    # Phase 2: Read from database via DealData
+    # Phase 2: DATABASE FIRST - this is the source of truth
     current_deal_id = flask_session.get('current_deal_id')
 
     if current_deal_id:
@@ -3112,6 +3087,31 @@ def applications_overview():
                                       debug_info=debug_info)
         except Exception as e:
             logger.warning(f"Could not load from database: {e}")
+
+    # Fallback: Try InventoryStore (structured data from imports) if no DB data
+    try:
+        from web.blueprints.inventory import get_inventory_store
+        inv_store = get_inventory_store()
+        debug_info['inventory_store_count'] = len(inv_store)
+        if len(inv_store) > 0:
+            # Check all apps vs target-only apps
+            all_apps = inv_store.get_items(inventory_type="application", status="active")
+            target_apps = inv_store.get_items(inventory_type="application", entity="target", status="active")
+            debug_info['inventory_apps_all'] = len(all_apps) if all_apps else 0
+            debug_info['inventory_apps_target'] = len(target_apps) if target_apps else 0
+
+            if target_apps:
+                inventory, status = build_applications_from_inventory_store(inv_store)
+                data_source = "inventory"
+                debug_info['data_source'] = data_source
+                logger.info(f"Applications debug (InventoryStore fallback): {debug_info}")
+                return render_template('applications/overview.html',
+                                      inventory=inventory,
+                                      status=status,
+                                      data_source=data_source,
+                                      debug_info=debug_info)
+    except Exception as e:
+        logger.warning(f"Could not load from InventoryStore: {e}")
 
     # Fallback: Return empty inventory
     inventory = ApplicationsInventory()
@@ -3181,29 +3181,13 @@ def applications_category(category):
 def infrastructure_overview():
     """Infrastructure inventory overview.
 
-    Phase 2: Now reads from database via DealData, with fallback to InventoryStore.
+    Phase 2: DATABASE FIRST - this is the source of truth, with fallback to InventoryStore.
     """
     from services.infrastructure_bridge import build_infrastructure_inventory, build_infrastructure_from_inventory_store, InfrastructureInventory
     from web.deal_data import DealData, wrap_db_facts
     from web.context import load_deal_context
 
-    # First try InventoryStore (structured data from imports)
-    try:
-        from web.blueprints.inventory import get_inventory_store
-        inv_store = get_inventory_store()
-        if len(inv_store) > 0:
-            infra_items = inv_store.get_items(inventory_type="infrastructure", entity="target", status="active")
-            if infra_items:
-                inventory, status = build_infrastructure_from_inventory_store(inv_store)
-                data_source = "inventory"
-                return render_template('infrastructure/overview.html',
-                                      inventory=inventory,
-                                      status=status,
-                                      data_source=data_source)
-    except Exception as e:
-        logger.warning(f"Could not load from InventoryStore: {e}")
-
-    # Phase 2: Read from database via DealData
+    # Phase 2: DATABASE FIRST - this is the source of truth
     current_deal_id = flask_session.get('current_deal_id')
 
     if current_deal_id:
@@ -3223,6 +3207,22 @@ def infrastructure_overview():
                                       data_source=data_source)
         except Exception as e:
             logger.warning(f"Could not load from database: {e}")
+
+    # Fallback: Try InventoryStore (structured data from imports) if no DB data
+    try:
+        from web.blueprints.inventory import get_inventory_store
+        inv_store = get_inventory_store()
+        if len(inv_store) > 0:
+            infra_items = inv_store.get_items(inventory_type="infrastructure", entity="target", status="active")
+            if infra_items:
+                inventory, status = build_infrastructure_from_inventory_store(inv_store)
+                data_source = "inventory"
+                return render_template('infrastructure/overview.html',
+                                      inventory=inventory,
+                                      status=status,
+                                      data_source=data_source)
+    except Exception as e:
+        logger.warning(f"Could not load from InventoryStore: {e}")
 
     # Fallback: Return empty inventory
     inventory = InfrastructureInventory()

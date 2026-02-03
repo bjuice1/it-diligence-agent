@@ -465,6 +465,10 @@ class DBFactWrapper:
         self._fact = db_fact
 
     @property
+    def id(self):
+        return self._fact.id
+
+    @property
     def fact_id(self):
         return self._fact.id
 
@@ -574,7 +578,7 @@ class ReasoningStoreAdapter:
         return len(self.risks) + len(self.work_items)
 
 
-def create_store_adapters_from_deal_data(data: 'DealData'):
+def create_store_adapters_from_deal_data(data: 'DealData', entity: str = None):
     """
     Create both FactStoreAdapter and ReasoningStoreAdapter from DealData.
 
@@ -582,11 +586,18 @@ def create_store_adapters_from_deal_data(data: 'DealData'):
 
     Args:
         data: DealData instance
+        entity: Optional entity filter ('target' or 'buyer'). If not provided,
+                uses data.default_entity. Pass entity explicitly to ensure
+                correct filtering for organization/applications/inventory views.
 
     Returns:
         Tuple of (FactStoreAdapter, ReasoningStoreAdapter)
     """
-    facts = data.get_all_facts()
+    # Use explicit entity, fall back to DealData's default_entity
+    effective_entity = entity if entity is not None else data.default_entity
+
+    # Get facts filtered by entity (CRITICAL for org/apps/inventory separation)
+    facts = data.get_all_facts(entity=effective_entity)
     gaps = data.get_gaps()
     risks = data.get_risks()
     work_items = data.get_work_items()
