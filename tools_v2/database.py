@@ -518,7 +518,7 @@ def load_fact_store(deal_id: str, db_path: Path = None) -> FactStore:
     conn = get_connection(db_path)
     cursor = conn.cursor()
 
-    fact_store = FactStore()
+    fact_store = FactStore(deal_id=deal_id)
 
     # Load facts
     cursor.execute('SELECT * FROM facts WHERE deal_id = ?', (deal_id,))

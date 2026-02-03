@@ -657,8 +657,8 @@ class DDSession:
             run_history=[]
         )
 
-        # Create stores
-        fact_store = FactStore()
+        # Create stores with session_id as deal_id for proper data isolation
+        fact_store = FactStore(deal_id=session_id)
 
         session = cls(
             session_id=session_id,
@@ -717,12 +717,12 @@ class DDSession:
             narratives_file=state_dict.get("narratives_file", "narratives.json")
         )
 
-        # Load fact store
+        # Load fact store (use session_id as deal_id for data isolation)
         facts_path = session_dir / state.facts_file
         if facts_path.exists():
-            fact_store = FactStore.load(str(facts_path))
+            fact_store = FactStore.load(str(facts_path), deal_id=session_id)
         else:
-            fact_store = FactStore()
+            fact_store = FactStore(deal_id=session_id)
 
         # Load reasoning store
         reasoning_store = ReasoningStore(fact_store=fact_store)

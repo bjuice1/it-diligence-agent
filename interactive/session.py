@@ -56,10 +56,18 @@ class Session:
         deal_context: Optional[Dict] = None,
         deal_id: Optional[str] = None
     ):
-        self.fact_store = fact_store or FactStore()
+        # Resolve deal_id: explicit param > deal_context > generate
+        effective_deal_id = deal_id
+        if not effective_deal_id and deal_context:
+            effective_deal_id = deal_context.get('deal_id')
+        if not effective_deal_id:
+            # Generate a session-based deal_id for CLI/interactive use
+            effective_deal_id = f"session-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+
+        self.deal_id = effective_deal_id  # CRITICAL: Track which deal this session belongs to
+        self.fact_store = fact_store or FactStore(deal_id=effective_deal_id)
         self.reasoning_store = reasoning_store or ReasoningStore(fact_store=self.fact_store)
         self.deal_context = deal_context or {}
-        self.deal_id = deal_id  # CRITICAL: Track which deal this session belongs to
 
         self.modifications: List[Modification] = []
         self._last_save_modification_count = 0
@@ -348,15 +356,27 @@ class Session:
         Returns:
             New Session instance
         """
-        fact_store = FactStore()
-        reasoning_store = None
         deal_context = {}
         source_files = {}
+        deal_id = None
 
-        # Load facts
+        # Load deal context first to get deal_id
+        if deal_context_file and Path(deal_context_file).exists():
+            with open(deal_context_file) as f:
+                deal_context = json.load(f)
+            source_files['deal_context'] = str(deal_context_file)
+            deal_id = deal_context.get('deal_id')
+
+        # Load facts (will get deal_id from file metadata if available)
         if facts_file and Path(facts_file).exists():
-            fact_store = FactStore.load(str(facts_file))
+            fact_store = FactStore.load(str(facts_file), deal_id=deal_id)
             source_files['facts'] = str(facts_file)
+            # Update deal_id from loaded store if not set
+            if not deal_id and fact_store.deal_id:
+                deal_id = fact_store.deal_id
+        else:
+            # No facts file - create empty store with deal_id
+            fact_store = FactStore(deal_id=deal_id)
 
         # Load findings
         if findings_file and Path(findings_file).exists():
@@ -365,16 +385,11 @@ class Session:
         else:
             reasoning_store = ReasoningStore(fact_store=fact_store)
 
-        # Load deal context
-        if deal_context_file and Path(deal_context_file).exists():
-            with open(deal_context_file) as f:
-                deal_context = json.load(f)
-            source_files['deal_context'] = str(deal_context_file)
-
         session = cls(
             fact_store=fact_store,
             reasoning_store=reasoning_store,
-            deal_context=deal_context
+            deal_context=deal_context,
+            deal_id=deal_id
         )
         session.source_files = source_files
 
@@ -613,32 +628,16 @@ class Session:
         if paths is None:
             raise ValueError(f"Run not found: {run_id}")
 
-        # Load facts
-        facts_file = paths.facts / "facts.json"
-        if facts_file.exists():
-            fact_store = FactStore.load(str(facts_file))
-        else:
-            fact_store = FactStore()
-
-        # Load findings
-        findings_file = paths.findings / "findings.json"
-        reasoning_store = ReasoningStore(fact_store=fact_store)
-        if findings_file.exists():
-            with open(findings_file) as f:
-                findings_data = json.load(f)
-            reasoning_store.import_from_dict(findings_data)
-
-        # Load deal context
+        # Load deal context FIRST to get deal_id
         deal_context = {}
+        deal_id = None
         context_file = paths.root / "deal_context.json"
         if context_file.exists():
             with open(context_file) as f:
                 deal_context = json.load(f)
+            deal_id = deal_context.get('deal_id') if isinstance(deal_context, dict) else None
 
-        # Extract deal_id from context if available
-        deal_id = deal_context.get('deal_id') if isinstance(deal_context, dict) else None
-
-        # Also try to get from metadata
+        # Also try to get deal_id from metadata
         if not deal_id:
             metadata_file = paths.root / "metadata.json"
             if metadata_file.exists():
@@ -648,6 +647,24 @@ class Session:
                     deal_id = metadata.get('deal_id')
                 except Exception:
                     pass
+
+        # Load facts (pass deal_id for proper isolation)
+        facts_file = paths.facts / "facts.json"
+        if facts_file.exists():
+            fact_store = FactStore.load(str(facts_file), deal_id=deal_id)
+            # Update deal_id from loaded store if not set
+            if not deal_id and fact_store.deal_id:
+                deal_id = fact_store.deal_id
+        else:
+            fact_store = FactStore(deal_id=deal_id)
+
+        # Load findings
+        findings_file = paths.findings / "findings.json"
+        reasoning_store = ReasoningStore(fact_store=fact_store)
+        if findings_file.exists():
+            with open(findings_file) as f:
+                findings_data = json.load(f)
+            reasoning_store.import_from_dict(findings_data)
 
         session = cls(
             fact_store=fact_store,

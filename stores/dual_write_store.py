@@ -342,4 +342,4 @@ def create_fact_store(deal_id: Optional[str] = None,
     if use_db:
         return DualWriteFactStore(deal_id=deal_id, enable_dual_write=True)
     else:
-        return FactStore()
+        return FactStore(deal_id=deal_id)

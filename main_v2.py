@@ -142,7 +142,8 @@ def run_discovery(
     fact_store: Optional[FactStore] = None,
     target_name: Optional[str] = None,
     industry: Optional[str] = None,
-    document_name: str = ""
+    document_name: str = "",
+    deal_id: Optional[str] = None
 ) -> FactStore:
     """
     Run discovery phase for a domain.
@@ -158,12 +159,16 @@ def run_discovery(
                   logistics, energy_utilities, insurance, construction,
                   food_beverage, professional_services, education, hospitality
         document_name: Source document filename for fact traceability
+        deal_id: Deal ID for data isolation (required if fact_store is None)
 
     Returns:
         FactStore with extracted facts
     """
     if fact_store is None:
-        fact_store = FactStore()
+        # Generate deal_id if not provided
+        if not deal_id:
+            deal_id = f"run-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+        fact_store = FactStore(deal_id=deal_id)
 
     print(f"\n{'='*60}")
     print("PHASE 1: DISCOVERY")
@@ -541,22 +546,27 @@ def run_discovery_for_domain(
     document_text: str,
     domain: str,
     shared_fact_store: FactStore,
-    target_name: Optional[str] = None
+    target_name: Optional[str] = None,
+    deal_id: Optional[str] = None
 ) -> Dict:
     """
     Run discovery for a single domain (used in parallel execution).
 
     Returns dict with domain results and metrics.
     """
-    # Create a local FactStore for this domain
-    local_store = FactStore()
+    # Use deal_id from shared store or passed parameter
+    effective_deal_id = deal_id or shared_fact_store.deal_id
+
+    # Create a local FactStore for this domain with same deal_id
+    local_store = FactStore(deal_id=effective_deal_id)
 
     try:
         result = run_discovery(
             document_text=document_text,
             domain=domain,
             fact_store=local_store,
-            target_name=target_name
+            target_name=target_name,
+            deal_id=effective_deal_id
         )
 
         # Merge into shared store (thread-safe)
@@ -613,7 +623,8 @@ def run_parallel_discovery(
     domains: List[str],
     max_workers: int = MAX_PARALLEL_AGENTS,
     target_name: Optional[str] = None,
-    progress_callback: Optional[callable] = None
+    progress_callback: Optional[callable] = None,
+    deal_id: Optional[str] = None
 ) -> FactStore:
     """
     Run discovery for multiple domains in parallel.
@@ -624,18 +635,24 @@ def run_parallel_discovery(
         max_workers: Maximum parallel agents
         target_name: Name of target company (helps agents focus on correct entity)
         progress_callback: Optional callback(completed, total, domain) for progress updates
+        deal_id: Deal ID for data isolation
 
     Returns:
         Merged FactStore with all facts
     """
+    # Generate deal_id if not provided
+    if not deal_id:
+        deal_id = f"run-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+
     print(f"\n{'='*60}")
     print(f"PARALLEL DISCOVERY: {len(domains)} domains")
     print(f"Max workers: {max_workers}")
+    print(f"Deal ID: {deal_id}")
     if target_name:
         print(f"Target: {target_name}")
     print(f"{'='*60}")
 
-    shared_fact_store = FactStore()
+    shared_fact_store = FactStore(deal_id=deal_id)
     results = []
     completed_count = 0
 
@@ -646,7 +663,8 @@ def run_parallel_discovery(
                 document_text,
                 domain,
                 shared_fact_store,
-                target_name
+                target_name,
+                deal_id
             ): domain
             for domain in domains
         }
@@ -1023,10 +1041,21 @@ Phases:
             industry=args.industry
         )
 
+    # Generate deal_id for data isolation
+    # Priority: session_id > run folder name > timestamp-based
+    deal_id: Optional[str] = None
+    if dd_session:
+        deal_id = dd_session.session_id
+    elif run_paths:
+        deal_id = run_paths.root.name
+    else:
+        deal_id = f"run-{timestamp}"
+
     print(f"\n{'='*60}")
     print("IT DUE DILIGENCE AGENT V2")
     print(f"{'='*60}")
     print(f"Timestamp: {timestamp}")
+    print(f"Deal ID: {deal_id}")
     if run_paths:
         print(f"Run: {run_paths.root.name}")
     if dd_session:
@@ -1040,7 +1069,7 @@ Phases:
         # Phase 1: Discovery (or load from file)
         if args.from_facts:
             print(f"\nLoading facts from: {args.from_facts}")
-            fact_store = FactStore.load(str(args.from_facts))
+            fact_store = FactStore.load(str(args.from_facts), deal_id=deal_id)
             print(f"Loaded {len(fact_store.facts)} facts, {len(fact_store.gaps)} gaps")
         elif dd_session:
             # Session-based workflow: use session's fact_store
@@ -1115,17 +1144,19 @@ Phases:
                     document_text=document_text,
                     domains=domains_to_analyze,
                     max_workers=MAX_PARALLEL_AGENTS,
-                    target_name=args.target_name
+                    target_name=args.target_name,
+                    deal_id=deal_id
                 )
             else:
                 # Sequential discovery
-                fact_store = FactStore()
+                fact_store = FactStore(deal_id=deal_id)
                 for domain in domains_to_analyze:
                     run_discovery(
                         document_text=document_text,
                         domain=domain,
                         fact_store=fact_store,
-                        target_name=args.target_name
+                        target_name=args.target_name,
+                        deal_id=deal_id
                     )
 
         # Save facts
