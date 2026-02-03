@@ -1127,212 +1127,132 @@ def cancel_analysis():
 def dashboard():
     """Main dashboard view.
 
-    Phase 2: Tries database-first via DealData, falls back to session.
+    Phase 2+: Database-first implementation (no fallback).
     """
     from config_v2 import OUTPUT_DIR
     import json as json_module
 
-    # Phase 2: Try database first
+    # Phase 2+: Database-first - require deal selection
     current_deal_id = flask_session.get('current_deal_id')
-    db_data = None
-    if current_deal_id:
-        try:
-            from web.deal_data import DealData
-            from web.context import load_deal_context
+    if not current_deal_id:
+        flash('Please select a deal to view the dashboard.', 'info')
+        return redirect(url_for('deals.deals_list_page'))
 
-            load_deal_context(current_deal_id)
-            db_data = DealData()
-            logger.info(f"Dashboard: Using Phase 2 database path for deal {current_deal_id}")
-        except Exception as e:
-            logger.warning(f"Dashboard: Phase 2 DB path failed, falling back to session: {e}")
+    try:
+        from web.deal_data import DealData
+        from web.context import load_deal_context
 
-    # Get session as fallback or for legacy data
-    s = get_session()
+        load_deal_context(current_deal_id)
+        db_data = DealData()
 
-    # Build summary - prefer database if available
-    if db_data:
-        summary = db_data.get_dashboard_summary()
-        # Adapt summary format to match session.get_summary() output
+        # Build summary from database
+        raw_summary = db_data.get_dashboard_summary()
         summary = {
-            'facts': sum(summary.get('fact_counts', {}).values()),
-            'gaps': sum(summary.get('gap_counts', {}).values()),
-            'risks': summary.get('risk_summary', {}).get('total', 0),
-            'work_items': summary.get('work_item_summary', {}).get('total', 0),
+            'facts': sum(raw_summary.get('fact_counts', {}).values()),
+            'gaps': sum(raw_summary.get('gap_counts', {}).values()),
+            'risks': raw_summary.get('risk_summary', {}).get('total', 0),
+            'work_items': raw_summary.get('work_item_summary', {}).get('total', 0),
         }
         top_risks = db_data.get_top_risks(5)
         day1_items = [w for w in db_data.get_work_items() if w.phase == 'Day_1'][:5]
-    else:
-        summary = s.get_summary()
-        top_risks = sorted(s.reasoning_store.risks,
-                           key=lambda r: {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}.get(r.severity, 4))[:5]
-        day1_items = [w for w in s.reasoning_store.work_items if w.phase == 'Day_1'][:5]
 
-    # Get analysis metadata - show what data is currently being displayed
-    analysis_metadata = None
-
-    # Phase 2: Try to get analysis run info from database first
-    if db_data:
-        try:
-            run = db_data.get_analysis_run()
-            if run:
-                from datetime import datetime
-                analysis_metadata = {
-                    'run_id': run.id,
-                    'run_number': run.run_number,
-                    'timestamp': run.completed_at.strftime('%Y-%m-%d') if run.completed_at else None,
-                    'domains': run.domains or [],
-                    'source': 'database',
-                    'fact_count': run.facts_created or 0,
-                    'finding_count': run.findings_created or 0,
-                }
-        except Exception as e:
-            logger.debug(f"Could not get analysis run from DB: {e}")
-
-    # Fallback: Check task manager
-    if not analysis_metadata:
-        task_id = flask_session.get('current_task_id')
-        if task_id:
-            task = task_manager.get_task(task_id)
-            if task:
-                from datetime import datetime
-                analysis_metadata = {
-                    'file_count': len(task.file_paths),
-                    'timestamp': task.completed_at[:10] if task.completed_at else None,
-                    'domains': task.domains,
-                    'task_id': task_id,
-                    'source': 'current_analysis',
-                }
-
-    # Fallback: Show info about loaded data from session
-    if not analysis_metadata and s and s.fact_store and len(s.fact_store.facts) > 0:
-        # Find the source from fact_store metadata
-        from datetime import datetime
-        created_at = s.fact_store.metadata.get('created_at', '')
-        timestamp = created_at[:10] if created_at else 'Unknown'
-
-        # Get domains from facts
-        domains = list(set(f.domain for f in s.fact_store.facts))
-
-        # Find the most recent facts file to show as source
-        facts_files = sorted(OUTPUT_DIR.glob("facts_*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
-        source_file = facts_files[0].name if facts_files else 'Unknown'
-
-        analysis_metadata = {
-            'file_count': len(set(f.source_document for f in s.fact_store.facts if f.source_document)),
-            'timestamp': timestamp,
-            'domains': domains,
-            'source': 'loaded_from_file',
-            'source_file': source_file,
-            'fact_count': len(s.fact_store.facts),
-        }
-
-    # Get pending changes summary for incremental updates
-    pending_summary = {"tier1": 0, "tier2": 0, "tier3": 0, "total": 0}
-    pending_file = OUTPUT_DIR / "pending_changes.json"
-    if pending_file.exists():
-        try:
-            with open(pending_file, 'r') as f:
-                pending = json_module.load(f)
-            pending_summary = {
-                "tier1": len(pending.get("tier1", [])),
-                "tier2": len(pending.get("tier2", [])),
-                "tier3": len(pending.get("tier3", [])),
-                "total": len(pending.get("tier1", [])) + len(pending.get("tier2", [])) + len(pending.get("tier3", []))
+        # Get analysis metadata from database
+        analysis_metadata = None
+        run = db_data.get_analysis_run()
+        if run:
+            analysis_metadata = {
+                'run_id': run.id,
+                'run_number': run.run_number,
+                'timestamp': run.completed_at.strftime('%Y-%m-%d') if run.completed_at else None,
+                'domains': run.domains or [],
+                'source': 'database',
+                'fact_count': run.facts_created or 0,
+                'finding_count': run.findings_created or 0,
             }
+
+        # Get pending changes summary for incremental updates
+        pending_summary = {"tier1": 0, "tier2": 0, "tier3": 0, "total": 0}
+        pending_file = OUTPUT_DIR / "pending_changes.json"
+        if pending_file.exists():
+            try:
+                with open(pending_file, 'r') as f:
+                    pending = json_module.load(f)
+                pending_summary = {
+                    "tier1": len(pending.get("tier1", [])),
+                    "tier2": len(pending.get("tier2", [])),
+                    "tier3": len(pending.get("tier3", [])),
+                    "total": len(pending.get("tier1", [])) + len(pending.get("tier2", [])) + len(pending.get("tier3", []))
+                }
+            except Exception:
+                pass
+
+        # Get entity summary (target vs buyer breakdown) from database
+        def domain_breakdown(facts):
+            breakdown = {}
+            for f in facts:
+                domain = getattr(f, 'domain', 'unknown')
+                breakdown[domain] = breakdown.get(domain, 0) + 1
+            return breakdown
+
+        entity_summary = None
+        all_facts = db_data.get_all_facts()
+        if all_facts:
+            target_facts = [f for f in all_facts if getattr(f, 'entity', 'target') == 'target']
+            buyer_facts = [f for f in all_facts if getattr(f, 'entity', '') == 'buyer']
+
+            # Get document counts from DocumentStore
+            target_doc_count = 0
+            buyer_doc_count = 0
+            try:
+                from tools_v2.document_store import DocumentStore
+                doc_store = DocumentStore.get_instance()
+                stats = doc_store.get_statistics()
+                target_doc_count = stats["by_entity"]["target"]
+                buyer_doc_count = stats["by_entity"]["buyer"]
+            except Exception:
+                pass
+
+            entity_summary = {
+                "target": {
+                    "fact_count": len(target_facts),
+                    "document_count": target_doc_count,
+                    "by_domain": domain_breakdown(target_facts)
+                },
+                "buyer": {
+                    "fact_count": len(buyer_facts),
+                    "document_count": buyer_doc_count,
+                    "by_domain": domain_breakdown(buyer_facts)
+                }
+            }
+
+        # Get inventory summary
+        inventory_summary = None
+        try:
+            from web.blueprints.inventory import get_inventory_store
+            inv_store = get_inventory_store()
+            if len(inv_store) > 0:
+                apps = inv_store.get_items(inventory_type="application", entity="target", status="active")
+                inventory_summary = {
+                    "total": len(inv_store),
+                    "applications": len(apps),
+                    "total_cost": sum(app.cost or 0 for app in apps),
+                    "critical": len([a for a in apps if a.criticality and 'critical' in str(a.criticality).lower()]),
+                }
         except Exception:
             pass
 
-    # Get entity summary (target vs buyer breakdown)
-    entity_summary = None
+        logger.debug(f"Dashboard: Loaded data from database for deal {current_deal_id}")
 
-    def domain_breakdown(facts):
-        breakdown = {}
-        for f in facts:
-            domain = getattr(f, 'domain', 'unknown')
-            breakdown[domain] = breakdown.get(domain, 0) + 1
-        return breakdown
-
-    # Phase 2: Try database first for entity summary
-    if db_data:
-        try:
-            all_facts = db_data.get_all_facts()
-            if all_facts:
-                target_facts = [f for f in all_facts if getattr(f, 'entity', 'target') == 'target']
-                buyer_facts = [f for f in all_facts if getattr(f, 'entity', '') == 'buyer']
-
-                # Get document counts from DocumentStore
-                target_doc_count = 0
-                buyer_doc_count = 0
-                try:
-                    from tools_v2.document_store import DocumentStore
-                    doc_store = DocumentStore.get_instance()
-                    stats = doc_store.get_statistics()
-                    target_doc_count = stats["by_entity"]["target"]
-                    buyer_doc_count = stats["by_entity"]["buyer"]
-                except Exception:
-                    pass
-
-                entity_summary = {
-                    "target": {
-                        "fact_count": len(target_facts),
-                        "document_count": target_doc_count,
-                        "by_domain": domain_breakdown(target_facts)
-                    },
-                    "buyer": {
-                        "fact_count": len(buyer_facts),
-                        "document_count": buyer_doc_count,
-                        "by_domain": domain_breakdown(buyer_facts)
-                    }
-                }
-        except Exception as e:
-            logger.debug(f"Could not get entity summary from DB: {e}")
-
-    # Fallback: Use session
-    if entity_summary is None and s and s.fact_store and len(s.fact_store.facts) > 0:
-        all_facts = list(s.fact_store.facts)
-        target_facts = [f for f in all_facts if getattr(f, 'entity', 'target') == 'target']
-        buyer_facts = [f for f in all_facts if getattr(f, 'entity', '') == 'buyer']
-
-        # Get document counts from DocumentStore
-        target_doc_count = 0
-        buyer_doc_count = 0
-        try:
-            from tools_v2.document_store import DocumentStore
-            doc_store = DocumentStore.get_instance()
-            stats = doc_store.get_statistics()
-            target_doc_count = stats["by_entity"]["target"]
-            buyer_doc_count = stats["by_entity"]["buyer"]
-        except Exception:
-            pass
-
-        entity_summary = {
-            "target": {
-                "fact_count": len(target_facts),
-                "document_count": target_doc_count,
-                "by_domain": domain_breakdown(target_facts)
-            },
-            "buyer": {
-                "fact_count": len(buyer_facts),
-                "document_count": buyer_doc_count,
-                "by_domain": domain_breakdown(buyer_facts)
-            }
-        }
-
-    # Get inventory summary
-    inventory_summary = None
-    try:
-        from web.blueprints.inventory import get_inventory_store
-        inv_store = get_inventory_store()
-        if len(inv_store) > 0:
-            apps = inv_store.get_items(inventory_type="application", entity="target", status="active")
-            inventory_summary = {
-                "total": len(inv_store),
-                "applications": len(apps),
-                "total_cost": sum(app.cost or 0 for app in apps),
-                "critical": len([a for a in apps if a.criticality and 'critical' in str(a.criticality).lower()]),
-            }
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"Dashboard: Database path failed: {e}")
+        flash('Error loading dashboard. Please try again.', 'error')
+        summary = {'facts': 0, 'gaps': 0, 'risks': 0, 'work_items': 0}
+        top_risks = []
+        day1_items = []
+        analysis_metadata = None
+        pending_summary = {"tier1": 0, "tier2": 0, "tier3": 0, "total": 0}
+        entity_summary = None
+        inventory_summary = None
 
     return render_template('dashboard.html',
                          summary=summary,
@@ -1342,47 +1262,68 @@ def dashboard():
                          pending_summary=pending_summary,
                          entity_summary=entity_summary,
                          inventory_summary=inventory_summary,
-                         session=s)
+                         session=None)
 
 
 @app.route('/risks')
 @auth_optional
 def risks():
-    """List all risks with pagination."""
-    s = get_session()
+    """List all risks with pagination.
+
+    Phase 2+: Database-first implementation using DealData.
+    """
+    # Get query parameters
     severity_filter = request.args.get('severity', '')
     domain_filter = request.args.get('domain', '')
-    search_query = request.args.get('q', '').lower()
+    search_query = request.args.get('q', '')
     page = request.args.get('page', 1, type=int)
     per_page = 50
 
-    risks_list = list(s.reasoning_store.risks)
+    # Phase 2: Database-first - require deal selection
+    current_deal_id = flask_session.get('current_deal_id')
+    if not current_deal_id:
+        flash('Please select a deal to view risks.', 'info')
+        return redirect(url_for('deals.deals_list_page'))
 
-    # Apply filters
-    if severity_filter:
-        risks_list = [r for r in risks_list if r.severity == severity_filter]
-    if domain_filter:
-        risks_list = [r for r in risks_list if r.domain == domain_filter]
-    if search_query:
-        risks_list = [r for r in risks_list if search_query in r.title.lower()
-                      or search_query in (r.description or '').lower()]
+    try:
+        from web.deal_data import DealData
+        from web.context import load_deal_context
 
-    # Sort by severity
-    severity_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}
-    risks_list = sorted(risks_list, key=lambda r: severity_order.get(r.severity, 4))
+        load_deal_context(current_deal_id)
+        data = DealData()
 
-    # Pagination
-    total = len(risks_list)
-    total_pages = (total + per_page - 1) // per_page
-    start = (page - 1) * per_page
-    end = start + per_page
-    paginated_risks = risks_list[start:end]
+        # Get paginated risks with filters (SQL-level filtering)
+        paginated_risks, total = data.get_findings_paginated(
+            finding_type='risk',
+            domain=domain_filter or None,
+            severity=severity_filter or None,
+            search=search_query or None,
+            page=page,
+            per_page=per_page,
+            order_by_severity=True
+        )
 
-    domains = list(set(r.domain for r in s.reasoning_store.risks))
+        # Calculate pagination
+        total_pages = (total + per_page - 1) // per_page
+
+        # Get all risks for domain dropdown (unfiltered count)
+        all_risks = data.get_risks()
+        domains = sorted(list(set(r.domain for r in all_risks if r.domain)))
+
+        logger.debug(f"Risks route: Loaded {len(paginated_risks)} risks from database (total: {total})")
+
+    except Exception as e:
+        logger.error(f"Risks route: Database path failed: {e}")
+        flash('Error loading risks. Please try again.', 'error')
+        paginated_risks = []
+        all_risks = []
+        domains = []
+        total = 0
+        total_pages = 0
 
     return render_template('risks.html',
                          risks=paginated_risks,
-                         all_risks=risks_list,
+                         all_risks=all_risks,
                          domains=domains,
                          severity_filter=severity_filter,
                          domain_filter=domain_filter,
@@ -1395,27 +1336,49 @@ def risks():
 @app.route('/risk/<risk_id>')
 @auth_optional
 def risk_detail(risk_id):
-    """Risk detail view with connected items."""
-    s = get_session()
+    """Risk detail view with connected items.
 
-    risk = s.get_risk(risk_id)
-    if not risk:
-        flash(f'Risk {risk_id} not found', 'error')
-        return redirect(url_for('risks'))
+    Phase 2+: Database-first implementation.
+    """
+    # Phase 2: Database-first - require deal selection
+    current_deal_id = flask_session.get('current_deal_id')
+    if not current_deal_id:
+        flash('Please select a deal to view risk details.', 'info')
+        return redirect(url_for('deals.deals_list_page'))
 
-    # Get supporting facts
-    facts = []
-    for fact_id in (risk.based_on_facts or []):
-        fact = s.get_fact(fact_id)
-        if fact:
-            facts.append(fact)
+    try:
+        from web.repositories import FindingRepository, FactRepository
+        from web.context import load_deal_context
 
-    # Get related work items
-    related_wi = []
-    for wi in s.reasoning_store.work_items:
-        if hasattr(wi, 'triggered_by_risks') and wi.triggered_by_risks:
-            if risk_id in wi.triggered_by_risks:
+        load_deal_context(current_deal_id)
+
+        finding_repo = FindingRepository()
+        fact_repo = FactRepository()
+
+        risk = finding_repo.get_by_id(risk_id)
+        if not risk or risk.finding_type != 'risk':
+            flash(f'Risk {risk_id} not found', 'error')
+            return redirect(url_for('risks'))
+
+        # Get supporting facts
+        facts = []
+        for fact_id in (risk.based_on_facts or []):
+            fact = fact_repo.get_by_id(fact_id)
+            if fact:
+                facts.append(fact)
+
+        # Get related work items (those triggered by this risk)
+        related_wi = []
+        all_work_items = finding_repo.get_work_items(current_deal_id)
+        for wi in all_work_items:
+            triggered_risks = getattr(wi, 'triggered_by_risks', None) or []
+            if risk_id in triggered_risks:
                 related_wi.append(wi)
+
+    except Exception as e:
+        logger.error(f"Risk detail: Database path failed: {e}")
+        flash('Error loading risk details. Please try again.', 'error')
+        return redirect(url_for('risks'))
 
     # Find affected inventory items based on fact item names
     affected_items = []
@@ -1471,13 +1434,31 @@ def risk_detail(risk_id):
 @app.route('/risk/<risk_id>/adjust', methods=['POST'])
 @auth_optional
 def adjust_risk(risk_id):
-    """Adjust a risk's severity."""
-    s = get_session()
-    new_severity = request.form.get('severity')
+    """Adjust a risk's severity.
 
-    if new_severity and s.adjust_risk(risk_id, 'severity', new_severity):
-        flash(f'Updated {risk_id} severity to {new_severity}', 'success')
-    else:
+    Phase 2+: Database-first implementation.
+    """
+    new_severity = request.form.get('severity')
+    if not new_severity:
+        flash('No severity provided', 'error')
+        return redirect(url_for('risk_detail', risk_id=risk_id))
+
+    try:
+        from web.repositories import FindingRepository
+        from web.database import db
+
+        repo = FindingRepository()
+        risk = repo.get_by_id(risk_id)
+
+        if risk and risk.finding_type == 'risk':
+            risk.severity = new_severity
+            db.session.commit()
+            flash(f'Updated {risk_id} severity to {new_severity}', 'success')
+        else:
+            flash(f'Risk {risk_id} not found', 'error')
+
+    except Exception as e:
+        logger.error(f"Adjust risk failed: {e}")
         flash(f'Failed to update {risk_id}', 'error')
 
     return redirect(url_for('risk_detail', risk_id=risk_id))
@@ -1486,19 +1467,34 @@ def adjust_risk(risk_id):
 @app.route('/risk/<risk_id>/note', methods=['POST'])
 @auth_optional
 def add_risk_note(risk_id):
-    """Add a note to a risk."""
-    s = get_session()
-    note_text = request.form.get('note')
+    """Add a note to a risk.
 
-    if note_text:
-        risk = s.get_risk(risk_id)
-        if risk:
-            from datetime import datetime
+    Phase 2+: Database-first implementation.
+    """
+    note_text = request.form.get('note')
+    if not note_text:
+        return redirect(url_for('risk_detail', risk_id=risk_id))
+
+    try:
+        from web.repositories import FindingRepository
+        from web.database import db
+        from datetime import datetime
+
+        repo = FindingRepository()
+        risk = repo.get_by_id(risk_id)
+
+        if risk and risk.finding_type == 'risk':
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-            old_reasoning = risk.reasoning
+            old_reasoning = risk.reasoning or ''
             risk.reasoning = f"{old_reasoning}\n\n[Note {timestamp}]: {note_text}"
-            s.record_modification('risk', risk_id, 'reasoning', old_reasoning, risk.reasoning)
+            db.session.commit()
             flash(f'Note added to {risk_id}', 'success')
+        else:
+            flash(f'Risk {risk_id} not found', 'error')
+
+    except Exception as e:
+        logger.error(f"Add risk note failed: {e}")
+        flash(f'Failed to add note to {risk_id}', 'error')
 
     return redirect(url_for('risk_detail', risk_id=risk_id))
 
@@ -1506,52 +1502,87 @@ def add_risk_note(risk_id):
 @app.route('/work-items')
 @auth_optional
 def work_items():
-    """List all work items with pagination."""
-    s = get_session()
+    """List all work items with pagination.
+
+    Phase 2+: Database-first implementation using DealData.
+    """
     phase_filter = request.args.get('phase', '')
     domain_filter = request.args.get('domain', '')
-    search_query = request.args.get('q', '').lower()
+    search_query = request.args.get('q', '')
     page = request.args.get('page', 1, type=int)
     per_page = 50
 
-    items = list(s.reasoning_store.work_items)
+    # Phase 2: Database-first - require deal selection
+    current_deal_id = flask_session.get('current_deal_id')
+    if not current_deal_id:
+        flash('Please select a deal to view work items.', 'info')
+        return redirect(url_for('deals.deals_list_page'))
 
-    # Apply filters
-    if phase_filter:
-        items = [w for w in items if w.phase == phase_filter]
-    if domain_filter:
-        items = [w for w in items if w.domain == domain_filter]
-    if search_query:
-        items = [w for w in items if search_query in w.title.lower()
-                 or search_query in (w.description or '').lower()]
+    try:
+        from web.deal_data import DealData
+        from web.context import load_deal_context
 
-    # Group by phase (before pagination for totals)
-    by_phase = {'Day_1': [], 'Day_100': [], 'Post_100': []}
-    for wi in items:
-        if wi.phase in by_phase:
-            by_phase[wi.phase].append(wi)
+        load_deal_context(current_deal_id)
+        data = DealData()
 
-    # Calculate totals
-    totals = {}
-    for phase, items_list in by_phase.items():
-        low = sum(COST_RANGE_VALUES.get(w.cost_estimate, {}).get('low', 0) for w in items_list)
-        high = sum(COST_RANGE_VALUES.get(w.cost_estimate, {}).get('high', 0) for w in items_list)
-        totals[phase] = {'low': low, 'high': high, 'count': len(items_list)}
+        # Get all work items for totals calculation (unfiltered by page)
+        all_work_items = data.get_work_items()
 
-    # Pagination (on flat list)
-    total = len(items)
-    total_pages = (total + per_page - 1) // per_page
-    start = (page - 1) * per_page
-    end = start + per_page
-    paginated_items = items[start:end]
+        # Apply domain and search filters manually for totals (phase-independent)
+        filtered_items = all_work_items
+        if domain_filter:
+            filtered_items = [w for w in filtered_items if w.domain == domain_filter]
+        if search_query:
+            sq = search_query.lower()
+            filtered_items = [w for w in filtered_items
+                            if sq in (w.title or '').lower()
+                            or sq in (w.description or '').lower()]
 
-    # Re-group paginated items for display
-    paginated_by_phase = {'Day_1': [], 'Day_100': [], 'Post_100': []}
-    for wi in paginated_items:
-        if wi.phase in paginated_by_phase:
-            paginated_by_phase[wi.phase].append(wi)
+        # Group by phase for totals
+        by_phase = {'Day_1': [], 'Day_100': [], 'Post_100': []}
+        for wi in filtered_items:
+            if wi.phase in by_phase:
+                by_phase[wi.phase].append(wi)
 
-    domains = list(set(w.domain for w in s.reasoning_store.work_items))
+        # Calculate totals
+        totals = {}
+        for phase_name, items_list in by_phase.items():
+            low = sum(COST_RANGE_VALUES.get(w.cost_estimate, {}).get('low', 0) for w in items_list)
+            high = sum(COST_RANGE_VALUES.get(w.cost_estimate, {}).get('high', 0) for w in items_list)
+            totals[phase_name] = {'low': low, 'high': high, 'count': len(items_list)}
+
+        # Get paginated items with all filters
+        paginated_items, total = data.get_findings_paginated(
+            finding_type='work_item',
+            domain=domain_filter or None,
+            phase=phase_filter or None,
+            search=search_query or None,
+            page=page,
+            per_page=per_page
+        )
+
+        total_pages = (total + per_page - 1) // per_page
+
+        # Re-group paginated items for display
+        paginated_by_phase = {'Day_1': [], 'Day_100': [], 'Post_100': []}
+        for wi in paginated_items:
+            if wi.phase in paginated_by_phase:
+                paginated_by_phase[wi.phase].append(wi)
+
+        # Get domains for dropdown
+        domains = sorted(list(set(w.domain for w in all_work_items if w.domain)))
+
+        logger.debug(f"Work items route: Loaded {len(paginated_items)} items from database (total: {total})")
+
+    except Exception as e:
+        logger.error(f"Work items route: Database path failed: {e}")
+        flash('Error loading work items. Please try again.', 'error')
+        paginated_by_phase = {'Day_1': [], 'Day_100': [], 'Post_100': []}
+        by_phase = {'Day_1': [], 'Day_100': [], 'Post_100': []}
+        totals = {p: {'low': 0, 'high': 0, 'count': 0} for p in ['Day_1', 'Day_100', 'Post_100']}
+        domains = []
+        total = 0
+        total_pages = 0
 
     return render_template('work_items.html',
                          by_phase=paginated_by_phase,
@@ -1570,29 +1601,52 @@ def work_items():
 @app.route('/work-item/<wi_id>')
 @auth_optional
 def work_item_detail(wi_id):
-    """Work item detail view."""
-    s = get_session()
+    """Work item detail view.
 
-    wi = s.get_work_item(wi_id)
-    if not wi:
-        flash(f'Work item {wi_id} not found', 'error')
+    Phase 2+: Database-first implementation.
+    """
+    # Phase 2: Database-first - require deal selection
+    current_deal_id = flask_session.get('current_deal_id')
+    if not current_deal_id:
+        flash('Please select a deal to view work item details.', 'info')
+        return redirect(url_for('deals.deals_list_page'))
+
+    try:
+        from web.repositories import FindingRepository, FactRepository
+        from web.context import load_deal_context
+
+        load_deal_context(current_deal_id)
+
+        finding_repo = FindingRepository()
+        fact_repo = FactRepository()
+
+        wi = finding_repo.get_by_id(wi_id)
+        if not wi or wi.finding_type != 'work_item':
+            flash(f'Work item {wi_id} not found', 'error')
+            return redirect(url_for('work_items'))
+
+        # Get triggering facts
+        facts = []
+        triggered_by = getattr(wi, 'triggered_by', None) or getattr(wi, 'based_on_facts', None) or []
+        for fact_id in triggered_by:
+            fact = fact_repo.get_by_id(fact_id)
+            if fact:
+                facts.append(fact)
+
+        # Get triggering risks
+        risks = []
+        triggered_risks = getattr(wi, 'triggered_by_risks', None) or []
+        for risk_id in triggered_risks:
+            risk = finding_repo.get_by_id(risk_id)
+            if risk and risk.finding_type == 'risk':
+                risks.append(risk)
+
+        cost_range = COST_RANGE_VALUES.get(wi.cost_estimate, {'low': 0, 'high': 0})
+
+    except Exception as e:
+        logger.error(f"Work item detail: Database path failed: {e}")
+        flash('Error loading work item details. Please try again.', 'error')
         return redirect(url_for('work_items'))
-
-    # Get triggering facts
-    facts = []
-    for fact_id in (wi.triggered_by or []):
-        fact = s.get_fact(fact_id)
-        if fact:
-            facts.append(fact)
-
-    # Get triggering risks
-    risks = []
-    for risk_id in (wi.triggered_by_risks or []):
-        risk = s.get_risk(risk_id)
-        if risk:
-            risks.append(risk)
-
-    cost_range = COST_RANGE_VALUES.get(wi.cost_estimate, {'low': 0, 'high': 0})
 
     return render_template('work_item_detail.html',
                          wi=wi,
@@ -1662,17 +1716,38 @@ def open_questions():
 @app.route('/work-item/<wi_id>/adjust', methods=['POST'])
 @auth_optional
 def adjust_work_item(wi_id):
-    """Adjust a work item."""
-    s = get_session()
+    """Adjust a work item.
 
+    Phase 2+: Database-first implementation.
+    """
     field = request.form.get('field')
     value = request.form.get('value')
 
-    if field and value:
-        if s.adjust_work_item(wi_id, field, value):
-            flash(f'Updated {wi_id} {field} to {value}', 'success')
+    if not field or not value:
+        flash('Missing field or value', 'error')
+        return redirect(url_for('work_item_detail', wi_id=wi_id))
+
+    try:
+        from web.repositories import FindingRepository
+        from web.database import db
+
+        repo = FindingRepository()
+        wi = repo.get_by_id(wi_id)
+
+        if wi and wi.finding_type == 'work_item':
+            # Update the field dynamically
+            if hasattr(wi, field):
+                setattr(wi, field, value)
+                db.session.commit()
+                flash(f'Updated {wi_id} {field} to {value}', 'success')
+            else:
+                flash(f'Invalid field: {field}', 'error')
         else:
-            flash(f'Failed to update {wi_id}', 'error')
+            flash(f'Work item {wi_id} not found', 'error')
+
+    except Exception as e:
+        logger.error(f"Adjust work item failed: {e}")
+        flash(f'Failed to update {wi_id}', 'error')
 
     return redirect(url_for('work_item_detail', wi_id=wi_id))
 
@@ -1682,7 +1757,7 @@ def adjust_work_item(wi_id):
 def facts():
     """List all facts with pagination.
 
-    Phase 2: Uses database pagination when available.
+    Phase 2+: Database-first implementation (no fallback).
     """
     domain_filter = request.args.get('domain', '')
     category_filter = request.args.get('category', '')
@@ -1691,117 +1766,107 @@ def facts():
     page = request.args.get('page', 1, type=int)
     per_page = 50
 
-    # Phase 2: Try database-first with SQL pagination
+    # Database-first: require deal selection
     current_deal_id = flask_session.get('current_deal_id')
-    if current_deal_id:
-        try:
-            from web.deal_data import DealData
-            from web.context import load_deal_context
+    if not current_deal_id:
+        flash('Please select a deal to view facts.', 'info')
+        return redirect(url_for('deals.deals_list_page'))
 
-            load_deal_context(current_deal_id)
-            data = DealData()
+    try:
+        from web.deal_data import DealData
+        from web.context import load_deal_context
 
-            # Use repository pagination (filtering done in SQL)
-            paginated_facts, total = data.get_facts_paginated(
-                domain=domain_filter or None,
-                status=None,
-                search=search_query or None,
-                page=page,
-                per_page=per_page
-            )
+        load_deal_context(current_deal_id)
+        data = DealData()
 
-            # Apply category and entity filters (may need to add to repository later)
-            if category_filter:
-                paginated_facts = [f for f in paginated_facts if f.category == category_filter]
-            if entity_filter:
-                paginated_facts = [f for f in paginated_facts if getattr(f, 'entity', 'target') == entity_filter]
+        # Use repository pagination (filtering done in SQL)
+        paginated_facts, total = data.get_facts_paginated(
+            domain=domain_filter or None,
+            status=None,
+            search=search_query or None,
+            page=page,
+            per_page=per_page
+        )
 
-            total_pages = (total + per_page - 1) // per_page
+        # Apply category and entity filters (may need to add to repository later)
+        if category_filter:
+            paginated_facts = [f for f in paginated_facts if f.category == category_filter]
+        if entity_filter:
+            paginated_facts = [f for f in paginated_facts if getattr(f, 'entity', 'target') == entity_filter]
 
-            # Get unique domains/categories from all facts for filter dropdowns
-            all_facts = data.get_all_facts()
-            domains = list(set(f.domain for f in all_facts))
-            categories = list(set(f.category for f in all_facts if f.category))
+        total_pages = (total + per_page - 1) // per_page
 
-            return render_template('facts.html',
-                                 facts=paginated_facts,
-                                 all_facts=all_facts,
-                                 domains=domains,
-                                 categories=categories,
-                                 domain_filter=domain_filter,
-                                 category_filter=category_filter,
-                                 entity_filter=entity_filter,
-                                 search_query=search_query,
-                                 page=page,
-                                 total_pages=total_pages,
-                                 total=total,
-                                 data_source='database')
-        except Exception as e:
-            logger.warning(f"Facts page: Phase 2 DB path failed, falling back to session: {e}")
+        # Get unique domains/categories from all facts for filter dropdowns
+        all_facts = data.get_all_facts()
+        domains = list(set(f.domain for f in all_facts))
+        categories = list(set(f.category for f in all_facts if f.category))
 
-    # Fallback: Session-based approach
-    s = get_session()
-    facts_list = list(s.fact_store.facts)
-
-    # Apply filters
-    if domain_filter:
-        facts_list = [f for f in facts_list if f.domain == domain_filter]
-    if category_filter:
-        facts_list = [f for f in facts_list if f.category == category_filter]
-    if entity_filter:
-        facts_list = [f for f in facts_list if getattr(f, 'entity', 'target') == entity_filter]
-    if search_query:
-        facts_list = [f for f in facts_list if search_query in f.item.lower()
-                      or search_query in str(f.details or '').lower()]
-
-    # Pagination
-    total = len(facts_list)
-    total_pages = (total + per_page - 1) // per_page
-    start = (page - 1) * per_page
-    end = start + per_page
-    paginated_facts = facts_list[start:end]
-
-    domains = list(set(f.domain for f in s.fact_store.facts))
-    categories = list(set(f.category for f in s.fact_store.facts))
-
-    return render_template('facts.html',
-                         facts=paginated_facts,
-                         all_facts=facts_list,
-                         domains=domains,
-                         categories=categories,
-                         domain_filter=domain_filter,
-                         category_filter=category_filter,
-                         entity_filter=entity_filter,
-                         page=page,
-                         total_pages=total_pages,
-                         total=total,
-                         per_page=per_page)
+        return render_template('facts.html',
+                             facts=paginated_facts,
+                             all_facts=all_facts,
+                             domains=domains,
+                             categories=categories,
+                             domain_filter=domain_filter,
+                             category_filter=category_filter,
+                             entity_filter=entity_filter,
+                             search_query=search_query,
+                             page=page,
+                             total_pages=total_pages,
+                             total=total,
+                             data_source='database')
+    except Exception as e:
+        logger.error(f"Facts page: Database path failed: {e}")
+        flash('Error loading facts. Please try again.', 'error')
+        return redirect(url_for('dashboard'))
 
 
 @app.route('/fact/<fact_id>')
 @auth_optional
 def fact_detail(fact_id):
-    """Fact detail view with items that cite it."""
-    s = get_session()
+    """Fact detail view with items that cite it.
 
-    fact = s.get_fact(fact_id)
-    if not fact:
-        flash(f'Fact {fact_id} not found', 'error')
-        return redirect(url_for('facts'))
+    Phase 2+: Database-first implementation.
+    """
+    # Phase 2: Database-first - require deal selection
+    current_deal_id = flask_session.get('current_deal_id')
+    if not current_deal_id:
+        flash('Please select a deal to view fact details.', 'info')
+        return redirect(url_for('deals.deals_list_page'))
 
-    # Find risks citing this fact
-    citing_risks = []
-    for risk in s.reasoning_store.risks:
-        if hasattr(risk, 'based_on_facts') and risk.based_on_facts:
-            if fact_id in risk.based_on_facts:
+    try:
+        from web.repositories import FactRepository, FindingRepository
+        from web.context import load_deal_context
+
+        load_deal_context(current_deal_id)
+
+        fact_repo = FactRepository()
+        finding_repo = FindingRepository()
+
+        fact = fact_repo.get_by_id(fact_id)
+        if not fact:
+            flash(f'Fact {fact_id} not found', 'error')
+            return redirect(url_for('facts'))
+
+        # Find risks citing this fact
+        citing_risks = []
+        all_risks = finding_repo.get_risks(current_deal_id)
+        for risk in all_risks:
+            based_on = getattr(risk, 'based_on_facts', None) or []
+            if fact_id in based_on:
                 citing_risks.append(risk)
 
-    # Find work items citing this fact
-    citing_wi = []
-    for wi in s.reasoning_store.work_items:
-        if hasattr(wi, 'triggered_by') and wi.triggered_by:
-            if fact_id in wi.triggered_by:
+        # Find work items citing this fact
+        citing_wi = []
+        all_work_items = finding_repo.get_work_items(current_deal_id)
+        for wi in all_work_items:
+            triggered_by = getattr(wi, 'triggered_by', None) or getattr(wi, 'based_on_facts', None) or []
+            if fact_id in triggered_by:
                 citing_wi.append(wi)
+
+    except Exception as e:
+        logger.error(f"Fact detail: Database path failed: {e}")
+        flash('Error loading fact details. Please try again.', 'error')
+        return redirect(url_for('facts'))
 
     return render_template('fact_detail.html',
                          fact=fact,
@@ -1814,7 +1879,7 @@ def fact_detail(fact_id):
 def gaps():
     """List all gaps with pagination.
 
-    Database-first: Reads from database if deal is selected, falls back to in-memory.
+    Phase 2+: Database-first implementation (no fallback).
     """
     domain_filter = request.args.get('domain', '')
     importance_filter = request.args.get('importance', '')
@@ -1822,54 +1887,51 @@ def gaps():
     page = request.args.get('page', 1, type=int)
     per_page = 50
 
-    gaps_list = []
-    domains = []
+    # Phase 2: Database-first - require deal selection
+    current_deal_id = flask_session.get('current_deal_id')
+    if not current_deal_id:
+        flash('Please select a deal to view gaps.', 'info')
+        return redirect(url_for('deals.deals_list_page'))
 
-    # Try database first if we have a deal_id
-    deal_id = flask_session.get('current_deal_id')
-    if deal_id and USE_DATABASE:
-        try:
-            from web.repositories.gap_repository import GapRepository
-            repo = GapRepository()
-            db_gaps = repo.get_by_deal(
-                deal_id=deal_id,
-                domain=domain_filter if domain_filter else None,
-                importance=importance_filter if importance_filter else None
-            )
-            # Convert to gap-like objects for template compatibility
-            gaps_list = db_gaps
-            domains = repo.get_domains(deal_id)
-            logger.debug(f"Retrieved {len(gaps_list)} gaps from database for deal {deal_id}")
-        except Exception as e:
-            logger.warning(f"Database query failed, falling back to in-memory: {e}")
-            gaps_list = []
+    try:
+        from web.repositories import GapRepository
+        from web.context import load_deal_context
 
-    # Fallback to in-memory session store
-    if not gaps_list:
-        s = get_session()
-        gaps_list = list(s.fact_store.gaps)
-        domains = list(set(g.domain for g in s.fact_store.gaps))
+        load_deal_context(current_deal_id)
+        repo = GapRepository()
 
-        # Apply filters (already filtered for database)
-        if domain_filter:
-            gaps_list = [g for g in gaps_list if g.domain == domain_filter]
-        if importance_filter:
-            gaps_list = [g for g in gaps_list if g.importance == importance_filter]
+        gaps_list = repo.get_by_deal(
+            deal_id=current_deal_id,
+            domain=domain_filter if domain_filter else None,
+            importance=importance_filter if importance_filter else None
+        )
+        domains = repo.get_domains(current_deal_id)
 
-    # Apply search filter
-    if search_query:
-        gaps_list = [g for g in gaps_list if search_query in g.description.lower()]
+        # Apply search filter
+        if search_query:
+            gaps_list = [g for g in gaps_list if search_query in (g.description or '').lower()]
 
-    # Sort by importance
-    importance_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}
-    gaps_list = sorted(gaps_list, key=lambda g: importance_order.get(g.importance, 4))
+        # Sort by importance
+        importance_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}
+        gaps_list = sorted(gaps_list, key=lambda g: importance_order.get(g.importance, 4))
 
-    # Pagination
-    total = len(gaps_list)
-    total_pages = (total + per_page - 1) // per_page
-    start = (page - 1) * per_page
-    end = start + per_page
-    paginated_gaps = gaps_list[start:end]
+        # Pagination
+        total = len(gaps_list)
+        total_pages = (total + per_page - 1) // per_page
+        start = (page - 1) * per_page
+        end = start + per_page
+        paginated_gaps = gaps_list[start:end]
+
+        logger.debug(f"Gaps route: Loaded {len(paginated_gaps)} gaps from database (total: {total})")
+
+    except Exception as e:
+        logger.error(f"Gaps route: Database path failed: {e}")
+        flash('Error loading gaps. Please try again.', 'error')
+        paginated_gaps = []
+        gaps_list = []
+        domains = []
+        total = 0
+        total_pages = 0
 
     return render_template('gaps.html',
                          gaps=paginated_gaps,
@@ -1886,17 +1948,39 @@ def gaps():
 @app.route('/export-vdr')
 @auth_optional
 def export_vdr():
-    """Export VDR request list."""
-    s = get_session()
+    """Export VDR request list.
+
+    Phase 2+: Database-first implementation.
+    """
     from datetime import datetime
     from config_v2 import OUTPUT_DIR
+
+    # Database-first: require deal selection
+    current_deal_id = flask_session.get('current_deal_id')
+    if not current_deal_id:
+        flash('Please select a deal to export VDR requests.', 'info')
+        return redirect(url_for('deals.deals_list_page'))
+
+    try:
+        from web.deal_data import DealData
+        from web.context import load_deal_context
+
+        load_deal_context(current_deal_id)
+        data = DealData()
+        gaps = data.get_gaps()
+    except Exception as e:
+        logger.error(f"Export VDR: Database path failed: {e}")
+        flash('Error loading gaps. Please try again.', 'error')
+        return redirect(url_for('gaps'))
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     # Generate VDR markdown
     vdr_content = "# VDR Request List\n\n"
-    for gap in s.fact_store.gaps:
-        vdr_content += f"## [{gap.importance.upper()}] {gap.gap_id}\n"
+    for gap in gaps:
+        importance = getattr(gap, 'importance', 'medium') or 'medium'
+        gap_id = getattr(gap, 'id', '') or getattr(gap, 'gap_id', '')
+        vdr_content += f"## [{importance.upper()}] {gap_id}\n"
         vdr_content += f"**Domain:** {gap.domain}\n"
         vdr_content += f"**Category:** {gap.category}\n"
         vdr_content += f"**Description:** {gap.description}\n\n"
@@ -1912,35 +1996,162 @@ def export_vdr():
 @app.route('/context', methods=['GET', 'POST'])
 @auth_optional
 def context():
-    """Manage deal context."""
-    s = get_session()
+    """Manage deal context.
 
-    if request.method == 'POST':
-        action = request.form.get('action')
-        if action == 'add':
-            text = request.form.get('context_text')
-            if text:
-                s.add_deal_context(text)
-                flash('Deal context added', 'success')
-        elif action == 'clear':
-            s.clear_deal_context()
-            flash('Deal context cleared', 'success')
-        return redirect(url_for('context'))
+    Phase 2+: Database-first implementation.
+    Stores context in Deal.context JSON field.
+    """
+    # Database-first: require deal selection
+    current_deal_id = flask_session.get('current_deal_id')
+    if not current_deal_id:
+        flash('Please select a deal to manage context.', 'info')
+        return redirect(url_for('deals.deals_list_page'))
 
-    return render_template('context.html', deal_context=s.deal_context)
+    try:
+        from web.repositories import DealRepository
+        from web.database import db
+
+        repo = DealRepository()
+        deal = repo.get_by_id(current_deal_id)
+
+        if not deal:
+            flash('Deal not found.', 'error')
+            return redirect(url_for('deals.deals_list_page'))
+
+        # Ensure context is a dict
+        deal_context = deal.context or {}
+        if not isinstance(deal_context, dict):
+            deal_context = {}
+
+        context_notes = deal_context.get('notes', [])
+        if not isinstance(context_notes, list):
+            context_notes = []
+
+        if request.method == 'POST':
+            action = request.form.get('action')
+            if action == 'add':
+                text = request.form.get('context_text')
+                if text:
+                    # Add new context note
+                    context_notes.append({
+                        'text': text,
+                        'added_at': datetime.now().isoformat()
+                    })
+                    deal_context['notes'] = context_notes
+                    deal.context = deal_context
+                    db.session.commit()
+                    flash('Deal context added', 'success')
+            elif action == 'clear':
+                deal_context['notes'] = []
+                deal.context = deal_context
+                db.session.commit()
+                flash('Deal context cleared', 'success')
+            return redirect(url_for('context'))
+
+        # Format context for display (backward compatible with template)
+        display_context = '\n\n'.join([
+            note.get('text', '') for note in context_notes
+        ]) if context_notes else ''
+
+    except Exception as e:
+        logger.error(f"Context page: Database path failed: {e}")
+        flash('Error managing context. Please try again.', 'error')
+        return redirect(url_for('dashboard'))
+
+    return render_template('context.html', deal_context=display_context)
 
 
 @app.route('/export', methods=['POST'])
 @csrf.exempt  # Form submission
 @auth_optional
 def export():
-    """Export current session."""
-    s = get_session()
+    """Export current session data to files.
+
+    Phase 2+: Database-first implementation.
+    Exports data from database to JSON files.
+    """
+    import json
     from datetime import datetime
     from config_v2 import OUTPUT_DIR
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    saved_files = s.save_to_files(OUTPUT_DIR, timestamp)
+    # Database-first: require deal selection
+    current_deal_id = flask_session.get('current_deal_id')
+    if not current_deal_id:
+        flash('Please select a deal to export.', 'info')
+        return redirect(url_for('deals.deals_list_page'))
+
+    try:
+        from web.deal_data import DealData
+        from web.context import load_deal_context
+
+        load_deal_context(current_deal_id)
+        data = DealData()
+
+        facts = data.get_all_facts()
+        gaps = data.get_gaps()
+        risks = data.get_risks()
+        work_items = data.get_work_items()
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        saved_files = []
+
+        # Export facts
+        facts_data = [{
+            'id': getattr(f, 'id', '') or getattr(f, 'fact_id', ''),
+            'domain': f.domain,
+            'category': f.category,
+            'item': f.item,
+            'details': f.details,
+            'status': f.status,
+        } for f in facts]
+        facts_file = OUTPUT_DIR / f"facts_{timestamp}.json"
+        with open(facts_file, 'w') as f:
+            json.dump(facts_data, f, indent=2, default=str)
+        saved_files.append(facts_file)
+
+        # Export gaps
+        gaps_data = [{
+            'id': getattr(g, 'id', '') or getattr(g, 'gap_id', ''),
+            'domain': g.domain,
+            'category': g.category,
+            'description': g.description,
+            'importance': getattr(g, 'importance', 'medium'),
+        } for g in gaps]
+        gaps_file = OUTPUT_DIR / f"gaps_{timestamp}.json"
+        with open(gaps_file, 'w') as f:
+            json.dump(gaps_data, f, indent=2, default=str)
+        saved_files.append(gaps_file)
+
+        # Export risks
+        risks_data = [{
+            'id': getattr(r, 'id', '') or getattr(r, 'finding_id', ''),
+            'domain': r.domain,
+            'title': r.title,
+            'description': r.description,
+            'severity': r.severity,
+        } for r in risks]
+        risks_file = OUTPUT_DIR / f"risks_{timestamp}.json"
+        with open(risks_file, 'w') as f:
+            json.dump(risks_data, f, indent=2, default=str)
+        saved_files.append(risks_file)
+
+        # Export work items
+        work_items_data = [{
+            'id': getattr(w, 'id', '') or getattr(w, 'finding_id', ''),
+            'domain': w.domain,
+            'title': w.title,
+            'description': w.description,
+            'phase': w.phase,
+        } for w in work_items]
+        work_items_file = OUTPUT_DIR / f"work_items_{timestamp}.json"
+        with open(work_items_file, 'w') as f:
+            json.dump(work_items_data, f, indent=2, default=str)
+        saved_files.append(work_items_file)
+
+    except Exception as e:
+        logger.error(f"Export: Database path failed: {e}")
+        flash('Error exporting data. Please try again.', 'error')
+        return redirect(url_for('dashboard'))
 
     # Audit log the export
     if USE_AUDIT_LOGGING:
@@ -1953,6 +2164,7 @@ def export():
                 details={
                     'files_exported': len(saved_files),
                     'filenames': [str(f) for f in saved_files[:5]],  # First 5 only
+                    'deal_id': current_deal_id,
                 }
             )
         except Exception as e:
@@ -1965,32 +2177,69 @@ def export():
 @app.route('/search')
 @auth_optional
 def search():
-    """Search across all items."""
-    s = get_session()
-    query = request.args.get('q', '').lower()
+    """Search across all items.
 
+    Phase 2+: Database-first implementation using repository search methods.
+    """
+    query = request.args.get('q', '')
     results = {'risks': [], 'work_items': [], 'facts': [], 'gaps': []}
 
+    # Phase 2: Database-first - require deal selection
+    current_deal_id = flask_session.get('current_deal_id')
+    if not current_deal_id:
+        if query:
+            flash('Please select a deal to search.', 'info')
+        return render_template('search.html', query=query, results=results, total=0)
+
     if query:
-        # Search risks
-        for risk in s.reasoning_store.risks:
-            if query in risk.title.lower() or query in risk.description.lower():
-                results['risks'].append(risk)
+        try:
+            from web.repositories import FactRepository, FindingRepository, GapRepository
+            from web.context import load_deal_context
 
-        # Search work items
-        for wi in s.reasoning_store.work_items:
-            if query in wi.title.lower() or query in wi.description.lower():
-                results['work_items'].append(wi)
+            load_deal_context(current_deal_id)
 
-        # Search facts
-        for fact in s.fact_store.facts:
-            if query in fact.item.lower() or query in str(fact.details).lower():
-                results['facts'].append(fact)
+            fact_repo = FactRepository()
+            finding_repo = FindingRepository()
+            gap_repo = GapRepository()
 
-        # Search gaps
-        for gap in s.fact_store.gaps:
-            if query in gap.description.lower():
-                results['gaps'].append(gap)
+            # Search risks (findings with type 'risk')
+            risk_results = finding_repo.get_by_deal(
+                deal_id=current_deal_id,
+                finding_type='risk'
+            )
+            for risk in risk_results:
+                if query.lower() in (risk.title or '').lower() or query.lower() in (risk.description or '').lower():
+                    results['risks'].append(risk)
+
+            # Search work items (findings with type 'work_item')
+            wi_results = finding_repo.get_by_deal(
+                deal_id=current_deal_id,
+                finding_type='work_item'
+            )
+            for wi in wi_results:
+                if query.lower() in (wi.title or '').lower() or query.lower() in (wi.description or '').lower():
+                    results['work_items'].append(wi)
+
+            # Search facts
+            fact_results = fact_repo.get_by_deal(deal_id=current_deal_id)
+            for fact in fact_results:
+                item_text = getattr(fact, 'item', '') or ''
+                details_text = str(getattr(fact, 'details', {}) or {})
+                if query.lower() in item_text.lower() or query.lower() in details_text.lower():
+                    results['facts'].append(fact)
+
+            # Search gaps
+            gap_results = gap_repo.get_by_deal(deal_id=current_deal_id)
+            for gap in gap_results:
+                description = getattr(gap, 'description', '') or ''
+                if query.lower() in description.lower():
+                    results['gaps'].append(gap)
+
+            logger.debug(f"Search '{query}': {len(results['risks'])} risks, {len(results['work_items'])} work items, {len(results['facts'])} facts, {len(results['gaps'])} gaps")
+
+        except Exception as e:
+            logger.error(f"Search failed: {e}")
+            flash('Error performing search. Please try again.', 'error')
 
     total = sum(len(v) for v in results.values())
 
@@ -3021,25 +3270,64 @@ def review_queue_page():
     """
     Fact validation review queue page.
 
+    Phase 2+: Database-first implementation.
     Displays facts needing human review, prioritized by importance.
     """
-    s = get_session()
+    # Database-first: require deal selection
+    current_deal_id = flask_session.get('current_deal_id')
+    if not current_deal_id:
+        flash('Please select a deal to view the review queue.', 'info')
+        return redirect(url_for('deals.deals_list_page'))
 
-    # Get review queue stats
-    stats = s.fact_store.get_review_stats()
+    try:
+        from web.repositories import FactRepository
+        from web.context import load_deal_context
 
-    # Get initial queue (first 50 highest priority)
-    queue = s.fact_store.get_review_queue(limit=50)
+        load_deal_context(current_deal_id)
+        repo = FactRepository()
 
-    # Get domain list for filtering
-    domains = list(stats.get('by_domain', {}).keys())
+        # Get review queue (paginated)
+        result = repo.get_review_queue(deal_id=current_deal_id, per_page=50)
+        queue = result.get('items', [])
+        total_needs_review = result.get('total', 0)
+
+        # Get all facts for stats
+        all_facts = repo.get_by_deal(deal_id=current_deal_id)
+
+        # Build stats from database
+        stats = {
+            'total_facts': len(all_facts),
+            'needs_review': total_needs_review,
+            'verified': len([f for f in all_facts if f.verified]),
+            'unverified': len([f for f in all_facts if not f.verified]),
+            'by_domain': {}
+        }
+
+        # Group by domain
+        for fact in all_facts:
+            domain = fact.domain
+            if domain not in stats['by_domain']:
+                stats['by_domain'][domain] = {'total': 0, 'needs_review': 0, 'verified': 0}
+            stats['by_domain'][domain]['total'] += 1
+            if getattr(fact, 'needs_review', False):
+                stats['by_domain'][domain]['needs_review'] += 1
+            if fact.verified:
+                stats['by_domain'][domain]['verified'] += 1
+
+        domains = list(stats['by_domain'].keys())
+        data_source = 'database' if len(all_facts) > 0 else 'none'
+
+    except Exception as e:
+        logger.error(f"Review queue page: Database path failed: {e}")
+        flash('Error loading review queue. Please try again.', 'error')
+        return redirect(url_for('dashboard'))
 
     return render_template(
         'review/queue.html',
         stats=stats,
         queue=queue,
         domains=domains,
-        data_source='analysis' if len(s.fact_store.facts) > 0 else 'none'
+        data_source=data_source
     )
 
 
@@ -3118,21 +3406,63 @@ def api_health_detailed():
 
 @app.route('/api/session/info')
 def session_info():
-    """Get current session information."""
-    s = get_session()
-    summary = s.get_summary()
+    """Get current session/deal information.
 
+    Phase 2+: Database-first implementation.
+    """
+    current_deal_id = flask_session.get('current_deal_id')
+
+    # Get task status if running
     task_id = flask_session.get('current_task_id')
     task_status = None
     if task_id:
         task_status = task_manager.get_task_status(task_id)
 
-    return jsonify({
-        'summary': summary,
-        'task_id': task_id,
-        'task_status': task_status,
-        'has_results': summary.get('facts', 0) > 0 or summary.get('risks', 0) > 0
-    })
+    if not current_deal_id:
+        return jsonify({
+            'summary': {'facts': 0, 'gaps': 0, 'risks': 0, 'work_items': 0},
+            'task_id': task_id,
+            'task_status': task_status,
+            'has_results': False,
+            'deal_id': None
+        })
+
+    try:
+        from web.deal_data import DealData
+        from web.context import load_deal_context
+
+        load_deal_context(current_deal_id)
+        data = DealData()
+
+        # Get summary from database
+        dashboard = data.get_dashboard_summary()
+        summary = {
+            'facts': dashboard.get('fact_counts', {}).get('total', 0) if isinstance(dashboard.get('fact_counts'), dict) else len(data.get_all_facts()),
+            'gaps': len(data.get_gaps()),
+            'risks': dashboard.get('risk_summary', {}).get('total', 0),
+            'work_items': dashboard.get('work_item_summary', {}).get('total', 0),
+            'risk_summary': dashboard.get('risk_summary', {}),
+            'work_item_summary': dashboard.get('work_item_summary', {}),
+        }
+
+        return jsonify({
+            'summary': summary,
+            'task_id': task_id,
+            'task_status': task_status,
+            'has_results': summary.get('facts', 0) > 0 or summary.get('risks', 0) > 0,
+            'deal_id': current_deal_id,
+            'source': 'database'
+        })
+    except Exception as e:
+        logger.error(f"Session info: Database path failed: {e}")
+        return jsonify({
+            'summary': {'facts': 0, 'gaps': 0, 'risks': 0, 'work_items': 0},
+            'task_id': task_id,
+            'task_status': task_status,
+            'has_results': False,
+            'deal_id': current_deal_id,
+            'error': str(e)
+        })
 
 
 @app.route('/api/pipeline/status')
@@ -3301,64 +3631,96 @@ def cleanup_tasks():
 @app.route('/api/export/json')
 @auth_optional
 def export_json():
-    """Export all analysis data as JSON."""
-    s = get_session()
+    """Export all analysis data as JSON.
 
-    # Compile all data
-    export_data = {
-        'summary': s.get_summary(),
-        'facts': [
-            {
-                'id': f.fact_id,
-                'domain': f.domain,
-                'category': f.category,
-                'item': f.item,
-                'details': f.details,
-                'status': f.status,
-                'entity': getattr(f, 'entity', 'target'),
-            }
-            for f in s.fact_store.facts
-        ],
-        'gaps': [
-            {
-                'id': g.gap_id,
-                'domain': g.domain,
-                'category': g.category,
-                'description': g.description,
-                'importance': g.importance,
-            }
-            for g in s.fact_store.gaps
-        ],
-        'risks': [
-            {
-                'id': r.finding_id,
-                'domain': r.domain,
-                'title': r.title,
-                'description': r.description,
-                'severity': r.severity,
-                'category': r.category,
-                'mitigation': r.mitigation,
-                'based_on_facts': r.based_on_facts,
-            }
-            for r in s.reasoning_store.risks
-        ],
-        'work_items': [
-            {
-                'id': w.finding_id,
-                'domain': w.domain,
-                'title': w.title,
-                'description': w.description,
-                'phase': w.phase,
-                'priority': w.priority,
-                'owner_type': w.owner_type,
-                'cost_estimate': w.cost_estimate,
-                'based_on_facts': w.based_on_facts,
-            }
-            for w in s.reasoning_store.work_items
-        ],
-    }
+    Phase 2+: Database-first implementation.
+    """
+    # Database-first: require deal selection
+    current_deal_id = flask_session.get('current_deal_id')
+    if not current_deal_id:
+        return jsonify({'error': 'No deal selected', 'message': 'Please select a deal to export data.'}), 400
 
-    return jsonify(export_data)
+    try:
+        from web.deal_data import DealData
+        from web.context import load_deal_context
+
+        load_deal_context(current_deal_id)
+        data = DealData()
+
+        facts = data.get_all_facts()
+        gaps = data.get_gaps()
+        risks = data.get_risks()
+        work_items = data.get_work_items()
+
+        # Build summary from database counts
+        summary = data.get_dashboard_summary()
+
+        # Compile all data
+        export_data = {
+            'summary': {
+                'facts': len(facts),
+                'gaps': len(gaps),
+                'risks': len(risks),
+                'work_items': len(work_items),
+                'risk_summary': summary.get('risk_summary', {}),
+                'work_item_summary': summary.get('work_item_summary', {}),
+            },
+            'facts': [
+                {
+                    'id': getattr(f, 'id', '') or getattr(f, 'fact_id', ''),
+                    'domain': f.domain,
+                    'category': f.category,
+                    'item': f.item,
+                    'details': f.details,
+                    'status': f.status,
+                    'entity': getattr(f, 'entity', 'target'),
+                }
+                for f in facts
+            ],
+            'gaps': [
+                {
+                    'id': getattr(g, 'id', '') or getattr(g, 'gap_id', ''),
+                    'domain': g.domain,
+                    'category': g.category,
+                    'description': g.description,
+                    'importance': getattr(g, 'importance', 'medium'),
+                }
+                for g in gaps
+            ],
+            'risks': [
+                {
+                    'id': getattr(r, 'id', '') or getattr(r, 'finding_id', ''),
+                    'domain': r.domain,
+                    'title': r.title,
+                    'description': r.description,
+                    'severity': r.severity,
+                    'category': getattr(r, 'category', ''),
+                    'mitigation': getattr(r, 'mitigation', ''),
+                    'based_on_facts': getattr(r, 'based_on_facts', []),
+                }
+                for r in risks
+            ],
+            'work_items': [
+                {
+                    'id': getattr(w, 'id', '') or getattr(w, 'finding_id', ''),
+                    'domain': w.domain,
+                    'title': w.title,
+                    'description': w.description,
+                    'phase': w.phase,
+                    'priority': getattr(w, 'priority', 0),
+                    'owner_type': getattr(w, 'owner_type', ''),
+                    'cost_estimate': getattr(w, 'cost_estimate', ''),
+                    'based_on_facts': getattr(w, 'based_on_facts', []),
+                }
+                for w in work_items
+            ],
+        }
+
+        return jsonify(export_data)
+
+    except Exception as e:
+        logger.error(f"Export JSON: Database path failed: {e}")
+        return jsonify({'error': 'Export failed', 'message': str(e)}), 500
 
 
 @app.route('/api/facts')
@@ -3366,166 +3728,186 @@ def export_json():
 def api_facts():
     """Get facts as JSON with optional filtering.
 
-    Database-first: Reads from database if deal is selected, falls back to in-memory.
+    Phase 2+: Database-first implementation (no fallback).
     """
     domain = request.args.get('domain')
     category = request.args.get('category')
     entity = request.args.get('entity')
 
-    # Try database first if we have a deal_id
+    # Database-first: require deal selection
     deal_id = flask_session.get('current_deal_id')
-    if deal_id and USE_DATABASE:
-        try:
-            from web.repositories.fact_repository import FactRepository
-            repo = FactRepository()
-            db_facts = repo.get_by_deal(
-                deal_id=deal_id,
-                domain=domain,
-                entity=entity,
-                category=category
-            )
-            return jsonify({
-                'count': len(db_facts),
-                'source': 'database',
-                'deal_id': deal_id,
-                'facts': [f.to_dict() for f in db_facts]
-            })
-        except Exception as e:
-            logger.warning(f"Database query failed, falling back to in-memory: {e}")
+    if not deal_id:
+        return jsonify({'error': 'No deal selected', 'message': 'Please select a deal to view facts.', 'facts': []}), 400
 
-    # Fallback to in-memory session store
-    s = get_session()
-    facts = list(s.fact_store.facts)
-
-    if domain:
-        facts = [f for f in facts if f.domain == domain]
-    if category:
-        facts = [f for f in facts if f.category == category]
-    if entity:
-        facts = [f for f in facts if f.entity == entity]
-
-    return jsonify({
-        'count': len(facts),
-        'source': 'memory',
-        'deal_id': deal_id,
-        'facts': [
-            {
-                'id': f.fact_id,
-                'fact_id': f.fact_id,
-                'domain': f.domain,
-                'category': f.category,
-                'item': f.item,
-                'details': f.details,
-                'status': f.status,
-                'entity': f.entity,
-                'source_document': f.source_document,
-                'confidence_score': f.confidence_score,
-                'verified': f.verified,
-                'verified_by': f.verified_by,
-                'verified_at': f.verified_at,
-            }
-            for f in facts
-        ]
-    })
+    try:
+        from web.repositories.fact_repository import FactRepository
+        repo = FactRepository()
+        db_facts = repo.get_by_deal(
+            deal_id=deal_id,
+            domain=domain,
+            entity=entity,
+            category=category
+        )
+        return jsonify({
+            'count': len(db_facts),
+            'source': 'database',
+            'deal_id': deal_id,
+            'facts': [f.to_dict() for f in db_facts]
+        })
+    except Exception as e:
+        logger.error(f"API facts: Database query failed: {e}")
+        return jsonify({'error': 'Database query failed', 'message': str(e), 'facts': []}), 500
 
 
 @app.route('/api/facts/<fact_id>/verify', methods=['POST'])
 @auth_optional
 def verify_fact(fact_id):
-    """Mark a fact as verified by a human reviewer."""
+    """Mark a fact as verified by a human reviewer.
+
+    Phase 2+: Database-first implementation (no fallback).
+    """
     data = request.get_json() or {}
     verified_by = data.get('verified_by', 'web_user')
     verification_note = data.get('note', '')
 
-    # Try database first
-    if USE_DATABASE:
-        try:
-            from web.repositories.fact_repository import FactRepository
-            repo = FactRepository()
-            fact = repo.get_by_id(fact_id)
-            if fact:
-                repo.verify_fact(fact, verified_by, verification_note)
-                return jsonify({
-                    'status': 'success',
-                    'source': 'database',
-                    'message': f'Fact {fact_id} verified by {verified_by}',
-                    'fact_id': fact_id,
-                    'verified': True,
-                    'verified_by': verified_by
-                })
-        except Exception as e:
-            logger.warning(f"Database verify failed, trying in-memory: {e}")
+    try:
+        from web.repositories import FactRepository
 
-    # Fallback to in-memory
-    s = get_session()
-    success = s.fact_store.verify_fact(fact_id, verified_by)
+        repo = FactRepository()
+        fact = repo.get_by_id(fact_id)
 
-    if success:
-        # Save the updated fact store
-        from config_v2 import OUTPUT_DIR
-        facts_files = sorted(OUTPUT_DIR.glob("facts_*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
-        if facts_files:
-            s.fact_store.save(str(facts_files[0]))
+        if fact:
+            repo.verify_fact(fact, verified_by, verification_note)
+            return jsonify({
+                'status': 'success',
+                'source': 'database',
+                'message': f'Fact {fact_id} verified by {verified_by}',
+                'fact_id': fact_id,
+                'verified': True,
+                'verified_by': verified_by
+            })
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': f'Fact {fact_id} not found'
+            }), 404
 
-        return jsonify({
-            'status': 'success',
-            'source': 'memory',
-            'message': f'Fact {fact_id} verified by {verified_by}',
-            'fact_id': fact_id,
-            'verified': True,
-            'verified_by': verified_by
-        })
-    else:
+    except Exception as e:
+        logger.error(f"Verify fact failed: {e}")
         return jsonify({
             'status': 'error',
-            'message': f'Fact {fact_id} not found'
-        }), 404
+            'message': str(e)
+        }), 500
 
 
 @app.route('/api/facts/<fact_id>/unverify', methods=['POST'])
 @auth_optional
 def unverify_fact(fact_id):
-    """Remove verification status from a fact."""
-    s = get_session()
+    """Remove verification status from a fact.
 
-    success = s.fact_store.unverify_fact(fact_id)
+    Phase 2+: Database-first implementation (no fallback).
+    """
+    try:
+        from web.repositories import FactRepository
+        from web.database import db
 
-    if success:
-        # Save the updated fact store
-        from config_v2 import OUTPUT_DIR
-        facts_files = sorted(OUTPUT_DIR.glob("facts_*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
-        if facts_files:
-            s.fact_store.save(str(facts_files[0]))
+        repo = FactRepository()
+        fact = repo.get_by_id(fact_id)
 
-        return jsonify({
-            'status': 'success',
-            'message': f'Verification removed from {fact_id}',
-            'fact_id': fact_id,
-            'verified': False
-        })
-    else:
+        if fact:
+            fact.verified = False
+            fact.verified_by = None
+            fact.verified_at = None
+            fact.verification_note = None
+            db.session.commit()
+
+            return jsonify({
+                'status': 'success',
+                'source': 'database',
+                'message': f'Verification removed from {fact_id}',
+                'fact_id': fact_id,
+                'verified': False
+            })
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': f'Fact {fact_id} not found'
+            }), 404
+
+    except Exception as e:
+        logger.error(f"Unverify fact failed: {e}")
         return jsonify({
             'status': 'error',
-            'message': f'Fact {fact_id} not found'
-        }), 404
+            'message': str(e)
+        }), 500
 
 
 @app.route('/api/facts/verification-stats')
 @auth_optional
 def verification_stats():
-    """Get verification statistics for all facts."""
-    s = get_session()
-    stats = s.fact_store.get_verification_stats()
-    return jsonify(stats)
+    """Get verification statistics for all facts.
+
+    Phase 2+: Database-first implementation.
+    """
+    current_deal_id = flask_session.get('current_deal_id')
+    if not current_deal_id:
+        return jsonify({'error': 'No deal selected', 'total': 0, 'verified': 0, 'unverified': 0})
+
+    try:
+        from web.repositories import FactRepository
+
+        repo = FactRepository()
+        all_facts = repo.get_by_deal(deal_id=current_deal_id)
+
+        verified = sum(1 for f in all_facts if getattr(f, 'verified', False))
+        total = len(all_facts)
+
+        return jsonify({
+            'total': total,
+            'verified': verified,
+            'unverified': total - verified,
+            'verification_rate': round(verified / total * 100, 1) if total > 0 else 0,
+            'source': 'database'
+        })
+
+    except Exception as e:
+        logger.error(f"Verification stats failed: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/facts/confidence-summary')
 @auth_optional
 def confidence_summary():
-    """Get confidence score summary for all facts."""
-    s = get_session()
-    summary = s.fact_store.get_confidence_summary()
-    return jsonify(summary)
+    """Get confidence score summary for all facts.
+
+    Phase 2+: Database-first implementation.
+    """
+    current_deal_id = flask_session.get('current_deal_id')
+    if not current_deal_id:
+        return jsonify({'error': 'No deal selected'})
+
+    try:
+        from web.repositories import FactRepository
+
+        repo = FactRepository()
+        all_facts = repo.get_by_deal(deal_id=current_deal_id)
+
+        # Group by confidence level
+        by_confidence = {'high': 0, 'medium': 0, 'low': 0}
+        for fact in all_facts:
+            confidence = getattr(fact, 'confidence', 'medium') or 'medium'
+            if confidence in by_confidence:
+                by_confidence[confidence] += 1
+
+        return jsonify({
+            'by_confidence': by_confidence,
+            'total': len(all_facts),
+            'source': 'database'
+        })
+
+    except Exception as e:
+        logger.error(f"Confidence summary failed: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/entity-summary')
@@ -3533,58 +3915,67 @@ def confidence_summary():
 def entity_summary():
     """Get summary of facts by entity (target vs buyer).
 
+    Phase 2+: Database-first implementation.
     Returns counts and breakdown by domain for each entity.
     """
-    s = get_session()
-
-    if not s or not s.fact_store:
+    # Database-first: require deal selection
+    current_deal_id = flask_session.get('current_deal_id')
+    if not current_deal_id:
         return jsonify({
             "status": "error",
-            "message": "No session or fact store available"
+            "message": "No deal selected"
         }), 400
 
-    # Use facts list directly, not get_all_facts() which returns a dict
-    all_facts = list(s.fact_store.facts)
-
-    # Count by entity
-    target_facts = [f for f in all_facts if getattr(f, 'entity', 'target') == 'target']
-    buyer_facts = [f for f in all_facts if getattr(f, 'entity', '') == 'buyer']
-
-    # Count by domain for each entity
-    def domain_breakdown(facts):
-        breakdown = {}
-        for f in facts:
-            domain = f.domain
-            breakdown[domain] = breakdown.get(domain, 0) + 1
-        return breakdown
-
-    # Get document counts from DocumentStore if available
-    doc_stats = {"target": 0, "buyer": 0}
     try:
-        from tools_v2.document_store import DocumentStore
-        doc_store = DocumentStore.get_instance()
-        stats = doc_store.get_statistics()
-        doc_stats["target"] = stats["by_entity"]["target"]
-        doc_stats["buyer"] = stats["by_entity"]["buyer"]
-    except Exception:
-        pass
+        from web.deal_data import DealData
+        from web.context import load_deal_context
 
-    return jsonify({
-        "status": "success",
-        "summary": {
-            "target": {
-                "fact_count": len(target_facts),
-                "document_count": doc_stats["target"],
-                "by_domain": domain_breakdown(target_facts)
-            },
-            "buyer": {
-                "fact_count": len(buyer_facts),
-                "document_count": doc_stats["buyer"],
-                "by_domain": domain_breakdown(buyer_facts)
-            },
-            "total_facts": len(all_facts)
-        }
-    })
+        load_deal_context(current_deal_id)
+        data = DealData()
+        all_facts = data.get_all_facts()
+
+        # Count by entity
+        target_facts = [f for f in all_facts if getattr(f, 'entity', 'target') == 'target']
+        buyer_facts = [f for f in all_facts if getattr(f, 'entity', '') == 'buyer']
+
+        # Count by domain for each entity
+        def domain_breakdown(facts):
+            breakdown = {}
+            for f in facts:
+                domain = f.domain
+                breakdown[domain] = breakdown.get(domain, 0) + 1
+            return breakdown
+
+        # Get document counts from DocumentStore if available
+        doc_stats = {"target": 0, "buyer": 0}
+        try:
+            from tools_v2.document_store import DocumentStore
+            doc_store = DocumentStore.get_instance()
+            stats = doc_store.get_statistics()
+            doc_stats["target"] = stats["by_entity"]["target"]
+            doc_stats["buyer"] = stats["by_entity"]["buyer"]
+        except Exception:
+            pass
+
+        return jsonify({
+            "status": "success",
+            "summary": {
+                "target": {
+                    "fact_count": len(target_facts),
+                    "document_count": doc_stats["target"],
+                    "by_domain": domain_breakdown(target_facts)
+                },
+                "buyer": {
+                    "fact_count": len(buyer_facts),
+                    "document_count": doc_stats["buyer"],
+                    "by_domain": domain_breakdown(buyer_facts)
+                },
+                "total_facts": len(all_facts)
+            }
+        })
+    except Exception as e:
+        logger.error(f"Entity summary: Database path failed: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 @app.route('/api/documents/store')
@@ -3627,60 +4018,175 @@ def review_queue():
     """
     Get facts needing review, sorted by priority.
 
+    Phase 2+: Database-first implementation.
+
     Query params:
         domain: Filter by domain
         limit: Max facts to return (default 50)
         include_skipped: Include previously skipped facts (default false)
     """
-    s = get_session()
+    # Database-first: require deal selection
+    current_deal_id = flask_session.get('current_deal_id')
+    if not current_deal_id:
+        return jsonify({'error': 'No deal selected', 'count': 0, 'facts': []}), 400
 
-    domain = request.args.get('domain')
-    limit = int(request.args.get('limit', 50))
-    include_skipped = request.args.get('include_skipped', 'false').lower() == 'true'
+    try:
+        from web.repositories import FactRepository
 
-    facts = s.fact_store.get_review_queue(
-        domain=domain,
-        limit=limit,
-        include_skipped=include_skipped
-    )
+        repo = FactRepository()
+        limit = int(request.args.get('limit', 50))
 
-    return jsonify({
-        'count': len(facts),
-        'facts': [
-            {
-                'fact_id': f.fact_id,
-                'domain': f.domain,
-                'category': f.category,
-                'item': f.item,
-                'details': f.details,
-                'evidence': f.evidence,
-                'source_document': f.source_document,
-                'confidence_score': f.confidence_score,
-                'review_priority': f.review_priority,
-                'verification_status': f.verification_status,
-                'verification_note': f.verification_note,
-                'entity': f.entity
-            }
-            for f in facts
-        ]
-    })
+        # Get review queue from database
+        result = repo.get_review_queue(deal_id=current_deal_id, per_page=limit)
+        facts = result.get('items', [])
+
+        # Filter by domain if specified
+        domain = request.args.get('domain')
+        if domain:
+            facts = [f for f in facts if f.domain == domain]
+
+        return jsonify({
+            'count': len(facts),
+            'facts': [
+                {
+                    'fact_id': getattr(f, 'id', '') or getattr(f, 'fact_id', ''),
+                    'domain': f.domain,
+                    'category': f.category,
+                    'item': f.item,
+                    'details': f.details,
+                    'evidence': getattr(f, 'evidence', {}),
+                    'source_document': getattr(f, 'source_document', ''),
+                    'confidence_score': getattr(f, 'confidence_score', 0.5),
+                    'review_priority': getattr(f, 'review_priority', 'medium'),
+                    'verification_status': getattr(f, 'verification_status', 'pending'),
+                    'verification_note': getattr(f, 'verification_note', ''),
+                    'entity': getattr(f, 'entity', 'target')
+                }
+                for f in facts
+            ]
+        })
+    except Exception as e:
+        logger.error(f"API review queue: Database path failed: {e}")
+        return jsonify({'error': 'Database query failed', 'count': 0, 'facts': []}), 500
 
 
 @app.route('/api/review/stats')
 @auth_optional
 def review_stats():
-    """Get comprehensive review queue statistics."""
-    s = get_session()
-    stats = s.fact_store.get_review_stats()
-    return jsonify(stats)
+    """Get comprehensive review queue statistics.
+
+    Phase 2+: Database-first implementation.
+    """
+    # Database-first: require deal selection
+    current_deal_id = flask_session.get('current_deal_id')
+    if not current_deal_id:
+        return jsonify({'error': 'No deal selected'}), 400
+
+    try:
+        from web.repositories import FactRepository
+
+        repo = FactRepository()
+        all_facts = repo.get_by_deal(deal_id=current_deal_id)
+
+        # Build stats from database
+        stats = {
+            'total_facts': len(all_facts),
+            'confirmed': len([f for f in all_facts if getattr(f, 'verification_status', '') == 'verified']),
+            'incorrect': len([f for f in all_facts if getattr(f, 'verification_status', '') == 'rejected']),
+            'needs_info': len([f for f in all_facts if getattr(f, 'verification_status', '') == 'needs_info']),
+            'skipped': len([f for f in all_facts if getattr(f, 'verification_status', '') == 'skipped']),
+            'by_domain': {}
+        }
+
+        # Calculate completion rate
+        reviewed = stats['confirmed'] + stats['incorrect'] + stats['skipped']
+        stats['completion_rate'] = reviewed / stats['total_facts'] if stats['total_facts'] > 0 else 0
+
+        # Group by domain
+        for fact in all_facts:
+            domain = fact.domain
+            if domain not in stats['by_domain']:
+                stats['by_domain'][domain] = {'total': 0, 'confirmed': 0}
+            stats['by_domain'][domain]['total'] += 1
+            if getattr(fact, 'verification_status', '') == 'verified':
+                stats['by_domain'][domain]['confirmed'] += 1
+
+        # Confidence breakdown
+        high = len([f for f in all_facts if getattr(f, 'confidence_score', 0) >= 0.8])
+        medium = len([f for f in all_facts if 0.5 <= getattr(f, 'confidence_score', 0) < 0.8])
+        low = len([f for f in all_facts if getattr(f, 'confidence_score', 0) < 0.5])
+        stats['confidence_breakdown'] = {'high': high, 'medium': medium, 'low': low}
+
+        # Average confidence
+        if all_facts:
+            stats['average_confidence'] = sum(getattr(f, 'confidence_score', 0.5) for f in all_facts) / len(all_facts)
+        else:
+            stats['average_confidence'] = 0
+
+        stats['remaining_critical'] = len([f for f in all_facts if getattr(f, 'needs_review', False)])
+        stats['verified_today'] = 0  # Would need timestamp filtering
+
+        return jsonify(stats)
+    except Exception as e:
+        logger.error(f"API review stats: Database path failed: {e}")
+        return jsonify({'error': 'Database query failed'}), 500
 
 
 @app.route('/api/review/export-report')
 @auth_optional
 def export_verification_report():
-    """Export verification report as markdown."""
-    s = get_session()
-    stats = s.fact_store.get_review_stats()
+    """Export verification report as markdown.
+
+    Phase 2+: Database-first implementation.
+    """
+    # Database-first: require deal selection
+    current_deal_id = flask_session.get('current_deal_id')
+    if not current_deal_id:
+        return jsonify({'error': 'No deal selected'}), 400
+
+    try:
+        from web.repositories import FactRepository
+
+        repo = FactRepository()
+        all_facts = repo.get_by_deal(deal_id=current_deal_id)
+
+        # Build stats
+        stats = {
+            'total_facts': len(all_facts),
+            'confirmed': len([f for f in all_facts if getattr(f, 'verification_status', '') == 'verified']),
+            'incorrect': len([f for f in all_facts if getattr(f, 'verification_status', '') == 'rejected']),
+            'needs_info': len([f for f in all_facts if getattr(f, 'verification_status', '') == 'needs_info']),
+            'skipped': len([f for f in all_facts if getattr(f, 'verification_status', '') == 'skipped']),
+            'by_domain': {}
+        }
+
+        reviewed = stats['confirmed'] + stats['incorrect'] + stats['skipped']
+        stats['completion_rate'] = reviewed / stats['total_facts'] if stats['total_facts'] > 0 else 0
+
+        for fact in all_facts:
+            domain = fact.domain
+            if domain not in stats['by_domain']:
+                stats['by_domain'][domain] = {'total': 0, 'confirmed': 0}
+            stats['by_domain'][domain]['total'] += 1
+            if getattr(fact, 'verification_status', '') == 'verified':
+                stats['by_domain'][domain]['confirmed'] += 1
+
+        high = len([f for f in all_facts if getattr(f, 'confidence_score', 0) >= 0.8])
+        medium = len([f for f in all_facts if 0.5 <= getattr(f, 'confidence_score', 0) < 0.8])
+        low = len([f for f in all_facts if getattr(f, 'confidence_score', 0) < 0.5])
+        stats['confidence_breakdown'] = {'high': high, 'medium': medium, 'low': low}
+
+        if all_facts:
+            stats['average_confidence'] = sum(getattr(f, 'confidence_score', 0.5) for f in all_facts) / len(all_facts)
+        else:
+            stats['average_confidence'] = 0
+
+        stats['remaining_critical'] = len([f for f in all_facts if getattr(f, 'needs_review', False)])
+        stats['verified_today'] = 0
+
+    except Exception as e:
+        logger.error(f"Export verification report: Database path failed: {e}")
+        return jsonify({'error': 'Database query failed'}), 500
 
     from datetime import datetime
     date = datetime.now().strftime("%Y-%m-%d")
@@ -3741,14 +4247,14 @@ def update_fact_status(fact_id):
     """
     Update verification status for a fact.
 
+    Phase 2+: Database-first implementation (no fallback).
+
     JSON body:
         status: pending, confirmed, incorrect, needs_info, skipped
         reviewer_id: Who is making this update
         note: Optional verification note
     """
-    s = get_session()
     data = request.get_json() or {}
-
     status = data.get('status')
     reviewer_id = data.get('reviewer_id', 'web_user')
     note = data.get('note', '')
@@ -3759,82 +4265,106 @@ def update_fact_status(fact_id):
             'message': 'status field is required'
         }), 400
 
-    try:
-        success = s.fact_store.update_verification_status(
-            fact_id=fact_id,
-            status=status,
-            reviewer_id=reviewer_id,
-            note=note
-        )
-    except ValueError as e:
+    valid_statuses = ['pending', 'confirmed', 'incorrect', 'needs_info', 'skipped']
+    if status not in valid_statuses:
         return jsonify({
             'status': 'error',
-            'message': str(e)
+            'message': f'Invalid status. Must be one of: {valid_statuses}'
         }), 400
 
-    if success:
-        # Save the updated fact store
-        from config_v2 import OUTPUT_DIR
-        facts_files = sorted(OUTPUT_DIR.glob("facts_*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
-        if facts_files:
-            s.fact_store.save(str(facts_files[0]))
+    try:
+        from web.repositories import FactRepository
+        from web.database import db
+        from datetime import datetime
 
-        # Get updated fact for response
-        fact = s.fact_store.get_fact(fact_id)
+        repo = FactRepository()
+        fact = repo.get_by_id(fact_id)
+
+        if not fact:
+            return jsonify({
+                'status': 'error',
+                'message': f'Fact {fact_id} not found'
+            }), 404
+
+        # Update verification status
+        fact.verification_status = status
+        fact.verified_by = reviewer_id
+        fact.verified_at = datetime.utcnow()
+        fact.verification_note = note
+        fact.verified = (status == 'confirmed')
+
+        db.session.commit()
 
         return jsonify({
             'status': 'success',
+            'source': 'database',
             'message': f'Fact {fact_id} status updated to {status}',
             'fact_id': fact_id,
-            'verification_status': fact.verification_status,
-            'confidence_score': fact.confidence_score,
+            'verification_status': status,
             'verified': fact.verified
         })
-    else:
+
+    except Exception as e:
+        logger.error(f"Update fact status failed: {e}")
         return jsonify({
             'status': 'error',
-            'message': f'Fact {fact_id} not found'
-        }), 404
+            'message': str(e)
+        }), 500
 
 
 @app.route('/api/facts/<fact_id>/skip', methods=['POST'])
 @auth_optional
 def skip_fact(fact_id):
-    """Mark a fact as skipped (will revisit later)."""
-    s = get_session()
+    """Mark a fact as skipped (will revisit later).
+
+    Phase 2+: Database-first implementation (no fallback).
+    """
     data = request.get_json() or {}
     reviewer_id = data.get('reviewer_id', 'web_user')
+    note = data.get('note', 'Skipped for later review')
 
-    success = s.fact_store.update_verification_status(
-        fact_id=fact_id,
-        status='skipped',
-        reviewer_id=reviewer_id,
-        note=data.get('note', 'Skipped for later review')
-    )
+    try:
+        from web.repositories import FactRepository
+        from web.database import db
+        from datetime import datetime
 
-    if success:
-        from config_v2 import OUTPUT_DIR
-        facts_files = sorted(OUTPUT_DIR.glob("facts_*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
-        if facts_files:
-            s.fact_store.save(str(facts_files[0]))
+        repo = FactRepository()
+        fact = repo.get_by_id(fact_id)
+
+        if not fact:
+            return jsonify({
+                'status': 'error',
+                'message': f'Fact {fact_id} not found'
+            }), 404
+
+        fact.verification_status = 'skipped'
+        fact.verified_by = reviewer_id
+        fact.verified_at = datetime.utcnow()
+        fact.verification_note = note
+        db.session.commit()
 
         return jsonify({
             'status': 'success',
+            'source': 'database',
             'message': f'Fact {fact_id} skipped',
             'fact_id': fact_id
         })
-    else:
+
+    except Exception as e:
+        logger.error(f"Skip fact failed: {e}")
         return jsonify({
             'status': 'error',
-            'message': f'Fact {fact_id} not found'
-        }), 404
+            'message': str(e)
+        }), 500
 
 
 @app.route('/api/facts/<fact_id>/flag-incorrect', methods=['POST'])
 @auth_optional
 def flag_incorrect(fact_id):
-    """Mark a fact as incorrect."""
-    s = get_session()
+    """Mark a fact as incorrect.
+
+    Phase 2+: Database-first implementation (no fallback).
+    """
     data = request.get_json() or {}
     reviewer_id = data.get('reviewer_id', 'web_user')
     reason = data.get('reason', '')
@@ -3845,25 +4375,36 @@ def flag_incorrect(fact_id):
             'message': 'reason field is required when flagging as incorrect'
         }), 400
 
-    success = s.fact_store.update_verification_status(
-        fact_id=fact_id,
-        status='incorrect',
-        reviewer_id=reviewer_id,
-        note=f"INCORRECT: {reason}"
-    )
+    try:
+        from web.repositories import FactRepository
+        from web.database import db
+        from datetime import datetime
 
-    if success:
-        from config_v2 import OUTPUT_DIR
-        facts_files = sorted(OUTPUT_DIR.glob("facts_*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
-        if facts_files:
-            s.fact_store.save(str(facts_files[0]))
+        repo = FactRepository()
+        fact = repo.get_by_id(fact_id)
+
+        if not fact:
+            return jsonify({
+                'status': 'error',
+                'message': f'Fact {fact_id} not found'
+            }), 404
+
+        fact.verification_status = 'incorrect'
+        fact.verified_by = reviewer_id
+        fact.verified_at = datetime.utcnow()
+        fact.verification_note = f"INCORRECT: {reason}"
+        fact.verified = False
+        db.session.commit()
 
         return jsonify({
             'status': 'success',
+            'source': 'database',
             'message': f'Fact {fact_id} flagged as incorrect',
             'fact_id': fact_id
         })
-    else:
+
+    except Exception as e:
+        logger.error(f"Flag incorrect failed: {e}")
         return jsonify({
             'status': 'error',
             'message': f'Fact {fact_id} not found'
@@ -3873,8 +4414,10 @@ def flag_incorrect(fact_id):
 @app.route('/api/facts/<fact_id>/needs-info', methods=['POST'])
 @auth_optional
 def needs_more_info(fact_id):
-    """Mark a fact as needing more information and optionally create a question."""
-    s = get_session()
+    """Mark a fact as needing more information and optionally create a question.
+
+    Phase 2+: Database-first implementation (no fallback).
+    """
     data = request.get_json() or {}
     reviewer_id = data.get('reviewer_id', 'web_user')
     question = data.get('question', '')
@@ -3888,85 +4431,101 @@ def needs_more_info(fact_id):
         note_parts.append(f"Ask: {recipient}")
     note = " | ".join(note_parts)
 
-    success = s.fact_store.update_verification_status(
-        fact_id=fact_id,
-        status='needs_info',
-        reviewer_id=reviewer_id,
-        note=note
-    )
+    try:
+        from web.repositories import FactRepository
+        from web.database import db
+        from datetime import datetime
 
-    if success:
-        from config_v2 import OUTPUT_DIR
-        facts_files = sorted(OUTPUT_DIR.glob("facts_*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
-        if facts_files:
-            s.fact_store.save(str(facts_files[0]))
+        repo = FactRepository()
+        fact = repo.get_by_id(fact_id)
 
-        # Create an OpenQuestion if we have a question (Phase 2 integration)
+        if not fact:
+            return jsonify({
+                'status': 'error',
+                'message': f'Fact {fact_id} not found'
+            }), 404
+
+        fact.verification_status = 'needs_info'
+        fact.verified_by = reviewer_id
+        fact.verified_at = datetime.utcnow()
+        fact.verification_note = note
+        db.session.commit()
+
+        # Create an OpenQuestion if we have a question
         question_id = None
         if question:
             try:
                 from tools_v2.open_questions import OpenQuestionsStore
-                fact = s.fact_store.get_fact(fact_id)
-                if fact:
-                    questions_store = OpenQuestionsStore()
-                    question_id = questions_store.add_question(
-                        domain=fact.domain,
-                        question=question,
-                        context=f"Generated from fact review. Fact: {fact.item}",
-                        suggested_recipient=recipient,
-                        source_fact_id=fact_id
-                    )
+                questions_store = OpenQuestionsStore()
+                question_id = questions_store.add_question(
+                    domain=fact.domain,
+                    question=question,
+                    context=f"Generated from fact review. Fact: {fact.item}",
+                    suggested_recipient=recipient,
+                    source_fact_id=fact_id
+                )
             except Exception as e:
-                # Don't fail the whole operation if question creation fails
-                import logging
-                logging.getLogger(__name__).warning(f"Could not create OpenQuestion: {e}")
+                logger.warning(f"Could not create OpenQuestion: {e}")
 
         return jsonify({
             'status': 'success',
+            'source': 'database',
             'message': f'Fact {fact_id} marked as needing more info',
             'fact_id': fact_id,
             'question_id': question_id
         })
-    else:
+
+    except Exception as e:
+        logger.error(f"Needs more info failed: {e}")
         return jsonify({
             'status': 'error',
-            'message': f'Fact {fact_id} not found'
-        }), 404
+            'message': str(e)
+        }), 500
 
 
 @app.route('/api/facts/<fact_id>/note', methods=['PATCH'])
 @auth_optional
 def update_fact_note(fact_id):
-    """Update just the note for a fact without changing status."""
-    s = get_session()
+    """Update just the note for a fact without changing status.
+
+    Phase 2+: Database-first implementation (no fallback).
+    """
     data = request.get_json() or {}
     note = data.get('note', '')
     reviewer_id = data.get('reviewer_id', 'web_user')
 
-    fact = s.fact_store.get_fact(fact_id)
-    if not fact:
+    try:
+        from web.repositories import FactRepository
+        from web.database import db
+        from datetime import datetime
+
+        repo = FactRepository()
+        fact = repo.get_by_id(fact_id)
+
+        if not fact:
+            return jsonify({
+                'status': 'error',
+                'message': f'Fact {fact_id} not found'
+            }), 404
+
+        fact.verification_note = note
+        fact.verified_by = reviewer_id
+        fact.updated_at = datetime.utcnow()
+        db.session.commit()
+
+        return jsonify({
+            'status': 'success',
+            'source': 'database',
+            'message': f'Note updated for {fact_id}',
+            'fact_id': fact_id
+        })
+
+    except Exception as e:
+        logger.error(f"Update fact note failed: {e}")
         return jsonify({
             'status': 'error',
-            'message': f'Fact {fact_id} not found'
-        }), 404
-
-    # Update just the note
-    fact.verification_note = note
-    fact.reviewer_id = reviewer_id
-    from tools_v2.fact_store import _generate_timestamp
-    fact.updated_at = _generate_timestamp()
-
-    # Save
-    from config_v2 import OUTPUT_DIR
-    facts_files = sorted(OUTPUT_DIR.glob("facts_*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
-    if facts_files:
-        s.fact_store.save(str(facts_files[0]))
-
-    return jsonify({
-        'status': 'success',
-        'message': f'Note updated for {fact_id}',
-        'fact_id': fact_id
-    })
+            'message': str(e)
+        }), 500
 
 
 @app.route('/api/risks')
@@ -3974,57 +4533,45 @@ def update_fact_note(fact_id):
 def api_risks():
     """Get risks as JSON with optional filtering.
 
-    Database-first: Reads from database if deal is selected, falls back to in-memory.
+    Phase 2+: Database-first implementation (no fallback).
     """
     domain = request.args.get('domain')
     severity = request.args.get('severity')
 
-    # Try database first if we have a deal_id
     deal_id = flask_session.get('current_deal_id')
-    if deal_id and USE_DATABASE:
-        try:
-            from web.repositories.finding_repository import FindingRepository
-            repo = FindingRepository()
-            db_findings = repo.get_by_deal(
-                deal_id=deal_id,
-                finding_type='risk',
-                domain=domain,
-                severity=severity
-            )
-            return jsonify({
-                'count': len(db_findings),
-                'source': 'database',
-                'deal_id': deal_id,
-                'risks': [f.to_dict() for f in db_findings]
-            })
-        except Exception as e:
-            logger.warning(f"Database query failed, falling back to in-memory: {e}")
+    if not deal_id:
+        return jsonify({
+            'error': 'No deal selected',
+            'count': 0,
+            'risks': []
+        }), 400
 
-    # Fallback to in-memory session store
-    s = get_session()
-    risks = list(s.reasoning_store.risks)
+    try:
+        from web.repositories import FindingRepository
+        from web.context import load_deal_context
 
-    if domain:
-        risks = [r for r in risks if r.domain == domain]
-    if severity:
-        risks = [r for r in risks if r.severity == severity]
-
-    return jsonify({
-        'count': len(risks),
-        'source': 'memory',
-        'deal_id': deal_id,
-        'risks': [
-            {
-                'id': r.finding_id,
-                'domain': r.domain,
-                'title': r.title,
-                'description': r.description,
-                'severity': r.severity,
-                'mitigation': r.mitigation,
-            }
-            for r in risks
-        ]
-    })
+        load_deal_context(deal_id)
+        repo = FindingRepository()
+        db_findings = repo.get_by_deal(
+            deal_id=deal_id,
+            finding_type='risk',
+            domain=domain,
+            severity=severity
+        )
+        return jsonify({
+            'count': len(db_findings),
+            'source': 'database',
+            'deal_id': deal_id,
+            'risks': [f.to_dict() for f in db_findings]
+        })
+    except Exception as e:
+        logger.error(f"API risks failed: {e}")
+        return jsonify({
+            'error': str(e),
+            'count': 0,
+            'deal_id': deal_id,
+            'risks': []
+        }), 500
 
 
 # =============================================================================
@@ -4111,7 +4658,10 @@ def api_regenerate_narrative(domain):
 @app.route('/api/export/excel')
 @auth_optional
 def export_excel():
-    """Export analysis data as Excel file."""
+    """Export analysis data as Excel file.
+
+    Phase 2+: Database-first implementation.
+    """
     from io import BytesIO
     from flask import send_file
 
@@ -4121,7 +4671,26 @@ def export_excel():
     except ImportError:
         return jsonify({'error': 'openpyxl not installed'}), 500
 
-    s = get_session()
+    # Database-first: require deal selection
+    current_deal_id = flask_session.get('current_deal_id')
+    if not current_deal_id:
+        return jsonify({'error': 'No deal selected', 'message': 'Please select a deal to export data.'}), 400
+
+    try:
+        from web.deal_data import DealData
+        from web.context import load_deal_context
+
+        load_deal_context(current_deal_id)
+        data = DealData()
+
+        facts = data.get_all_facts()
+        gaps = data.get_gaps()
+        risks = data.get_risks()
+        work_items = data.get_work_items()
+        summary = data.get_dashboard_summary()
+    except Exception as e:
+        logger.error(f"Export Excel: Database path failed: {e}")
+        return jsonify({'error': 'Export failed', 'message': str(e)}), 500
 
     # Create workbook
     wb = openpyxl.Workbook()
@@ -4133,21 +4702,21 @@ def export_excel():
     # Summary sheet
     ws_summary = wb.active
     ws_summary.title = "Summary"
-    summary = s.get_summary()
+    risk_summary = summary.get('risk_summary', {})
     summary_data = [
         ["IT Due Diligence Analysis Summary"],
         [""],
         ["Metric", "Value"],
-        ["Facts Discovered", summary.get('facts', 0)],
-        ["Information Gaps", summary.get('gaps', 0)],
-        ["Risks Identified", summary.get('risks', 0)],
-        ["Work Items", summary.get('work_items', 0)],
+        ["Facts Discovered", len(facts)],
+        ["Information Gaps", len(gaps)],
+        ["Risks Identified", len(risks)],
+        ["Work Items", len(work_items)],
         [""],
         ["Risk Summary"],
-        ["Critical", summary.get('risk_summary', {}).get('critical', 0)],
-        ["High", summary.get('risk_summary', {}).get('high', 0)],
-        ["Medium", summary.get('risk_summary', {}).get('medium', 0)],
-        ["Low", summary.get('risk_summary', {}).get('low', 0)],
+        ["Critical", risk_summary.get('critical', 0)],
+        ["High", risk_summary.get('high', 0)],
+        ["Medium", risk_summary.get('medium', 0)],
+        ["Low", risk_summary.get('low', 0)],
     ]
     for row in summary_data:
         ws_summary.append(row)
@@ -4161,14 +4730,15 @@ def export_excel():
         cell.font = header_font
         cell.fill = header_fill
 
-    for risk in s.reasoning_store.risks:
+    for risk in risks:
+        risk_id = getattr(risk, 'id', '') or getattr(risk, 'finding_id', '')
         ws_risks.append([
-            risk.finding_id,
+            risk_id,
             risk.domain,
-            risk.severity.upper(),
+            (risk.severity or '').upper(),
             risk.title,
             risk.description or "",
-            risk.mitigation or ""
+            getattr(risk, 'mitigation', '') or ""
         ])
 
     # Work Items sheet
@@ -4180,16 +4750,17 @@ def export_excel():
         cell.font = header_font
         cell.fill = header_fill
 
-    for wi in s.reasoning_store.work_items:
+    for wi in work_items:
+        wi_id = getattr(wi, 'id', '') or getattr(wi, 'finding_id', '')
         ws_items.append([
-            wi.finding_id,
+            wi_id,
             wi.domain,
             wi.phase,
-            wi.priority,
+            getattr(wi, 'priority', 0),
             wi.title,
             wi.description or "",
-            wi.cost_estimate,
-            wi.owner_type
+            getattr(wi, 'cost_estimate', ''),
+            getattr(wi, 'owner_type', '')
         ])
 
     # Facts sheet
@@ -4201,9 +4772,10 @@ def export_excel():
         cell.font = header_font
         cell.fill = header_fill
 
-    for fact in s.fact_store.facts:
+    for fact in facts:
+        fact_id = getattr(fact, 'id', '') or getattr(fact, 'fact_id', '')
         ws_facts.append([
-            fact.fact_id,
+            fact_id,
             fact.domain,
             fact.category,
             fact.item,
@@ -4219,12 +4791,13 @@ def export_excel():
         cell.font = header_font
         cell.fill = header_fill
 
-    for gap in s.fact_store.gaps:
+    for gap in gaps:
+        gap_id = getattr(gap, 'id', '') or getattr(gap, 'gap_id', '')
         ws_gaps.append([
-            gap.gap_id,
+            gap_id,
             gap.domain,
             gap.category,
-            gap.importance,
+            getattr(gap, 'importance', 'medium'),
             gap.description
         ])
 
@@ -4261,7 +4834,10 @@ def export_excel():
 @app.route('/api/export/dossiers/<domain>')
 @auth_optional
 def export_dossiers(domain):
-    """Export comprehensive dossiers for a specific domain."""
+    """Export comprehensive dossiers for a specific domain.
+
+    Phase 2+: Database-first implementation.
+    """
     from flask import send_file, request
     from io import BytesIO
     from datetime import datetime
@@ -4273,50 +4849,67 @@ def export_dossiers(domain):
     except ImportError as e:
         return jsonify({'error': f'Dossier service not available: {e}'}), 500
 
-    s = get_session()
+    # Database-first: require deal selection
+    current_deal_id = flask_session.get('current_deal_id')
+    if not current_deal_id:
+        return jsonify({'error': 'No deal selected', 'message': 'Please select a deal to export dossiers.'}), 400
+
+    try:
+        from web.deal_data import DealData
+        from web.context import load_deal_context
+
+        load_deal_context(current_deal_id)
+        data = DealData()
+
+        facts = data.get_all_facts()
+        risks = data.get_risks()
+        work_items = data.get_work_items()
+    except Exception as e:
+        logger.error(f"Export Dossiers: Database path failed: {e}")
+        return jsonify({'error': 'Export failed', 'message': str(e)}), 500
 
     # Build facts as flat list (DossierBuilder expects List[Dict], not Dict[str, List])
     facts_list = [
         {
-            'fact_id': fact.fact_id,
+            'fact_id': getattr(fact, 'id', '') or getattr(fact, 'fact_id', ''),
             'domain': fact.domain,
             'category': fact.category,
             'item': fact.item,
             'details': fact.details,
             'status': fact.status,
-            'evidence': getattr(fact, 'evidence', ''),
+            'evidence': getattr(fact, 'evidence', '') or '',
             'entity': getattr(fact, 'entity', 'target'),
         }
-        for fact in s.fact_store.facts
+        for fact in facts
     ]
 
     findings_data = {
         'risks': [
             {
-                'finding_id': r.finding_id,
+                'finding_id': getattr(r, 'id', '') or getattr(r, 'finding_id', ''),
                 'domain': r.domain,
                 'title': r.title,
                 'description': r.description,
                 'severity': r.severity,
-                'category': r.category,
-                'mitigation': r.mitigation,
-                'based_on_facts': r.based_on_facts,
+                'category': getattr(r, 'category', ''),
+                'mitigation': getattr(r, 'mitigation', ''),
+                'based_on_facts': getattr(r, 'based_on_facts', []),
             }
-            for r in s.reasoning_store.risks
+            for r in risks
         ],
         'work_items': [
             {
-                'finding_id': wi.finding_id,
+                'finding_id': getattr(wi, 'id', '') or getattr(wi, 'finding_id', ''),
                 'domain': wi.domain,
                 'title': wi.title,
                 'description': wi.description,
                 'phase': wi.phase,
-                'priority': wi.priority,
-                'cost_estimate': wi.cost_estimate,
-                'owner_type': wi.owner_type,
-                'based_on_facts': wi.based_on_facts,
+                'priority': getattr(wi, 'priority', 0),
+                'cost_estimate': getattr(wi, 'cost_estimate', ''),
+                'owner_type': getattr(wi, 'owner_type', ''),
+                'based_on_facts': getattr(wi, 'based_on_facts', []),
             }
-            for wi in s.reasoning_store.work_items
+            for wi in work_items
         ]
     }
 
@@ -4408,7 +5001,10 @@ body {{ font-family: -apple-system, sans-serif; margin: 20px; }}
 @app.route('/api/export/inventory/<domain>')
 @auth_optional
 def export_inventory(domain):
-    """Export inventory for a specific domain using the export service."""
+    """Export inventory for a specific domain using the export service.
+
+    Phase 2+: Database-first implementation.
+    """
     from flask import send_file, request
     from io import BytesIO
     from datetime import datetime
@@ -4420,44 +5016,61 @@ def export_inventory(domain):
     except ImportError as e:
         return jsonify({'error': f'Export service not available: {e}'}), 500
 
-    s = get_session()
+    # Database-first: require deal selection
+    current_deal_id = flask_session.get('current_deal_id')
+    if not current_deal_id:
+        return jsonify({'error': 'No deal selected', 'message': 'Please select a deal to export inventory.'}), 400
+
+    try:
+        from web.deal_data import DealData
+        from web.context import load_deal_context
+
+        load_deal_context(current_deal_id)
+        data = DealData()
+
+        facts = data.get_all_facts()
+        risks = data.get_risks()
+        work_items = data.get_work_items()
+    except Exception as e:
+        logger.error(f"Export Inventory: Database path failed: {e}")
+        return jsonify({'error': 'Export failed', 'message': str(e)}), 500
 
     # Build facts as flat list
     facts_list = [
         {
-            'fact_id': fact.fact_id,
+            'fact_id': getattr(fact, 'id', '') or getattr(fact, 'fact_id', ''),
             'domain': fact.domain,
             'category': fact.category,
             'item': fact.item,
             'details': fact.details,
             'status': fact.status,
-            'evidence': getattr(fact, 'evidence', ''),
+            'evidence': getattr(fact, 'evidence', '') or '',
             'entity': getattr(fact, 'entity', 'target'),
         }
-        for fact in s.fact_store.facts
+        for fact in facts
     ]
 
     # Build findings as flat list (ExportService expects List[Dict], not Dict)
     findings_list = []
-    for r in s.reasoning_store.risks:
+    for r in risks:
         findings_list.append({
-            'finding_id': r.finding_id,
+            'finding_id': getattr(r, 'id', '') or getattr(r, 'finding_id', ''),
             'domain': r.domain,
             'title': r.title,
             'description': r.description,
             'severity': r.severity,
-            'mitigation': r.mitigation,
-            'based_on_facts': r.based_on_facts,
+            'mitigation': getattr(r, 'mitigation', ''),
+            'based_on_facts': getattr(r, 'based_on_facts', []),
             'type': 'risk',
         })
-    for wi in s.reasoning_store.work_items:
+    for wi in work_items:
         findings_list.append({
-            'finding_id': wi.finding_id,
+            'finding_id': getattr(wi, 'id', '') or getattr(wi, 'finding_id', ''),
             'domain': wi.domain,
             'title': wi.title,
             'description': wi.description,
             'phase': wi.phase,
-            'based_on_facts': wi.based_on_facts,
+            'based_on_facts': getattr(wi, 'based_on_facts', []),
             'type': 'work_item',
         })
 
@@ -4505,7 +5118,10 @@ def export_inventory(domain):
 @app.route('/api/export/work-items')
 @auth_optional
 def export_work_items():
-    """Export work items as Markdown."""
+    """Export work items as Markdown.
+
+    Phase 2+: Database-first implementation.
+    """
     from flask import send_file
     from io import BytesIO
     from datetime import datetime
@@ -4515,32 +5131,48 @@ def export_work_items():
     except ImportError as e:
         return jsonify({'error': f'Export service not available: {e}'}), 500
 
-    s = get_session()
+    # Database-first: require deal selection
+    current_deal_id = flask_session.get('current_deal_id')
+    if not current_deal_id:
+        return jsonify({'error': 'No deal selected', 'message': 'Please select a deal to export work items.'}), 400
+
+    try:
+        from web.deal_data import DealData
+        from web.context import load_deal_context
+
+        load_deal_context(current_deal_id)
+        data = DealData()
+
+        facts = data.get_all_facts()
+        work_items = data.get_work_items()
+    except Exception as e:
+        logger.error(f"Export Work Items: Database path failed: {e}")
+        return jsonify({'error': 'Export failed', 'message': str(e)}), 500
 
     # Build data
     facts_list = [
         {
-            'fact_id': fact.fact_id,
+            'fact_id': getattr(fact, 'id', '') or getattr(fact, 'fact_id', ''),
             'domain': fact.domain,
             'category': fact.category,
             'item': fact.item,
             'details': fact.details,
         }
-        for fact in s.fact_store.facts
+        for fact in facts
     ]
 
     findings_list = []
-    for wi in s.reasoning_store.work_items:
+    for wi in work_items:
         findings_list.append({
-            'finding_id': wi.finding_id,
+            'finding_id': getattr(wi, 'id', '') or getattr(wi, 'finding_id', ''),
             'domain': wi.domain,
             'title': wi.title,
             'description': wi.description,
             'phase': wi.phase,
-            'priority': wi.priority,
-            'cost_estimate': wi.cost_estimate,
-            'owner_type': wi.owner_type,
-            'based_on_facts': wi.based_on_facts,
+            'priority': getattr(wi, 'priority', 0),
+            'cost_estimate': getattr(wi, 'cost_estimate', ''),
+            'owner_type': getattr(wi, 'owner_type', ''),
+            'based_on_facts': getattr(wi, 'based_on_facts', []),
             'type': 'work_item',
         })
 
@@ -4562,7 +5194,10 @@ def export_work_items():
 @app.route('/api/export/risks')
 @auth_optional
 def export_risks():
-    """Export risks as Markdown."""
+    """Export risks as Markdown.
+
+    Phase 2+: Database-first implementation.
+    """
     from flask import send_file
     from io import BytesIO
     from datetime import datetime
@@ -4572,29 +5207,45 @@ def export_risks():
     except ImportError as e:
         return jsonify({'error': f'Export service not available: {e}'}), 500
 
-    s = get_session()
+    # Database-first: require deal selection
+    current_deal_id = flask_session.get('current_deal_id')
+    if not current_deal_id:
+        return jsonify({'error': 'No deal selected', 'message': 'Please select a deal to export risks.'}), 400
+
+    try:
+        from web.deal_data import DealData
+        from web.context import load_deal_context
+
+        load_deal_context(current_deal_id)
+        data = DealData()
+
+        facts = data.get_all_facts()
+        risks = data.get_risks()
+    except Exception as e:
+        logger.error(f"Export Risks: Database path failed: {e}")
+        return jsonify({'error': 'Export failed', 'message': str(e)}), 500
 
     facts_list = [
         {
-            'fact_id': fact.fact_id,
+            'fact_id': getattr(fact, 'id', '') or getattr(fact, 'fact_id', ''),
             'domain': fact.domain,
             'category': fact.category,
             'item': fact.item,
             'details': fact.details,
         }
-        for fact in s.fact_store.facts
+        for fact in facts
     ]
 
     findings_list = []
-    for r in s.reasoning_store.risks:
+    for r in risks:
         findings_list.append({
-            'finding_id': r.finding_id,
+            'finding_id': getattr(r, 'id', '') or getattr(r, 'finding_id', ''),
             'domain': r.domain,
             'title': r.title,
             'description': r.description,
             'severity': r.severity,
-            'mitigation': r.mitigation,
-            'based_on_facts': r.based_on_facts,
+            'mitigation': getattr(r, 'mitigation', ''),
+            'based_on_facts': getattr(r, 'based_on_facts', []),
             'type': 'risk',
         })
 
@@ -4616,7 +5267,10 @@ def export_risks():
 @app.route('/api/export/vdr-requests')
 @auth_optional
 def export_vdr_requests():
-    """Export VDR/information gap requests as Markdown."""
+    """Export VDR/information gap requests as Markdown.
+
+    Phase 2+: Database-first implementation.
+    """
     from flask import send_file
     from io import BytesIO
     from datetime import datetime
@@ -4626,18 +5280,33 @@ def export_vdr_requests():
     except ImportError as e:
         return jsonify({'error': f'Export service not available: {e}'}), 500
 
-    s = get_session()
+    # Database-first: require deal selection
+    current_deal_id = flask_session.get('current_deal_id')
+    if not current_deal_id:
+        return jsonify({'error': 'No deal selected', 'message': 'Please select a deal to export VDR requests.'}), 400
 
-    # Build gaps list from fact_store
+    try:
+        from web.deal_data import DealData
+        from web.context import load_deal_context
+
+        load_deal_context(current_deal_id)
+        data = DealData()
+
+        gaps = data.get_gaps()
+    except Exception as e:
+        logger.error(f"Export VDR Requests: Database path failed: {e}")
+        return jsonify({'error': 'Export failed', 'message': str(e)}), 500
+
+    # Build gaps list
     gaps_list = [
         {
-            'gap_id': gap.gap_id,
+            'gap_id': getattr(gap, 'id', '') or getattr(gap, 'gap_id', ''),
             'domain': gap.domain,
             'category': gap.category,
             'description': gap.description,
-            'importance': gap.importance,
+            'importance': getattr(gap, 'importance', 'medium'),
         }
-        for gap in s.fact_store.gaps
+        for gap in gaps
     ]
 
     export_service = ExportService([], [])
@@ -4658,7 +5327,10 @@ def export_vdr_requests():
 @app.route('/api/export/executive-summary')
 @auth_optional
 def export_executive_summary():
-    """Export executive summary as Markdown."""
+    """Export executive summary as Markdown.
+
+    Phase 2+: Database-first implementation.
+    """
     from flask import send_file
     from io import BytesIO
     from datetime import datetime
@@ -4668,61 +5340,84 @@ def export_executive_summary():
     except ImportError as e:
         return jsonify({'error': f'Export service not available: {e}'}), 500
 
-    s = get_session()
+    # Database-first: require deal selection
+    current_deal_id = flask_session.get('current_deal_id')
+    if not current_deal_id:
+        return jsonify({'error': 'No deal selected', 'message': 'Please select a deal to export executive summary.'}), 400
+
+    try:
+        from web.deal_data import DealData
+        from web.context import load_deal_context
+        from web.repositories import DealRepository
+
+        load_deal_context(current_deal_id)
+        data = DealData()
+
+        facts = data.get_all_facts()
+        risks = data.get_risks()
+        work_items = data.get_work_items()
+        gaps = data.get_gaps()
+
+        # Get deal info for context
+        deal_repo = DealRepository()
+        deal = deal_repo.get_by_id(current_deal_id)
+    except Exception as e:
+        logger.error(f"Export Executive Summary: Database path failed: {e}")
+        return jsonify({'error': 'Export failed', 'message': str(e)}), 500
 
     # Build facts list
     facts_list = [
         {
-            'fact_id': fact.fact_id,
+            'fact_id': getattr(fact, 'id', '') or getattr(fact, 'fact_id', ''),
             'domain': fact.domain,
             'category': fact.category,
             'item': fact.item,
             'details': fact.details,
         }
-        for fact in s.fact_store.facts
+        for fact in facts
     ]
 
     # Build findings list
     findings_list = []
-    for r in s.reasoning_store.risks:
+    for r in risks:
         findings_list.append({
-            'finding_id': r.finding_id,
+            'finding_id': getattr(r, 'id', '') or getattr(r, 'finding_id', ''),
             'domain': r.domain,
             'title': r.title,
             'description': r.description,
             'severity': r.severity,
-            'mitigation': r.mitigation,
+            'mitigation': getattr(r, 'mitigation', ''),
             'type': 'risk',
         })
-    for wi in s.reasoning_store.work_items:
+    for wi in work_items:
         findings_list.append({
-            'finding_id': wi.finding_id,
+            'finding_id': getattr(wi, 'id', '') or getattr(wi, 'finding_id', ''),
             'domain': wi.domain,
             'title': wi.title,
             'description': wi.description,
             'phase': wi.phase,
-            'priority': wi.priority,
+            'priority': getattr(wi, 'priority', 0),
             'type': 'work_item',
         })
 
     # Build gaps list
     gaps_list = [
         {
-            'gap_id': gap.gap_id,
+            'gap_id': getattr(gap, 'id', '') or getattr(gap, 'gap_id', ''),
             'domain': gap.domain,
             'category': gap.category,
             'description': gap.description,
-            'importance': gap.importance,
+            'importance': getattr(gap, 'importance', 'medium'),
         }
-        for gap in s.fact_store.gaps
+        for gap in gaps
     ]
 
-    # Get deal context if available
+    # Get deal context from database
     deal_context = {}
-    if hasattr(s, 'deal_context') and s.deal_context:
+    if deal:
         deal_context = {
-            'target_name': getattr(s.deal_context, 'target_name', ''),
-            'buyer_name': getattr(s.deal_context, 'buyer_name', ''),
+            'target_name': deal.name or '',
+            'buyer_name': '',  # Not currently stored in Deal model
         }
 
     export_service = ExportService(facts_list, findings_list)
@@ -4743,27 +5438,63 @@ def export_executive_summary():
 @app.route('/exports')
 @auth_optional
 def exports_page():
-    """Export center page with all export options."""
-    s = get_session()
-    summary = s.get_summary()
+    """Export center page with all export options.
 
-    # Get domain stats
-    domain_stats = {}
-    for fact in s.fact_store.facts:
-        domain = fact.domain
-        if domain not in domain_stats:
-            domain_stats[domain] = {'facts': 0, 'risks': 0, 'work_items': 0}
-        domain_stats[domain]['facts'] += 1
+    Phase 2+: Database-first implementation.
+    """
+    # Database-first: require deal selection
+    current_deal_id = flask_session.get('current_deal_id')
+    if not current_deal_id:
+        flash('Please select a deal to access exports.', 'info')
+        return redirect(url_for('deals.deals_list_page'))
 
-    for risk in s.reasoning_store.risks:
-        domain = risk.domain
-        if domain in domain_stats:
+    try:
+        from web.deal_data import DealData
+        from web.context import load_deal_context
+
+        load_deal_context(current_deal_id)
+        data = DealData()
+
+        facts = data.get_all_facts()
+        risks = data.get_risks()
+        work_items = data.get_work_items()
+        gaps = data.get_gaps()
+
+        # Build summary
+        dashboard = data.get_dashboard_summary()
+        summary = {
+            'facts': len(facts),
+            'gaps': len(gaps),
+            'risks': len(risks),
+            'work_items': len(work_items),
+            'risk_summary': dashboard.get('risk_summary', {}),
+            'work_item_summary': dashboard.get('work_item_summary', {}),
+        }
+
+        # Get domain stats
+        domain_stats = {}
+        for fact in facts:
+            domain = fact.domain
+            if domain not in domain_stats:
+                domain_stats[domain] = {'facts': 0, 'risks': 0, 'work_items': 0}
+            domain_stats[domain]['facts'] += 1
+
+        for risk in risks:
+            domain = risk.domain
+            if domain not in domain_stats:
+                domain_stats[domain] = {'facts': 0, 'risks': 0, 'work_items': 0}
             domain_stats[domain]['risks'] += 1
 
-    for wi in s.reasoning_store.work_items:
-        domain = wi.domain
-        if domain in domain_stats:
+        for wi in work_items:
+            domain = wi.domain
+            if domain not in domain_stats:
+                domain_stats[domain] = {'facts': 0, 'risks': 0, 'work_items': 0}
             domain_stats[domain]['work_items'] += 1
+
+    except Exception as e:
+        logger.error(f"Exports page: Database path failed: {e}")
+        flash('Error loading export data. Please try again.', 'error')
+        return redirect(url_for('dashboard'))
 
     return render_template('exports.html',
                          summary=summary,

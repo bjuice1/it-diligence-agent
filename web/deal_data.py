@@ -143,13 +143,26 @@ class DealData:
     def get_findings_paginated(
         self,
         finding_type: str = None,
+        domain: str = None,
         severity: str = None,
+        phase: str = None,
         search: str = None,
         page: int = 1,
-        per_page: int = 50
+        per_page: int = 50,
+        order_by_severity: bool = False
     ) -> Tuple[List, int]:
         """
         Get paginated findings with filtering.
+
+        Args:
+            finding_type: Filter by type (risk, work_item, recommendation, etc.)
+            domain: Filter by domain (applications, organization, etc.)
+            severity: Filter by severity (critical, high, medium, low)
+            phase: Filter work items by phase (Day_1, Day_100, Post_100)
+            search: Search in title and description
+            page: Page number (1-indexed)
+            per_page: Items per page
+            order_by_severity: If True, order by severity instead of created_at
 
         Returns:
             Tuple of (items, total_count)
@@ -158,10 +171,13 @@ class DealData:
             deal_id=self.deal_id,
             run_id=self.run_id,
             finding_type=finding_type,
+            domain=domain,
             severity=severity,
+            phase=phase,
             search=search,
             page=page,
-            per_page=per_page
+            per_page=per_page,
+            order_by_severity=order_by_severity
         )
 
     # =========================================================================

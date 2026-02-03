@@ -189,11 +189,14 @@ class FindingRepository(BaseRepository[Finding]):
         deal_id: str,
         run_id: str = None,
         finding_type: str = None,
+        domain: str = None,
         severity: str = None,
+        phase: str = None,
         search: str = None,
         page: int = 1,
         per_page: int = 50,
-        include_orphaned: bool = True
+        include_orphaned: bool = True,
+        order_by_severity: bool = False
     ):
         """
         Get paginated findings with filtering in SQL.
@@ -201,6 +204,8 @@ class FindingRepository(BaseRepository[Finding]):
         Args:
             include_orphaned: If True (default), includes findings with NULL
                 analysis_run_id when filtering by run_id.
+            order_by_severity: If True, order risks by severity (critical > high > medium > low)
+            phase: Filter work items by phase (Day_1, Day_100, Post_100)
 
         Returns:
             Tuple of (items, total_count)
@@ -219,8 +224,12 @@ class FindingRepository(BaseRepository[Finding]):
                 query = query.filter(Finding.analysis_run_id == run_id)
         if finding_type:
             query = query.filter(Finding.finding_type == finding_type)
+        if domain:
+            query = query.filter(Finding.domain == domain)
         if severity:
             query = query.filter(Finding.severity == severity)
+        if phase:
+            query = query.filter(Finding.phase == phase)
         if search:
             search_term = f"%{search}%"
             query = query.filter(
@@ -231,10 +240,20 @@ class FindingRepository(BaseRepository[Finding]):
             )
 
         total = query.count()
-        items = query.order_by(Finding.created_at.desc()) \
-                     .offset((page - 1) * per_page) \
-                     .limit(per_page) \
-                     .all()
+
+        # Order by severity for risks if requested
+        if order_by_severity:
+            severity_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}
+            items = query.all()
+            items = sorted(items, key=lambda r: severity_order.get(r.severity, 4))
+            # Apply pagination in Python after sorting
+            start = (page - 1) * per_page
+            items = items[start:start + per_page]
+        else:
+            items = query.order_by(Finding.created_at.desc()) \
+                         .offset((page - 1) * per_page) \
+                         .limit(per_page) \
+                         .all()
 
         return items, total
 

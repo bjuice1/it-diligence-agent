@@ -132,8 +132,13 @@ class CostCenterData:
 # =============================================================================
 
 def _gather_headcount_costs() -> CostCategory:
-    """Gather headcount costs from organization analysis."""
-    from web.app import get_session
+    """Gather headcount costs from organization analysis.
+
+    Phase 2+: Database-first implementation using DealData.
+    """
+    from flask import session as flask_session
+    from web.deal_data import get_deal_data
+    from web.context import load_deal_context
 
     category = CostCategory(
         name="headcount",
@@ -142,46 +147,52 @@ def _gather_headcount_costs() -> CostCategory:
     )
 
     try:
-        session = get_session()
-        if session and session.fact_store:
-            # Get organization facts
-            org_facts = [f for f in session.fact_store.facts if f.domain == "organization"]
+        # Get current deal context
+        current_deal_id = flask_session.get('current_deal_id')
+        if not current_deal_id:
+            return category
 
-            # Group by role category
-            role_costs = {}
-            for fact in org_facts:
-                details = fact.details or {}
-                role_cat = fact.category or "other"
+        load_deal_context(current_deal_id)
+        data = get_deal_data()
 
-                # Extract cost info
-                headcount = details.get('headcount', details.get('count', 1))
-                if isinstance(headcount, str):
-                    try:
-                        headcount = int(headcount.replace(',', ''))
-                    except:
-                        headcount = 1
+        # Get organization facts from database
+        org_facts = data.get_organization()
 
-                total_cost = details.get('total_personnel_cost', details.get('total_cost', 0))
-                if isinstance(total_cost, str):
-                    total_cost = float(total_cost.replace('$', '').replace(',', ''))
+        # Group by role category
+        role_costs = {}
+        for fact in org_facts:
+            details = getattr(fact, 'details', None) or {}
+            role_cat = getattr(fact, 'category', None) or "other"
 
-                if role_cat not in role_costs:
-                    role_costs[role_cat] = {'count': 0, 'cost': 0}
-                role_costs[role_cat]['count'] += headcount
-                role_costs[role_cat]['cost'] += total_cost
+            # Extract cost info
+            headcount = details.get('headcount', details.get('count', 1))
+            if isinstance(headcount, str):
+                try:
+                    headcount = int(headcount.replace(',', ''))
+                except:
+                    headcount = 1
 
-            # Create line items
-            for role_cat, data in role_costs.items():
-                if data['cost'] > 0:
-                    category.items.append(CostLineItem(
-                        category="headcount",
-                        name=role_cat.replace('_', ' ').title(),
-                        amount=data['cost'],
-                        unit="annual",
-                        confidence="medium",
-                        source="Organization analysis (FactStore)",
-                        item_count=data['count']
-                    ))
+            total_cost = details.get('total_personnel_cost', details.get('total_cost', 0))
+            if isinstance(total_cost, str):
+                total_cost = float(total_cost.replace('$', '').replace(',', ''))
+
+            if role_cat not in role_costs:
+                role_costs[role_cat] = {'count': 0, 'cost': 0}
+            role_costs[role_cat]['count'] += headcount
+            role_costs[role_cat]['cost'] += total_cost
+
+        # Create line items
+        for role_cat, data_item in role_costs.items():
+            if data_item['cost'] > 0:
+                category.items.append(CostLineItem(
+                    category="headcount",
+                    name=role_cat.replace('_', ' ').title(),
+                    amount=data_item['cost'],
+                    unit="annual",
+                    confidence="medium",
+                    source="Organization analysis (Database)",
+                    item_count=data_item['count']
+                ))
 
     except Exception as e:
         logger.warning(f"Could not gather headcount costs: {e}")
@@ -289,7 +300,14 @@ def _gather_infrastructure_costs() -> CostCategory:
 
 
 def _gather_one_time_costs() -> OneTimeCosts:
-    """Gather one-time integration costs from work items and cost engine."""
+    """Gather one-time integration costs from work items and cost engine.
+
+    Phase 2+: Database-first implementation using DealData.
+    """
+    from flask import session as flask_session
+    from web.deal_data import get_deal_data
+    from web.context import load_deal_context
+
     one_time = OneTimeCosts()
 
     # Cost range lookup: maps string keys to low/high dollar amounts
@@ -305,88 +323,95 @@ def _gather_one_time_costs() -> OneTimeCosts:
     }
 
     try:
-        from web.app import get_session
-        session = get_session()
+        # Get current deal context
+        current_deal_id = flask_session.get('current_deal_id')
+        if not current_deal_id:
+            return one_time
 
-        if session and session.reasoning_store:
-            # Group work items by phase
-            phase_costs = {}
-            category_costs = {}
+        load_deal_context(current_deal_id)
+        data = get_deal_data()
 
-            for wi in session.reasoning_store.work_items:
-                # Get cost estimate string (e.g., "25k_to_100k")
-                cost_estimate_key = getattr(wi, 'cost_estimate', None) or getattr(wi, 'cost_estimate_range', None)
-                phase = getattr(wi, 'phase', 'unknown') or 'unknown'
-                domain = getattr(wi, 'domain', 'other') or 'other'
+        # Get work items from database
+        work_items = data.get_work_items()
 
-                # Convert string key to low/high amounts
-                cost_range = COST_RANGE_VALUES.get(cost_estimate_key, {"low": 0, "high": 0})
-                cost_low = cost_range["low"]
-                cost_high = cost_range["high"]
+        # Group work items by phase
+        phase_costs = {}
+        category_costs = {}
 
-                # Skip items with no cost
-                if cost_low == 0 and cost_high == 0 and not cost_estimate_key:
-                    continue
+        for wi in work_items:
+            # Get cost estimate string (e.g., "25k_to_100k")
+            cost_estimate_key = getattr(wi, 'cost_estimate', None) or getattr(wi, 'cost_estimate_range', None)
+            phase = getattr(wi, 'phase', 'unknown') or 'unknown'
+            domain = getattr(wi, 'domain', 'other') or 'other'
 
-                # Initialize phase category
-                if phase not in phase_costs:
-                    phase_costs[phase] = CostCategory(
-                        name=phase,
-                        display_name=phase.replace('_', ' ').title(),
-                        icon="📅"
-                    )
+            # Convert string key to low/high amounts
+            cost_range = COST_RANGE_VALUES.get(cost_estimate_key, {"low": 0, "high": 0})
+            cost_low = cost_range["low"]
+            cost_high = cost_range["high"]
 
-                # Initialize domain category
-                if domain not in category_costs:
-                    category_costs[domain] = CostCategory(
-                        name=domain,
-                        display_name=domain.replace('_', ' ').title(),
-                        icon="📁"
-                    )
+            # Skip items with no cost
+            if cost_low == 0 and cost_high == 0 and not cost_estimate_key:
+                continue
 
-                # Add to phase
-                phase_costs[phase].items.append(CostLineItem(
-                    category=phase,
-                    name=getattr(wi, 'title', 'Unnamed work item'),
-                    amount=(cost_low + cost_high) / 2,
-                    amount_low=cost_low,
-                    amount_high=cost_high,
-                    unit="one-time",
-                    confidence=getattr(wi, 'confidence', 'medium') or 'medium',
-                    source=f"Work item ({cost_estimate_key})"
-                ))
+            # Initialize phase category
+            if phase not in phase_costs:
+                phase_costs[phase] = CostCategory(
+                    name=phase,
+                    display_name=phase.replace('_', ' ').title(),
+                    icon="📅"
+                )
 
-                # Add to domain
-                category_costs[domain].items.append(CostLineItem(
-                    category=domain,
-                    name=getattr(wi, 'title', 'Unnamed work item'),
-                    amount=(cost_low + cost_high) / 2,
-                    amount_low=cost_low,
-                    amount_high=cost_high,
-                    unit="one-time",
-                    confidence=getattr(wi, 'confidence', 'medium') or 'medium',
-                    source=f"Work item ({cost_estimate_key})"
-                ))
+            # Initialize domain category
+            if domain not in category_costs:
+                category_costs[domain] = CostCategory(
+                    name=domain,
+                    display_name=domain.replace('_', ' ').title(),
+                    icon="📁"
+                )
 
-            # Calculate totals
-            for phase, cat in phase_costs.items():
-                cat.calculate_totals()
-            for domain, cat in category_costs.items():
-                cat.calculate_totals()
+            # Add to phase
+            phase_costs[phase].items.append(CostLineItem(
+                category=phase,
+                name=getattr(wi, 'title', 'Unnamed work item'),
+                amount=(cost_low + cost_high) / 2,
+                amount_low=cost_low,
+                amount_high=cost_high,
+                unit="one-time",
+                confidence=getattr(wi, 'confidence', 'medium') or 'medium',
+                source=f"Work item ({cost_estimate_key})"
+            ))
 
-            one_time.by_phase = phase_costs
-            one_time.by_category = category_costs
+            # Add to domain
+            category_costs[domain].items.append(CostLineItem(
+                category=domain,
+                name=getattr(wi, 'title', 'Unnamed work item'),
+                amount=(cost_low + cost_high) / 2,
+                amount_low=cost_low,
+                amount_high=cost_high,
+                unit="one-time",
+                confidence=getattr(wi, 'confidence', 'medium') or 'medium',
+                source=f"Work item ({cost_estimate_key})"
+            ))
 
-            # Calculate grand totals from phase costs (to avoid double-counting)
-            all_items = []
-            for cat in phase_costs.values():
-                all_items.extend(cat.items)
+        # Calculate totals
+        for phase, cat in phase_costs.items():
+            cat.calculate_totals()
+        for domain_name, cat in category_costs.items():
+            cat.calculate_totals()
 
-            one_time.total_low = sum(i.amount_low for i in all_items)
-            one_time.total_high = sum(i.amount_high for i in all_items)
-            one_time.total_mid = (one_time.total_low + one_time.total_high) / 2
+        one_time.by_phase = phase_costs
+        one_time.by_category = category_costs
 
-            logger.info(f"Gathered one-time costs: {len(all_items)} work items, ${one_time.total_low:,.0f} - ${one_time.total_high:,.0f}")
+        # Calculate grand totals from phase costs (to avoid double-counting)
+        all_items = []
+        for cat in phase_costs.values():
+            all_items.extend(cat.items)
+
+        one_time.total_low = sum(i.amount_low for i in all_items)
+        one_time.total_high = sum(i.amount_high for i in all_items)
+        one_time.total_mid = (one_time.total_low + one_time.total_high) / 2
+
+        logger.info(f"Gathered one-time costs: {len(all_items)} work items, ${one_time.total_low:,.0f} - ${one_time.total_high:,.0f}")
 
     except Exception as e:
         logger.warning(f"Could not gather one-time costs: {e}")
