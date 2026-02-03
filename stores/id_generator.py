@@ -33,17 +33,21 @@ FACT_DOMAIN_PREFIXES = {
 def generate_inventory_id(
     inventory_type: str,
     data: Dict[str, Any],
-    entity: str = "target"
+    entity: str = "target",
+    deal_id: str = ""
 ) -> str:
     """
     Generate stable inventory item ID from content hash.
 
     Same item always gets same ID, regardless of import order or session.
+    Including deal_id ensures items with same content in different deals
+    get different IDs (proper isolation).
 
     Args:
         inventory_type: One of: application, infrastructure, organization, vendor
         data: Item data dict containing at least the id_fields for the type
         entity: "target" or "buyer"
+        deal_id: Deal ID for scoping (ensures cross-deal uniqueness)
 
     Returns:
         ID like "I-APP-a3f291" (prefix + 6-char hash)
@@ -52,7 +56,7 @@ def generate_inventory_id(
         ValueError: If inventory_type is invalid
 
     Example:
-        >>> generate_inventory_id("application", {"name": "Salesforce", "vendor": "Salesforce"}, "target")
+        >>> generate_inventory_id("application", {"name": "Salesforce", "vendor": "Salesforce"}, "target", "deal-123")
         'I-APP-7b3c91'
     """
     if not validate_inventory_type(inventory_type):
@@ -62,7 +66,8 @@ def generate_inventory_id(
     id_fields = get_id_fields(inventory_type)
 
     # Build content string from key fields
-    parts = [inventory_type, entity]
+    # Include deal_id FIRST to ensure different deals get different IDs
+    parts = [deal_id, inventory_type, entity]
     for field in id_fields:
         value = data.get(field, "")
         # Normalize: lowercase, strip whitespace

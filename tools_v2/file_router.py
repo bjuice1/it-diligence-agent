@@ -27,6 +27,7 @@ from tools_v2.parsers.schema_validator import validate_table, normalize_row
 
 from stores.inventory_store import InventoryStore
 from stores.inventory_item import MergeResult
+from stores.app_category_mappings import categorize_app, lookup_app
 from tools_v2.enrichment.inventory_reviewer import review_inventory, ReviewResult
 
 logger = logging.getLogger(__name__)
@@ -181,9 +182,17 @@ def _process_table(
 
     # Add each row to inventory
     added = 0
+    auto_categorized = 0
+
     for row in table.rows:
         # Normalize row to use schema field names
         normalized = normalize_row(row, inv_type, header_map)
+
+        # Auto-categorize applications using known app mappings
+        if inv_type == "application":
+            normalized, was_categorized = _auto_categorize_app(normalized)
+            if was_categorized:
+                auto_categorized += 1
 
         try:
             item_id = inventory_store.add_item(
@@ -197,11 +206,48 @@ def _process_table(
         except Exception as e:
             result.errors.append(f"Failed to add row: {str(e)}")
 
+    if auto_categorized > 0:
+        logger.info(f"Auto-categorized {auto_categorized}/{added} applications")
+
     # Update result counts
     if inv_type not in result.by_type:
         result.by_type[inv_type] = 0
     result.by_type[inv_type] += added
     result.inventory_items_added += added
+
+
+def _auto_categorize_app(data: Dict[str, Any]) -> tuple:
+    """
+    Auto-categorize an application using known app mappings.
+
+    Args:
+        data: Normalized row data with 'name' field
+
+    Returns:
+        Tuple of (updated_data, was_categorized)
+    """
+    app_name = data.get("name", "")
+    if not app_name:
+        return data, False
+
+    # Look up the app
+    mapping = lookup_app(app_name)
+    if not mapping:
+        return data, False
+
+    # Only set category if not already provided
+    if not data.get("category"):
+        data["category"] = mapping.category
+
+    # Set vendor if not already provided and we have it
+    if not data.get("vendor") and mapping.vendor:
+        data["vendor"] = mapping.vendor
+
+    # Add enrichment metadata
+    data["_auto_categorized"] = True
+    data["_category_source"] = "app_mappings"
+
+    return data, True
 
 
 def _handle_text_file(

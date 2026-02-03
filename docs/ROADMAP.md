@@ -321,6 +321,8 @@ New features need real-world validation:
 
 | Version | Date | Major Changes |
 |---------|------|---------------|
+| V2.3 | Feb 2026 | **In Progress** - Deal isolation (deal_id scoping), presentation reliability (dashboard fixes, Mermaid sanitization), document preprocessing (PUA removal, table-aware chunking, numeric normalization) |
+| V2.2 | Jan 2026 | Inventory system upgrade (InventoryStore, deterministic parsing, content-based IDs, LLM enrichment, inventory reports) |
 | V2.1 | Jan 2026 | Session management, incremental analysis, deal context (carve-out/bolt-on/platform), entity tracking (target/buyer) |
 | V2.0 | Jan 2026 | Discovery/Reasoning split, model tiering, evidence chains, coverage scoring, VDR generation, synthesis |
 | V1.0 | Dec 2025 | Initial release, single-phase analysis, basic outputs |
@@ -364,4 +366,4 @@ New features need real-world validation:
 
 ---
 
-*Last updated: January 2026*
+*Last updated: February 2026*

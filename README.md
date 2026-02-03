@@ -6,15 +6,16 @@ AI-powered IT due diligence analysis for M&A transactions. Uses Claude to analyz
 
 ---
 
-> ⚠️ **Active Development: Inventory System Upgrade**
+> ⚠️ **Active Development: Version 2.3 Reliability Fixes**
 >
-> We are transitioning from 100% LLM-based extraction to a hybrid architecture:
-> - **Structured inputs** (ToltIQ tables, Excel) → Deterministic parsing → **InventoryStore**
-> - **Unstructured inputs** (prose, meeting notes) → LLM discovery → **FactStore**
+> Currently implementing data integrity and reliability improvements:
+> - **Phase 1/6**: Deal isolation with `deal_id` scoping across all stores ✅
+> - **Phase 2+4**: Presentation reliability (dashboard fixes, Mermaid sanitization) ✅
+> - **Phase 5**: Document parsing (PUA removal, table-aware chunking, numeric normalization) ✅
+> - **Phase 3**: App ingestion & category mapping 🔜
+> - **Phase 6**: Cost estimation determinism 🔜
 >
-> Key changes: InventoryStore + FactStore separation, content-based IDs, Application Intelligence layer.
->
-> See **[Inventory System Upgrade Plan](docs/INVENTORY_SYSTEM_UPGRADE_PLAN.md)** for full details.
+> **81 new tests added.** See **[FIX_PLAN_2.3.md](FIX_PLAN_2.3.md)** for detailed progress.
 
 ---
 
@@ -702,4 +703,4 @@ Internal use only.
 
 ---
 
-*Last Updated: January 15, 2026 (V2.3 - Narrative Generation & Output Guide)*
+*Last Updated: February 3, 2026 (V2.3 - Deal Isolation, Presentation Reliability, Document Parsing)*

@@ -13,6 +13,9 @@ Key differences from Fact:
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from typing import Dict, Any, Optional, List
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def _generate_timestamp() -> str:
@@ -44,11 +47,14 @@ class InventoryItem:
     # Core Data (flexible schema per type)
     # Contains: name, vendor, version, cost, etc. depending on inventory_type
     # Missing fields are None (not empty string)
-    data: Dict[str, Any]
+    data: Dict[str, Any] = field(default_factory=dict)
 
     # Source Tracking
-    source_file: str                # Original file this came from
+    source_file: str = ""           # Original file this came from
     source_type: str = "import"     # "import", "manual", or "discovery"
+
+    # Deal isolation - REQUIRED for proper data separation
+    deal_id: str = ""               # Deal this item belongs to - REQUIRED for new items
 
     # Enrichment (from Application Intelligence - Phase 3)
     # category: industry_standard, vertical_specific, niche, unknown, custom
@@ -92,6 +98,10 @@ class InventoryItem:
         valid_statuses = ["active", "removed", "deprecated", "planned"]
         if self.status not in valid_statuses:
             raise ValueError(f"Invalid status: {self.status}. Must be one of: {valid_statuses}")
+
+        # Warn if deal_id is missing (required for proper isolation)
+        if not self.deal_id:
+            logger.warning(f"InventoryItem {self.item_id} created without deal_id - data isolation may be compromised")
 
     # ----- Convenience Properties -----
 
@@ -232,6 +242,8 @@ class InventoryItem:
         data = dict(data)
 
         # Set defaults for optional fields
+        if "deal_id" not in data:
+            data["deal_id"] = ""  # Legacy items without deal_id
         if "enrichment" not in data:
             data["enrichment"] = {}
         if "status" not in data:

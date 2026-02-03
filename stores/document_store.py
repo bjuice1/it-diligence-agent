@@ -74,6 +74,9 @@ class Document:
     page_count: int                       # Number of pages (0 if unknown)
     status: str                           # DocumentStatus value
 
+    # Deal scoping (REQUIRED for new documents)
+    deal_id: str = ""                     # Deal this document belongs to
+
     # Optional metadata
     file_size_bytes: int = 0              # Size of original file
     mime_type: str = ""                   # Detected MIME type
@@ -90,6 +93,9 @@ class Document:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Document":
         """Create Document from dictionary."""
+        # Handle backwards compatibility for missing deal_id
+        if "deal_id" not in data:
+            data["deal_id"] = ""
         return cls(**data)
 
 
@@ -118,22 +124,30 @@ class DocumentStore:
     """
 
     _instance: Optional["DocumentStore"] = None
+    _instances: Dict[str, "DocumentStore"] = {}  # deal_id -> instance for deal-scoped stores
     _lock = threading.Lock()
 
-    def __init__(self, base_dir: Optional[Path] = None):
+    def __init__(self, deal_id: str = None, base_dir: Optional[Path] = None):
         """
         Initialize DocumentStore.
 
         Args:
+            deal_id: Deal ID for scoping. Required for proper data isolation.
             base_dir: Base directory for document storage.
-                      Defaults to OUTPUT_DIR/documents from config.
+                      If deal_id is provided without base_dir, path is auto-generated.
         """
+        self.deal_id = deal_id
+
         if base_dir is None:
             try:
                 from config_v2 import DOCUMENTS_DIR
                 base_dir = DOCUMENTS_DIR
             except ImportError:
                 base_dir = Path("output/documents")
+
+            # Make base_dir deal-specific if deal_id provided
+            if deal_id:
+                base_dir = base_dir / deal_id
 
         self.base_dir = Path(base_dir)
         self._documents: Dict[str, Document] = {}  # doc_id -> Document
@@ -146,21 +160,48 @@ class DocumentStore:
         # Load existing manifest if present
         self._load_manifest()
 
-        logger.info(f"DocumentStore initialized at {self.base_dir}")
+        logger.info(f"DocumentStore initialized at {self.base_dir} (deal: {deal_id})")
 
     @classmethod
-    def get_instance(cls, base_dir: Optional[Path] = None) -> "DocumentStore":
-        """Get singleton instance of DocumentStore."""
+    def get_instance(cls, deal_id: str = None, base_dir: Optional[Path] = None) -> "DocumentStore":
+        """
+        Get singleton instance of DocumentStore.
+
+        Args:
+            deal_id: Deal ID for scoping. If provided, returns deal-specific instance.
+            base_dir: Optional base directory override.
+
+        Returns:
+            DocumentStore instance (deal-specific if deal_id provided)
+        """
         with cls._lock:
-            if cls._instance is None:
-                cls._instance = cls(base_dir)
-            return cls._instance
+            if deal_id:
+                # Deal-scoped instance
+                if deal_id not in cls._instances:
+                    cls._instances[deal_id] = cls(deal_id=deal_id, base_dir=base_dir)
+                return cls._instances[deal_id]
+            else:
+                # Global instance (legacy compatibility)
+                if cls._instance is None:
+                    cls._instance = cls(base_dir=base_dir)
+                return cls._instance
 
     @classmethod
-    def reset_instance(cls):
+    def reset_instance(cls, deal_id: str = None):
         """Reset singleton (for testing)."""
         with cls._lock:
+            if deal_id:
+                if deal_id in cls._instances:
+                    del cls._instances[deal_id]
+            else:
+                cls._instance = None
+
+    @classmethod
+    def reset_all_instances(cls):
+        """Reset all instances (for testing)."""
+        with cls._lock:
             cls._instance = None
+            cls._instances.clear()
 
     def _ensure_directories(self):
         """Create the document storage directory structure."""
@@ -198,6 +239,7 @@ class DocumentStore:
         self,
         file_path: Union[str, Path],
         entity: str,
+        deal_id: str = None,
         authority_level: int = 1,
         uploaded_by: str = "system"
     ) -> Document:
@@ -207,6 +249,7 @@ class DocumentStore:
         Args:
             file_path: Path to the source file
             entity: "target" or "buyer"
+            deal_id: Deal ID (uses store's deal_id if not provided)
             authority_level: 1 (data room), 2 (correspondence), 3 (notes)
             uploaded_by: User or system identifier
 
@@ -218,6 +261,11 @@ class DocumentStore:
             FileNotFoundError: If file doesn't exist
         """
         file_path = Path(file_path)
+
+        # Resolve deal_id
+        effective_deal_id = deal_id or self.deal_id
+        if not effective_deal_id:
+            logger.warning(f"Document {file_path.name} added without deal_id - data isolation may be compromised")
 
         # Validate entity
         if entity not in ("target", "buyer"):
@@ -271,7 +319,7 @@ class DocumentStore:
         # Detect MIME type
         mime_type = self._detect_mime_type(file_path)
 
-        # Create document record
+        # Create document record with deal_id
         doc = Document(
             doc_id=doc_id,
             filename=file_path.name,
@@ -284,6 +332,7 @@ class DocumentStore:
             extracted_text_path=str(extracted_text_path),
             page_count=0,  # Set during extraction
             status=DocumentStatus.PENDING.value,
+            deal_id=effective_deal_id or "",  # Include deal_id
             file_size_bytes=file_size,
             mime_type=mime_type
         )
@@ -298,7 +347,7 @@ class DocumentStore:
 
         logger.info(
             f"Added document: {doc.filename} (doc_id: {doc_id}, "
-            f"entity: {entity}, authority: {authority_level})"
+            f"entity: {entity}, authority: {authority_level}, deal: {effective_deal_id})"
         )
 
         return doc
@@ -308,6 +357,7 @@ class DocumentStore:
         file_bytes: bytes,
         filename: str,
         entity: str,
+        deal_id: str = None,
         authority_level: int = 1,
         uploaded_by: str = "system"
     ) -> Document:
@@ -318,12 +368,21 @@ class DocumentStore:
             file_bytes: Raw file content
             filename: Original filename
             entity: "target" or "buyer"
+            deal_id: Deal ID (uses store's deal_id if not provided)
             authority_level: 1-3
             uploaded_by: User identifier
 
         Returns:
             Document record
+
+        Raises:
+            ValueError: If deal_id is not provided and store has no deal_id
         """
+        # Resolve deal_id
+        effective_deal_id = deal_id or self.deal_id
+        if not effective_deal_id:
+            logger.warning(f"Document {filename} added without deal_id - data isolation may be compromised")
+
         # Validate entity
         if entity not in ("target", "buyer"):
             raise ValueError(
@@ -361,7 +420,7 @@ class DocumentStore:
         # Detect MIME type from extension
         mime_type = self._detect_mime_type(Path(filename))
 
-        # Create document record
+        # Create document record with deal_id
         doc = Document(
             doc_id=doc_id,
             filename=filename,
@@ -374,6 +433,7 @@ class DocumentStore:
             extracted_text_path=str(extracted_text_path),
             page_count=0,
             status=DocumentStatus.PENDING.value,
+            deal_id=effective_deal_id or "",  # Include deal_id
             file_size_bytes=len(file_bytes),
             mime_type=mime_type
         )
@@ -385,7 +445,7 @@ class DocumentStore:
 
         self._save_manifest()
 
-        logger.info(f"Added document from bytes: {filename} (doc_id: {doc_id})")
+        logger.info(f"Added document from bytes: {filename} (doc_id: {doc_id}, deal: {effective_deal_id})")
         return doc
 
     def _detect_mime_type(self, file_path: Path) -> str:
@@ -480,7 +540,8 @@ class DocumentStore:
         self,
         entity: Optional[str] = None,
         authority_level: Optional[int] = None,
-        status: Optional[str] = None
+        status: Optional[str] = None,
+        deal_id: Optional[str] = None
     ) -> List[Document]:
         """
         List documents with optional filters.
@@ -489,12 +550,20 @@ class DocumentStore:
             entity: Filter by entity
             authority_level: Filter by authority level
             status: Filter by status
+            deal_id: Filter by deal (uses store's deal_id if not provided)
 
         Returns:
             List of matching documents
         """
+        # Use store's deal_id if not provided
+        effective_deal_id = deal_id or self.deal_id
+
         with self._lock:
             docs = list(self._documents.values())
+
+        # Filter by deal_id FIRST (most important for isolation)
+        if effective_deal_id:
+            docs = [d for d in docs if d.deal_id == effective_deal_id]
 
         if entity:
             docs = [d for d in docs if d.entity == entity]
@@ -782,7 +851,8 @@ class DocumentStore:
                 docs_for_storage.append(doc_dict)
 
             manifest = {
-                "version": "1.1",  # Bumped version for relative paths
+                "schema_version": "2.0",  # Bumped for deal_id support
+                "deal_id": self.deal_id or "",
                 "updated_at": datetime.now().isoformat(),
                 "document_count": len(self._documents),
                 "documents": docs_for_storage

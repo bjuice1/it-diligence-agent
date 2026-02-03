@@ -18,6 +18,12 @@ from anthropic import Anthropic
 
 from stores.inventory_store import InventoryStore
 from stores.inventory_item import InventoryItem
+from stores.app_category_mappings import (
+    lookup_app,
+    categorize_app,
+    CATEGORY_DEFINITIONS,
+    get_category_description,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -69,9 +75,13 @@ def review_inventory(
     entity: str = "target",
     model: str = "claude-sonnet-4-20250514",
     skip_enriched: bool = True,
+    use_local_mappings: bool = True,
 ) -> ReviewResult:
     """
     Review all items of a given type in the inventory.
+
+    First attempts to enrich using local app mappings (no LLM cost),
+    then sends remaining unknown items to LLM for review.
 
     Args:
         inventory_store: The inventory store to review
@@ -80,6 +90,7 @@ def review_inventory(
         entity: Entity filter ("target" or "buyer")
         model: Claude model to use
         skip_enriched: Skip items that already have enrichment
+        use_local_mappings: Try local app mappings before LLM (default: True)
 
     Returns:
         ReviewResult with statistics and individual reviews
@@ -100,52 +111,126 @@ def review_inventory(
         logger.info("No items to review")
         return result
 
-    # Process in batches
-    client = Anthropic(api_key=api_key)
+    # Phase 1: Try local app mappings first (no LLM cost)
+    items_for_llm = []
+    local_enriched = 0
 
-    for i in range(0, len(items), BATCH_SIZE):
-        batch = items[i:i + BATCH_SIZE]
-        batch_reviews = _review_batch(batch, client, model, inventory_type)
+    if use_local_mappings and inventory_type == "application":
+        for item in items:
+            review = _try_local_lookup(item)
+            if review and review.description:
+                # Successfully enriched from local mappings
+                result.reviews.append(review)
+                result.items_reviewed += 1
 
-        for review in batch_reviews:
-            result.reviews.append(review)
-            result.items_reviewed += 1
-
-            # Update the inventory item
-            item = inventory_store.get_item(review.item_id)
-            if item and review.description:
-                # Determine category based on LLM response
-                if review.is_confident:
-                    category = "industry_standard"  # Known software
-                else:
-                    category = "unknown"
-
-                # Use the set_enrichment method with proper signature
+                # Update the inventory item
                 item.set_enrichment(
-                    category=category,
+                    category="industry_standard",
                     note=review.description,
-                    confidence="high" if review.is_confident else "low",
+                    confidence="high",
                     flag=None,
                 )
-                # Store additional LLM data in enrichment dict
-                item.enrichment["llm_category"] = review.category
+                item.enrichment["app_category"] = review.category
+                item.enrichment["enrichment_source"] = "local_mappings"
                 if review.vendor_info:
-                    item.enrichment["llm_vendor_info"] = review.vendor_info
+                    item.enrichment["vendor_info"] = review.vendor_info
 
                 result.items_enriched += 1
+                local_enriched += 1
+            else:
+                # Not found in local mappings - queue for LLM
+                items_for_llm.append(item)
 
-            if review.needs_investigation:
-                # Flag the item for investigation
-                if item:
+        logger.info(f"Local mappings enriched {local_enriched}/{len(items)} items")
+    else:
+        items_for_llm = items
+
+    # Phase 2: Send remaining items to LLM
+    if items_for_llm and api_key:
+        client = Anthropic(api_key=api_key)
+
+        for i in range(0, len(items_for_llm), BATCH_SIZE):
+            batch = items_for_llm[i:i + BATCH_SIZE]
+            batch_reviews = _review_batch(batch, client, model, inventory_type)
+
+            for review in batch_reviews:
+                result.reviews.append(review)
+                result.items_reviewed += 1
+
+                # Update the inventory item
+                item = inventory_store.get_item(review.item_id)
+                if item and review.description:
+                    # Determine category based on LLM response
+                    if review.is_confident:
+                        category = "industry_standard"
+                    else:
+                        category = "unknown"
+
                     item.set_enrichment(
-                        category="unknown",
-                        note=review.flag_reason or "LLM could not identify this item",
-                        confidence="low",
-                        flag="investigate",
+                        category=category,
+                        note=review.description,
+                        confidence="high" if review.is_confident else "low",
+                        flag=None,
                     )
-                result.items_flagged += 1
+                    item.enrichment["app_category"] = review.category
+                    item.enrichment["enrichment_source"] = "llm"
+                    if review.vendor_info:
+                        item.enrichment["vendor_info"] = review.vendor_info
+
+                    result.items_enriched += 1
+
+                if review.needs_investigation:
+                    if item:
+                        item.set_enrichment(
+                            category="unknown",
+                            note=review.flag_reason or "LLM could not identify this item",
+                            confidence="low",
+                            flag="investigate",
+                        )
+                    result.items_flagged += 1
+    elif items_for_llm:
+        # No API key but have items - flag them
+        for item in items_for_llm:
+            review = ItemReview(
+                item_id=item.item_id,
+                name=item.data.get("name", "Unknown"),
+                needs_investigation=True,
+                flag_reason="Not in local mappings; no API key for LLM lookup",
+            )
+            result.reviews.append(review)
+            result.items_reviewed += 1
+            result.items_flagged += 1
 
     return result
+
+
+def _try_local_lookup(item: InventoryItem) -> Optional[ItemReview]:
+    """
+    Try to enrich an item using local app category mappings.
+
+    Args:
+        item: The inventory item to look up
+
+    Returns:
+        ItemReview if found in mappings, None otherwise
+    """
+    name = item.data.get("name", "")
+    if not name:
+        return None
+
+    mapping = lookup_app(name)
+    if not mapping:
+        return None
+
+    return ItemReview(
+        item_id=item.item_id,
+        name=name,
+        description=mapping.description,
+        category=mapping.category,
+        vendor_info=mapping.vendor,
+        is_confident=True,
+        needs_investigation=False,
+    )
 
 
 def review_item(
@@ -333,3 +418,151 @@ def clear_flag(item: InventoryItem) -> None:
     """Clear the investigation flag from an item."""
     if item.enrichment:
         item.enrichment["flag"] = None
+
+
+def validate_category(category: str) -> bool:
+    """
+    Validate that a category is in the defined list.
+
+    Args:
+        category: Category string to validate
+
+    Returns:
+        True if valid, False otherwise
+    """
+    if not category:
+        return False
+    return category.lower() in CATEGORY_DEFINITIONS
+
+
+def normalize_category(category: str) -> str:
+    """
+    Normalize a category to match defined categories.
+
+    Handles common aliases and variations.
+
+    Args:
+        category: Category string (possibly with variations)
+
+    Returns:
+        Normalized category or "unknown" if not recognized
+    """
+    if not category:
+        return "unknown"
+
+    cat_lower = category.lower().strip()
+
+    # Direct match
+    if cat_lower in CATEGORY_DEFINITIONS:
+        return cat_lower
+
+    # Common aliases
+    aliases = {
+        "erp": ["enterprise resource planning", "erp system"],
+        "crm": ["customer relationship management", "sales"],
+        "hcm": ["hr", "human resources", "hrms", "hris", "payroll"],
+        "finance": ["accounting", "financial", "ap", "ar", "accounts payable", "accounts receivable"],
+        "collaboration": ["communication", "chat", "messaging", "video conferencing"],
+        "productivity": ["office", "documents", "file storage", "content management"],
+        "security": ["identity", "iam", "sso", "mfa", "endpoint", "edr", "siem"],
+        "infrastructure": ["cloud", "virtualization", "platform", "iaas", "paas"],
+        "database": ["data platform", "data warehouse", "rdbms", "nosql"],
+        "devops": ["development", "ci/cd", "itsm", "monitoring", "apm"],
+        "bi_analytics": ["bi", "business intelligence", "analytics", "reporting", "visualization"],
+        "industry_vertical": ["vertical", "healthcare", "insurance", "manufacturing", "retail"],
+        "custom": ["in-house", "internal", "proprietary", "homegrown"],
+    }
+
+    for std_cat, alias_list in aliases.items():
+        if cat_lower in alias_list or any(alias in cat_lower for alias in alias_list):
+            return std_cat
+
+    return "unknown"
+
+
+def suggest_category(app_name: str) -> Optional[str]:
+    """
+    Suggest a category for an application based on its name.
+
+    Uses local app mappings to determine category.
+
+    Args:
+        app_name: Application name
+
+    Returns:
+        Suggested category or None if unknown
+    """
+    category, mapping = categorize_app(app_name)
+    if category != "unknown":
+        return category
+    return None
+
+
+def validate_inventory_categories(
+    inventory_store: InventoryStore,
+    inventory_type: str = "application",
+) -> Dict[str, Any]:
+    """
+    Validate categories for all items in the inventory.
+
+    Returns summary of valid, invalid, and unknown categories.
+
+    Args:
+        inventory_store: The inventory store to validate
+        inventory_type: Type to validate
+
+    Returns:
+        Dict with validation summary
+    """
+    items = inventory_store.get_items(inventory_type=inventory_type)
+
+    valid = []
+    invalid = []
+    unknown = []
+    missing = []
+
+    for item in items:
+        category = item.data.get("category", "")
+        app_category = item.enrichment.get("app_category", "")
+
+        # Use enrichment category if data category is empty
+        effective_category = category or app_category
+
+        if not effective_category:
+            missing.append({
+                "item_id": item.item_id,
+                "name": item.data.get("name", "Unknown"),
+            })
+        elif validate_category(effective_category):
+            valid.append({
+                "item_id": item.item_id,
+                "name": item.data.get("name", "Unknown"),
+                "category": effective_category,
+            })
+        elif normalize_category(effective_category) != "unknown":
+            # Can be normalized
+            normalized = normalize_category(effective_category)
+            invalid.append({
+                "item_id": item.item_id,
+                "name": item.data.get("name", "Unknown"),
+                "category": effective_category,
+                "suggested": normalized,
+            })
+        else:
+            unknown.append({
+                "item_id": item.item_id,
+                "name": item.data.get("name", "Unknown"),
+                "category": effective_category,
+            })
+
+    return {
+        "total": len(items),
+        "valid": len(valid),
+        "invalid": len(invalid),
+        "unknown": len(unknown),
+        "missing": len(missing),
+        "valid_items": valid,
+        "invalid_items": invalid,
+        "unknown_items": unknown,
+        "missing_items": missing,
+    }

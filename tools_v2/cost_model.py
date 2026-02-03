@@ -989,11 +989,25 @@ class CostModel:
     1. Buyer one-time costs (separation)
     2. TSA exit costs (to become independent)
     3. Run-rate impact estimates
+
+    Determinism:
+    - Rules are processed in sorted order by rule_id
+    - Facts are normalized and sorted before matching
+    - Same inputs always produce same outputs
+    - Cache integration for repeated calculations
     """
 
-    def __init__(self):
+    def __init__(self, use_cache: bool = True, cache_ttl: int = None):
+        """
+        Initialize the cost model.
+
+        Args:
+            use_cache: Whether to use cost estimate cache (default: True)
+            cache_ttl: Cache TTL in seconds (None = no expiration)
+        """
         self.anchors = COST_ANCHORS
-        self.rules = ADJUSTMENT_RULES
+        # Sort rules by rule_id for deterministic processing
+        self.rules = sorted(ADJUSTMENT_RULES, key=lambda r: r.rule_id)
         self.tsa_patterns = TSA_EXPOSURE_PATTERNS
         self.runrate_anchors = RUN_RATE_ANCHORS
         self.runrate_deltas = RUN_RATE_DELTAS
@@ -1001,20 +1015,80 @@ class CostModel:
         self.risk_flags = RISK_FLAGS
         self.timeline_drivers = TIMELINE_DRIVERS
         self._matched_rules: List[AdjustmentRule] = []
+        self._use_cache = use_cache
+        self._cache_ttl = cache_ttl
+        self._cache = None
+
+    def _get_cache(self):
+        """Get or create the cost cache."""
+        if self._cache is None and self._use_cache:
+            from tools_v2.cost_cache import get_cost_cache
+            self._cache = get_cost_cache(ttl_seconds=self._cache_ttl)
+        return self._cache
+
+    def _normalize_facts(self, facts: List[Dict]) -> List[Dict]:
+        """
+        Normalize facts for deterministic processing.
+
+        - Sorts by content
+        - Normalizes strings
+        - Assigns deterministic IDs if missing
+        """
+        normalized = []
+        for i, fact in enumerate(facts):
+            content = fact.get("content", "")
+            if isinstance(content, str):
+                content = content.strip()
+
+            # Ensure each fact has an ID
+            fact_id = fact.get("fact_id") or f"F-{i:04d}"
+
+            normalized.append({
+                **fact,
+                "content": content,
+                "fact_id": fact_id,
+            })
+
+        # Sort by content for deterministic ordering
+        normalized.sort(key=lambda f: (
+            f.get("content", "").lower() if isinstance(f.get("content", ""), str) else "",
+            f.get("fact_id", "")
+        ))
+
+        return normalized
 
     def match_facts_to_rules(self, facts: List[Dict]) -> List[Tuple[AdjustmentRule, List[str]]]:
-        """Match facts to adjustment rules."""
+        """
+        Match facts to adjustment rules.
+
+        Deterministic behavior:
+        - Facts are normalized and sorted first
+        - Rules are processed in sorted order by rule_id
+        - Matching fact IDs are sorted for consistent ordering
+        """
+        # Normalize facts for deterministic matching
+        normalized_facts = self._normalize_facts(facts)
+
         matched = []
+        # Rules are already sorted by rule_id in __init__
         for rule in self.rules:
             matching_facts = []
-            for fact in facts:
-                content = fact.get("content", "").lower()
+            for fact in normalized_facts:
+                content = fact.get("content", "")
+                if isinstance(content, str):
+                    content = content.lower()
+                else:
+                    content = str(content).lower()
+
                 for pattern in rule.fact_patterns:
                     if pattern.lower() in content:
                         matching_facts.append(fact.get("fact_id", "unknown"))
                         break
+
             if matching_facts:
-                matched.append((rule, list(set(matching_facts))))
+                # Sort matching facts for deterministic ordering
+                matched.append((rule, sorted(set(matching_facts))))
+
         self._matched_rules = [m[0] for m in matched]
         return matched
 
@@ -1499,10 +1573,28 @@ class CostModel:
         dc_count: int = 1,
         site_count: int = 5,
         server_count: int = 50,
-        major_vendor_count: int = 10
+        major_vendor_count: int = 10,
+        use_cache: bool = None,
     ) -> Dict[str, Any]:
         """
         Generate comprehensive cost estimate.
+
+        Determinism guarantee:
+        - Same inputs always produce same outputs
+        - Facts are normalized and sorted
+        - Rules applied in consistent order
+        - Cache enabled by default for repeated calculations
+
+        Args:
+            user_count: Number of users
+            deal_type: "carveout" or "acquisition"
+            facts: List of fact dicts with "content" field
+            app_count: Number of applications
+            dc_count: Number of data centers
+            site_count: Number of sites/locations
+            server_count: Number of servers
+            major_vendor_count: Number of major vendors
+            use_cache: Override cache setting (None = use instance default)
 
         Returns:
         - Buyer one-time costs
@@ -1510,7 +1602,26 @@ class CostModel:
         - Total ranges
         - Full breakdown with adjustments
         """
-        # Match facts to rules
+        # Determine cache usage
+        should_use_cache = use_cache if use_cache is not None else self._use_cache
+
+        # Check cache first
+        cache = self._get_cache() if should_use_cache else None
+        if cache:
+            cached = cache.get(
+                user_count=user_count,
+                deal_type=deal_type,
+                facts=facts,
+                app_count=app_count,
+                dc_count=dc_count,
+                site_count=site_count,
+                server_count=server_count,
+                major_vendor_count=major_vendor_count,
+            )
+            if cached is not None:
+                return cached
+
+        # Match facts to rules (uses normalized, sorted facts)
         matched_rules = self.match_facts_to_rules(facts)
 
         # Identify TSA exposure
@@ -1699,7 +1810,23 @@ class CostModel:
         grand_total_low = sep_total_low + tsa_exit_total_low + contingency_low
         grand_total_high = sep_total_high + tsa_exit_total_high + contingency_high
 
-        return {
+        # Build deterministic input hash
+        input_data = {
+            "user_count": user_count,
+            "deal_type": deal_type.lower().strip(),
+            "app_count": app_count,
+            "dc_count": dc_count,
+            "site_count": site_count,
+            "server_count": server_count,
+            "major_vendor_count": major_vendor_count,
+            # Sort facts for deterministic hash
+            "facts": sorted([f.get("content", "")[:50].lower().strip() for f in facts])
+        }
+        input_hash = hashlib.sha256(
+            json.dumps(input_data, sort_keys=True).encode()
+        ).hexdigest()[:12]
+
+        result = {
             "deal_type": deal_type,
             "user_count": user_count,
             "facts_analyzed": len(facts),
@@ -1717,15 +1844,27 @@ class CostModel:
             "grand_total": (round(grand_total_low, -3), round(grand_total_high, -3)),
             "grand_total_midpoint": round((grand_total_low + grand_total_high) / 2, -3),
 
-            "methodology": "anchored_estimation_v2",
-            "input_hash": hashlib.sha256(
-                json.dumps({
-                    "user_count": user_count,
-                    "deal_type": deal_type,
-                    "facts": [f.get("content", "")[:50] for f in facts]
-                }, sort_keys=True).encode()
-            ).hexdigest()[:12]
+            "methodology": "anchored_estimation_v2.1_deterministic",
+            "input_hash": input_hash,
+            "is_cached": False,
         }
+
+        # Store in cache
+        if cache:
+            cache.set(
+                result,
+                user_count=user_count,
+                deal_type=deal_type,
+                facts=facts,
+                app_count=app_count,
+                dc_count=dc_count,
+                site_count=site_count,
+                server_count=server_count,
+                major_vendor_count=major_vendor_count,
+            )
+            result["is_cached"] = True
+
+        return result
 
     def format_for_display(self, estimate: Dict) -> str:
         """Format estimate for display."""

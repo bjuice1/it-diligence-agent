@@ -65,6 +65,7 @@ flask-limiter>=3.5.0
 
 # Web UI - Streamlit (legacy, kept for compatibility)
 streamlit>=1.30.0
+streamlit-mermaid>=0.2.0  # For org chart rendering
 
 # =============================================================================
 # DATA EXPORT

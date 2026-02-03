@@ -118,6 +118,33 @@ from tools_v2.adversarial_reviewer import (
     FindingType,
 )
 
+# Phase 5: Document Parsing & Preprocessing
+from tools_v2.document_preprocessor import (
+    DocumentPreprocessor,
+    preprocess_document,
+)
+from tools_v2.numeric_normalizer import (
+    normalize_numeric,
+    normalize_cost,
+    normalize_count,
+    normalize_percentage,
+    is_null_value,
+)
+from tools_v2.table_chunker import (
+    TableAwareChunker,
+    Chunk,
+    chunk_document,
+    chunk_with_context,
+)
+from tools_v2.table_parser import (
+    DeterministicTableParser,
+    ParsedTable,
+    TableCell,
+    parse_table,
+    parse_tables,
+    extract_table_data,
+)
+
 __all__ = [
     # Fact Store
     'FactStore',
@@ -205,4 +232,22 @@ __all__ = [
     'AdversarialReviewResult',
     'AdversarialFinding',
     'FindingType',
+    # Phase 5: Document Parsing & Preprocessing
+    'DocumentPreprocessor',
+    'preprocess_document',
+    'normalize_numeric',
+    'normalize_cost',
+    'normalize_count',
+    'normalize_percentage',
+    'is_null_value',
+    'TableAwareChunker',
+    'Chunk',
+    'chunk_document',
+    'chunk_with_context',
+    'DeterministicTableParser',
+    'ParsedTable',
+    'TableCell',
+    'parse_table',
+    'parse_tables',
+    'extract_table_data',
 ]

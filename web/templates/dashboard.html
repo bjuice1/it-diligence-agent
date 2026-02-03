@@ -106,14 +106,14 @@
         <span class="metric-value">{{ summary.gaps }}</span>
         <span class="metric-subtext">Requiring VDR requests</span>
     </div>
-    <div class="metric-card {{ 'metric-danger' if summary.risk_summary.critical|default(0) > 0 else 'metric-warning' if summary.risk_summary.high|default(0) > 0 else '' }}">
+    <div class="metric-card {{ 'metric-danger' if (summary.risk_summary|default({})).critical|default(0) > 0 else 'metric-warning' if (summary.risk_summary|default({})).high|default(0) > 0 else '' }}">
         <span class="metric-label">Risks Identified</span>
-        <span class="metric-value">{{ summary.risks }}</span>
+        <span class="metric-value">{{ summary.risks|default(0) }}</span>
         <span class="metric-subtext">
-            {% if summary.risk_summary.critical|default(0) > 0 %}
-            <span style="color: var(--danger);">{{ summary.risk_summary.critical }} critical</span>,
+            {% if (summary.risk_summary|default({})).critical|default(0) > 0 %}
+            <span style="color: var(--danger);">{{ (summary.risk_summary|default({})).critical }} critical</span>,
             {% endif %}
-            {{ summary.risk_summary.high|default(0) }} high
+            {{ (summary.risk_summary|default({})).high|default(0) }} high
         </span>
     </div>
     <div class="metric-card">

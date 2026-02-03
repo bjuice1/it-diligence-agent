@@ -114,6 +114,7 @@ class Fact:
     analysis_phase: str = "target_extraction"  # "target_extraction" or "buyer_extraction" - which phase created this fact
     is_integration_insight: bool = False       # True if this fact describes cross-entity integration considerations
     source_document: str = "" # Filename of source document (for incremental updates)
+    deal_id: str = ""         # Deal this fact belongs to - REQUIRED for proper isolation
     created_at: str = field(default_factory=lambda: _generate_timestamp())
     updated_at: str = ""      # Set when fact is modified
     # Verification fields - for human-in-the-loop validation
@@ -248,6 +249,9 @@ class Fact:
             data['needs_review'] = False
         if 'needs_review_reason' not in data:
             data['needs_review_reason'] = ""
+        # Deal isolation (backwards compatibility)
+        if 'deal_id' not in data:
+            data['deal_id'] = ""  # Legacy facts without deal_id
 
         return cls(**data)
 
@@ -266,6 +270,7 @@ class Gap:
     description: str
     importance: str           # critical, high, medium, low
     entity: str = "target"    # "target" or "buyer" - which entity this gap is for
+    deal_id: str = ""         # Deal this gap belongs to - REQUIRED for proper isolation
     created_at: str = field(default_factory=lambda: _generate_timestamp())
 
     def to_dict(self) -> Dict:
@@ -276,6 +281,9 @@ class Gap:
         # Handle legacy gaps without entity field
         if 'entity' not in data:
             data['entity'] = 'target'
+        # Deal isolation (backwards compatibility)
+        if 'deal_id' not in data:
+            data['deal_id'] = ""  # Legacy gaps without deal_id
         return cls(**data)
 
 
@@ -418,6 +426,7 @@ class OpenQuestion:
     answer: str = ""                              # The answer when provided
     answered_by: str = ""                         # Who provided the answer
     answered_at: str = ""                         # When answered
+    deal_id: str = ""                             # Deal this question belongs to
     created_at: str = field(default_factory=lambda: _generate_timestamp())
 
     def to_dict(self) -> Dict:
@@ -425,6 +434,10 @@ class OpenQuestion:
 
     @classmethod
     def from_dict(cls, data: Dict) -> "OpenQuestion":
+        # Backwards compatibility for deal_id
+        if 'deal_id' not in data:
+            data = dict(data)
+            data['deal_id'] = ""
         return cls(**data)
 
     def mark_answered(self, answer: str, answered_by: str) -> None:
@@ -476,7 +489,15 @@ class FactStore:
         questions = store.transform_gaps_to_questions()
     """
 
-    def __init__(self):
+    def __init__(self, deal_id: str = None):
+        """
+        Initialize FactStore.
+
+        Args:
+            deal_id: Deal ID for scoping all facts/gaps. Required for new stores,
+                     can be None when loading legacy data.
+        """
+        self.deal_id = deal_id
         self.facts: List[Fact] = []
         self.gaps: List[Gap] = []
         self.open_questions: List[OpenQuestion] = []  # Point 82
@@ -486,7 +507,8 @@ class FactStore:
         self.discovery_complete: Dict[str, bool] = {}
         self.metadata: Dict[str, Any] = {
             "created_at": _generate_timestamp(),
-            "version": "2.1"  # Version bump for open questions
+            "version": "2.2",  # Version bump for deal isolation
+            "deal_id": deal_id or ""
         }
         # Thread safety: Lock for all mutating operations
         self._lock = threading.RLock()
@@ -495,13 +517,18 @@ class FactStore:
         self._gap_index: Dict[str, Gap] = {}
         self._question_index: Dict[str, OpenQuestion] = {}  # Point 82
 
+        # Warn if no deal_id provided
+        if not deal_id:
+            logger.warning("FactStore created without deal_id - data isolation may be compromised")
+
     def add_fact(self, domain: str, category: str, item: str,
                  details: Dict[str, Any], status: str,
                  evidence: Dict[str, str], entity: str = "target",
                  source_document: str = "", needs_review: bool = False,
                  needs_review_reason: str = "",
                  analysis_phase: str = None,
-                 is_integration_insight: bool = False) -> str:
+                 is_integration_insight: bool = False,
+                 deal_id: str = None) -> str:
         """
         Add a fact and return its unique ID.
 
@@ -518,13 +545,19 @@ class FactStore:
             needs_review_reason: Why the entry needs review
             analysis_phase: "target_extraction" or "buyer_extraction" (auto-set if None)
             is_integration_insight: True if this is a cross-entity integration observation
+            deal_id: Deal ID for scoping (uses store's deal_id if not provided)
 
         Returns:
             Unique fact ID (e.g., F-INFRA-001)
 
         Raises:
-            ValueError: If entity is invalid or locked
+            ValueError: If entity is invalid, locked, or deal_id missing
         """
+        # Resolve deal_id - use provided value or fall back to store's deal_id
+        effective_deal_id = deal_id or self.deal_id
+        if not effective_deal_id:
+            raise ValueError("deal_id is required - provide in add_fact() or store constructor")
+
         # Validate entity - fail fast instead of silently defaulting
         if entity not in ("target", "buyer"):
             raise ValueError(f"Invalid entity '{entity}'. Must be 'target' or 'buyer'")
@@ -571,6 +604,7 @@ class FactStore:
                 analysis_phase=analysis_phase,
                 is_integration_insight=is_integration_insight,
                 source_document=source_document,
+                deal_id=effective_deal_id,
                 needs_review=needs_review,
                 needs_review_reason=needs_review_reason
             )
@@ -590,12 +624,13 @@ class FactStore:
 
         return fact_id
 
-    def add_fact_from_dict(self, fact_data: Dict[str, Any]) -> Optional['Fact']:
+    def add_fact_from_dict(self, fact_data: Dict[str, Any], deal_id: str = None) -> Optional['Fact']:
         """
         Add a fact from a dictionary (for incremental updates).
 
         Args:
             fact_data: Dictionary containing fact fields
+            deal_id: Deal ID for scoping (uses store's deal_id if not provided)
 
         Returns:
             The created Fact object, or None if creation failed
@@ -609,6 +644,8 @@ class FactStore:
             evidence = fact_data.get("evidence", {})
             entity = fact_data.get("entity", "target")
             source_document = fact_data.get("source_document", "")
+            # Use deal_id from fact_data, or provided deal_id, or fall back to store's deal_id
+            effective_deal_id = fact_data.get("deal_id") or deal_id or self.deal_id
 
             if not item:
                 return None
@@ -621,7 +658,8 @@ class FactStore:
                 status=status,
                 evidence=evidence,
                 entity=entity,
-                source_document=source_document
+                source_document=source_document,
+                deal_id=effective_deal_id
             )
 
             return self.get_fact(fact_id)
@@ -631,7 +669,8 @@ class FactStore:
             return None
 
     def add_gap(self, domain: str, category: str,
-                description: str, importance: str) -> str:
+                description: str, importance: str,
+                entity: str = "target", deal_id: str = None) -> str:
         """
         Add a gap (missing information) and return its ID.
 
@@ -640,10 +679,20 @@ class FactStore:
             category: Category within domain
             description: What information is missing
             importance: critical, high, medium, low
+            entity: "target" or "buyer" - which entity this gap is for
+            deal_id: Deal ID for scoping (uses store's deal_id if not provided)
 
         Returns:
             Unique gap ID (e.g., G-INFRA-001)
+
+        Raises:
+            ValueError: If deal_id is missing
         """
+        # Resolve deal_id - use provided value or fall back to store's deal_id
+        effective_deal_id = deal_id or self.deal_id
+        if not effective_deal_id:
+            raise ValueError("deal_id is required - provide in add_gap() or store constructor")
+
         with self._lock:
             gap_id = self._generate_gap_id(domain)
             gap = Gap(
@@ -651,7 +700,9 @@ class FactStore:
                 domain=domain,
                 category=category,
                 description=description,
-                importance=importance
+                importance=importance,
+                entity=entity,
+                deal_id=effective_deal_id
             )
 
             self.gaps.append(gap)
@@ -1634,14 +1685,27 @@ class FactStore:
         logger.info(f"Saved {len(self.facts)} facts to {path}")
 
     @classmethod
-    def load(cls, path: str) -> "FactStore":
-        """Load fact store from JSON file with retry logic."""
+    def load(cls, path: str, deal_id: str = None) -> "FactStore":
+        """
+        Load fact store from JSON file with retry logic.
+
+        Args:
+            path: Path to JSON file
+            deal_id: Optional deal_id to use (overrides metadata deal_id)
+
+        Returns:
+            Loaded FactStore instance
+        """
         from tools_v2.io_utils import safe_file_read
 
         data = safe_file_read(path, mode='r', encoding='utf-8', max_retries=3)
 
-        store = cls()
-        store.metadata = data.get("metadata", {})
+        # Get deal_id from argument, or from metadata, or None
+        metadata = data.get("metadata", {})
+        effective_deal_id = deal_id or metadata.get("deal_id")
+
+        store = cls(deal_id=effective_deal_id)
+        store.metadata = metadata
 
         # Load facts with robust ID parsing and index building
         for fact_dict in data.get("facts", []):
@@ -2177,7 +2241,8 @@ class FactStore:
         source_gap_ids: List[str] = None,
         suggested_recipient: str = "Management",
         context: str = "",
-        impact_if_unanswered: str = ""
+        impact_if_unanswered: str = "",
+        deal_id: str = None
     ) -> str:
         """
         Add an open question and return its unique ID.
@@ -2191,10 +2256,19 @@ class FactStore:
             suggested_recipient: Who should answer this
             context: Background context
             impact_if_unanswered: Why this matters
+            deal_id: Deal ID for scoping (uses store's deal_id if not provided)
 
         Returns:
             Unique question ID (e.g., Q-INFRA-001)
+
+        Raises:
+            ValueError: If deal_id is missing
         """
+        # Resolve deal_id
+        effective_deal_id = deal_id or self.deal_id
+        if not effective_deal_id:
+            raise ValueError("deal_id is required - provide in add_open_question() or store constructor")
+
         with self._lock:
             question_id = self._generate_question_id(domain)
 
@@ -2207,7 +2281,8 @@ class FactStore:
                 source_gap_ids=source_gap_ids or [],
                 suggested_recipient=suggested_recipient,
                 context=context,
-                impact_if_unanswered=impact_if_unanswered
+                impact_if_unanswered=impact_if_unanswered,
+                deal_id=effective_deal_id
             )
 
             self.open_questions.append(question)
@@ -2251,7 +2326,7 @@ class FactStore:
                 # Determine impact based on importance
                 impact = self._determine_gap_impact(gap)
 
-                # Create the question
+                # Create the question (inherit deal_id from gap or store)
                 question_id = self.add_open_question(
                     domain=gap.domain,
                     category=gap.category,
@@ -2260,7 +2335,8 @@ class FactStore:
                     source_gap_ids=[gap.gap_id],
                     suggested_recipient=recipient,
                     context=f"Gap identified during {gap.domain} discovery",
-                    impact_if_unanswered=impact
+                    impact_if_unanswered=impact,
+                    deal_id=gap.deal_id or self.deal_id
                 )
 
                 created_question_ids.append(question_id)

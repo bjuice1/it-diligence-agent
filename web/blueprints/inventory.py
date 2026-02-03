@@ -31,6 +31,7 @@ def get_inventory_store() -> InventoryStore:
     """Get or create the inventory store for the current deal.
 
     IMPORTANT: Inventory is now deal-scoped to prevent data leakage between deals.
+    The store is created WITH deal_id and uses consistent deal-specific paths.
     """
     from flask import session
 
@@ -40,14 +41,16 @@ def get_inventory_store() -> InventoryStore:
     store_key = current_deal_id or 'default'
 
     if store_key not in _inventory_stores:
-        _inventory_stores[store_key] = InventoryStore()
+        # Create store WITH deal_id - this auto-generates the storage path
+        _inventory_stores[store_key] = InventoryStore(deal_id=current_deal_id)
 
-        # Try to load from deal-specific path first, then default
-        if current_deal_id:
-            deal_path = Path(f"data/deals/{current_deal_id}/inventory_store.json")
-            if deal_path.exists():
+        # Storage path is now auto-generated in constructor based on deal_id
+        # For deal: output/deals/{deal_id}/inventory_store.json
+        # For default: uses storage_path=None
+        if _inventory_stores[store_key].storage_path:
+            if _inventory_stores[store_key].storage_path.exists():
                 try:
-                    _inventory_stores[store_key].load(deal_path)
+                    _inventory_stores[store_key].load(_inventory_stores[store_key].storage_path)
                     logger.info(f"Loaded inventory store for deal {current_deal_id} with {len(_inventory_stores[store_key])} items")
                 except Exception as e:
                     logger.warning(f"Could not load deal inventory store: {e}")
@@ -64,6 +67,29 @@ def get_inventory_store() -> InventoryStore:
                     logger.warning(f"Could not load inventory store: {e}")
 
     return _inventory_stores[store_key]
+
+
+def save_inventory_store(store: InventoryStore) -> None:
+    """Save inventory store to its deal-specific path.
+
+    FIXED: Now uses consistent deal-specific paths for BOTH read AND write.
+    """
+    if store.storage_path:
+        store.storage_path.parent.mkdir(parents=True, exist_ok=True)
+        store.save(store.storage_path)
+        logger.info(f"Saved inventory store to {store.storage_path}")
+    elif store.deal_id:
+        # Fallback: construct path from deal_id
+        deal_path = Path(f"output/deals/{store.deal_id}/inventory_store.json")
+        deal_path.parent.mkdir(parents=True, exist_ok=True)
+        store.save(deal_path)
+        logger.info(f"Saved inventory store to {deal_path}")
+    else:
+        # No deal - use default path
+        default_path = Path("data/inventory_store.json")
+        default_path.parent.mkdir(parents=True, exist_ok=True)
+        store.save(default_path)
+        logger.warning("Saved inventory to default path (no deal_id set)")
 
 
 def clear_inventory_store_for_deal(deal_id: str = None):
@@ -240,8 +266,8 @@ def upload_inventory():
         else:
             flash(f"Imported {result.inventory_items_added} items from {file.filename}", "success")
 
-            # Save the store
-            store.save(Path("data/inventory_store.json"))
+            # Save the store to deal-specific path
+            save_inventory_store(store)
 
     except Exception as e:
         logger.exception(f"Failed to ingest {file.filename}")
@@ -278,8 +304,8 @@ def enrich_inventory():
                 "success"
             )
 
-        # Save the store
-        store.save(Path("data/inventory_store.json"))
+        # Save the store to deal-specific path
+        save_inventory_store(store)
 
     except Exception as e:
         logger.exception("Enrichment failed")
@@ -290,16 +316,27 @@ def enrich_inventory():
 
 @inventory_bp.route('/clear', methods=['POST'])
 def clear_inventory():
-    """Clear all inventory data."""
-    global _inventory_store
-    _inventory_store = InventoryStore()
+    """Clear inventory data for the current deal."""
+    from flask import session
 
-    # Remove saved file
-    save_path = Path("data/inventory_store.json")
-    if save_path.exists():
-        save_path.unlink()
+    current_deal_id = session.get('current_deal_id')
+    store_key = current_deal_id or 'default'
 
-    flash("Inventory cleared", "info")
+    # Clear the cached store
+    if store_key in _inventory_stores:
+        store = _inventory_stores[store_key]
+        # Remove the saved file if it exists
+        if store.storage_path and store.storage_path.exists():
+            store.storage_path.unlink()
+            logger.info(f"Removed inventory file: {store.storage_path}")
+        del _inventory_stores[store_key]
+    else:
+        # Fallback: try to remove default path
+        default_path = Path("data/inventory_store.json")
+        if default_path.exists():
+            default_path.unlink()
+
+    flash(f"Inventory cleared for deal {current_deal_id or 'default'}", "info")
     return redirect(url_for('inventory.inventory_home'))
 
 

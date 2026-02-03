@@ -148,8 +148,38 @@ def _build_org_chart_data(store: OrganizationDataStore) -> Dict[str, Any]:
 
 
 def _sanitize_id(id_str: str) -> str:
-    """Sanitize ID for Mermaid (no special characters)."""
-    return id_str.replace("-", "_").replace(" ", "_").replace(".", "_")
+    """
+    Sanitize string for use as Mermaid node ID.
+
+    Mermaid IDs must be alphanumeric with underscores only.
+    This function handles:
+    - Common separators (-, ., spaces)
+    - Special characters like parentheses, apostrophes, colons
+    - IDs starting with numbers
+    - Empty or None values
+    - Very long names
+    """
+    import re
+
+    if not id_str:
+        return "unknown"
+
+    # Replace common separators with underscore
+    sanitized = id_str.replace("-", "_").replace(" ", "_").replace(".", "_")
+
+    # Remove all other non-alphanumeric characters
+    sanitized = re.sub(r'[^a-zA-Z0-9_]', '', sanitized)
+
+    # Ensure doesn't start with number (Mermaid requirement)
+    if sanitized and sanitized[0].isdigit():
+        sanitized = "n" + sanitized
+
+    # Ensure not empty
+    if not sanitized:
+        sanitized = "node"
+
+    # Limit length (Mermaid can have issues with very long IDs)
+    return sanitized[:50]
 
 
 def _find_parent_node(nodes: List[Dict], parent_name: str) -> Optional[Dict]:
@@ -301,9 +331,12 @@ graph TD
 
 def _render_mermaid(code: str) -> None:
     """
-    Render Mermaid diagram in Streamlit.
+    Render Mermaid diagram in Streamlit with fallback options.
 
-    Uses streamlit-mermaid if available, falls back to code display.
+    Tries in order:
+    1. streamlit-mermaid package (best quality)
+    2. HTML/JS with Mermaid CDN (fallback)
+    3. Raw code display (last resort)
     """
     try:
         # Try to use streamlit-mermaid
@@ -311,6 +344,7 @@ def _render_mermaid(code: str) -> None:
         stmd.st_mermaid(code, height=400)
     except ImportError:
         # Fallback: Show as HTML using Mermaid CDN
+        st.warning("streamlit-mermaid not installed. Using fallback renderer.")
         html = f"""
         <div class="mermaid" style="text-align: center;">
         {code}
@@ -320,7 +354,16 @@ def _render_mermaid(code: str) -> None:
             mermaid.initialize({{ startOnLoad: true, theme: 'default' }});
         </script>
         """
-        st.components.v1.html(html, height=450, scrolling=True)
+        try:
+            st.components.v1.html(html, height=450, scrolling=True)
+        except Exception as html_error:
+            # Last resort: show raw code
+            st.error(f"Failed to render diagram: {html_error}")
+            st.code(code, language="mermaid")
+    except Exception as e:
+        # Handle any other errors during rendering
+        st.error(f"Failed to render org chart: {e}")
+        st.code(code, language="mermaid")
 
 
 def render_org_chart_inline(

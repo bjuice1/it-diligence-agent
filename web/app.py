@@ -1152,6 +1152,10 @@ def dashboard():
             'gaps': sum(raw_summary.get('gap_counts', {}).values()),
             'risks': raw_summary.get('risk_summary', {}).get('total', 0),
             'work_items': raw_summary.get('work_item_summary', {}).get('total', 0),
+            # Include full risk_summary for template access
+            'risk_summary': raw_summary.get('risk_summary', {
+                'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'total': 0
+            }),
         }
         top_risks = db_data.get_top_risks(5)
         day1_items = [w for w in db_data.get_work_items() if w.phase == 'Day_1'][:5]
@@ -1246,7 +1250,19 @@ def dashboard():
     except Exception as e:
         logger.error(f"Dashboard: Database path failed: {e}")
         flash('Error loading dashboard. Please try again.', 'error')
-        summary = {'facts': 0, 'gaps': 0, 'risks': 0, 'work_items': 0}
+        summary = {
+            'facts': 0,
+            'gaps': 0,
+            'risks': 0,
+            'work_items': 0,
+            'risk_summary': {
+                'critical': 0,
+                'high': 0,
+                'medium': 0,
+                'low': 0,
+                'total': 0
+            },
+        }
         top_risks = []
         day1_items = []
         analysis_metadata = None

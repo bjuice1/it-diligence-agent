@@ -41,14 +41,15 @@ it-diligence-agent/
 All persistence is handled through the `stores/` package:
 
 ### FactStore (`stores/fact_store.py`)
-Central repository for extracted facts.
+Central repository for extracted facts. **Requires deal_id for data isolation (V2.3).**
 
 ```python
 from stores import FactStore
 
-store = FactStore()
+# Initialize with deal_id for proper isolation
+store = FactStore(deal_id="deal_abc123")
 
-# Add a fact
+# Add a fact (deal_id inherited from store)
 fact_id = store.add_fact(
     domain="infrastructure",
     category="hosting",
@@ -57,6 +58,14 @@ fact_id = store.add_fact(
     status="documented",
     evidence={"exact_quote": "50 EC2 instances...", "page": 5},
     entity="target"
+)
+
+# Or provide deal_id per-fact
+fact_id = store.add_fact(
+    domain="infrastructure",
+    category="hosting",
+    item="Azure VMs",
+    deal_id="deal_xyz789"  # Override store's deal_id
 )
 
 # Retrieve facts
@@ -225,6 +234,56 @@ Finding → Fact → Document (hash-verified)
 
 ### Atomic Writes
 All store operations use atomic writes (write to temp, then rename) to prevent corruption.
+
+---
+
+## Document Processing Utilities (V2.3)
+
+The `tools_v2/` package includes preprocessing utilities for reliable document handling:
+
+### Document Preprocessor
+Cleans text before parsing or storage:
+
+```python
+from tools_v2 import preprocess_document
+
+# Remove PUA chars, filecite artifacts, normalize whitespace
+clean_text = preprocess_document(dirty_text)
+```
+
+### Numeric Normalizer
+Consistent parsing of numbers, currencies, and null values:
+
+```python
+from tools_v2 import normalize_numeric, normalize_cost, is_null_value
+
+normalize_numeric("$1,234.56")  # → 1234.56
+normalize_numeric("N/A")        # → None
+normalize_numeric("~500")       # → 500
+is_null_value("TBD")            # → True
+```
+
+### Table-Aware Chunker
+Chunks documents while preserving table integrity:
+
+```python
+from tools_v2 import chunk_document
+
+chunks = chunk_document(text, max_chunk_size=4000)
+# Tables never split mid-row; large tables repeat headers
+```
+
+### Table Parser
+Deterministic Markdown table parsing:
+
+```python
+from tools_v2 import parse_table
+
+table = parse_table(markdown_table)
+# Returns ParsedTable with headers, rows (normalized), raw_rows
+```
+
+---
 
 See also:
 - [Architecture Overview](architecture.md)

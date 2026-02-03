@@ -42,16 +42,28 @@ class InventoryStore:
     - Merge capabilities for re-imports
     """
 
-    def __init__(self, storage_path: Optional[Path] = None):
+    def __init__(self, deal_id: str = None, storage_path: Optional[Path] = None):
         """
         Initialize InventoryStore.
 
         Args:
+            deal_id: Deal ID for scoping. Required for proper data isolation.
             storage_path: Optional path for persistence. If provided,
-                         will attempt to load existing data.
+                         will attempt to load existing data. If deal_id is
+                         provided without storage_path, path is auto-generated.
         """
+        self.deal_id = deal_id
         self._items: Dict[str, InventoryItem] = {}
         self._lock = threading.Lock()
+
+        # Auto-generate storage path if deal_id provided but no path
+        if deal_id and not storage_path:
+            try:
+                from config_v2 import OUTPUT_DIR
+                storage_path = OUTPUT_DIR / "deals" / deal_id / "inventory_store.json"
+            except ImportError:
+                storage_path = Path("output") / "deals" / deal_id / "inventory_store.json"
+
         self.storage_path = storage_path
 
         # Load existing data if path provided and file exists
@@ -67,6 +79,7 @@ class InventoryStore:
         inventory_type: str,
         data: Dict[str, Any],
         entity: str = "target",
+        deal_id: str = None,
         source_file: str = "",
         source_type: str = "import"
     ) -> str:
@@ -77,16 +90,27 @@ class InventoryStore:
             inventory_type: application, infrastructure, organization, vendor
             data: Item data (name, vendor, version, etc.)
             entity: "target" or "buyer"
+            deal_id: Deal ID (uses store's deal_id if not provided)
             source_file: Source filename
             source_type: "import", "manual", or "discovery"
 
         Returns:
             The item_id of the created/existing item
 
+        Raises:
+            ValueError: If deal_id is not provided and store has no deal_id
+
         Note:
             If an item with the same content-based ID already exists,
             returns the existing ID without creating a duplicate.
         """
+        # Resolve deal_id
+        effective_deal_id = deal_id or self.deal_id
+        if not effective_deal_id:
+            raise ValueError(
+                "deal_id is required - provide in add_item() or store constructor"
+            )
+
         # Validate
         if not validate_inventory_type(inventory_type):
             raise ValueError(f"Invalid inventory type: {inventory_type}")
@@ -100,8 +124,8 @@ class InventoryStore:
                 f"Item will be created but may have issues."
             )
 
-        # Generate content-based ID
-        item_id = generate_inventory_id(inventory_type, data, entity)
+        # Generate content-based ID (now includes deal_id for cross-deal uniqueness)
+        item_id = generate_inventory_id(inventory_type, data, entity, effective_deal_id)
 
         with self._lock:
             # Check if already exists
@@ -116,18 +140,19 @@ class InventoryStore:
                     logger.debug(f"Item already exists: {item_id}")
                 return item_id
 
-            # Create new item
+            # Create new item with deal_id
             item = InventoryItem(
                 item_id=item_id,
                 inventory_type=inventory_type,
                 entity=entity,
+                deal_id=effective_deal_id,
                 data=data,
                 source_file=source_file,
                 source_type=source_type,
             )
 
             self._items[item_id] = item
-            logger.debug(f"Added inventory item: {item_id} ({item.name})")
+            logger.debug(f"Added inventory item: {item_id} ({item.name}) for deal {effective_deal_id}")
 
         return item_id
 
@@ -232,6 +257,7 @@ class InventoryStore:
         self,
         inventory_type: Optional[str] = None,
         entity: Optional[str] = None,
+        deal_id: Optional[str] = None,
         status: str = "active"
     ) -> List[InventoryItem]:
         """
@@ -240,14 +266,22 @@ class InventoryStore:
         Args:
             inventory_type: Filter by type (None = all types)
             entity: Filter by entity (None = all entities)
+            deal_id: Filter by deal (uses store's deal_id if not provided)
             status: Filter by status ("active", "removed", "all")
 
         Returns:
             List of matching InventoryItems
         """
+        # Use store's deal_id if not explicitly provided
+        effective_deal_id = deal_id or self.deal_id
+
         results = []
 
         for item in self._items.values():
+            # Filter by deal_id FIRST (most important for isolation)
+            if effective_deal_id and item.deal_id and item.deal_id != effective_deal_id:
+                continue
+
             # Filter by status
             if status != "all" and item.status != status:
                 continue
@@ -465,6 +499,8 @@ class InventoryStore:
         Args:
             path: Path to save to. Uses storage_path if not provided.
         """
+        from datetime import datetime
+
         save_path = path or self.storage_path
         if not save_path:
             raise ValueError("No save path provided and no storage_path set")
@@ -473,7 +509,10 @@ class InventoryStore:
 
         with self._lock:
             data = {
-                "version": "1.0",
+                "schema_version": "2.0",  # Updated for deal_id support
+                "deal_id": self.deal_id or "",
+                "created_at": datetime.now().isoformat(),
+                "item_count": len(self._items),
                 "items": {
                     item_id: item.to_dict()
                     for item_id, item in self._items.items()
@@ -487,11 +526,11 @@ class InventoryStore:
         with open(save_path, 'w') as f:
             json.dump(data, f, indent=2)
 
-        logger.info(f"Saved {len(self._items)} inventory items to {save_path}")
+        logger.info(f"Saved {len(self._items)} inventory items to {save_path} (deal: {self.deal_id})")
 
-    def load(self, path: Path) -> None:
+    def load_from_file(self, path: Path) -> None:
         """
-        Load store from JSON file.
+        Load store from JSON file (instance method).
 
         Args:
             path: Path to load from
@@ -502,6 +541,10 @@ class InventoryStore:
 
         with open(path, 'r') as f:
             data = json.load(f)
+
+        # Update deal_id from loaded data if not already set
+        if not self.deal_id:
+            self.deal_id = data.get("deal_id", "")
 
         with self._lock:
             self._items.clear()
@@ -516,10 +559,49 @@ class InventoryStore:
 
         logger.info(f"Loaded {len(self._items)} inventory items from {path}")
 
+    @classmethod
+    def load(cls, path: Path, deal_id: str = None) -> "InventoryStore":
+        """
+        Load store from JSON file (classmethod).
+
+        Args:
+            path: Path to load from
+            deal_id: Optional deal_id to use (overrides file's deal_id)
+
+        Returns:
+            Loaded InventoryStore instance
+        """
+        path = Path(path)
+        if not path.exists():
+            raise FileNotFoundError(f"Inventory file not found: {path}")
+
+        with open(path, 'r') as f:
+            data = json.load(f)
+
+        # Get deal_id from argument, or from file data
+        effective_deal_id = deal_id or data.get("deal_id", "")
+
+        store = cls(deal_id=effective_deal_id)
+
+        items_data = data.get("items", {})
+        for item_id, item_dict in items_data.items():
+            try:
+                item = InventoryItem.from_dict(item_dict)
+                store._items[item_id] = item
+            except Exception as e:
+                logger.error(f"Failed to load item {item_id}: {e}")
+
+        logger.info(f"Loaded {len(store._items)} inventory items from {path} (deal: {store.deal_id})")
+        return store
+
     def to_dict(self) -> Dict[str, Any]:
         """Export all items as dict (for JSON serialization)."""
+        from datetime import datetime
         return {
-            "version": "1.0",
+            "schema_version": "2.0",
+            "deal_id": self.deal_id or "",
+            "created_at": datetime.now().isoformat(),
+            "item_count": len(self._items),
             "items": {
                 item_id: item.to_dict()
                 for item_id, item in self._items.items()
@@ -528,9 +610,11 @@ class InventoryStore:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "InventoryStore":
+    def from_dict(cls, data: Dict[str, Any], deal_id: str = None) -> "InventoryStore":
         """Create InventoryStore from dict."""
-        store = cls()
+        # Get deal_id from data if not provided
+        effective_deal_id = deal_id or data.get("deal_id", "")
+        store = cls(deal_id=effective_deal_id)
         items_data = data.get("items", {})
         for item_id, item_dict in items_data.items():
             item = InventoryItem.from_dict(item_dict)
@@ -609,6 +693,7 @@ class InventoryStore:
         inventory_type: str,
         rows: List[Dict[str, Any]],
         entity: str = "target",
+        deal_id: str = None,
         source_file: str = ""
     ) -> MergeResult:
         """
@@ -620,12 +705,16 @@ class InventoryStore:
             inventory_type: Type of inventory
             rows: List of row dicts with field data
             entity: target or buyer
+            deal_id: Deal ID (uses store's deal_id if not provided)
             source_file: Source filename
 
         Returns:
             MergeResult with import statistics
         """
         result = MergeResult()
+
+        # Resolve deal_id
+        effective_deal_id = deal_id or self.deal_id
 
         # Track existing IDs before adding
         existing_ids = set(self._items.keys())
@@ -636,6 +725,7 @@ class InventoryStore:
                     inventory_type=inventory_type,
                     data=row,
                     entity=entity,
+                    deal_id=effective_deal_id,
                     source_file=source_file,
                     source_type="import"
                 )
