@@ -172,6 +172,7 @@ class StaffMember:
     hire_date: Optional[str] = None
     reports_to: Optional[str] = None
     entity: str = "target"  # target | buyer | parent
+    deal_id: str = ""  # Deal ID for data isolation
     skills: List[str] = field(default_factory=list)
     is_key_person: bool = False
     key_person_reason: Optional[str] = None
@@ -198,6 +199,7 @@ class StaffMember:
             'hire_date': self.hire_date,
             'reports_to': self.reports_to,
             'entity': self.entity,
+            'deal_id': self.deal_id,
             'skills': self.skills,
             'is_key_person': self.is_key_person,
             'key_person_reason': self.key_person_reason,
@@ -221,6 +223,7 @@ class StaffMember:
             hire_date=data.get('hire_date'),
             reports_to=data.get('reports_to'),
             entity=data.get('entity', 'target'),
+            deal_id=data.get('deal_id', ''),
             skills=data.get('skills', []),
             is_key_person=data.get('is_key_person', False),
             key_person_reason=data.get('key_person_reason'),
@@ -353,6 +356,7 @@ class MSPRelationship:
     notice_period_days: int = 30
     dependency_level: DependencyLevel = DependencyLevel.PARTIAL
     entity: str = "target"
+    deal_id: str = ""  # Deal ID for data isolation
     notes: Optional[str] = None
 
     # Calculated fields
@@ -400,6 +404,7 @@ class MSPRelationship:
             'replacement_cost_estimate': self.replacement_cost_estimate,
             'risk_level': self.risk_level,
             'entity': self.entity,
+            'deal_id': self.deal_id,
             'notes': self.notes
         }
 
@@ -415,6 +420,7 @@ class MSPRelationship:
             notice_period_days=data.get('notice_period_days', 30),
             dependency_level=DependencyLevel(data.get('dependency_level', 'partial')),
             entity=data.get('entity', 'target'),
+            deal_id=data.get('deal_id', ''),
             notes=data.get('notes')
         )
 
@@ -440,6 +446,7 @@ class SharedServiceDependency:
     criticality: str = "medium"  # "critical" | "high" | "medium" | "low"
     tsa_candidate: bool = True  # Should this be in a TSA?
     tsa_duration_months: int = 12
+    deal_id: str = ""  # Deal ID for data isolation
     description: Optional[str] = None
 
     # Calculated fields for replacement planning
@@ -476,6 +483,7 @@ class SharedServiceDependency:
             'criticality': self.criticality,
             'tsa_candidate': self.tsa_candidate,
             'tsa_duration_months': self.tsa_duration_months,
+            'deal_id': self.deal_id,
             'replacement_cost_annual': self.replacement_cost_annual,
             'replacement_fte_need': self.replacement_fte_need,
             'urgency': self.urgency,
@@ -493,6 +501,7 @@ class SharedServiceDependency:
             criticality=data.get('criticality', 'medium'),
             tsa_candidate=data.get('tsa_candidate', True),
             tsa_duration_months=data.get('tsa_duration_months', 12),
+            deal_id=data.get('deal_id', ''),
             description=data.get('description')
         )
 

@@ -784,10 +784,13 @@ def process_upload():
     # Ensure directories exist
     ensure_directories()
 
-    # Initialize DocumentStore
+    # Get current deal_id from session for data isolation
+    current_deal_id = flask_session.get('current_deal_id')
+
+    # Initialize DocumentStore with deal_id for proper isolation
     try:
         from tools_v2.document_store import DocumentStore
-        doc_store = DocumentStore.get_instance()
+        doc_store = DocumentStore.get_instance(deal_id=current_deal_id)
     except Exception as e:
         logger.error(f"Failed to initialize DocumentStore: {e}")
         doc_store = None
@@ -817,6 +820,7 @@ def process_upload():
                         file_bytes=file_bytes,
                         filename=safe_filename,
                         entity="target",
+                        deal_id=current_deal_id,
                         authority_level=target_authority,
                         uploaded_by="web_upload"
                     )
@@ -852,6 +856,7 @@ def process_upload():
                         file_bytes=file_bytes,
                         filename=safe_filename,
                         entity="buyer",
+                        deal_id=current_deal_id,
                         authority_level=buyer_authority,
                         uploaded_by="web_upload"
                     )
@@ -1147,6 +1152,7 @@ def dashboard():
 
         # Build summary from database
         raw_summary = db_data.get_dashboard_summary()
+        cost_summary = db_data.get_cost_summary_by_phase()
         summary = {
             'facts': sum(raw_summary.get('fact_counts', {}).values()),
             'gaps': sum(raw_summary.get('gap_counts', {}).values()),
@@ -1156,6 +1162,8 @@ def dashboard():
             'risk_summary': raw_summary.get('risk_summary', {
                 'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'total': 0
             }),
+            # Include cost summary by phase for work items table
+            'cost_summary': cost_summary,
         }
         top_risks = db_data.get_top_risks(5)
         day1_items = [w for w in db_data.get_work_items() if w.phase == 'Day_1'][:5]
@@ -1209,7 +1217,7 @@ def dashboard():
             buyer_doc_count = 0
             try:
                 from tools_v2.document_store import DocumentStore
-                doc_store = DocumentStore.get_instance()
+                doc_store = DocumentStore.get_instance(deal_id=current_deal_id)
                 stats = doc_store.get_statistics()
                 target_doc_count = stats["by_entity"]["target"]
                 buyer_doc_count = stats["by_entity"]["buyer"]
@@ -2335,7 +2343,7 @@ def get_organization_analysis():
                     fact_adapter, reasoning_adapter = create_store_adapters_from_deal_data(data)
 
                     logger.info(f"Building org result for target: {target_name}")
-                    result, status = build_organization_result(fact_adapter, reasoning_adapter, target_name)
+                    result, status = build_organization_result(fact_adapter, reasoning_adapter, target_name, deal_id=current_deal_id)
 
                     # Update DEAL-SCOPED cache
                     _org_cache_by_deal[current_deal_id] = {
@@ -2402,7 +2410,7 @@ def get_organization_analysis():
                 target_name = deal_context.get('target_name', 'Target') if isinstance(deal_context, dict) else 'Target'
 
                 logger.info(f"Building org result for target: {target_name}")
-                result, status = build_organization_result(s.fact_store, s.reasoning_store, target_name)
+                result, status = build_organization_result(s.fact_store, s.reasoning_store, target_name, deal_id=current_deal_id)
 
                 # Update DEAL-SCOPED cache
                 _org_cache_by_deal[current_deal_id] = {
@@ -3966,7 +3974,7 @@ def entity_summary():
         doc_stats = {"target": 0, "buyer": 0}
         try:
             from tools_v2.document_store import DocumentStore
-            doc_store = DocumentStore.get_instance()
+            doc_store = DocumentStore.get_instance(deal_id=current_deal_id)
             stats = doc_store.get_statistics()
             doc_stats["target"] = stats["by_entity"]["target"]
             doc_stats["buyer"] = stats["by_entity"]["buyer"]
@@ -3998,9 +4006,10 @@ def entity_summary():
 @auth_optional
 def api_document_store():
     """Get document store statistics and list."""
+    current_deal_id = flask_session.get('current_deal_id')
     try:
         from tools_v2.document_store import DocumentStore
-        doc_store = DocumentStore.get_instance()
+        doc_store = DocumentStore.get_instance(deal_id=current_deal_id)
 
         entity = request.args.get('entity')
         authority = request.args.get('authority')

@@ -220,6 +220,33 @@ class DealData:
             'analysis_run': self._run_repo.get_by_id(self.run_id) if self.run_id else None,
         }
 
+    def get_cost_summary_by_phase(self) -> Dict[str, Dict[str, int]]:
+        """
+        Get cost summary by phase (Day_1, Day_100, Post_100).
+
+        Returns:
+            Dict with phase keys, each containing {count, low, high}
+        """
+        from tools_v2.reasoning_tools import COST_RANGE_VALUES
+
+        by_phase = {
+            "Day_1": {"low": 0, "high": 0, "count": 0},
+            "Day_100": {"low": 0, "high": 0, "count": 0},
+            "Post_100": {"low": 0, "high": 0, "count": 0}
+        }
+
+        work_items = self.get_work_items()
+        for wi in work_items:
+            phase = wi.phase if hasattr(wi, 'phase') else None
+            cost_estimate = wi.cost_estimate if hasattr(wi, 'cost_estimate') else None
+            if phase in by_phase and cost_estimate and cost_estimate in COST_RANGE_VALUES:
+                cost_range = COST_RANGE_VALUES[cost_estimate]
+                by_phase[phase]["low"] += cost_range.get("low", 0)
+                by_phase[phase]["high"] += cost_range.get("high", 0)
+                by_phase[phase]["count"] += 1
+
+        return by_phase
+
     def get_fact_summary_by_domain(self) -> Dict[str, Dict[str, int]]:
         """Get fact counts by domain and status."""
         return self._fact_repo.get_summary_by_domain(self.deal_id, self.run_id)
@@ -297,6 +324,13 @@ class EmptyDealData:
             'risk_summary': {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'total': 0},
             'work_item_summary': {'Day_1': 0, 'Day_100': 0, 'Post_100': 0, 'total': 0},
             'analysis_run': None,
+        }
+
+    def get_cost_summary_by_phase(self):
+        return {
+            "Day_1": {"low": 0, "high": 0, "count": 0},
+            "Day_100": {"low": 0, "high": 0, "count": 0},
+            "Post_100": {"low": 0, "high": 0, "count": 0}
         }
 
     def get_fact_summary_by_domain(self): return {}

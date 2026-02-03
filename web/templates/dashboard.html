@@ -119,7 +119,7 @@
     <div class="metric-card">
         <span class="metric-label">Work Items</span>
         <span class="metric-value">{{ summary.work_items }}</span>
-        <span class="metric-subtext">{{ summary.cost_summary.Day_1.count|default(0) if summary.cost_summary else 0 }} for Day 1</span>
+        <span class="metric-subtext">{{ (summary.cost_summary|default({})).get('Day_1', {}).get('count', 0) }} for Day 1</span>
     </div>
     {% if pending_summary and pending_summary.total > 0 %}
     <div class="metric-card metric-warning" style="cursor: pointer;" onclick="window.location='/documents'">
@@ -364,25 +364,26 @@
                         {% set total_count = 0 %}
                         {% set total_low = 0 %}
                         {% set total_high = 0 %}
-                        {% for phase, data in summary.cost_summary.items() %}
-                        {% set total_count = total_count + data.count %}
-                        {% set total_low = total_low + data.low %}
-                        {% set total_high = total_high + data.high %}
+                        {% set cost_data = summary.cost_summary|default({'Day_1': {'count': 0, 'low': 0, 'high': 0}, 'Day_100': {'count': 0, 'low': 0, 'high': 0}, 'Post_100': {'count': 0, 'low': 0, 'high': 0}}) %}
+                        {% for phase, data in cost_data.items() %}
+                        {% set total_count = total_count + data.count|default(0) %}
+                        {% set total_low = total_low + data.low|default(0) %}
+                        {% set total_high = total_high + data.high|default(0) %}
                         <tr style="cursor: default;">
                             <td>
                                 <span class="badge badge-{{ phase|lower|replace('_', '') }}">{{ phase|replace('_', ' ') }}</span>
                             </td>
-                            <td>{{ data.count }}</td>
-                            <td style="text-align: right;" class="cost-range">${{ "{:,.0f}".format(data.low) }} - ${{ "{:,.0f}".format(data.high) }}</td>
+                            <td>{{ data.count|default(0) }}</td>
+                            <td style="text-align: right;" class="cost-range">${{ "{:,.0f}".format(data.low|default(0)) }} - ${{ "{:,.0f}".format(data.high|default(0)) }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
                     <tfoot style="background: var(--bg-surface-sunken);">
                         <tr style="cursor: default;">
                             <td><strong>Total</strong></td>
-                            <td><strong>{{ summary.cost_summary.values()|sum(attribute='count') }}</strong></td>
+                            <td><strong>{{ total_count }}</strong></td>
                             <td style="text-align: right;" class="cost-range">
-                                <strong>${{ "{:,.0f}".format(summary.cost_summary.values()|sum(attribute='low')) }} - ${{ "{:,.0f}".format(summary.cost_summary.values()|sum(attribute='high')) }}</strong>
+                                <strong>${{ "{:,.0f}".format(total_low) }} - ${{ "{:,.0f}".format(total_high) }}</strong>
                             </td>
                         </tr>
                     </tfoot>

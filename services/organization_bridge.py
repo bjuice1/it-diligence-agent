@@ -53,13 +53,14 @@ DEFAULT_SALARIES = {
 }
 
 
-def build_organization_from_facts(fact_store: FactStore, target_name: str = "Target") -> Tuple[OrganizationDataStore, str]:
+def build_organization_from_facts(fact_store: FactStore, target_name: str = "Target", deal_id: str = "") -> Tuple[OrganizationDataStore, str]:
     """
     Build an OrganizationDataStore from organization-domain facts.
 
     Args:
         fact_store: The fact store containing organization facts
         target_name: Name of the target company
+        deal_id: Deal ID for data isolation (passed to created objects)
 
     Returns:
         Tuple of (OrganizationDataStore, status) where status is:
@@ -67,6 +68,10 @@ def build_organization_from_facts(fact_store: FactStore, target_name: str = "Tar
         - "no_org_facts": Analysis ran but no org facts found
         - "no_facts": No facts at all in the store
     """
+    # Try to get deal_id from fact_store if not provided
+    if not deal_id and hasattr(fact_store, 'deal_id') and fact_store.deal_id:
+        deal_id = fact_store.deal_id
+
     store = OrganizationDataStore()
 
     # Check if fact store has any facts at all
@@ -116,32 +121,32 @@ def build_organization_from_facts(fact_store: FactStore, target_name: str = "Tar
 
     # Process leadership
     for fact in leadership_facts:
-        members = _create_staff_from_leadership_fact(fact)
+        members = _create_staff_from_leadership_fact(fact, deal_id=deal_id)
         staff_members.extend(members)
 
     # Process central IT teams
     for fact in central_it_facts:
-        members = _create_staff_from_team_fact(fact, RoleCategory.INFRASTRUCTURE)
+        members = _create_staff_from_team_fact(fact, RoleCategory.INFRASTRUCTURE, deal_id=deal_id)
         staff_members.extend(members)
 
     # Process app teams
     for fact in app_team_facts:
-        members = _create_staff_from_team_fact(fact, RoleCategory.APPLICATIONS)
+        members = _create_staff_from_team_fact(fact, RoleCategory.APPLICATIONS, deal_id=deal_id)
         staff_members.extend(members)
 
     # Process embedded IT
     for fact in embedded_facts:
-        members = _create_staff_from_team_fact(fact, RoleCategory.OTHER)
+        members = _create_staff_from_team_fact(fact, RoleCategory.OTHER, deal_id=deal_id)
         staff_members.extend(members)
 
     # Process roles (from Role & Compensation Breakdown table)
     for fact in roles_facts:
-        members = _create_staff_from_role_fact(fact)
+        members = _create_staff_from_role_fact(fact, deal_id=deal_id)
         staff_members.extend(members)
 
     # Process key individuals
     for fact in key_individual_facts:
-        member = _create_staff_from_key_individual_fact(fact)
+        member = _create_staff_from_key_individual_fact(fact, deal_id=deal_id)
         if member:
             # Check if already added, update if so
             existing = next((s for s in staff_members if s.name == member.name), None)
@@ -161,7 +166,7 @@ def build_organization_from_facts(fact_store: FactStore, target_name: str = "Tar
     # Build MSP relationships from outsourcing facts
     msp_relationships = []
     for fact in outsourcing_facts:
-        msp = _create_msp_from_fact(fact)
+        msp = _create_msp_from_fact(fact, deal_id=deal_id)
         if msp:
             msp_relationships.append(msp)
 
@@ -182,10 +187,13 @@ def build_organization_from_facts(fact_store: FactStore, target_name: str = "Tar
     return store, "success"
 
 
-def _create_staff_from_leadership_fact(fact: Fact) -> List[StaffMember]:
+def _create_staff_from_leadership_fact(fact: Fact, deal_id: str = "") -> List[StaffMember]:
     """Create StaffMembers from a leadership fact (may be aggregated)."""
     details = fact.details or {}
     members = []
+
+    # Get deal_id from fact if not provided
+    effective_deal_id = deal_id or getattr(fact, 'deal_id', '')
 
     # Check if this is aggregated data (has count field)
     count = _parse_headcount(details.get('count', 1))
@@ -217,6 +225,7 @@ def _create_staff_from_leadership_fact(fact: Fact) -> List[StaffMember]:
                 base_compensation=per_person_cost,
                 location=details.get('location', 'Unknown'),
                 entity=details.get('entity', 'target'),
+                deal_id=effective_deal_id,
                 notes=_get_evidence_str(fact) or str(details)
             ))
     else:
@@ -241,16 +250,20 @@ def _create_staff_from_leadership_fact(fact: Fact) -> List[StaffMember]:
                 tenure_years=_parse_tenure(details.get('tenure')),
                 reports_to=details.get('reports_to'),
                 entity=details.get('entity', 'target'),
+                deal_id=effective_deal_id,
                 notes=_get_evidence_str(fact) or str(details)
             ))
 
     return members
 
 
-def _create_staff_from_team_fact(fact: Fact, default_category: RoleCategory) -> List[StaffMember]:
+def _create_staff_from_team_fact(fact: Fact, default_category: RoleCategory, deal_id: str = "") -> List[StaffMember]:
     """Create StaffMembers from a team fact."""
     details = fact.details or {}
     members = []
+
+    # Get deal_id from fact if not provided
+    effective_deal_id = deal_id or getattr(fact, 'deal_id', '')
 
     # Get team name from fact.item (e.g., "Applications Team")
     team_name = fact.item if fact.item else f"{default_category.display_name} Team"
@@ -294,6 +307,7 @@ def _create_staff_from_team_fact(fact: Fact, default_category: RoleCategory) -> 
             base_compensation=per_person_cost,
             location=details.get('location', 'Unknown'),
             entity=details.get('entity', 'target'),
+            deal_id=effective_deal_id,
             notes=_get_evidence_str(fact) or str(details)
         ))
 
@@ -309,6 +323,7 @@ def _create_staff_from_team_fact(fact: Fact, default_category: RoleCategory) -> 
             base_compensation=int(per_person_cost * 1.3),  # Contractor premium
             location=details.get('location', 'Unknown'),
             entity=details.get('entity', 'target'),
+            deal_id=effective_deal_id,
             notes=_get_evidence_str(fact) or str(details)
         ))
 
@@ -334,7 +349,7 @@ def _parse_cost(cost_str: Any) -> float:
     return 0.0
 
 
-def _create_staff_from_role_fact(fact: Fact) -> List[StaffMember]:
+def _create_staff_from_role_fact(fact: Fact, deal_id: str = "") -> List[StaffMember]:
     """Create StaffMembers from a role fact (from Role & Compensation Breakdown table).
 
     Role facts have details like:
@@ -347,6 +362,9 @@ def _create_staff_from_role_fact(fact: Fact) -> List[StaffMember]:
     """
     details = fact.details or {}
     members = []
+
+    # Get deal_id from fact if not provided
+    effective_deal_id = deal_id or getattr(fact, 'deal_id', '')
 
     role_title = fact.item if fact.item else "Unknown Role"
     team = details.get('team', 'IT')
@@ -386,15 +404,19 @@ def _create_staff_from_role_fact(fact: Fact) -> List[StaffMember]:
             base_compensation=int(per_person_cost) if per_person_cost > 0 else DEFAULT_SALARIES.get(category, 100000),
             location="Unknown",
             entity=details.get('entity', 'target'),
+            deal_id=effective_deal_id,
             notes=f"Level: {level}. {_get_evidence_str(fact)}"
         ))
 
     return members
 
 
-def _create_staff_from_key_individual_fact(fact: Fact) -> Optional[StaffMember]:
+def _create_staff_from_key_individual_fact(fact: Fact, deal_id: str = "") -> Optional[StaffMember]:
     """Create a StaffMember from a key individual fact."""
     details = fact.details or {}
+
+    # Get deal_id from fact if not provided
+    effective_deal_id = deal_id or getattr(fact, 'deal_id', '')
 
     name = details.get('item', details.get('name', 'Key Individual'))
     role_title = details.get('role', name)
@@ -409,15 +431,19 @@ def _create_staff_from_key_individual_fact(fact: Fact) -> Optional[StaffMember]:
         base_compensation=DEFAULT_SALARIES[RoleCategory.OTHER],
         tenure_years=_parse_tenure(details.get('tenure')),
         entity=details.get('entity', 'target'),
+        deal_id=effective_deal_id,
         is_key_person=True,
         key_person_reason=details.get('unique_knowledge', fact.item),
         notes=_get_evidence_str(fact)
     )
 
 
-def _create_msp_from_fact(fact: Fact) -> Optional[MSPRelationship]:
+def _create_msp_from_fact(fact: Fact, deal_id: str = "") -> Optional[MSPRelationship]:
     """Create an MSPRelationship from an outsourcing fact."""
     details = fact.details or {}
+
+    # Get deal_id from fact if not provided
+    effective_deal_id = deal_id or getattr(fact, 'deal_id', '')
 
     vendor_name = details.get('item', fact.item or 'Unknown Vendor')
     services_provided = details.get('services_provided', fact.item or 'Services')
@@ -456,6 +482,7 @@ def _create_msp_from_fact(fact: Fact) -> Optional[MSPRelationship]:
         contract_expiry=details.get('contract_expiry'),
         dependency_level=dependency,
         entity=details.get('entity', 'target'),
+        deal_id=effective_deal_id,
         notes=_get_evidence_str(fact)
     )
 
@@ -575,7 +602,8 @@ def _build_role_summaries(staff: List[StaffMember]) -> Dict[str, RoleSummary]:
 def build_organization_result(
     fact_store: FactStore,
     reasoning_store: Any = None,
-    target_name: str = "Target"
+    target_name: str = "Target",
+    deal_id: str = ""
 ) -> Tuple[OrganizationAnalysisResult, str]:
     """
     Build a complete OrganizationAnalysisResult from facts.
@@ -584,6 +612,7 @@ def build_organization_result(
         fact_store: The fact store containing organization facts
         reasoning_store: Optional reasoning store for additional findings
         target_name: Name of the target company
+        deal_id: Deal ID for data isolation
 
     Returns:
         Tuple of (OrganizationAnalysisResult, status) where status is:
@@ -594,7 +623,7 @@ def build_organization_result(
     from models.organization_stores import StaffingComparisonResult
     from datetime import datetime
 
-    store, status = build_organization_from_facts(fact_store, target_name)
+    store, status = build_organization_from_facts(fact_store, target_name, deal_id=deal_id)
 
     # Calculate summaries
     msp_summary = _build_msp_summary(store.msp_relationships)

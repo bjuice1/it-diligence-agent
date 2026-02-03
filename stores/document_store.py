@@ -482,56 +482,70 @@ class DocumentStore:
                 return self._documents.get(doc_id)
             return None
 
-    def get_documents_for_entity(self, entity: str) -> List[Document]:
+    def get_documents_for_entity(self, entity: str, deal_id: str = None) -> List[Document]:
         """
         Get all documents for a specific entity.
 
         Args:
             entity: "target" or "buyer"
+            deal_id: Optional deal_id filter (uses self.deal_id if not provided)
 
         Returns:
-            List of documents for that entity
+            List of documents for that entity (filtered by deal if deal_id set)
         """
+        effective_deal_id = deal_id or self.deal_id
         with self._lock:
-            return [
+            docs = [
                 doc for doc in self._documents.values()
                 if doc.entity == entity
             ]
+            # Filter by deal_id if set
+            if effective_deal_id:
+                docs = [d for d in docs if d.deal_id == effective_deal_id]
+            return docs
 
-    def get_high_authority_docs(self, entity: Optional[str] = None) -> List[Document]:
+    def get_high_authority_docs(self, entity: Optional[str] = None, deal_id: str = None) -> List[Document]:
         """
         Get documents with high authority level (data room).
 
         Args:
             entity: Optional entity filter
+            deal_id: Optional deal_id filter (uses self.deal_id if not provided)
 
         Returns:
             List of authority level 1 documents
         """
+        effective_deal_id = deal_id or self.deal_id
         with self._lock:
             docs = [
                 doc for doc in self._documents.values()
                 if doc.authority_level == 1
             ]
+            if effective_deal_id:
+                docs = [d for d in docs if d.deal_id == effective_deal_id]
             if entity:
                 docs = [d for d in docs if d.entity == entity]
             return docs
 
-    def get_discussion_notes(self, entity: Optional[str] = None) -> List[Document]:
+    def get_discussion_notes(self, entity: Optional[str] = None, deal_id: str = None) -> List[Document]:
         """
         Get discussion notes (lowest authority).
 
         Args:
             entity: Optional entity filter
+            deal_id: Optional deal_id filter (uses self.deal_id if not provided)
 
         Returns:
             List of authority level 3 documents
         """
+        effective_deal_id = deal_id or self.deal_id
         with self._lock:
             docs = [
                 doc for doc in self._documents.values()
                 if doc.authority_level == 3
             ]
+            if effective_deal_id:
+                docs = [d for d in docs if d.deal_id == effective_deal_id]
             if entity:
                 docs = [d for d in docs if d.entity == entity]
             return docs
@@ -890,10 +904,23 @@ class DocumentStore:
         except Exception as e:
             logger.error(f"Error loading manifest: {e}")
 
-    def get_statistics(self) -> Dict[str, Any]:
-        """Get document store statistics."""
+    def get_statistics(self, deal_id: str = None) -> Dict[str, Any]:
+        """
+        Get document store statistics.
+
+        Args:
+            deal_id: Optional deal_id filter (uses self.deal_id if not provided)
+
+        Returns:
+            Statistics dict filtered by deal_id if set
+        """
+        effective_deal_id = deal_id or self.deal_id
         with self._lock:
             docs = list(self._documents.values())
+
+        # Filter by deal_id if set
+        if effective_deal_id:
+            docs = [d for d in docs if d.deal_id == effective_deal_id]
 
         return {
             "total_documents": len(docs),
