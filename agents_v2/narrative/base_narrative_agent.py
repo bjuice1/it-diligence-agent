@@ -344,11 +344,16 @@ After writing the narrative, use complete_narrative to finish."""
         
         try:
             # Use low temperature for more consistent narrative output
+            # Use prompt caching to reduce token costs on repeated iterations
             response = self.client.messages.create(
                 model=self.model,
                 max_tokens=self.max_tokens,
                 temperature=NARRATIVE_TEMPERATURE,  # Low temp for consistent prose
-                system=system_prompt,
+                system=[{
+                    "type": "text",
+                    "text": system_prompt,
+                    "cache_control": {"type": "ephemeral"}
+                }],
                 tools=self.tools,
                 messages=self.messages,
                 timeout=timeout_seconds  # Add timeout to prevent hanging
@@ -361,6 +366,13 @@ After writing the narrative, use complete_narrative to finish."""
         # Track token usage
         self.metrics.input_tokens += response.usage.input_tokens
         self.metrics.output_tokens += response.usage.output_tokens
+
+        # Log cache statistics if available
+        cache_created = getattr(response.usage, 'cache_creation_input_tokens', 0)
+        cache_read = getattr(response.usage, 'cache_read_input_tokens', 0)
+        if cache_created or cache_read:
+            self.logger.info(f"Prompt cache: created={cache_created}, read={cache_read} tokens")
+
         self.metrics.estimated_cost += estimate_cost(
             self.model,
             response.usage.input_tokens,

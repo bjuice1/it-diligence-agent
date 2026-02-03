@@ -359,13 +359,19 @@ class BaseDiscoveryAgent(ABC):
                 try:
                     # Use circuit breaker to protect API call
                     # CRITICAL: temperature=0 for deterministic, consistent extraction
+                    # Use prompt caching to reduce token costs on repeated iterations
+                    cached_system = [{
+                        "type": "text",
+                        "text": self.system_prompt,
+                        "cache_control": {"type": "ephemeral"}
+                    }]
                     if self.circuit_breaker:
                         response = self.circuit_breaker.call(
                             self.client.messages.create,
                             model=self.model,
                             max_tokens=self.max_tokens,
                             temperature=DISCOVERY_TEMPERATURE,  # Deterministic extraction
-                            system=self.system_prompt,
+                            system=cached_system,
                             tools=self.tools,
                             messages=self.messages,
                             timeout=timeout_seconds
@@ -375,7 +381,7 @@ class BaseDiscoveryAgent(ABC):
                             model=self.model,
                             max_tokens=self.max_tokens,
                             temperature=DISCOVERY_TEMPERATURE,  # Deterministic extraction
-                            system=self.system_prompt,
+                            system=cached_system,
                             tools=self.tools,
                             messages=self.messages,
                             timeout=timeout_seconds
@@ -390,6 +396,13 @@ class BaseDiscoveryAgent(ABC):
                     self.metrics.input_tokens += response.usage.input_tokens
                     self.metrics.output_tokens += response.usage.output_tokens
                     self.metrics.tokens_used = self.metrics.input_tokens + self.metrics.output_tokens
+
+                    # Log cache statistics if available (prompt caching)
+                    cache_created = getattr(response.usage, 'cache_creation_input_tokens', 0)
+                    cache_read = getattr(response.usage, 'cache_read_input_tokens', 0)
+                    if cache_created or cache_read:
+                        self.logger.info(f"Prompt cache: created={cache_created}, read={cache_read} tokens")
+
                     # Calculate running cost
                     self.metrics.estimated_cost = estimate_cost(
                         self.model,

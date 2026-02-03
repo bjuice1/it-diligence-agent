@@ -348,11 +348,18 @@ class BaseReasoningAgent(ABC):
                 
                 try:
                     # CRITICAL: temperature=0 for deterministic, consistent scoring
+                    # Use prompt caching to reduce token costs on repeated iterations
+                    # The system prompt is sent as a cached block - subsequent calls
+                    # in the same session reuse the cache at 90% token discount
                     response = self.client.messages.create(
                         model=self.model,
                         max_tokens=self.max_tokens,
                         temperature=REASONING_TEMPERATURE,  # Deterministic analysis
-                        system=system_prompt,
+                        system=[{
+                            "type": "text",
+                            "text": system_prompt,
+                            "cache_control": {"type": "ephemeral"}
+                        }],
                         tools=self.tools,
                         messages=self.messages,
                         timeout=timeout_seconds  # Add timeout to prevent hanging
@@ -367,6 +374,13 @@ class BaseReasoningAgent(ABC):
                     self.metrics.input_tokens += response.usage.input_tokens
                     self.metrics.output_tokens += response.usage.output_tokens
                     self.metrics.tokens_used = self.metrics.input_tokens + self.metrics.output_tokens
+
+                    # Log cache statistics if available (prompt caching)
+                    cache_created = getattr(response.usage, 'cache_creation_input_tokens', 0)
+                    cache_read = getattr(response.usage, 'cache_read_input_tokens', 0)
+                    if cache_created or cache_read:
+                        self.logger.info(f"Prompt cache: created={cache_created}, read={cache_read} tokens")
+
                     # Calculate running cost
                     self.metrics.estimated_cost = estimate_cost(
                         self.model,
