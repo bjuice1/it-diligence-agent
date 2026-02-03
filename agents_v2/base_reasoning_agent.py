@@ -334,7 +334,17 @@ class BaseReasoningAgent(ABC):
     def _call_model(self, system_prompt: str) -> anthropic.types.Message:
         """Make API call to Claude with timeout and retry logic"""
         from config_v2 import API_MAX_RETRIES, API_TIMEOUT_SECONDS, API_RETRY_BACKOFF_BASE, API_RATE_LIMITER_TIMEOUT
-        
+
+        # Import model caps and clamp max_tokens to model limit
+        try:
+            from config_v2 import MODEL_OUTPUT_CAPS
+            model_cap = MODEL_OUTPUT_CAPS.get(self.model, 8192)  # Default to 8192 if unknown
+            effective_max_tokens = min(self.max_tokens, model_cap)
+            if effective_max_tokens != self.max_tokens:
+                self.logger.warning(f"Clamped max_tokens from {self.max_tokens} to {effective_max_tokens} (model limit)")
+        except ImportError:
+            effective_max_tokens = min(self.max_tokens, 8192)  # Safe default
+
         self.metrics.api_calls += 1
         max_retries = API_MAX_RETRIES
         timeout_seconds = API_TIMEOUT_SECONDS
@@ -345,7 +355,7 @@ class BaseReasoningAgent(ABC):
                 if self.rate_limiter:
                     if not self.rate_limiter.acquire(timeout=API_RATE_LIMITER_TIMEOUT):
                         raise TimeoutError("Rate limiter timeout: could not acquire API call slot")
-                
+
                 try:
                     # CRITICAL: temperature=0 for deterministic, consistent scoring
                     # Use prompt caching to reduce token costs on repeated iterations
@@ -353,7 +363,7 @@ class BaseReasoningAgent(ABC):
                     # in the same session reuse the cache at 90% token discount
                     response = self.client.messages.create(
                         model=self.model,
-                        max_tokens=self.max_tokens,
+                        max_tokens=effective_max_tokens,  # Use clamped value
                         temperature=REASONING_TEMPERATURE,  # Deterministic analysis
                         system=[{
                             "type": "text",
@@ -394,6 +404,17 @@ class BaseReasoningAgent(ABC):
                 self.metrics.errors += 1
                 self.logger.error(f"Circuit breaker open: {e}")
                 raise
+            except anthropic.BadRequestError as e:
+                # 400 errors are config bugs, NOT transient failures
+                # Don't trip circuit breaker - fail fast with clear message
+                self.metrics.errors += 1
+                error_msg = str(e)
+                if "max_tokens" in error_msg:
+                    self.logger.error(f"CONFIG ERROR: max_tokens exceeds model limit. {error_msg}")
+                    raise ValueError(f"Model token limit exceeded. Reduce max_tokens or use different model. Error: {error_msg}")
+                else:
+                    self.logger.error(f"Bad request (config error): {error_msg}")
+                    raise ValueError(f"Invalid API request (check config): {error_msg}")
             except anthropic.RateLimitError:
                 if attempt < max_retries - 1:
                     wait_time = API_RETRY_BACKOFF_BASE ** attempt
@@ -405,7 +426,7 @@ class BaseReasoningAgent(ABC):
             except anthropic.APIError as e:
                 self.metrics.errors += 1
                 self.logger.error(f"API error: {e}")
-                # Circuit breaker will track this failure
+                # Circuit breaker will track this failure (5xx, timeouts)
                 raise
 
     def _process_response(self, response: anthropic.types.Message):

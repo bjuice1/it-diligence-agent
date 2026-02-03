@@ -33,10 +33,18 @@ if not ANTHROPIC_API_KEY:
 DISCOVERY_MODEL = "claude-3-5-haiku-20241022"  # Fast, cheap for extraction
 REASONING_MODEL = "claude-sonnet-4-20250514"   # Capable for analysis
 
-# Token limits
-# Set HIGH to never truncate - we want EVERYTHING extracted
-DISCOVERY_MAX_TOKENS = 16384  # Handle 100+ item inventories without truncation
-REASONING_MAX_TOKENS = 16384  # Match for consistency
+# Token limits - MUST respect model maximums
+# Haiku max output = 8192, Sonnet max output = 8192
+# Set to model max - iterations handle large inventories, not single response size
+DISCOVERY_MAX_TOKENS = 8192   # Haiku max output limit
+REASONING_MAX_TOKENS = 8192   # Sonnet max output limit
+
+# Model output caps (for validation)
+MODEL_OUTPUT_CAPS = {
+    "claude-3-5-haiku-20241022": 8192,
+    "claude-sonnet-4-20250514": 8192,
+    "claude-3-5-sonnet-20241022": 8192,
+}
 
 # Iteration limits
 # Set HIGH - cost is minimal, missing items is unacceptable
