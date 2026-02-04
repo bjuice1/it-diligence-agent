@@ -3325,11 +3325,13 @@ def review_queue_page():
         all_facts = repo.get_by_deal(deal_id=current_deal_id)
 
         # Build stats from database
+        verified_count = len([f for f in all_facts if f.verified])
         stats = {
             'total_facts': len(all_facts),
             'needs_review': total_needs_review,
-            'verified': len([f for f in all_facts if f.verified]),
+            'verified': verified_count,
             'unverified': len([f for f in all_facts if not f.verified]),
+            'completion_rate': verified_count / len(all_facts) if len(all_facts) > 0 else 0,
             'by_domain': {}
         }
 

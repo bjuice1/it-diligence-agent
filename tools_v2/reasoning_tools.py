@@ -2547,12 +2547,20 @@ def validate_finding_entity_rules(tool_name: str, tool_input: Dict[str, Any]) ->
     # Extract fact citations
     based_on = tool_input.get("based_on_facts", [])
 
+    # For work items, also check triggered_by field
+    if tool_name == "create_work_item":
+        triggered_by = tool_input.get("triggered_by", [])
+        # Combine both sources for entity detection
+        all_citations = based_on + triggered_by
+    else:
+        all_citations = based_on
+
     # Separate by entity based on ID patterns
-    target_facts = [f for f in based_on if "TGT" in f.upper()]
-    buyer_facts = [f for f in based_on if "BYR" in f.upper()]
+    target_facts = [f for f in all_citations if "TGT" in f.upper()]
+    buyer_facts = [f for f in all_citations if "BYR" in f.upper()]
 
     # Also check legacy format (F-APP-xxx without entity prefix)
-    legacy_facts = [f for f in based_on if "TGT" not in f.upper() and "BYR" not in f.upper()]
+    legacy_facts = [f for f in all_citations if "TGT" not in f.upper() and "BYR" not in f.upper()]
 
     # =========================================================================
     # RULE 1: ANCHOR RULE - Buyer facts require target facts
