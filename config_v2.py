@@ -51,7 +51,6 @@ MODEL_OUTPUT_CAPS = {
 # 100 apps at 2-3 per iteration = 50 iterations, add buffer
 DISCOVERY_MAX_ITERATIONS = 100  # Never hit the limit - get everything
 REASONING_MAX_ITERATIONS = 60   # Reasoning needs fewer but still generous
-REASONING_MAX_ITERATIONS = 40
 
 # Temperature - SET TO 0 FOR DETERMINISTIC OUTPUT
 # This is critical for consistency between runs
@@ -287,7 +286,7 @@ DEFAULT_PAGE_SIZE = 50          # Default items per page
 MAX_PAGE_SIZE = 200             # Maximum items per page
 
 # Analysis timeouts
-ANALYSIS_TIMEOUT_SECONDS = 1800 # 30 minutes max for analysis
+ANALYSIS_TIMEOUT_SECONDS = 3600 # 60 minutes max for analysis
 
 
 # =============================================================================
