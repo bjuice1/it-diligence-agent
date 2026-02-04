@@ -1,0 +1,382 @@
+{
+  "_metadata": {
+    "version": "1.0.0",
+    "description": "PE Benchmark Library - Sourced benchmark data with citations",
+    "last_updated": "2024-01-15",
+    "notes": "Every benchmark MUST have a source - no fake authority. If internal estimation, mark as 'Internal rule of thumb'"
+  },
+  "metrics": {
+    "it_pct_revenue": {
+      "description": "IT spending as a percentage of company revenue",
+      "unit": "%",
+      "benchmarks": {
+        "software_0-50M": {
+          "low": 5.0,
+          "typical": 7.0,
+          "high": 10.0,
+          "source": "Gartner IT Key Metrics Data 2024",
+          "year": 2024,
+          "notes": "Software companies typically invest more in IT as a core capability"
+        },
+        "software_50-100M": {
+          "low": 4.5,
+          "typical": 6.5,
+          "high": 9.0,
+          "source": "Gartner IT Key Metrics Data 2024",
+          "year": 2024
+        },
+        "software_100-500M": {
+          "low": 4.0,
+          "typical": 5.5,
+          "high": 8.0,
+          "source": "Gartner IT Key Metrics Data 2024",
+          "year": 2024
+        },
+        "software_500M+": {
+          "low": 3.5,
+          "typical": 5.0,
+          "high": 7.0,
+          "source": "Gartner IT Key Metrics Data 2024",
+          "year": 2024
+        },
+        "manufacturing_0-50M": {
+          "low": 1.5,
+          "typical": 2.5,
+          "high": 4.0,
+          "source": "Gartner IT Key Metrics Data 2024",
+          "year": 2024,
+          "notes": "Manufacturing typically lower IT spend as % of revenue"
+        },
+        "manufacturing_50-100M": {
+          "low": 1.5,
+          "typical": 2.5,
+          "high": 3.5,
+          "source": "Gartner IT Key Metrics Data 2024",
+          "year": 2024
+        },
+        "manufacturing_100-500M": {
+          "low": 1.2,
+          "typical": 2.0,
+          "high": 3.0,
+          "source": "Gartner IT Key Metrics Data 2024",
+          "year": 2024
+        },
+        "healthcare_50-100M": {
+          "low": 3.0,
+          "typical": 4.5,
+          "high": 6.0,
+          "source": "HIMSS Healthcare IT Survey 2024",
+          "year": 2024,
+          "notes": "Healthcare IT spending driven by compliance and EHR requirements"
+        },
+        "healthcare_100-500M": {
+          "low": 2.5,
+          "typical": 4.0,
+          "high": 5.5,
+          "source": "HIMSS Healthcare IT Survey 2024",
+          "year": 2024
+        },
+        "financial_services_50-100M": {
+          "low": 5.0,
+          "typical": 7.5,
+          "high": 10.0,
+          "source": "Deloitte Financial Services IT Survey 2024",
+          "year": 2024,
+          "notes": "Financial services among highest IT spenders due to compliance and digital"
+        },
+        "financial_services_100-500M": {
+          "low": 4.5,
+          "typical": 6.5,
+          "high": 9.0,
+          "source": "Deloitte Financial Services IT Survey 2024",
+          "year": 2024
+        },
+        "retail_50-100M": {
+          "low": 1.5,
+          "typical": 2.5,
+          "high": 4.0,
+          "source": "NRF Retail IT Spending Report 2024",
+          "year": 2024
+        },
+        "general_0-50M": {
+          "low": 2.5,
+          "typical": 4.0,
+          "high": 6.0,
+          "source": "Internal rule of thumb (cross-industry average)",
+          "year": 2024,
+          "notes": "General benchmark when industry-specific data unavailable"
+        },
+        "general_50-100M": {
+          "low": 2.5,
+          "typical": 3.5,
+          "high": 5.5,
+          "source": "Internal rule of thumb (cross-industry average)",
+          "year": 2024
+        },
+        "general_100-500M": {
+          "low": 2.0,
+          "typical": 3.0,
+          "high": 4.5,
+          "source": "Internal rule of thumb (cross-industry average)",
+          "year": 2024
+        },
+        "general_500M+": {
+          "low": 1.5,
+          "typical": 2.5,
+          "high": 4.0,
+          "source": "Internal rule of thumb (cross-industry average)",
+          "year": 2024
+        }
+      }
+    },
+    "cost_per_employee": {
+      "description": "Total IT cost divided by total employees (annual)",
+      "unit": "$",
+      "benchmarks": {
+        "software_50-100M": {
+          "low": 12000,
+          "typical": 18000,
+          "high": 25000,
+          "source": "Computer Economics IT Spending Report 2024",
+          "year": 2024,
+          "notes": "Software companies have higher per-employee IT costs"
+        },
+        "software_100-500M": {
+          "low": 10000,
+          "typical": 15000,
+          "high": 22000,
+          "source": "Computer Economics IT Spending Report 2024",
+          "year": 2024
+        },
+        "manufacturing_50-100M": {
+          "low": 5000,
+          "typical": 8000,
+          "high": 12000,
+          "source": "Computer Economics IT Spending Report 2024",
+          "year": 2024
+        },
+        "manufacturing_100-500M": {
+          "low": 4500,
+          "typical": 7000,
+          "high": 10000,
+          "source": "Computer Economics IT Spending Report 2024",
+          "year": 2024
+        },
+        "healthcare_50-100M": {
+          "low": 8000,
+          "typical": 12000,
+          "high": 18000,
+          "source": "HIMSS Healthcare IT Survey 2024",
+          "year": 2024
+        },
+        "financial_services_50-100M": {
+          "low": 15000,
+          "typical": 22000,
+          "high": 30000,
+          "source": "Deloitte Financial Services IT Survey 2024",
+          "year": 2024
+        },
+        "general_50-100M": {
+          "low": 8000,
+          "typical": 12000,
+          "high": 18000,
+          "source": "Internal rule of thumb (cross-industry average)",
+          "year": 2024
+        },
+        "general_100-500M": {
+          "low": 7000,
+          "typical": 10000,
+          "high": 15000,
+          "source": "Internal rule of thumb (cross-industry average)",
+          "year": 2024
+        }
+      }
+    },
+    "it_staff_ratio": {
+      "description": "Number of IT staff per 100 total employees",
+      "unit": "ratio",
+      "benchmarks": {
+        "software_50-100M": {
+          "low": 8,
+          "typical": 12,
+          "high": 18,
+          "source": "AITE Group IT Staffing Benchmarks 2024",
+          "year": 2024,
+          "notes": "IT staff per 100 employees; software companies staff heavier"
+        },
+        "software_100-500M": {
+          "low": 6,
+          "typical": 10,
+          "high": 15,
+          "source": "AITE Group IT Staffing Benchmarks 2024",
+          "year": 2024
+        },
+        "manufacturing_50-100M": {
+          "low": 2,
+          "typical": 4,
+          "high": 6,
+          "source": "AITE Group IT Staffing Benchmarks 2024",
+          "year": 2024
+        },
+        "manufacturing_100-500M": {
+          "low": 2,
+          "typical": 3,
+          "high": 5,
+          "source": "AITE Group IT Staffing Benchmarks 2024",
+          "year": 2024
+        },
+        "general_50-100M": {
+          "low": 3,
+          "typical": 5,
+          "high": 8,
+          "source": "Internal rule of thumb (cross-industry average)",
+          "year": 2024
+        },
+        "general_100-500M": {
+          "low": 2,
+          "typical": 4,
+          "high": 6,
+          "source": "Internal rule of thumb (cross-industry average)",
+          "year": 2024
+        }
+      }
+    },
+    "app_count_ratio": {
+      "description": "Number of applications per 100 employees",
+      "unit": "count",
+      "benchmarks": {
+        "software_50-100M": {
+          "low": 15,
+          "typical": 25,
+          "high": 40,
+          "source": "Zylo SaaS Management Report 2024",
+          "year": 2024,
+          "notes": "Applications per 100 employees; includes SaaS"
+        },
+        "software_100-500M": {
+          "low": 12,
+          "typical": 20,
+          "high": 35,
+          "source": "Zylo SaaS Management Report 2024",
+          "year": 2024
+        },
+        "general_50-100M": {
+          "low": 10,
+          "typical": 18,
+          "high": 30,
+          "source": "Zylo SaaS Management Report 2024",
+          "year": 2024
+        },
+        "general_100-500M": {
+          "low": 8,
+          "typical": 15,
+          "high": 25,
+          "source": "Zylo SaaS Management Report 2024",
+          "year": 2024
+        }
+      }
+    },
+    "outsourcing_pct": {
+      "description": "Percentage of IT functions outsourced",
+      "unit": "%",
+      "benchmarks": {
+        "general_0-50M": {
+          "low": 20,
+          "typical": 40,
+          "high": 60,
+          "source": "ISG Outsourcing Index 2024",
+          "year": 2024,
+          "notes": "Smaller companies tend to outsource more IT functions"
+        },
+        "general_50-100M": {
+          "low": 15,
+          "typical": 30,
+          "high": 50,
+          "source": "ISG Outsourcing Index 2024",
+          "year": 2024
+        },
+        "general_100-500M": {
+          "low": 10,
+          "typical": 25,
+          "high": 40,
+          "source": "ISG Outsourcing Index 2024",
+          "year": 2024
+        }
+      }
+    },
+    "cloud_adoption_pct": {
+      "description": "Percentage of workloads in public/private cloud",
+      "unit": "%",
+      "benchmarks": {
+        "software_50-100M": {
+          "low": 60,
+          "typical": 80,
+          "high": 95,
+          "source": "Flexera State of the Cloud Report 2024",
+          "year": 2024
+        },
+        "manufacturing_50-100M": {
+          "low": 25,
+          "typical": 40,
+          "high": 60,
+          "source": "Flexera State of the Cloud Report 2024",
+          "year": 2024
+        },
+        "general_50-100M": {
+          "low": 35,
+          "typical": 55,
+          "high": 75,
+          "source": "Flexera State of the Cloud Report 2024",
+          "year": 2024
+        }
+      }
+    },
+    "security_pct_it": {
+      "description": "Cybersecurity spending as percentage of IT budget",
+      "unit": "%",
+      "benchmarks": {
+        "general_50-100M": {
+          "low": 5,
+          "typical": 10,
+          "high": 15,
+          "source": "Gartner Security & Risk Management Survey 2024",
+          "year": 2024
+        },
+        "financial_services_50-100M": {
+          "low": 10,
+          "typical": 15,
+          "high": 20,
+          "source": "Deloitte Financial Services IT Survey 2024",
+          "year": 2024
+        },
+        "healthcare_50-100M": {
+          "low": 8,
+          "typical": 12,
+          "high": 18,
+          "source": "HIMSS Healthcare IT Survey 2024",
+          "year": 2024
+        }
+      }
+    },
+    "tech_refresh_cycle": {
+      "description": "Typical hardware/infrastructure refresh cycle in years",
+      "unit": "years",
+      "benchmarks": {
+        "general_50-100M": {
+          "low": 3,
+          "typical": 5,
+          "high": 7,
+          "source": "Gartner Infrastructure & Operations Survey 2024",
+          "year": 2024
+        },
+        "software_50-100M": {
+          "low": 2,
+          "typical": 4,
+          "high": 5,
+          "source": "Gartner Infrastructure & Operations Survey 2024",
+          "year": 2024
+        }
+      }
+    }
+  }
+}

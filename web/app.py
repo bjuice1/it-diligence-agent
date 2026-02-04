@@ -250,6 +250,10 @@ app.register_blueprint(inventory_bp)
 from web.blueprints.costs import costs_bp
 app.register_blueprint(costs_bp)
 
+# Register PE reports blueprint
+from web.blueprints.pe_reports import pe_reports_bp
+app.register_blueprint(pe_reports_bp)
+
 # Phase 3: Register CLI commands for user management
 from web.cli import register_cli
 register_cli(app)

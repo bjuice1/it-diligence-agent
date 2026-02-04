@@ -1,0 +1,749 @@
+{% extends "base.html" %}
+
+{% block title %}{{ domain_display_name }} - {{ target_name }}{% endblock %}
+
+{% block content %}
+<div class="domain-report">
+    <!-- Navigation -->
+    <nav class="report-nav">
+        <a href="{{ url_for('pe_reports.dashboard') }}" class="nav-link">← Back to Dashboard</a>
+        <div class="domain-nav">
+            {% for d in domains %}
+            <a href="{{ url_for('pe_reports.domain_report', domain=d) }}"
+               class="domain-link {% if d == domain %}active{% endif %}">
+                {{ d|replace('_', ' ')|title }}
+            </a>
+            {% endfor %}
+        </div>
+    </nav>
+
+    <!-- Header -->
+    <div class="report-header">
+        <h1>
+            {{ domain_display_name }}
+            <span class="grade-badge grade-{{ overall_grade|lower|replace(' ', '-') }}">
+                {{ overall_grade }}
+            </span>
+        </h1>
+        <div class="meta">
+            {{ target_name }} |
+            {{ fact_count }} facts |
+            {{ work_item_count }} work items |
+            {{ risk_count }} risks
+        </div>
+    </div>
+
+    <!-- Section 1: What You're Getting -->
+    <section class="report-section" id="inventory">
+        <div class="section-header">
+            <span class="section-number">1</span>
+            <h2>What You're Getting</h2>
+        </div>
+        <div class="section-content">
+            {{ inventory_html|safe }}
+        </div>
+    </section>
+
+    <!-- Section 2: What It Costs Today -->
+    <section class="report-section" id="costs">
+        <div class="section-header">
+            <span class="section-number">2</span>
+            <h2>What It Costs Today</h2>
+        </div>
+        <div class="section-content">
+            <div class="cost-summary">
+                <div class="cost-card primary">
+                    <div class="label">Annual Run-Rate</div>
+                    <div class="value">{{ run_rate_display }}</div>
+                </div>
+                {% for category, cost in cost_breakdown.items() %}
+                {% if cost[1] > 0 %}
+                <div class="cost-card">
+                    <div class="label">{{ category|replace('_', ' ')|title }}</div>
+                    <div class="value">${{ "{:,.0f}".format(cost[0]) }} - ${{ "{:,.0f}".format(cost[1]) }}</div>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+            {% if cost_facts_cited %}
+            <div class="facts-cited">
+                Based on: {{ cost_facts_cited|join(', ') }}
+            </div>
+            {% endif %}
+        </div>
+    </section>
+
+    <!-- Section 3: How It Compares -->
+    <section class="report-section" id="benchmark">
+        <div class="section-header">
+            <span class="section-number">3</span>
+            <h2>How It Compares</h2>
+            <button class="edit-btn" onclick="toggleEdit('benchmark')">Edit</button>
+        </div>
+        <div class="section-content">
+            <div class="benchmark-grid">
+                <div class="benchmark-item">
+                    <div class="header">
+                        <strong>Technology Age</strong>
+                        <span class="badge badge-{{ benchmark.tech_age }}">{{ benchmark.tech_age|replace('_', ' ')|title }}</span>
+                    </div>
+                    <div class="rationale editable" data-field="tech_age_rationale">
+                        {{ benchmark.tech_age_rationale or 'No rationale provided' }}
+                    </div>
+                    <div class="source">{{ benchmark.tech_age_benchmark_source or 'Source not specified' }}</div>
+                </div>
+
+                <div class="benchmark-item">
+                    <div class="header">
+                        <strong>Cost Posture</strong>
+                        <span class="badge badge-{{ benchmark.cost_posture }}">{{ benchmark.cost_posture|replace('_', ' ')|title }}</span>
+                    </div>
+                    <div class="rationale editable" data-field="cost_posture_rationale">
+                        {{ benchmark.cost_posture_rationale or 'No rationale provided' }}
+                    </div>
+                    <div class="source">{{ benchmark.cost_benchmark_source or 'Source not specified' }}</div>
+                </div>
+
+                <div class="benchmark-item">
+                    <div class="header">
+                        <strong>Maturity</strong>
+                        <span class="badge badge-{{ benchmark.maturity }}">{{ benchmark.maturity|replace('_', ' ')|title }}</span>
+                    </div>
+                    <div class="rationale editable" data-field="maturity_rationale">
+                        {{ benchmark.maturity_rationale or 'No rationale provided' }}
+                    </div>
+                </div>
+            </div>
+
+            {% if benchmark.implication %}
+            <div class="so-what-box">
+                <strong>So What?</strong>
+                <span class="editable" data-field="implication">{{ benchmark.implication }}</span>
+            </div>
+            {% endif %}
+
+            {% if benchmark.key_callouts %}
+            <div class="callouts">
+                {% for callout in benchmark.key_callouts %}
+                <span class="callout">{{ callout }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </section>
+
+    <!-- Section 4: What Needs to Happen -->
+    <section class="report-section" id="actions">
+        <div class="section-header">
+            <span class="section-number">4</span>
+            <h2>What Needs to Happen</h2>
+            <button class="edit-btn" onclick="toggleEdit('actions')">Edit</button>
+        </div>
+        <div class="section-content">
+            <h4 class="subsection-title">Top Actions</h4>
+            <div class="action-list">
+                {% for action in top_actions %}
+                <div class="action-item priority-{{ action.priority }}">
+                    <div class="action-header">
+                        <h4 class="title">{{ action.title }}</h4>
+                        <span class="cost">{{ action.cost_display }}</span>
+                    </div>
+                    <div class="so-what editable" data-field="action_{{ loop.index }}_so_what">
+                        {{ action.so_what }}
+                    </div>
+                    <div class="action-meta">
+                        <span>📅 {{ action.timing|replace('_', ' ') }}</span>
+                        <span>👤 {{ action.owner_type|title }}</span>
+                        <span>⚡ {{ action.priority|title }}</span>
+                    </div>
+                </div>
+                {% else %}
+                <p>No actions identified</p>
+                {% endfor %}
+            </div>
+
+            {% if total_investment[1] > 0 %}
+            <div class="investment-total">
+                <strong>Total Investment Needed:</strong>
+                ${{ "{:,.0f}".format(total_investment[0]) }} - ${{ "{:,.0f}".format(total_investment[1]) }}
+            </div>
+            {% endif %}
+
+            {% if work_items %}
+            <h4 class="subsection-title" style="margin-top: 25px;">All Work Items</h4>
+            <table class="work-items-table">
+                <thead>
+                    <tr>
+                        <th>Work Item</th>
+                        <th>Phase</th>
+                        <th>Priority</th>
+                        <th>Cost</th>
+                        <th>Owner</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for wi in work_items[:10] %}
+                    <tr>
+                        <td><strong>{{ wi.title[:50] }}{% if wi.title|length > 50 %}...{% endif %}</strong></td>
+                        <td>{{ wi.phase|replace('_', ' ') }}</td>
+                        <td><span class="priority-{{ wi.priority }}">{{ wi.priority|title }}</span></td>
+                        <td>${{ "{:,.0f}".format(wi.cost_estimate_low) }} - ${{ "{:,.0f}".format(wi.cost_estimate_high) }}</td>
+                        <td>{{ wi.owner_type|title }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% if work_items|length > 10 %}
+            <p class="more-items">Showing 10 of {{ work_items|length }} work items</p>
+            {% endif %}
+            {% endif %}
+        </div>
+    </section>
+
+    <!-- Section 5: Team Implications -->
+    <section class="report-section" id="implications">
+        <div class="section-header">
+            <span class="section-number">5</span>
+            <h2>Team Implications</h2>
+            <button class="edit-btn" onclick="toggleEdit('implications')">Edit</button>
+        </div>
+        <div class="section-content">
+            <h4 class="subsection-title">Key Business Implications</h4>
+            <ul class="implications-list">
+                {% for imp in top_implications %}
+                <li class="editable" data-field="implication_{{ loop.index }}">{{ imp }}</li>
+                {% else %}
+                <li>No specific implications identified</li>
+                {% endfor %}
+            </ul>
+
+            {% if resource_needs %}
+            <h4 class="subsection-title">Resource Needs</h4>
+            <div class="resource-list">
+                {% for resource in resource_needs %}
+                <div class="resource-item">
+                    <span class="role">{{ resource.role }}</span>
+                    <div class="details">
+                        <span>{{ resource.type|title }}</span>
+                        <span>{{ resource.timing|replace('_', ' ') }}</span>
+                        <span>{{ resource.duration|replace('_', ' ')|title }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if integration_considerations %}
+            <div class="integration-box">
+                <h4>Integration Considerations</h4>
+                <ul>
+                    {% for cons in integration_considerations %}
+                    <li>{{ cons }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+    </section>
+
+    <!-- Actions -->
+    <div class="report-actions">
+        <button class="btn btn-primary" onclick="saveEdits()">Save Changes</button>
+        <a href="{{ url_for('pe_reports.dashboard') }}" class="btn btn-secondary">Back to Dashboard</a>
+    </div>
+</div>
+
+<style>
+.domain-report {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.report-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid var(--border, #e5e7eb);
+}
+
+.nav-link {
+    color: var(--primary, #2563eb);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.domain-nav {
+    display: flex;
+    gap: 10px;
+}
+
+.domain-link {
+    padding: 5px 12px;
+    border-radius: 15px;
+    font-size: 12px;
+    text-decoration: none;
+    color: var(--text-muted, #6b7280);
+    background: var(--bg-light, #f9fafb);
+}
+
+.domain-link.active {
+    background: var(--primary, #2563eb);
+    color: white;
+}
+
+.report-header {
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 3px solid var(--primary, #2563eb);
+}
+
+.report-header h1 {
+    margin: 0 0 10px 0;
+    font-size: 28px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.report-header .meta {
+    color: var(--text-muted, #6b7280);
+    font-size: 14px;
+}
+
+.grade-badge {
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.grade-strong { background: #dcfce7; color: #16a34a; }
+.grade-adequate { background: #fef3c7; color: #ca8a04; }
+.grade-needs-improvement { background: #fecaca; color: #dc2626; }
+
+.report-section {
+    margin-bottom: 35px;
+    padding: 25px;
+    background: var(--bg-light, #f9fafb);
+    border-radius: 10px;
+    border: 1px solid var(--border, #e5e7eb);
+}
+
+.section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border, #e5e7eb);
+}
+
+.section-number {
+    width: 28px;
+    height: 28px;
+    background: var(--primary, #2563eb);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.section-header h2 {
+    margin: 0;
+    font-size: 18px;
+    flex: 1;
+}
+
+.edit-btn {
+    padding: 4px 12px;
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 4px;
+    background: white;
+    color: var(--text-muted, #6b7280);
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.edit-btn:hover {
+    background: var(--bg-light, #f9fafb);
+}
+
+.subsection-title {
+    font-size: 14px;
+    color: var(--text-muted, #6b7280);
+    margin: 0 0 15px 0;
+}
+
+.cost-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 15px;
+}
+
+.cost-card {
+    background: white;
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid var(--border, #e5e7eb);
+    text-align: center;
+}
+
+.cost-card.primary {
+    border-color: var(--primary, #2563eb);
+}
+
+.cost-card .label {
+    font-size: 12px;
+    color: var(--text-muted, #6b7280);
+    text-transform: uppercase;
+    margin-bottom: 5px;
+}
+
+.cost-card .value {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--primary, #2563eb);
+}
+
+.facts-cited {
+    margin-top: 15px;
+    font-size: 12px;
+    color: var(--text-muted, #6b7280);
+}
+
+.benchmark-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+}
+
+.benchmark-item {
+    background: white;
+    padding: 18px;
+    border-radius: 8px;
+    border: 1px solid var(--border, #e5e7eb);
+}
+
+.benchmark-item .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.badge {
+    font-size: 12px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-weight: 600;
+}
+
+.badge-modern, .badge-lean, .badge-mature { background: #dcfce7; color: #16a34a; }
+.badge-mixed, .badge-in_line, .badge-developing { background: #fef3c7; color: #ca8a04; }
+.badge-outdated, .badge-bloated, .badge-immature { background: #fecaca; color: #dc2626; }
+
+.rationale {
+    font-size: 13px;
+    color: var(--text-muted, #6b7280);
+    margin-bottom: 8px;
+}
+
+.source {
+    font-size: 11px;
+    color: var(--text-muted, #6b7280);
+    font-style: italic;
+}
+
+.so-what-box {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    padding: 15px 18px;
+    margin-top: 20px;
+}
+
+.so-what-box strong {
+    color: var(--primary, #2563eb);
+}
+
+.callouts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.callout {
+    background: #fef3c7;
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    border: 1px solid #fcd34d;
+}
+
+.action-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.action-item {
+    background: white;
+    padding: 18px;
+    border-radius: 8px;
+    border: 1px solid var(--border, #e5e7eb);
+    border-left: 4px solid var(--primary, #2563eb);
+}
+
+.action-item.priority-critical { border-left-color: #dc2626; }
+.action-item.priority-high { border-left-color: #ea580c; }
+
+.action-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+}
+
+.action-item .title {
+    margin: 0;
+    font-size: 15px;
+}
+
+.action-item .cost {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--primary, #2563eb);
+}
+
+.action-item .so-what {
+    font-size: 13px;
+    color: var(--text-muted, #6b7280);
+    margin-bottom: 10px;
+}
+
+.action-meta {
+    display: flex;
+    gap: 15px;
+    font-size: 12px;
+    color: var(--text-muted, #6b7280);
+}
+
+.investment-total {
+    margin-top: 20px;
+    padding: 12px;
+    background: #eff6ff;
+    border-radius: 6px;
+}
+
+.work-items-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+.work-items-table th, .work-items-table td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border, #e5e7eb);
+}
+
+.work-items-table th {
+    background: white;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    color: var(--text-muted, #6b7280);
+}
+
+.priority-critical { color: #dc2626; font-weight: 600; }
+.priority-high { color: #ea580c; font-weight: 600; }
+.priority-medium { color: #ca8a04; }
+.priority-low { color: #16a34a; }
+
+.more-items {
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--text-muted, #6b7280);
+}
+
+.implications-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.implications-list li {
+    padding: 12px 15px;
+    background: white;
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 6px;
+    margin-bottom: 10px;
+    position: relative;
+    padding-left: 35px;
+}
+
+.implications-list li::before {
+    content: "→";
+    position: absolute;
+    left: 12px;
+    color: var(--primary, #2563eb);
+    font-weight: bold;
+}
+
+.resource-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.resource-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 15px;
+    background: white;
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 6px;
+}
+
+.resource-item .role {
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.resource-item .details {
+    display: flex;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--text-muted, #6b7280);
+}
+
+.integration-box {
+    background: #f0fdf4;
+    border: 1px solid #86efac;
+    border-radius: 8px;
+    padding: 15px 18px;
+    margin-top: 20px;
+}
+
+.integration-box h4 {
+    margin: 0 0 10px 0;
+    color: #16a34a;
+    font-size: 14px;
+}
+
+.integration-box ul {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.integration-box li {
+    margin-bottom: 6px;
+    font-size: 13px;
+}
+
+.report-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    padding-top: 20px;
+}
+
+.btn {
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    border: none;
+    font-size: 14px;
+}
+
+.btn-primary {
+    background: var(--primary, #2563eb);
+    color: white;
+}
+
+.btn-secondary {
+    background: var(--bg-light, #f9fafb);
+    color: var(--text, #1f2937);
+    border: 1px solid var(--border, #e5e7eb);
+}
+
+.editable {
+    cursor: text;
+    padding: 2px 4px;
+    border-radius: 3px;
+    transition: background 0.2s;
+}
+
+.editable:hover {
+    background: #fef3c7;
+}
+
+.editable:focus {
+    outline: 2px solid var(--primary, #2563eb);
+    background: white;
+}
+
+@media (max-width: 800px) {
+    .domain-nav {
+        display: none;
+    }
+
+    .benchmark-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+<script>
+function toggleEdit(sectionId) {
+    // Toggle contenteditable on editable elements in section
+    const section = document.getElementById(sectionId);
+    const editables = section.querySelectorAll('.editable');
+    const isEditing = editables[0]?.getAttribute('contenteditable') === 'true';
+
+    editables.forEach(el => {
+        el.setAttribute('contenteditable', !isEditing);
+        if (!isEditing) {
+            el.style.background = '#fef3c7';
+        } else {
+            el.style.background = '';
+        }
+    });
+}
+
+function saveEdits() {
+    // Collect all edits
+    const edits = {};
+    document.querySelectorAll('.editable').forEach(el => {
+        const field = el.dataset.field;
+        if (field) {
+            edits[field] = el.innerText;
+        }
+    });
+
+    // Send to server
+    fetch(`/reports/api/update-assessment/{{ domain }}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(edits)
+    })
+    .then(response => response.json())
+    .then(data => {
+        alert('Changes saved!');
+    })
+    .catch(error => {
+        alert('Error saving changes: ' + error);
+    });
+}
+</script>
+{% endblock %}

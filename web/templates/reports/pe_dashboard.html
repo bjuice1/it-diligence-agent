@@ -1,0 +1,559 @@
+{% extends "base.html" %}
+
+{% block title %}PE Dashboard - {{ target_name }}{% endblock %}
+
+{% block content %}
+<div class="pe-dashboard">
+    <!-- Header -->
+    <div class="dashboard-header">
+        <div class="header-content">
+            <h1>IT Due Diligence Dashboard</h1>
+            <span class="target-name">{{ target_name }}</span>
+        </div>
+        <div class="header-actions">
+            <span class="analysis-date">{{ analysis_date }}</span>
+            <span class="overall-grade grade-{{ overall_grade|lower|replace(' ', '-') }}">
+                {{ overall_grade }}
+            </span>
+        </div>
+    </div>
+
+    <!-- Overall Assessment -->
+    <div class="assessment-box">
+        <p>{{ overall_assessment }}</p>
+    </div>
+
+    <!-- Key Metrics -->
+    <div class="metrics-row">
+        <div class="metric-card">
+            <div class="metric-icon">💰</div>
+            <div class="metric-value">{{ total_it_budget }}</div>
+            <div class="metric-label">Annual IT Budget</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-icon">📊</div>
+            <div class="metric-value">{{ total_investment }}</div>
+            <div class="metric-label">Investment Needed</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-icon">👥</div>
+            <div class="metric-value">{{ it_headcount }}</div>
+            <div class="metric-label">IT Headcount</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-icon">📈</div>
+            <div class="metric-value">{{ it_pct_revenue }}</div>
+            <div class="metric-label">IT % of Revenue</div>
+        </div>
+    </div>
+
+    <!-- Domain Grid -->
+    <h2 class="section-title">Domain Assessment</h2>
+    <div class="domain-grid">
+        {% for domain, highlight in domain_highlights.items() %}
+        <a href="{{ url_for('pe_reports.domain_report', domain=domain) }}" class="domain-card">
+            <div class="card-header">
+                <h3>{{ highlight.domain_display_name }}</h3>
+                <span class="grade-badge grade-{{ highlight.overall_grade|lower|replace(' ', '-') }}">
+                    {{ highlight.overall_grade }}
+                </span>
+            </div>
+            <p class="key-finding">{{ highlight.key_finding }}</p>
+            <div class="card-metrics">
+                <span>{{ highlight.work_item_count }} work items</span>
+                <span>{{ highlight.risk_count }} risks</span>
+            </div>
+            <span class="deep-dive-link">Deep dive →</span>
+        </a>
+        {% endfor %}
+    </div>
+
+    <!-- Two Column: Risks & Opportunities -->
+    <div class="two-column">
+        <div class="column-card risks-card">
+            <h3>⚠️ Top Risks</h3>
+            <ul class="risks-list">
+                {% for risk in top_risks %}
+                <li class="risk-item severity-{{ risk.severity }}">
+                    <strong>{{ risk.title }}</strong>
+                    <span class="meta">{{ risk.domain|title }} | {{ risk.severity|title }}</span>
+                </li>
+                {% else %}
+                <li>No critical risks identified</li>
+                {% endfor %}
+            </ul>
+        </div>
+        <div class="column-card opportunities-card">
+            <h3>✨ Top Opportunities</h3>
+            <ul class="opportunities-list">
+                {% for opp in top_opportunities %}
+                <li>{{ opp }}</li>
+                {% else %}
+                <li>No specific opportunities identified</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <!-- Investment Summary -->
+    <div class="investment-summary">
+        <h3>Investment Summary</h3>
+        <div class="investment-grid">
+            <div class="investment-card highlight">
+                <div class="value">{{ total_investment }}</div>
+                <div class="label">Total Investment</div>
+            </div>
+            <div class="investment-card">
+                <div class="value">{{ tsa_costs }}</div>
+                <div class="label">TSA / Transition</div>
+            </div>
+            <div class="investment-card">
+                <div class="value">{{ separation_costs }}</div>
+                <div class="label">Separation</div>
+            </div>
+            <div class="investment-card">
+                <div class="value">{{ integration_costs }}</div>
+                <div class="label">Integration</div>
+            </div>
+        </div>
+
+        <h4>By Phase</h4>
+        <div class="phase-breakdown">
+            {% for phase, costs in investment_by_phase.items() %}
+            <div class="phase-card phase-{{ phase|lower|replace('_', '') }}">
+                <div class="phase-name">{{ phase|replace('_', ' ') }}</div>
+                <div class="phase-value">{{ costs }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Stats Footer -->
+    <div class="stats-footer">
+        <div class="stat">
+            <span class="number">{{ total_facts }}</span>
+            <span class="label">Facts</span>
+        </div>
+        <div class="stat">
+            <span class="number">{{ total_risks }}</span>
+            <span class="label">Risks</span>
+        </div>
+        <div class="stat">
+            <span class="number">{{ total_work_items }}</span>
+            <span class="label">Work Items</span>
+        </div>
+        <div class="stat">
+            <span class="number">{{ total_gaps }}</span>
+            <span class="label">Gaps</span>
+        </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="dashboard-actions">
+        <a href="{{ url_for('pe_reports.executive_summary') }}" class="btn btn-primary">
+            View Executive Summary
+        </a>
+        <a href="{{ url_for('pe_reports.costs_report') }}" class="btn btn-secondary">
+            View Costs Detail
+        </a>
+        <a href="{{ url_for('pe_reports.investment_report') }}" class="btn btn-secondary">
+            View Investment Detail
+        </a>
+        <form action="{{ url_for('pe_reports.generate_reports') }}" method="post" style="display: inline;">
+            <button type="submit" class="btn btn-success">
+                Generate All Reports (ZIP)
+            </button>
+        </form>
+    </div>
+</div>
+
+<style>
+.pe-dashboard {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 3px solid var(--primary, #2563eb);
+}
+
+.dashboard-header h1 {
+    margin: 0;
+    font-size: 24px;
+}
+
+.target-name {
+    color: var(--text-muted, #6b7280);
+    font-size: 14px;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.analysis-date {
+    color: var(--text-muted, #6b7280);
+    font-size: 13px;
+}
+
+.overall-grade {
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.grade-strong { background: #dcfce7; color: #16a34a; }
+.grade-adequate { background: #fef3c7; color: #ca8a04; }
+.grade-needs-improvement { background: #fecaca; color: #dc2626; }
+
+.assessment-box {
+    background: #eff6ff;
+    border-left: 4px solid var(--primary, #2563eb);
+    padding: 15px 20px;
+    border-radius: 0 8px 8px 0;
+    margin-bottom: 25px;
+}
+
+.assessment-box p {
+    margin: 0;
+    line-height: 1.6;
+}
+
+.metrics-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 15px;
+    margin-bottom: 30px;
+}
+
+.metric-card {
+    background: var(--bg-light, #f9fafb);
+    padding: 20px;
+    border-radius: 10px;
+    text-align: center;
+}
+
+.metric-icon {
+    font-size: 24px;
+    margin-bottom: 10px;
+}
+
+.metric-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--primary, #2563eb);
+    margin-bottom: 5px;
+}
+
+.metric-label {
+    font-size: 12px;
+    color: var(--text-muted, #6b7280);
+    text-transform: uppercase;
+}
+
+.section-title {
+    font-size: 18px;
+    margin-bottom: 15px;
+}
+
+.domain-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    margin-bottom: 30px;
+}
+
+.domain-card {
+    display: block;
+    background: white;
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 10px;
+    padding: 20px;
+    text-decoration: none;
+    color: inherit;
+    transition: box-shadow 0.2s, transform 0.2s;
+}
+
+.domain-card:hover {
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+}
+
+.domain-card .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+}
+
+.domain-card h3 {
+    margin: 0;
+    font-size: 16px;
+}
+
+.grade-badge {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-weight: 600;
+}
+
+.key-finding {
+    font-size: 14px;
+    color: var(--text-muted, #6b7280);
+    margin-bottom: 15px;
+    min-height: 42px;
+}
+
+.card-metrics {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--text-muted, #6b7280);
+    padding-top: 10px;
+    border-top: 1px solid var(--border, #e5e7eb);
+}
+
+.deep-dive-link {
+    display: block;
+    margin-top: 10px;
+    color: var(--primary, #2563eb);
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.two-column {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.column-card {
+    background: white;
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 10px;
+    padding: 20px;
+}
+
+.column-card h3 {
+    margin: 0 0 15px 0;
+    font-size: 16px;
+}
+
+.risks-list, .opportunities-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.risks-list li, .opportunities-list li {
+    padding: 10px 12px;
+    border-radius: 6px;
+    margin-bottom: 8px;
+}
+
+.risks-list li {
+    background: #fef2f2;
+    border-left: 3px solid #dc2626;
+}
+
+.risks-list li.severity-critical {
+    background: #fecaca;
+}
+
+.risks-list li strong {
+    display: block;
+    margin-bottom: 3px;
+}
+
+.risks-list li .meta {
+    font-size: 11px;
+    color: var(--text-muted, #6b7280);
+}
+
+.opportunities-list li {
+    background: #dcfce7;
+    border-left: 3px solid #16a34a;
+}
+
+.investment-summary {
+    background: white;
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 10px;
+    padding: 25px;
+    margin-bottom: 30px;
+}
+
+.investment-summary h3 {
+    margin: 0 0 20px 0;
+    font-size: 18px;
+}
+
+.investment-summary h4 {
+    margin: 20px 0 15px 0;
+    font-size: 14px;
+    color: var(--text-muted, #6b7280);
+}
+
+.investment-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 15px;
+}
+
+.investment-card {
+    text-align: center;
+    padding: 15px;
+    background: var(--bg-light, #f9fafb);
+    border-radius: 8px;
+}
+
+.investment-card.highlight {
+    background: #eff6ff;
+    border: 2px solid var(--primary, #2563eb);
+}
+
+.investment-card .value {
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.investment-card.highlight .value {
+    color: var(--primary, #2563eb);
+}
+
+.investment-card .label {
+    font-size: 12px;
+    color: var(--text-muted, #6b7280);
+}
+
+.phase-breakdown {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+}
+
+.phase-card {
+    padding: 15px;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.phase-day1 { background: #fef2f2; }
+.phase-day100 { background: #fef3c7; }
+.phase-post100 { background: #f0fdf4; }
+
+.phase-name {
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 5px;
+}
+
+.phase-value {
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.stats-footer {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    padding: 20px;
+    background: white;
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 10px;
+    margin-bottom: 30px;
+}
+
+.stat {
+    text-align: center;
+}
+
+.stat .number {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--primary, #2563eb);
+    display: block;
+}
+
+.stat .label {
+    font-size: 12px;
+    color: var(--text-muted, #6b7280);
+    text-transform: uppercase;
+}
+
+.dashboard-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.btn {
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    border: none;
+    font-size: 14px;
+}
+
+.btn-primary {
+    background: var(--primary, #2563eb);
+    color: white;
+}
+
+.btn-secondary {
+    background: var(--bg-light, #f9fafb);
+    color: var(--text, #1f2937);
+    border: 1px solid var(--border, #e5e7eb);
+}
+
+.btn-success {
+    background: #16a34a;
+    color: white;
+}
+
+.btn:hover {
+    opacity: 0.9;
+}
+
+@media (max-width: 1200px) {
+    .domain-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 800px) {
+    .metrics-row {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .two-column {
+        grid-template-columns: 1fr;
+    }
+
+    .investment-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .phase-breakdown {
+        grid-template-columns: 1fr;
+    }
+
+    .dashboard-actions {
+        flex-wrap: wrap;
+    }
+}
+</style>
+{% endblock %}
