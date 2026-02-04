@@ -548,7 +548,7 @@ class FactStore:
             deal_id: Deal ID for scoping (uses store's deal_id if not provided)
 
         Returns:
-            Unique fact ID (e.g., F-INFRA-001)
+            Unique fact ID with entity prefix (e.g., F-TGT-INFRA-001, F-BYR-APP-002)
 
         Raises:
             ValueError: If entity is invalid, locked, or deal_id missing
@@ -590,7 +590,7 @@ class FactStore:
             pass
 
         with self._lock:
-            fact_id = self._generate_fact_id(domain)
+            fact_id = self._generate_fact_id(domain, entity)
 
             fact = Fact(
                 fact_id=fact_id,
@@ -683,7 +683,7 @@ class FactStore:
             deal_id: Deal ID for scoping (uses store's deal_id if not provided)
 
         Returns:
-            Unique gap ID (e.g., G-INFRA-001)
+            Unique gap ID with entity prefix (e.g., G-TGT-INFRA-001, G-BYR-APP-002)
 
         Raises:
             ValueError: If deal_id is missing
@@ -694,7 +694,7 @@ class FactStore:
             raise ValueError("deal_id is required - provide in add_gap() or store constructor")
 
         with self._lock:
-            gap_id = self._generate_gap_id(domain)
+            gap_id = self._generate_gap_id(domain, entity)
             gap = Gap(
                 gap_id=gap_id,
                 domain=domain,
@@ -711,35 +711,57 @@ class FactStore:
 
         return gap_id
 
-    def _generate_fact_id(self, domain: str) -> str:
+    def _generate_fact_id(self, domain: str, entity: str = "target") -> str:
         """
-        Generate unique fact ID: F-{DOMAIN_PREFIX}-{SEQ}
-        
+        Generate unique fact ID with entity prefix: F-{ENTITY}-{DOMAIN}-{SEQ}
+
+        Format:
+        - Target facts: F-TGT-APP-001, F-TGT-INFRA-002
+        - Buyer facts: F-BYR-APP-001, F-BYR-NET-003
+
+        This makes entity immediately visible in fact IDs, preventing
+        accidental mixing of target and buyer facts in reasoning.
+
         NOTE: Must be called within self._lock context.
         This method modifies self._fact_counters and is not thread-safe on its own.
         """
-        prefix = DOMAIN_PREFIXES.get(domain, "GEN")
+        entity_prefix = "TGT" if entity == "target" else "BYR"
+        domain_prefix = DOMAIN_PREFIXES.get(domain, "GEN")
 
-        if prefix not in self._fact_counters:
-            self._fact_counters[prefix] = 0
+        # Key counters by entity+domain to keep sequences separate
+        counter_key = f"{entity_prefix}_{domain_prefix}"
 
-        self._fact_counters[prefix] += 1
-        return f"F-{prefix}-{self._fact_counters[prefix]:03d}"
+        if counter_key not in self._fact_counters:
+            self._fact_counters[counter_key] = 0
 
-    def _generate_gap_id(self, domain: str) -> str:
+        self._fact_counters[counter_key] += 1
+        return f"F-{entity_prefix}-{domain_prefix}-{self._fact_counters[counter_key]:03d}"
+
+    def _generate_gap_id(self, domain: str, entity: str = "target") -> str:
         """
-        Generate unique gap ID: G-{DOMAIN_PREFIX}-{SEQ}
-        
+        Generate unique gap ID with entity prefix: G-{ENTITY}-{DOMAIN}-{SEQ}
+
+        Format:
+        - Target gaps: G-TGT-APP-001, G-TGT-INFRA-002
+        - Buyer gaps: G-BYR-APP-001, G-BYR-NET-003
+
+        This makes entity immediately visible in gap IDs, preventing
+        accidental mixing of target and buyer gaps in reasoning.
+
         NOTE: Must be called within self._lock context.
         This method modifies self._gap_counters and is not thread-safe on its own.
         """
-        prefix = DOMAIN_PREFIXES.get(domain, "GEN")
+        entity_prefix = "TGT" if entity == "target" else "BYR"
+        domain_prefix = DOMAIN_PREFIXES.get(domain, "GEN")
 
-        if prefix not in self._gap_counters:
-            self._gap_counters[prefix] = 0
+        # Key counters by entity+domain to keep sequences separate
+        counter_key = f"{entity_prefix}_{domain_prefix}"
 
-        self._gap_counters[prefix] += 1
-        return f"G-{prefix}-{self._gap_counters[prefix]:03d}"
+        if counter_key not in self._gap_counters:
+            self._gap_counters[counter_key] = 0
+
+        self._gap_counters[counter_key] += 1
+        return f"G-{entity_prefix}-{domain_prefix}-{self._gap_counters[counter_key]:03d}"
 
     def get_fact(self, fact_id: str) -> Optional[Fact]:
         """Get a specific fact by ID (O(1) lookup using index)."""
@@ -1834,6 +1856,200 @@ class FactStore:
             if buyer_facts and entity == "target":
                 lines.append("\n### BUYER CONTEXT (for integration planning)")
                 lines.append(f"Note: {len(buyer_facts)} buyer facts exist in this domain for comparison")
+
+            return "\n".join(lines)
+
+    def format_for_reasoning_with_buyer_context(
+        self,
+        domain: str,
+        overlaps: List = None
+    ) -> str:
+        """
+        Format facts with BOTH target and buyer context for buyer-aware reasoning.
+
+        This is the CRITICAL FIX for buyer-aware reasoning. Unlike format_for_reasoning()
+        which only returns one entity, this combines TARGET + BUYER facts in a single
+        inventory with clear separation and guardrails.
+
+        Args:
+            domain: Domain to format (applications, infrastructure, etc.)
+            overlaps: Optional list of OverlapCandidate objects for this domain
+
+        Returns:
+            Formatted string with:
+            - Section 1: TARGET COMPANY INVENTORY
+            - Section 2: BUYER COMPANY REFERENCE (if buyer facts exist)
+            - Section 3: OVERLAP MAP (if overlaps provided)
+            - Section 4: ANALYSIS GUARDRAILS
+
+        BUYER-AWARE REASONING FIX (2026-02-04):
+        This function solves the root cause of buyer-aware features not working.
+        Before this fix, reasoning agents only received target facts because
+        format_for_reasoning() had entity="target" default and no way to combine both.
+        """
+        from config.buyer_context_config import should_include_buyer_facts, get_buyer_fact_limit
+
+        with self._lock:
+            # Get target facts (always include)
+            target_facts = [f for f in self.facts if f.domain == domain and f.entity == "target"]
+            domain_gaps = [g for g in self.gaps if g.domain == domain]
+
+            # Get buyer facts (if configured for this domain)
+            buyer_facts = []
+            if should_include_buyer_facts(domain):
+                all_buyer_facts = [f for f in self.facts if f.domain == domain and f.entity == "buyer"]
+                buyer_fact_limit = get_buyer_fact_limit(domain)
+
+                # Apply limit if configured
+                if buyer_fact_limit > 0 and len(all_buyer_facts) > buyer_fact_limit:
+                    buyer_facts = all_buyer_facts[:buyer_fact_limit]
+                else:
+                    buyer_facts = all_buyer_facts
+
+            lines = []
+
+            # ======================================================================
+            # SECTION 1: TARGET COMPANY INVENTORY
+            # ======================================================================
+            lines.append("## TARGET COMPANY INVENTORY\n")
+            lines.append(f"Entity: TARGET")
+            lines.append(f"Total Facts: {len(target_facts)}")
+            lines.append(f"Gaps Identified: {len(domain_gaps)}\n")
+
+            # Group target facts by category
+            target_by_category: Dict[str, List[Dict]] = {}
+            for fact in target_facts:
+                if fact.category not in target_by_category:
+                    target_by_category[fact.category] = []
+                target_by_category[fact.category].append(fact.to_dict())
+
+            for category, facts in target_by_category.items():
+                lines.append(f"### {category.upper()}")
+
+                for fact in facts:
+                    lines.append(f"\n**{fact['fact_id']}**: {fact['item']}")
+
+                    # Format details
+                    if fact['details']:
+                        details_str = ", ".join(
+                            f"{k}={v}" for k, v in fact['details'].items()
+                        )
+                        lines.append(f"- Details: {details_str}")
+
+                    lines.append(f"- Status: {fact['status']}")
+                    lines.append(f"- Entity: {fact.get('entity', 'target')}")
+
+                    # Include evidence quote (truncated)
+                    quote = fact['evidence'].get('exact_quote', '')
+                    if quote:
+                        truncated = quote[:150] + "..." if len(quote) > 150 else quote
+                        lines.append(f"- Evidence: \"{truncated}\"")
+
+                lines.append("")  # Blank line between categories
+
+            # Add gaps section
+            if domain_gaps:
+                lines.append("\n### IDENTIFIED GAPS")
+                for gap in domain_gaps:
+                    lines.append(f"\n**{gap.gap_id}**: [{gap.importance.upper()}] {gap.description}")
+
+            # ======================================================================
+            # SECTION 2: BUYER COMPANY REFERENCE (Conditional)
+            # ======================================================================
+            if buyer_facts:
+                lines.append("\n" + "="*70)
+                lines.append("\n## BUYER COMPANY REFERENCE (Read-Only Context)\n")
+                lines.append("⚠️ **PURPOSE**: Understand integration implications and overlaps ONLY.")
+                lines.append("⚠️ **DO NOT**: Create risks, work items, or recommendations FOR the buyer.")
+                lines.append("⚠️ **DO**: Use buyer facts to inform target-focused integration analysis.\n")
+
+                lines.append(f"Entity: BUYER")
+                lines.append(f"Total Facts Available: {len(buyer_facts)}")
+                lines.append("")
+
+                # Group buyer facts by category
+                buyer_by_category: Dict[str, List[Dict]] = {}
+                for fact in buyer_facts:
+                    if fact.category not in buyer_by_category:
+                        buyer_by_category[fact.category] = []
+                    buyer_by_category[fact.category].append(fact.to_dict())
+
+                for category, facts in buyer_by_category.items():
+                    lines.append(f"### {category.upper()}")
+
+                    for fact in facts:
+                        lines.append(f"\n**{fact['fact_id']}**: {fact['item']}")
+
+                        # Format details
+                        if fact['details']:
+                            details_str = ", ".join(
+                                f"{k}={v}" for k, v in fact['details'].items()
+                            )
+                            lines.append(f"- Details: {details_str}")
+
+                        lines.append(f"- Status: {fact['status']}")
+                        lines.append(f"- Entity: {fact.get('entity', 'buyer')}")
+
+                    lines.append("")  # Blank line between categories
+
+            # ======================================================================
+            # SECTION 3: OVERLAP MAP (If provided)
+            # ======================================================================
+            if overlaps and buyer_facts:
+                lines.append("\n" + "="*70)
+                lines.append("\n## PRE-COMPUTED OVERLAP MAP\n")
+                lines.append(f"The following {len(overlaps)} overlaps were detected between target and buyer:\n")
+
+                for overlap in overlaps:
+                    # Handle both dict and object formats
+                    overlap_id = overlap.get('overlap_id') if isinstance(overlap, dict) else overlap.overlap_id
+                    overlap_type = overlap.get('overlap_type') if isinstance(overlap, dict) else overlap.overlap_type
+                    target_summary = overlap.get('target_summary') if isinstance(overlap, dict) else overlap.target_summary
+                    buyer_summary = overlap.get('buyer_summary') if isinstance(overlap, dict) else overlap.buyer_summary
+                    why_it_matters = overlap.get('why_it_matters') if isinstance(overlap, dict) else overlap.why_it_matters
+                    confidence = overlap.get('confidence') if isinstance(overlap, dict) else overlap.confidence
+                    target_fact_ids = overlap.get('target_fact_ids') if isinstance(overlap, dict) else overlap.target_fact_ids
+                    buyer_fact_ids = overlap.get('buyer_fact_ids') if isinstance(overlap, dict) else overlap.buyer_fact_ids
+
+                    lines.append(f"### {overlap_id}: {overlap_type.replace('_', ' ').title()}")
+                    lines.append(f"**Target**: {target_summary}")
+                    lines.append(f"**Buyer**: {buyer_summary}")
+                    lines.append(f"**Why It Matters**: {why_it_matters}")
+                    lines.append(f"**Confidence**: {confidence}")
+                    lines.append(f"**Cites**: Target {target_fact_ids}, Buyer {buyer_fact_ids}")
+                    lines.append("")
+
+            # ======================================================================
+            # SECTION 4: ANALYSIS GUARDRAILS
+            # ======================================================================
+            if buyer_facts:
+                lines.append("\n" + "="*70)
+                lines.append("\n## ANALYSIS GUARDRAILS\n")
+                lines.append("When using buyer facts in your analysis:")
+                lines.append("")
+                lines.append("1. **TARGET FOCUS**: All findings (risks, work items, considerations) must be about the TARGET company")
+                lines.append("   - ✅ Good: \"Target's SAP requires migration to buyer's Oracle\"")
+                lines.append("   - ❌ Bad: \"Buyer should upgrade their Oracle to match target\"")
+                lines.append("")
+                lines.append("2. **ANCHOR RULE**: If citing buyer facts (F-BYR-xxx), you MUST also cite target facts (F-TGT-xxx)")
+                lines.append("   - Buyer facts provide CONTEXT for target-focused findings")
+                lines.append("   - No findings should be based solely on buyer facts")
+                lines.append("")
+                lines.append("3. **INTEGRATION CONTEXT**: Use buyer data to inform:")
+                lines.append("   - Integration complexity (platform mismatches)")
+                lines.append("   - Migration decisions (standardization targets)")
+                lines.append("   - Consolidation opportunities (capability overlaps)")
+                lines.append("   - Day-1 continuity (dependencies on buyer systems)")
+                lines.append("")
+                lines.append("4. **WORK ITEM STRUCTURE**: For integration-related work items:")
+                lines.append("   - `target_action`: What TARGET must do (always required)")
+                lines.append("   - `integration_option`: Buyer-dependent paths (optional)")
+                lines.append("   - `overlap_id`: Reference to overlap from map above")
+                lines.append("   - `integration_related`: Auto-set to true if buyer facts cited")
+                lines.append("")
+                lines.append("5. **VALIDATION**: Your findings will be validated against these rules")
+                lines.append("   - Violations will be flagged or rejected")
+                lines.append("   - See runtime validation in reasoning_tools.py")
 
             return "\n".join(lines)
 

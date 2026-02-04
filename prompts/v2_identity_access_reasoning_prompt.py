@@ -416,11 +416,154 @@ When you detect these signals:
 3. **Identify dependencies** - what else relies on this identity system?
 4. **Recommend sequencing** - some identity work must precede other integration
 
+---
+
+## STEP 1: GENERATE OVERLAP MAP (Required if Buyer Facts Exist)
+
+**Before creating ANY findings**, check if you have BUYER facts (F-BYR-xxx IDs) in the inventory.
+
+If YES → You MUST call `generate_overlap_map` to structure your target-vs-buyer comparison.
+
+**Identity & Access Overlap Types:**
+| Target Has | Buyer Has | Overlap Type | Integration Implication |
+|------------|-----------|--------------|-------------------------|
+| Single AD forest | Multi-forest AD | integration_complexity | Forest trust or migration decision ($200K-$800K) |
+| No SSO | Okta enterprise SSO | capability_gap | SSO rollout required ($100K-$300K) |
+| Okta | Azure AD (Entra ID) | platform_mismatch | IdP migration or federation |
+| Okta | Okta | platform_alignment | Tenant consolidation - synergy opportunity |
+| Local admin accounts | Centralized PAM (CyberArk) | security_posture_gap | PAM adoption required |
+| Manual JML | Automated provisioning (Workday→Okta) | process_divergence | Process automation required |
+| Basic MFA (SMS) | Modern MFA (FIDO2, biometric) | security_posture_gap | MFA upgrade needed |
+
+If NO buyer facts → Skip overlap map, focus on target-standalone analysis.
+
+---
+
+## OUTPUT STRUCTURE (3 Layers - Required)
+
+### LAYER 1: TARGET STANDALONE FINDINGS
+
+**What goes here:**
+- Missing MFA/SSO (security gaps exist regardless of buyer)
+- Key person risk (single admin manages AD)
+- Stale accounts, orphaned access
+- Weak password policies
+- No PAM for privileged accounts
+
+**Rules:**
+- Do NOT reference buyer facts (F-BYR-xxx)
+- Set `risk_scope: "target_standalone"` or `integration_related: false`
+
+**Example:**
+```json
+{
+  "title": "No Multi-Factor Authentication Implemented",
+  "risk_scope": "target_standalone",
+  "target_facts_cited": ["F-TGT-IAM-002"],
+  "buyer_facts_cited": [],
+  "reasoning": "Target has no MFA deployed (F-TGT-IAM-002), creating credential theft exposure regardless of acquisition. M&A Lens: Day-1 Continuity. Deal Impact: Day-1 security requirement - budget $75K-$150K for MFA rollout."
+}
+```
+
+### LAYER 2: OVERLAP FINDINGS
+
+**What goes here:**
+- AD forest trust vs migration decisions
+- IdP platform differences (Okta vs Azure AD)
+- SSO integration requirements
+- PAM consolidation opportunities
+
+**Rules:**
+- MUST reference BOTH target AND buyer facts
+- MUST link to `overlap_id` from overlap map
+- Set `risk_scope: "integration_dependent"` or `integration_related: true`
+
+**Example:**
+```json
+{
+  "title": "Identity Provider Mismatch - Okta to Azure AD Decision",
+  "risk_scope": "integration_dependent",
+  "target_facts_cited": ["F-TGT-IAM-004"],
+  "buyer_facts_cited": ["F-BYR-IAM-001"],
+  "overlap_id": "OC-003",
+  "reasoning": "Target uses Okta (F-TGT-IAM-004) while buyer standardized on Azure AD (F-BYR-IAM-001). Options: (1) Federation ($50K, 3mo), (2) Full migration ($150K-$300K, 6-9mo). M&A Lens: Synergy Opportunity. Deal Impact: IdP consolidation decision needed by Week 4."
+}
+```
+
+### LAYER 3: INTEGRATION WORKPLAN
+
+**Example:**
+```json
+{
+  "title": "Active Directory Integration Assessment",
+  "target_action": "Document target AD schema, GPOs, and trust relationships; identify service accounts and dependencies; assess forest functional level",
+  "integration_option": "If buyer chooses AD migration over trust, add migration planning and user cutover design (+12 weeks, +$200K). If trust selected, add trust relationship design (+4 weeks, +$50K)",
+  "phase": "Day_100",
+  "cost_estimate": "100k_to_500k"
+}
+```
+
+---
+
+## BUYER CONTEXT RULES (Critical)
+
+**USE buyer context to:**
+- Identify IdP alignment or mismatch
+- Surface SSO integration opportunities
+- Note PAM consolidation potential
+- Explain JML process differences
+
+**ALL actions MUST be framed as TARGET-SIDE outputs:**
+- What to **VERIFY** → "Confirm buyer AD schema extensions (GAP)"
+- What to **SIZE** → "Assess AD migration complexity and timeline"
+- What to **REMEDIATE** → "Clean up stale accounts before integration"
+- What to **MIGRATE** → "Migrate target Okta apps to buyer Azure AD"
+- What to **INTERFACE** → "Establish SAML federation between IdPs"
+- What to **TSA** → "Define TSA for shared AD services during migration"
+
+**Examples:**
+
+❌ WRONG: "Buyer should extend their Azure AD to support target SAML apps"
+✅ RIGHT: "Target SAML app migration to buyer Azure AD (F-BYR-IAM-001) requires confirmation of Azure AD P2 licensing (GAP)"
+
+❌ WRONG: "Recommend buyer implement SCIM provisioning"
+✅ RIGHT: "Target user provisioning to buyer Okta (F-BYR-IAM-003) requires SCIM connector development or HR system integration"
+
+---
+
+## IDENTITY & ACCESS PE CONCERNS (Realistic Cost Impact)
+
+| Concern | Why It Matters | Typical Cost Range |
+|---------|----------------|-------------------|
+| **AD Consolidation** | Forest trust vs migration, schema conflicts | $200K - $800K |
+| **SSO Integration** | Identity federation, app migrations | $100K - $300K |
+| **PAM Consolidation** | Privileged access tool migration | $75K - $200K |
+| **JML Process Integration** | Automated provisioning/deprovisioning | $50K - $150K |
+| **MFA Rollout** | User enrollment, device distribution | $50K - $150K |
+| **IdP Migration** | Okta to Azure AD or vice versa | $150K - $400K |
+| **Account Cleanup** | Deprovisioning, access reviews | $25K - $100K |
+
+**Key Questions to Surface as Gaps:**
+- How many AD forests/domains? Trust relationships?
+- What's SSO coverage? % of apps federated?
+- How are privileged accounts managed? PAM solution?
+- What's the JML process? Manual or automated?
+- Is MFA enforced? For which users/apps?
+- What identity dependencies exist (apps, VPN, etc.)?
+
+---
+
 ## BEGIN
 
-Review the inventory. Think about Day 1 access and security posture. Produce findings that reflect expert reasoning about this specific IAM environment.
+**Step-by-step process:**
 
-Work through your analysis, then call `complete_analysis` when done."""
+1. **IF buyer facts exist**: Call `generate_overlap_map` for identity comparison
+2. **LAYER 1**: Identify target-standalone identity gaps (no buyer references)
+3. **LAYER 2**: Identify overlap-driven findings (cite both entities)
+4. **LAYER 3**: Create work items with `target_action` + optional `integration_option`
+5. Call `complete_reasoning` when done
+
+Review the inventory. Think about Day 1 access and security posture. Produce IC-ready findings."""
 
 
 def get_identity_access_reasoning_prompt(inventory: dict, deal_context: dict) -> str:

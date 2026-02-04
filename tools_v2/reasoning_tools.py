@@ -118,6 +118,21 @@ PRIORITY_LEVELS = ["critical", "high", "medium", "low"]
 # M&A Lenses - every finding must connect to at least one
 MNA_LENSES = ["day_1_continuity", "tsa_exposure", "separation_complexity", "synergy_opportunity", "cost_driver"]
 
+# Overlap types for buyer-aware reasoning
+# Used to classify how target and buyer systems relate
+OVERLAP_TYPES = [
+    "platform_mismatch",        # Different vendors/platforms (SAP vs Oracle)
+    "platform_alignment",       # Same platforms (AWS + AWS) - synergy opportunity
+    "version_gap",              # Same platform, different versions
+    "capability_gap",           # Target lacks something buyer has
+    "capability_overlap",       # Both have same capability (consolidation opportunity)
+    "integration_complexity",   # Different integration patterns/middleware
+    "data_model_mismatch",      # Incompatible data structures
+    "licensing_conflict",       # License terms that conflict or require renegotiation
+    "security_posture_gap",     # Security maturity differences
+    "process_divergence",       # Business process differences affecting integration
+]
+
 # Cost estimate ranges for work items
 COST_RANGES = [
     "under_25k",      # < $25,000
@@ -195,6 +210,75 @@ COST_CALIBRATION = {
 # =============================================================================
 
 @dataclass
+class OverlapCandidate:
+    """
+    Structured comparison between TARGET and BUYER systems.
+
+    Generated BEFORE findings - forces the model to "show its work" by
+    explicitly comparing what target has vs what buyer has before
+    making any integration-related conclusions.
+
+    This is the foundation for PE-grade outputs: every overlap finding
+    must trace back to an explicit OverlapCandidate.
+    """
+    overlap_id: str                      # OC-001, OC-002, etc.
+    domain: str                          # Which domain this overlap is in
+    overlap_type: str                    # One of OVERLAP_TYPES
+
+    # Entity fact references (MUST have both for valid overlap)
+    target_fact_ids: List[str]           # F-TGT-xxx IDs
+    buyer_fact_ids: List[str]            # F-BYR-xxx IDs
+
+    # What we're comparing
+    target_summary: str                  # e.g., "SAP ECC 6.0 with 247 custom objects"
+    buyer_summary: str                   # e.g., "Oracle Cloud ERP, enterprise license"
+
+    # Analysis
+    why_it_matters: str                  # Integration implication explanation
+    confidence: float                    # 0.0-1.0
+
+    # Gaps that need filling
+    missing_info_questions: List[str] = field(default_factory=list)
+
+    # Metadata
+    created_at: str = field(default_factory=lambda: _generate_timestamp())
+
+    def to_dict(self) -> Dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> "OverlapCandidate":
+        return cls(**data)
+
+    def validate(self) -> List[str]:
+        """Validate that this overlap candidate follows entity rules."""
+        errors = []
+
+        # Must have target facts
+        if not self.target_fact_ids:
+            errors.append(f"OverlapCandidate {self.overlap_id} has no target facts - overlaps must anchor in target")
+
+        # Must have buyer facts (otherwise it's not an overlap)
+        if not self.buyer_fact_ids:
+            errors.append(f"OverlapCandidate {self.overlap_id} has no buyer facts - this is a standalone target observation, not an overlap")
+
+        # Validate fact ID prefixes
+        for fid in self.target_fact_ids:
+            if "BYR" in fid:
+                errors.append(f"OverlapCandidate {self.overlap_id}: target_fact_ids contains buyer fact {fid}")
+
+        for fid in self.buyer_fact_ids:
+            if "TGT" in fid:
+                errors.append(f"OverlapCandidate {self.overlap_id}: buyer_fact_ids contains target fact {fid}")
+
+        # Validate overlap_type
+        if self.overlap_type not in OVERLAP_TYPES:
+            errors.append(f"OverlapCandidate {self.overlap_id}: invalid overlap_type '{self.overlap_type}'")
+
+        return errors
+
+
+@dataclass
 class Risk:
     """A risk identified through reasoning about facts."""
     finding_id: str
@@ -205,12 +289,21 @@ class Risk:
     severity: str
     integration_dependent: bool  # True if only relevant if deal proceeds
     mitigation: str
-    based_on_facts: List[str]  # Fact IDs that support this finding
+    based_on_facts: List[str]  # Fact IDs that support this finding (legacy, combined list)
     confidence: str
     reasoning: str  # Explain HOW facts led to this conclusion
     mna_lens: str = ""  # Primary M&A lens (day_1_continuity, tsa_exposure, etc.)
     mna_implication: str = ""  # Specific deal implication (1-2 sentences)
     timeline: Optional[str] = None  # When this becomes critical
+
+    # === Entity Tracking (PE-Grade) ===
+    # Separates target vs buyer fact citations for clarity
+    risk_scope: str = "target_standalone"  # "target_standalone" or "integration_dependent"
+    target_facts_cited: List[str] = field(default_factory=list)  # F-TGT-xxx IDs
+    buyer_facts_cited: List[str] = field(default_factory=list)   # F-BYR-xxx IDs (empty if standalone)
+    overlap_id: Optional[str] = None  # Link to OverlapCandidate (OC-xxx) if integration-related
+    integration_related: bool = False  # Auto-set by validation if buyer facts cited
+
     created_at: str = field(default_factory=lambda: _generate_timestamp())
 
     def to_dict(self) -> Dict:
@@ -218,6 +311,12 @@ class Risk:
 
     @classmethod
     def from_dict(cls, data: Dict) -> "Risk":
+        # Handle missing new fields for backwards compatibility
+        data.setdefault("risk_scope", "target_standalone")
+        data.setdefault("target_facts_cited", [])
+        data.setdefault("buyer_facts_cited", [])
+        data.setdefault("overlap_id", None)
+        data.setdefault("integration_related", data.get("integration_dependent", False))
         return cls(**data)
 
 
@@ -230,11 +329,18 @@ class StrategicConsideration:
     description: str
     lens: str  # buyer_alignment, tsa, synergy, value_creation, etc.
     implication: str  # What this means for the deal
-    based_on_facts: List[str]  # Fact IDs that support this finding
+    based_on_facts: List[str]  # Fact IDs that support this finding (legacy, combined list)
     confidence: str
     reasoning: str  # Explain HOW facts led to this conclusion
     mna_lens: str = ""  # Primary M&A lens (day_1_continuity, tsa_exposure, etc.)
     mna_implication: str = ""  # Specific deal implication (1-2 sentences)
+
+    # === Entity Tracking (PE-Grade) ===
+    integration_related: bool = False  # True if this consideration involves buyer comparison
+    target_facts_cited: List[str] = field(default_factory=list)  # F-TGT-xxx IDs
+    buyer_facts_cited: List[str] = field(default_factory=list)   # F-BYR-xxx IDs
+    overlap_id: Optional[str] = None  # Link to OverlapCandidate (OC-xxx) if applicable
+
     created_at: str = field(default_factory=lambda: _generate_timestamp())
 
     def to_dict(self) -> Dict:
@@ -242,6 +348,11 @@ class StrategicConsideration:
 
     @classmethod
     def from_dict(cls, data: Dict) -> "StrategicConsideration":
+        # Handle missing new fields for backwards compatibility
+        data.setdefault("integration_related", False)
+        data.setdefault("target_facts_cited", [])
+        data.setdefault("buyer_facts_cited", [])
+        data.setdefault("overlap_id", None)
         return cls(**data)
 
 
@@ -355,22 +466,34 @@ class WorkItem:
     priority: str
     owner_type: str  # buyer, target, shared, vendor
     triggered_by: List[str]  # Fact IDs that necessitate this work
-    based_on_facts: List[str]  # Additional supporting fact IDs
+    based_on_facts: List[str]  # Additional supporting fact IDs (legacy, combined list)
     confidence: str
     reasoning: str  # Explain WHY this work is needed
 
-    # NEW: Cost estimation
+    # Cost estimation
     cost_estimate: str  # One of COST_RANGES: under_25k, 25k_to_100k, etc.
 
-    # NEW: Detailed cost build-up (shows HOW the estimate was derived)
+    # Detailed cost build-up (shows HOW the estimate was derived)
     cost_buildup: Optional[CostBuildUp] = None  # Detailed breakdown for transparency
 
-    # NEW: Link to risks that this work item addresses
+    # Link to risks that this work item addresses
     triggered_by_risks: List[str] = field(default_factory=list)  # Risk IDs (R-001, R-002)
 
     # M&A Framing
     mna_lens: str = ""  # Primary M&A lens (day_1_continuity, tsa_exposure, etc.)
     mna_implication: str = ""  # Specific deal implication (1-2 sentences)
+
+    # === PE-Grade: Separated Actions ===
+    # target_action: What TARGET must do (always present, target-scoped)
+    # integration_option: Optional path depending on buyer strategy
+    target_action: str = ""  # e.g., "Inventory SAP objects; engage licensing"
+    integration_option: Optional[str] = None  # e.g., "If Oracle harmonization, add ETL + 6 months"
+
+    # === Entity Tracking ===
+    integration_related: bool = False  # True if depends on buyer context
+    target_facts_cited: List[str] = field(default_factory=list)  # F-TGT-xxx IDs
+    buyer_facts_cited: List[str] = field(default_factory=list)   # F-BYR-xxx IDs
+    overlap_id: Optional[str] = None  # Link to OverlapCandidate (OC-xxx)
 
     dependencies: List[str] = field(default_factory=list)  # Other work items
     created_at: str = field(default_factory=lambda: _generate_timestamp())
@@ -387,6 +510,13 @@ class WorkItem:
         # Handle CostBuildUp deserialization
         if data.get('cost_buildup') and isinstance(data['cost_buildup'], dict):
             data['cost_buildup'] = CostBuildUp.from_dict(data['cost_buildup'])
+        # Handle missing new fields for backwards compatibility
+        data.setdefault("target_action", "")
+        data.setdefault("integration_option", None)
+        data.setdefault("integration_related", False)
+        data.setdefault("target_facts_cited", [])
+        data.setdefault("buyer_facts_cited", [])
+        data.setdefault("overlap_id", None)
         return cls(**data)
 
     def get_cost_range_values(self) -> Dict[str, int]:
@@ -404,11 +534,18 @@ class Recommendation:
     action_type: str  # negotiate, budget, investigate, accept, mitigate
     urgency: str  # immediate, pre-close, post-close
     rationale: str
-    based_on_facts: List[str]  # Fact IDs that support this recommendation
+    based_on_facts: List[str]  # Fact IDs that support this recommendation (legacy, combined)
     confidence: str
     reasoning: str  # Explain the reasoning chain
     mna_lens: str = ""  # Primary M&A lens (day_1_continuity, tsa_exposure, etc.)
     mna_implication: str = ""  # Specific deal implication (1-2 sentences)
+
+    # === Entity Tracking (PE-Grade) ===
+    integration_related: bool = False  # True if recommendation involves buyer context
+    target_facts_cited: List[str] = field(default_factory=list)  # F-TGT-xxx IDs
+    buyer_facts_cited: List[str] = field(default_factory=list)   # F-BYR-xxx IDs
+    overlap_id: Optional[str] = None  # Link to OverlapCandidate (OC-xxx)
+
     created_at: str = field(default_factory=lambda: _generate_timestamp())
 
     def to_dict(self) -> Dict:
@@ -416,6 +553,11 @@ class Recommendation:
 
     @classmethod
     def from_dict(cls, data: Dict) -> "Recommendation":
+        # Handle missing new fields for backwards compatibility
+        data.setdefault("integration_related", False)
+        data.setdefault("target_facts_cited", [])
+        data.setdefault("buyer_facts_cited", [])
+        data.setdefault("overlap_id", None)
         return cls(**data)
 
 
@@ -466,16 +608,23 @@ class ReasoningStore:
 
     def __init__(self, fact_store: "FactStore" = None):
         self.fact_store = fact_store
+
+        # Overlap candidates - generated FIRST, before findings
+        # Forces "show your work" comparison of target vs buyer
+        self.overlap_candidates: List[OverlapCandidate] = []
+
+        # Standard findings
         self.risks: List[Risk] = []
         self.strategic_considerations: List[StrategicConsideration] = []
         self.work_items: List[WorkItem] = []
         self.recommendations: List[Recommendation] = []
         self.function_stories: List[FunctionStory] = []  # Phase 3: Function narratives
+
         self._counters: Dict[str, int] = {}  # Kept for backwards compatibility
         self._used_ids: Set[str] = set()  # Track all used IDs to prevent duplicates
         self.metadata: Dict[str, Any] = {
             "created_at": _generate_timestamp(),
-            "version": "2.2"  # Version bump for function stories
+            "version": "2.3"  # Version bump for overlap candidates
         }
         # Thread safety: Lock for all mutating operations
         self._lock = threading.RLock()
@@ -567,6 +716,64 @@ class ReasoningStore:
         
         return result
 
+    def add_overlap_candidate(self, **kwargs) -> str:
+        """
+        Add an overlap candidate and return its ID.
+
+        Overlap candidates MUST be generated before findings.
+        They force explicit comparison of target vs buyer systems.
+
+        Returns:
+            Overlap ID (e.g., OC-001)
+
+        Raises:
+            ValueError: If validation fails (missing target/buyer facts)
+        """
+        with self._lock:
+            # Generate sequential ID for overlap candidates
+            oc_id = self._generate_id("OC")
+            kwargs["overlap_id"] = oc_id
+
+            # Set domain if not provided
+            if "domain" not in kwargs:
+                kwargs["domain"] = "cross-domain"
+
+            # Ensure list fields have defaults
+            if "target_fact_ids" not in kwargs:
+                kwargs["target_fact_ids"] = []
+            if "buyer_fact_ids" not in kwargs:
+                kwargs["buyer_fact_ids"] = []
+            if "missing_info_questions" not in kwargs:
+                kwargs["missing_info_questions"] = []
+
+            overlap = OverlapCandidate(**kwargs)
+
+            # Validate the overlap candidate
+            validation_errors = overlap.validate()
+            if validation_errors:
+                for error in validation_errors:
+                    logger.warning(error)
+                # Don't block, but log warnings - model may be learning
+
+            self.overlap_candidates.append(overlap)
+            logger.debug(
+                f"Added overlap candidate {oc_id}: {overlap.overlap_type} - "
+                f"target={overlap.target_fact_ids}, buyer={overlap.buyer_fact_ids}"
+            )
+            return oc_id
+
+    def get_overlap_candidates(self, domain: str = None) -> List[OverlapCandidate]:
+        """Get overlap candidates, optionally filtered by domain."""
+        with self._lock:
+            if domain:
+                return [oc for oc in self.overlap_candidates if oc.domain == domain]
+            return list(self.overlap_candidates)
+
+    def has_overlap_map(self) -> bool:
+        """Check if overlap map has been generated (required before findings)."""
+        with self._lock:
+            return len(self.overlap_candidates) > 0
+
     def add_risk(self, **kwargs) -> str:
         """Add a risk and return its ID (uses stable hashing)."""
         with self._lock:
@@ -589,6 +796,12 @@ class ReasoningStore:
             if validation.get("invalid") and not fail_fast:
                 logger.warning(f"Risk {risk_id} cites unknown IDs: {validation['invalid']}")
 
+            # Populate entity-specific fact citation fields from based_on_facts
+            target_facts = [f for f in based_on if "TGT" in f.upper()]
+            buyer_facts = [f for f in based_on if "BYR" in f.upper()]
+            kwargs["target_facts_cited"] = target_facts
+            kwargs["buyer_facts_cited"] = buyer_facts
+
             risk = Risk(**kwargs)
             self.risks.append(risk)
             logger.debug(f"Added risk {risk_id}: {risk.title}")
@@ -608,6 +821,12 @@ class ReasoningStore:
             validation = self.validate_fact_citations(based_on)
             if validation.get("invalid"):
                 logger.warning(f"Strategic consideration {sc_id} cites unknown IDs: {validation['invalid']}")
+
+            # Populate entity-specific fact citation fields from based_on_facts
+            target_facts = [f for f in based_on if "TGT" in f.upper()]
+            buyer_facts = [f for f in based_on if "BYR" in f.upper()]
+            kwargs["target_facts_cited"] = target_facts
+            kwargs["buyer_facts_cited"] = buyer_facts
 
             sc = StrategicConsideration(**kwargs)
             self.strategic_considerations.append(sc)
@@ -631,6 +850,12 @@ class ReasoningStore:
             validation = self.validate_fact_citations(all_ids)
             if validation.get("invalid"):
                 logger.warning(f"Work item {wi_id} cites unknown IDs: {validation['invalid']}")
+
+            # Populate entity-specific fact citation fields from triggered_by and based_on_facts
+            target_facts = [f for f in all_ids if "TGT" in f.upper()]
+            buyer_facts = [f for f in all_ids if "BYR" in f.upper()]
+            kwargs["target_facts_cited"] = target_facts
+            kwargs["buyer_facts_cited"] = buyer_facts
 
             # Validate cost estimate - fail fast instead of silent default
             cost_estimate = kwargs.get("cost_estimate")
@@ -665,6 +890,12 @@ class ReasoningStore:
             validation = self.validate_fact_citations(based_on)
             if validation.get("invalid"):
                 logger.warning(f"Recommendation {rec_id} cites unknown IDs: {validation['invalid']}")
+
+            # Populate entity-specific fact citation fields from based_on_facts
+            target_facts = [f for f in based_on if "TGT" in f.upper()]
+            buyer_facts = [f for f in based_on if "BYR" in f.upper()]
+            kwargs["target_facts_cited"] = target_facts
+            kwargs["buyer_facts_cited"] = buyer_facts
 
             rec = Recommendation(**kwargs)
             self.recommendations.append(rec)
@@ -706,12 +937,14 @@ class ReasoningStore:
             return {
                 "metadata": self.metadata,
                 "summary": {
+                    "overlap_candidates": len(self.overlap_candidates),
                     "risks": len(self.risks),
                     "strategic_considerations": len(self.strategic_considerations),
                     "work_items": len(self.work_items),
                     "recommendations": len(self.recommendations),
                     "function_stories": len(self.function_stories)
                 },
+                "overlap_candidates": [oc.to_dict() for oc in self.overlap_candidates],
                 "risks": [r.to_dict() for r in self.risks],
                 "strategic_considerations": [sc.to_dict() for sc in self.strategic_considerations],
                 "work_items": [wi.to_dict() for wi in self.work_items],
@@ -1741,6 +1974,88 @@ class ReasoningStore:
 
 REASONING_TOOLS = [
     {
+        "name": "generate_overlap_map",
+        "description": """Generate the overlap map comparing TARGET and BUYER systems.
+
+        ⚠️ MUST be called FIRST, before creating any findings.
+
+        This tool structures your analysis by explicitly comparing what the target
+        has vs what the buyer has. Every integration-related finding should trace
+        back to an overlap candidate generated here.
+
+        For each category where BOTH entities have relevant facts, create an
+        overlap candidate that documents:
+        - What the target has (with fact IDs)
+        - What the buyer has (with fact IDs)
+        - Why this comparison matters for integration
+        - What questions would improve confidence
+
+        This forces "show your work" reasoning and prevents drift into
+        generic observations without evidence.
+
+        Returns a list of overlap candidate IDs (OC-001, OC-002, etc.).""",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "overlap_candidates": {
+                    "type": "array",
+                    "description": "List of overlap comparisons between target and buyer",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "domain": {
+                                "type": "string",
+                                "enum": ALL_DOMAINS,
+                                "description": "Domain this overlap relates to"
+                            },
+                            "overlap_type": {
+                                "type": "string",
+                                "enum": OVERLAP_TYPES,
+                                "description": "Type of overlap/mismatch between target and buyer"
+                            },
+                            "target_fact_ids": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "REQUIRED: Target fact IDs (F-TGT-xxx) being compared"
+                            },
+                            "buyer_fact_ids": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "REQUIRED: Buyer fact IDs (F-BYR-xxx) being compared"
+                            },
+                            "target_summary": {
+                                "type": "string",
+                                "description": "Brief summary of target's position (e.g., 'SAP ECC 6.0 with 247 custom ABAP programs')"
+                            },
+                            "buyer_summary": {
+                                "type": "string",
+                                "description": "Brief summary of buyer's position (e.g., 'Oracle Cloud ERP, enterprise license')"
+                            },
+                            "why_it_matters": {
+                                "type": "string",
+                                "description": "REQUIRED: Why this overlap matters for integration (2-3 sentences)"
+                            },
+                            "confidence": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1,
+                                "description": "Confidence in this assessment (0.0-1.0)"
+                            },
+                            "missing_info_questions": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Questions that would improve confidence or clarify integration approach"
+                            }
+                        },
+                        "required": ["domain", "overlap_type", "target_fact_ids", "buyer_fact_ids",
+                                    "target_summary", "buyer_summary", "why_it_matters", "confidence"]
+                    }
+                }
+            },
+            "required": ["overlap_candidates"]
+        }
+    },
+    {
         "name": "identify_risk",
         "description": """Identify a risk based on facts from discovery.
 
@@ -1809,6 +2124,25 @@ REASONING_TOOLS = [
                 "mna_implication": {
                     "type": "string",
                     "description": "REQUIRED: Specific implication for THIS deal (1-2 sentences). Example: 'For this carveout, the single AD forest shared with parent means identity services will require 12-18 month TSA and $400-600K standalone build.'"
+                },
+                "risk_scope": {
+                    "type": "string",
+                    "enum": ["target_standalone", "integration_dependent"],
+                    "description": "target_standalone=risk exists regardless of buyer, integration_dependent=risk only matters in context of this integration"
+                },
+                "overlap_id": {
+                    "type": "string",
+                    "description": "Link to OverlapCandidate (OC-xxx) if this risk stems from a target-buyer comparison"
+                },
+                "target_facts_cited": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Target fact IDs (F-TGT-xxx) that support this risk"
+                },
+                "buyer_facts_cited": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Buyer fact IDs (F-BYR-xxx) if this is an integration-dependent risk"
                 }
             },
             "required": ["domain", "title", "description", "category", "severity",
@@ -1963,10 +2297,33 @@ REASONING_TOOLS = [
                 "mna_implication": {
                     "type": "string",
                     "description": "REQUIRED: Why this work matters for the deal (1-2 sentences). Connect to Day-1 readiness, TSA exit, separation, synergy capture, or cost."
+                },
+                "target_action": {
+                    "type": "string",
+                    "description": "REQUIRED: What the TARGET must do (target-scoped action). Example: 'Inventory SAP custom objects; engage licensing for migration terms'. Do NOT use 'Buyer should...' language here."
+                },
+                "integration_option": {
+                    "type": "string",
+                    "description": "OPTIONAL: Alternative/additional path depending on buyer integration strategy. Example: 'If buyer confirms Oracle harmonization, add ETL buildout (+6 months)'. Buyer-dependent language is allowed here."
+                },
+                "overlap_id": {
+                    "type": "string",
+                    "description": "Link to OverlapCandidate (OC-xxx) if this work item stems from a target-buyer comparison"
+                },
+                "target_facts_cited": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Target fact IDs (F-TGT-xxx) that drive this work item"
+                },
+                "buyer_facts_cited": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Buyer fact IDs (F-BYR-xxx) if this is integration-related work"
                 }
             },
             "required": ["domain", "title", "description", "phase", "priority",
-                        "owner_type", "cost_estimate", "triggered_by", "confidence", "reasoning", "mna_lens", "mna_implication"]
+                        "owner_type", "cost_estimate", "triggered_by", "confidence", "reasoning",
+                        "mna_lens", "mna_implication", "target_action"]
         }
     },
     {
@@ -2147,6 +2504,152 @@ REASONING_TOOLS = [
 
 
 # =============================================================================
+# ENTITY VALIDATION (Runtime Enforcement)
+# =============================================================================
+
+# Tools that create findings and should be validated
+FINDING_TOOLS = ["identify_risk", "create_strategic_consideration", "create_work_item", "create_recommendation"]
+
+# Patterns that indicate buyer-action language (should be rejected or reframed)
+BUYER_ACTION_PATTERNS = [
+    (r"\bbuyer\s+should\b", "Buyer should"),
+    (r"\bbuyer\s+must\b", "Buyer must"),
+    (r"\bbuyer\s+needs?\s+to\b", "Buyer needs to"),
+    (r"\brecommend.*\bbuyer\b", "recommend...buyer"),
+    (r"\bbuyer\s+will\s+need\b", "Buyer will need"),
+]
+
+
+def validate_finding_entity_rules(tool_name: str, tool_input: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Validate that a finding follows entity separation rules.
+
+    Rules enforced:
+    1. ANCHOR RULE: Findings citing buyer facts MUST also cite target facts
+    2. SCOPE RULE: "Buyer should..." language is rejected (except in integration_option)
+    3. TARGET ACTION RULE: Work items should describe target-side actions
+
+    Args:
+        tool_name: Name of the tool being called
+        tool_input: Input parameters for the tool
+
+    Returns:
+        Dict with:
+        - valid: bool - whether the finding passes validation
+        - errors: List[str] - blocking errors (finding should be rejected)
+        - warnings: List[str] - non-blocking issues (finding accepted with warning)
+        - auto_tags: Dict - fields to auto-set (e.g., integration_related)
+    """
+    errors = []
+    warnings = []
+    auto_tags = {}
+
+    # Extract fact citations
+    based_on = tool_input.get("based_on_facts", [])
+
+    # Separate by entity based on ID patterns
+    target_facts = [f for f in based_on if "TGT" in f.upper()]
+    buyer_facts = [f for f in based_on if "BYR" in f.upper()]
+
+    # Also check legacy format (F-APP-xxx without entity prefix)
+    legacy_facts = [f for f in based_on if "TGT" not in f.upper() and "BYR" not in f.upper()]
+
+    # =========================================================================
+    # RULE 1: ANCHOR RULE - Buyer facts require target facts
+    # =========================================================================
+    if buyer_facts and not target_facts:
+        errors.append(
+            f"ENTITY_ANCHOR_VIOLATION: Finding cites buyer facts {buyer_facts} "
+            f"but no target facts. All findings must anchor in target data. "
+            f"Either add target fact citations or remove buyer references."
+        )
+
+    # =========================================================================
+    # RULE 2: AUTO-TAG integration_related based on citations
+    # =========================================================================
+    if buyer_facts:
+        auto_tags["integration_related"] = True
+        # Also track which buyer facts were cited (for traceability)
+        auto_tags["_buyer_facts_cited"] = buyer_facts
+        auto_tags["_target_facts_cited"] = target_facts
+    else:
+        auto_tags["integration_related"] = False
+
+    # =========================================================================
+    # RULE 3: SCOPE RULE - Check for "Buyer should..." language
+    # =========================================================================
+    # Fields to check for buyer-action language
+    fields_to_check = {
+        "description": tool_input.get("description", ""),
+        "title": tool_input.get("title", ""),
+        "mitigation": tool_input.get("mitigation", ""),
+        "reasoning": tool_input.get("reasoning", ""),
+        "rationale": tool_input.get("rationale", ""),
+        "target_action": tool_input.get("target_action", ""),  # Definitely shouldn't have buyer language
+    }
+
+    # integration_option is ALLOWED to have buyer references
+    # (that's the whole point of that field)
+
+    for field_name, field_value in fields_to_check.items():
+        if not field_value:
+            continue
+
+        for pattern, friendly_name in BUYER_ACTION_PATTERNS:
+            if re.search(pattern, field_value, re.IGNORECASE):
+                if field_name == "target_action":
+                    # Hard error - target_action must be target-scoped
+                    errors.append(
+                        f"SCOPE_VIOLATION in {field_name}: Contains '{friendly_name}' language. "
+                        f"target_action must describe what the TARGET does, not the buyer. "
+                        f"Move buyer-related actions to integration_option field."
+                    )
+                else:
+                    # Warning for other fields - reframe as target action
+                    warnings.append(
+                        f"SCOPE_WARNING in {field_name}: Contains '{friendly_name}' language. "
+                        f"Consider reframing as target-side action (e.g., 'Target must migrate to...' "
+                        f"instead of 'Buyer should accept...'). "
+                        f"If describing optional integration path, use integration_option field."
+                    )
+
+    # =========================================================================
+    # RULE 4: WORK ITEM RULE - Should have target action focus
+    # =========================================================================
+    if tool_name == "create_work_item":
+        description = tool_input.get("description", "")
+        target_action = tool_input.get("target_action", "")
+
+        # If there's no target_action and description mentions buyer heavily
+        if not target_action:
+            buyer_mentions = len(re.findall(r'\bbuyer\b', description, re.IGNORECASE))
+            target_mentions = len(re.findall(r'\btarget\b', description, re.IGNORECASE))
+
+            if buyer_mentions > target_mentions and buyer_mentions > 2:
+                warnings.append(
+                    f"FOCUS_WARNING: Work item description mentions 'buyer' {buyer_mentions} times "
+                    f"vs 'target' {target_mentions} times. Work items should focus on target-side actions. "
+                    f"Consider using target_action field to clarify the target's responsibility."
+                )
+
+    # =========================================================================
+    # RULE 5: LEGACY FACT ID WARNING
+    # =========================================================================
+    if legacy_facts:
+        warnings.append(
+            f"LEGACY_FACT_IDS: Found fact IDs without entity prefix: {legacy_facts}. "
+            f"New fact IDs should use F-TGT-xxx or F-BYR-xxx format for clarity."
+        )
+
+    return {
+        "valid": len(errors) == 0,
+        "errors": errors,
+        "warnings": warnings,
+        "auto_tags": auto_tags
+    }
+
+
+# =============================================================================
 # TOOL EXECUTION
 # =============================================================================
 
@@ -2158,6 +2661,11 @@ def execute_reasoning_tool(
     """
     Execute a reasoning tool and store results in ReasoningStore.
 
+    Includes runtime validation for entity separation rules:
+    - Buyer facts must be accompanied by target facts
+    - "Buyer should..." language is flagged/rejected
+    - Auto-tags integration_related based on citations
+
     Args:
         tool_name: Name of the tool to execute
         tool_input: Tool input parameters
@@ -2166,22 +2674,164 @@ def execute_reasoning_tool(
     Returns:
         Dict with result status and any generated IDs
     """
-    if tool_name == "identify_risk":
-        return _execute_identify_risk(tool_input, reasoning_store)
+    # =========================================================================
+    # PRE-EXECUTION VALIDATION (for finding-creating tools)
+    # =========================================================================
+    validation_result = None
+    if tool_name in FINDING_TOOLS:
+        validation_result = validate_finding_entity_rules(tool_name, tool_input)
+
+        # Log validation results
+        if validation_result["errors"]:
+            for error in validation_result["errors"]:
+                logger.warning(f"[VALIDATION ERROR] {tool_name}: {error}")
+
+        if validation_result["warnings"]:
+            for warning in validation_result["warnings"]:
+                logger.info(f"[VALIDATION WARNING] {tool_name}: {warning}")
+
+        # If validation fails (has errors), return error response
+        # This enforces the rules - model must fix and retry
+        if not validation_result["valid"]:
+            return {
+                "status": "validation_error",
+                "message": "Finding rejected due to entity rule violations. Please fix and retry.",
+                "errors": validation_result["errors"],
+                "warnings": validation_result["warnings"],
+                "guidance": (
+                    "Entity rules: (1) Buyer facts (F-BYR-xxx) require target facts (F-TGT-xxx) - "
+                    "all findings must anchor in target. (2) Avoid 'Buyer should...' language - "
+                    "reframe as target-side actions. (3) Use integration_option field for "
+                    "buyer-dependent paths."
+                )
+            }
+
+        # Apply auto-tags to input (e.g., integration_related)
+        if validation_result["auto_tags"]:
+            for key, value in validation_result["auto_tags"].items():
+                if not key.startswith("_"):  # Skip internal tracking fields
+                    tool_input[key] = value
+
+    # =========================================================================
+    # TOOL EXECUTION
+    # =========================================================================
+    # Overlap map should be generated first
+    if tool_name == "generate_overlap_map":
+        result = _execute_generate_overlap_map(tool_input, reasoning_store)
+    elif tool_name == "identify_risk":
+        result = _execute_identify_risk(tool_input, reasoning_store)
     elif tool_name == "create_strategic_consideration":
-        return _execute_create_strategic_consideration(tool_input, reasoning_store)
+        result = _execute_create_strategic_consideration(tool_input, reasoning_store)
     elif tool_name == "create_work_item":
-        return _execute_create_work_item(tool_input, reasoning_store)
+        result = _execute_create_work_item(tool_input, reasoning_store)
     elif tool_name == "create_recommendation":
-        return _execute_create_recommendation(tool_input, reasoning_store)
+        result = _execute_create_recommendation(tool_input, reasoning_store)
     elif tool_name == "create_function_story":
-        return _execute_create_function_story(tool_input, reasoning_store)
+        result = _execute_create_function_story(tool_input, reasoning_store)
     elif tool_name == "complete_reasoning":
-        return _execute_complete_reasoning(tool_input, reasoning_store)
+        result = _execute_complete_reasoning(tool_input, reasoning_store)
     else:
         return {
             "status": "error",
             "message": f"Unknown reasoning tool: {tool_name}"
+        }
+
+    # =========================================================================
+    # POST-EXECUTION: Attach validation warnings to successful results
+    # =========================================================================
+    if validation_result and validation_result["warnings"] and result.get("status") == "success":
+        result["validation_warnings"] = validation_result["warnings"]
+        result["message"] = result.get("message", "") + " (with warnings - see validation_warnings)"
+
+    return result
+
+
+def _execute_generate_overlap_map(
+    input_data: Dict[str, Any],
+    reasoning_store: ReasoningStore
+) -> Dict[str, Any]:
+    """
+    Execute generate_overlap_map tool.
+
+    This should be called FIRST before any findings are generated.
+    It creates structured comparisons between target and buyer systems.
+    """
+    try:
+        overlap_candidates = input_data.get("overlap_candidates", [])
+
+        if not overlap_candidates:
+            return {
+                "status": "warning",
+                "message": "No overlap candidates provided. If buyer facts exist, you should compare them to target facts.",
+                "overlap_ids": []
+            }
+
+        created_ids = []
+        warnings = []
+
+        for candidate in overlap_candidates:
+            # Validate required fields
+            required = ["domain", "overlap_type", "target_fact_ids", "buyer_fact_ids",
+                       "target_summary", "buyer_summary", "why_it_matters", "confidence"]
+            missing = [f for f in required if f not in candidate or not candidate.get(f)]
+
+            if missing:
+                warnings.append(f"Overlap candidate missing fields: {missing}")
+                continue
+
+            # Validate overlap_type
+            overlap_type = candidate.get("overlap_type")
+            if overlap_type not in OVERLAP_TYPES:
+                warnings.append(f"Invalid overlap_type '{overlap_type}'. Valid types: {OVERLAP_TYPES}")
+                continue
+
+            # Validate fact ID prefixes
+            target_facts = candidate.get("target_fact_ids", [])
+            buyer_facts = candidate.get("buyer_fact_ids", [])
+
+            # Check for entity mixing in fact IDs
+            target_has_buyer = any("BYR" in fid for fid in target_facts)
+            buyer_has_target = any("TGT" in fid for fid in buyer_facts)
+
+            if target_has_buyer:
+                warnings.append(f"target_fact_ids contains buyer fact IDs - check your citations")
+            if buyer_has_target:
+                warnings.append(f"buyer_fact_ids contains target fact IDs - check your citations")
+
+            # Add the overlap candidate
+            try:
+                oc_id = reasoning_store.add_overlap_candidate(
+                    domain=candidate.get("domain"),
+                    overlap_type=overlap_type,
+                    target_fact_ids=target_facts,
+                    buyer_fact_ids=buyer_facts,
+                    target_summary=candidate.get("target_summary", ""),
+                    buyer_summary=candidate.get("buyer_summary", ""),
+                    why_it_matters=candidate.get("why_it_matters", ""),
+                    confidence=candidate.get("confidence", 0.5),
+                    missing_info_questions=candidate.get("missing_info_questions", [])
+                )
+                created_ids.append(oc_id)
+            except Exception as e:
+                warnings.append(f"Failed to create overlap candidate: {str(e)}")
+
+        result = {
+            "status": "success",
+            "message": f"Created {len(created_ids)} overlap candidates",
+            "overlap_ids": created_ids,
+            "count": len(created_ids)
+        }
+
+        if warnings:
+            result["warnings"] = warnings
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Error in generate_overlap_map: {e}", exc_info=True)
+        return {
+            "status": "error",
+            "message": f"Failed to generate overlap map: {str(e)}"
         }
 
 
@@ -2252,7 +2902,10 @@ def _execute_identify_risk(
             confidence=input_data.get("confidence"),
             reasoning=input_data.get("reasoning"),
             mna_lens=input_data.get("mna_lens", ""),
-            mna_implication=input_data.get("mna_implication", "")
+            mna_implication=input_data.get("mna_implication", ""),
+            integration_related=input_data.get("integration_related", False),
+            overlap_id=input_data.get("overlap_id"),
+            risk_scope=input_data.get("risk_scope", "target_standalone")
         )
 
         return {
@@ -2293,7 +2946,9 @@ def _execute_create_strategic_consideration(
             confidence=input_data.get("confidence"),
             reasoning=input_data.get("reasoning"),
             mna_lens=input_data.get("mna_lens", ""),
-            mna_implication=input_data.get("mna_implication", "")
+            mna_implication=input_data.get("mna_implication", ""),
+            integration_related=input_data.get("integration_related", False),
+            overlap_id=input_data.get("overlap_id")
         )
 
         return {
@@ -2384,7 +3039,11 @@ def _execute_create_work_item(
             cost_estimate=cost_estimate,
             triggered_by_risks=input_data.get("triggered_by_risks", []),
             mna_lens=input_data.get("mna_lens", ""),
-            mna_implication=input_data.get("mna_implication", "")
+            mna_implication=input_data.get("mna_implication", ""),
+            integration_related=input_data.get("integration_related", False),
+            overlap_id=input_data.get("overlap_id"),
+            integration_option=input_data.get("integration_option"),
+            target_action=input_data.get("target_action", "")
         )
 
         return {
@@ -2425,7 +3084,9 @@ def _execute_create_recommendation(
             confidence=input_data.get("confidence"),
             reasoning=input_data.get("reasoning"),
             mna_lens=input_data.get("mna_lens", ""),
-            mna_implication=input_data.get("mna_implication", "")
+            mna_implication=input_data.get("mna_implication", ""),
+            integration_related=input_data.get("integration_related", False),
+            overlap_id=input_data.get("overlap_id")
         )
 
         return {

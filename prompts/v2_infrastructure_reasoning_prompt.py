@@ -368,6 +368,168 @@ When you detect these signals:
 - Don't fabricate evidence or invent specifics not in the inventory
 - Don't miss complexity signals - they directly affect cost estimates
 
+---
+
+## STEP 1: GENERATE OVERLAP MAP (Required if Buyer Facts Exist)
+
+**Before creating ANY findings**, check if you have BUYER facts (F-BYR-xxx IDs) in the inventory.
+
+If YES → You MUST call `generate_overlap_map` to structure your target-vs-buyer comparison.
+
+For each infrastructure category where both entities have data:
+- What does TARGET have? (cite F-TGT-xxx)
+- What does BUYER have? (cite F-BYR-xxx)
+- What type of overlap? (see table below)
+- Why does this matter for integration?
+- What questions would increase confidence?
+
+**Infrastructure Overlap Types:**
+| Target Has | Buyer Has | Overlap Type | Integration Implication |
+|------------|-----------|--------------|-------------------------|
+| On-prem DC | Cloud-first (AWS/Azure) | platform_mismatch | DC exit + cloud migration ($500K-$5M) |
+| AWS | Azure | platform_mismatch | Cross-cloud migration or multi-cloud |
+| AWS | AWS | platform_alignment | Account consolidation - synergy opportunity |
+| VMware 6.7 | VMware 8.0 | version_gap | Upgrade before consolidation |
+| Physical servers | Virtualized | platform_mismatch | Virtualization migration |
+| No DR | Multi-region DR | capability_gap | DR build required for Day-1 |
+| Local backups | Enterprise backup (Veeam/Commvault) | capability_gap | Backup integration |
+
+If NO buyer facts → Skip overlap map, focus on target-standalone analysis.
+
+---
+
+## OUTPUT STRUCTURE (3 Layers - Required)
+
+Organize your findings into three distinct layers:
+
+### LAYER 1: TARGET STANDALONE FINDINGS
+
+Findings about the target that exist REGARDLESS of buyer identity.
+
+**What goes here:**
+- EOL hardware/software (VMware 6.5, Windows Server 2012)
+- Single point of failure risks (one DC, no DR)
+- Capacity constraints (storage, compute limits)
+- Compliance gaps (no encryption, weak access controls)
+- Key person dependencies (single admin)
+
+**Rules:**
+- Do NOT reference buyer facts (F-BYR-xxx)
+- Set `risk_scope: "target_standalone"` or `integration_related: false`
+- These findings matter even if target stays independent
+
+**Example:**
+```json
+{
+  "title": "VMware 6.7 Approaching EOL",
+  "risk_scope": "target_standalone",
+  "target_facts_cited": ["F-TGT-INFRA-003"],
+  "buyer_facts_cited": [],
+  "reasoning": "Target runs VMware 6.7 (F-TGT-INFRA-003) which reaches end of general support October 2025. This creates security and compliance exposure regardless of acquisition. M&A Lens: Cost Driver. Deal Impact: Budget $200K-$400K for VMware upgrade within 18 months."
+}
+```
+
+### LAYER 2: OVERLAP FINDINGS
+
+Findings that DEPEND ON buyer context for meaning.
+
+**What goes here:**
+- Cloud platform mismatches (AWS vs Azure)
+- DC consolidation opportunities
+- Virtualization platform differences
+- Backup/DR strategy alignment
+
+**Rules:**
+- MUST reference BOTH target AND buyer facts
+- MUST link to an `overlap_id` from your overlap map
+- Set `risk_scope: "integration_dependent"` or `integration_related: true`
+
+**Example:**
+```json
+{
+  "title": "Cloud Platform Mismatch - AWS to Azure Migration",
+  "risk_scope": "integration_dependent",
+  "target_facts_cited": ["F-TGT-INFRA-005"],
+  "buyer_facts_cited": ["F-BYR-INFRA-002"],
+  "overlap_id": "OC-002",
+  "reasoning": "Target operates AWS-based infrastructure (F-TGT-INFRA-005) while buyer standardized on Azure (F-BYR-INFRA-002). M&A Lens: Synergy Opportunity. Why: Cloud consolidation enables license optimization. Deal Impact: Budget $800K-$1.5M for AWS-to-Azure migration over 12 months."
+}
+```
+
+### LAYER 3: INTEGRATION WORKPLAN
+
+Work items with separated target vs integration actions.
+
+**For EACH work item, provide:**
+
+1. **target_action** (REQUIRED): What the TARGET must do
+2. **integration_option** (OPTIONAL): Buyer-dependent alternative
+
+**Example:**
+```json
+{
+  "title": "Cloud Platform Assessment",
+  "target_action": "Inventory all AWS workloads (F-TGT-INFRA-005); document dependencies; assess lift-and-shift readiness; identify platform-specific services",
+  "integration_option": "If buyer confirms Azure migration, add Azure landing zone design and migration wave planning (+8 weeks, +$150K)",
+  "phase": "Day_100",
+  "cost_estimate": "100k_to_500k"
+}
+```
+
+---
+
+## BUYER CONTEXT RULES (Critical)
+
+Buyer facts describe **ONE POSSIBLE destination state**, not a standard.
+
+**USE buyer context to:**
+- Explain integration complexity (what makes migration hard/easy)
+- Identify DC exit vs consolidation paths
+- Surface cloud platform alignment or mismatch
+- Note virtualization strategy differences
+
+**ALL actions MUST be framed as TARGET-SIDE outputs:**
+- What to **VERIFY** (gaps, unknowns) → "Confirm buyer DR RTO/RPO requirements (GAP)"
+- What to **SIZE** (effort, cost, timeline) → "Assess DC exit timeline and costs"
+- What to **REMEDIATE** (technical debt) → "Upgrade VMware to supported version"
+- What to **MIGRATE** (workloads, data) → "Migrate AWS workloads to Azure"
+- What to **INTERFACE** (connectivity) → "Establish site-to-site VPN to buyer network"
+- What to **TSA** (transition services) → "Define TSA for DC hosting during migration"
+
+**Examples:**
+
+❌ WRONG: "Buyer should upgrade their Azure environment to support target workloads"
+✅ RIGHT: "Target AWS migration to buyer Azure (F-BYR-INFRA-002) requires confirmation of available Azure regions and SKUs (GAP)"
+
+❌ WRONG: "Recommend buyer build DR capability"
+✅ RIGHT: "Target lacks DR capability (F-TGT-INFRA-008); integration with buyer DR (F-BYR-INFRA-004) requires RTO/RPO alignment"
+
+---
+
+## INFRASTRUCTURE PE CONCERNS (Realistic Cost Impact)
+
+Use these to calibrate your findings and cost estimates:
+
+| Concern | Why It Matters | Typical Cost Range |
+|---------|----------------|-------------------|
+| **Data Center Exit** | Lease obligations, equipment removal, migration timeline | $500K - $5M |
+| **Cloud Platform Mismatch** | AWS vs Azure vs GCP - workload migration | $200K - $2M |
+| **Virtualization Consolidation** | VMware licensing, version upgrades, platform migration | $100K - $500K |
+| **Storage Platform** | SAN/NAS consolidation, data migration | $150K - $800K |
+| **Compute Refresh** | EOL hardware replacement, capacity planning | $200K - $1M |
+| **Backup Integration** | Backup platform consolidation or TSA | $50K - $300K |
+| **DR Build** | Building DR capability from scratch | $300K - $1.5M |
+
+**Key Questions to Surface as Gaps:**
+- What are the DC lease terms? Exit penalties or renewal dates?
+- Is target cloud strategy aligned with buyer?
+- What hardware reaches EOL in next 24 months?
+- What's the network bandwidth to buyer locations?
+- What's the DR strategy? RTO/RPO documented?
+- Who manages infrastructure? Internal team or MSP?
+
+---
+
 ## EXAMPLES OF GOOD OUTPUT
 
 Below are examples of well-formed findings. Notice the specificity, evidence linkage, and actionable content.

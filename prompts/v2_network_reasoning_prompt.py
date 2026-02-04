@@ -469,11 +469,126 @@ When you detect these signals:
 3. **Include lead times** when relevant to timeline
 4. **Identify dependencies** - what else does this affect?
 
+---
+
+## STEP 1: GENERATE OVERLAP MAP (Required if Buyer Facts Exist)
+
+**Before creating ANY findings**, check if you have BUYER facts (F-BYR-xxx IDs) in the inventory.
+
+**Network Overlap Types:**
+| Target Has | Buyer Has | Overlap Type | Integration Implication |
+|------------|-----------|--------------|-------------------------|
+| MPLS WAN | SD-WAN | platform_mismatch | Circuit migration ($100K-$300K) |
+| SD-WAN | SD-WAN | platform_alignment | WAN consolidation - synergy |
+| Cisco firewalls | Palo Alto | platform_mismatch | Firewall policy migration ($50K-$200K) |
+| 10.x.x.x network | 10.x.x.x network | data_model_mismatch | IP re-addressing required |
+| Flat network | Segmented (VLANs) | security_posture_gap | Network redesign needed |
+| Regional ISPs | Global MPLS | capability_gap | Circuit procurement |
+| No remote access VPN | GlobalProtect | capability_gap | VPN rollout |
+
+If NO buyer facts → Skip overlap map, focus on target-standalone analysis.
+
+---
+
+## OUTPUT STRUCTURE (3 Layers - Required)
+
+### LAYER 1: TARGET STANDALONE FINDINGS
+
+**What goes here:**
+- Network architecture weaknesses (flat network, no segmentation)
+- Single points of failure (one WAN link, no redundancy)
+- Bandwidth constraints
+- IP addressing chaos
+- Firewall rule accumulation
+
+**Example:**
+```json
+{
+  "title": "No Network Redundancy - Single WAN Link",
+  "risk_scope": "target_standalone",
+  "target_facts_cited": ["F-TGT-NET-003"],
+  "reasoning": "Target has single WAN connection (F-TGT-NET-003) with no failover, creating business continuity risk regardless of acquisition. M&A Lens: Day-1 Continuity. Deal Impact: Budget $50K-$100K for backup circuit."
+}
+```
+
+### LAYER 2: OVERLAP FINDINGS
+
+**What goes here:**
+- WAN platform differences (MPLS vs SD-WAN)
+- IP address space conflicts
+- Firewall platform migration
+- DNS/DHCP integration
+
+**Example:**
+```json
+{
+  "title": "WAN Platform Mismatch - MPLS to SD-WAN Migration",
+  "risk_scope": "integration_dependent",
+  "target_facts_cited": ["F-TGT-NET-005"],
+  "buyer_facts_cited": ["F-BYR-NET-001"],
+  "overlap_id": "OC-005",
+  "reasoning": "Target uses MPLS WAN (F-TGT-NET-005) while buyer standardized on SD-WAN (F-BYR-NET-001). M&A Lens: Synergy Opportunity. Deal Impact: Budget $150K-$300K for circuit migration over 12 months."
+}
+```
+
+### LAYER 3: INTEGRATION WORKPLAN
+
+**Example:**
+```json
+{
+  "title": "WAN Integration Assessment",
+  "target_action": "Document all WAN circuits, bandwidth, and contract terms; assess application dependencies on WAN; identify circuit termination costs",
+  "integration_option": "If buyer confirms SD-WAN migration, add circuit procurement and cutover planning (+6 months, +$150K). If MPLS extension allowed, negotiate contract transfer.",
+  "phase": "Day_100",
+  "cost_estimate": "100k_to_500k"
+}
+```
+
+---
+
+## BUYER CONTEXT RULES
+
+**ALL actions MUST be framed as TARGET-SIDE outputs:**
+- What to **VERIFY** → "Confirm buyer IP address scheme (GAP)"
+- What to **SIZE** → "Assess WAN migration effort and lead times"
+- What to **REMEDIATE** → "Fix IP conflicts before integration"
+- What to **MIGRATE** → "Migrate target sites to buyer WAN"
+- What to **INTERFACE** → "Establish site-to-site VPN to buyer"
+- What to **TSA** → "Define TSA for WAN services during migration"
+
+---
+
+## NETWORK PE CONCERNS (Realistic Cost Impact)
+
+| Concern | Why It Matters | Typical Cost Range |
+|---------|----------------|-------------------|
+| **WAN Consolidation** | Circuit migration, MPLS vs SD-WAN | $100K - $300K/year |
+| **Site Connectivity** | Getting target sites on buyer network | $100K - $500K |
+| **Firewall Policy Migration** | Security posture, rule migration | $50K - $200K |
+| **IP Re-addressing** | Namespace conflicts, re-IP work | $75K - $250K |
+| **Network Redesign** | Segmentation, VLAN restructure | $100K - $400K |
+| **Internet Egress** | Proxy, filtering, breakout strategy | $50K - $150K |
+| **DNS/DHCP Integration** | Namespace consolidation | $25K - $100K |
+
+**Key Questions:**
+- What's the IP address scheme? Overlaps with buyer?
+- What's the WAN contract status? Early termination fees?
+- How many sites need connectivity to buyer?
+- What's current internet bandwidth per site?
+
+---
+
 ## BEGIN
 
-Review the inventory. Think about what it means for Day 1 and beyond. Produce findings that reflect expert reasoning about this specific network.
+**Step-by-step process:**
 
-Work through your analysis, then call `complete_analysis` when done."""
+1. **IF buyer facts exist**: Call `generate_overlap_map` for network comparison
+2. **LAYER 1**: Identify target-standalone network issues
+3. **LAYER 2**: Identify overlap-driven findings (cite both entities)
+4. **LAYER 3**: Create work items with `target_action` + `integration_option`
+5. Call `complete_reasoning` when done
+
+Review the inventory. Think about Day 1 connectivity and integration. Produce IC-ready findings."""
 
 
 def get_network_reasoning_prompt(inventory: dict, deal_context: dict) -> str:

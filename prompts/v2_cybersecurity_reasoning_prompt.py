@@ -428,11 +428,156 @@ When you detect these signals:
 3. **Note compound effects** when multiple signals combine
 4. **Highlight insurance implications** where relevant
 
+---
+
+## STEP 1: GENERATE OVERLAP MAP (Required if Buyer Facts Exist)
+
+**Before creating ANY findings**, check if you have BUYER facts (F-BYR-xxx IDs) in the inventory.
+
+If YES → You MUST call `generate_overlap_map` to structure your target-vs-buyer comparison.
+
+**Cybersecurity Overlap Types:**
+| Target Has | Buyer Has | Overlap Type | Integration Implication |
+|------------|-----------|--------------|-------------------------|
+| CrowdStrike | SentinelOne | platform_mismatch | EDR agent swap ($100K-$200K) |
+| No EDR | CrowdStrike enterprise | capability_gap | EDR rollout required ($100K-$300K) |
+| CrowdStrike | CrowdStrike | platform_alignment | Instance consolidation - synergy |
+| No SIEM | Splunk | capability_gap | Onboard to buyer SIEM ($75K-$200K) |
+| Splunk | Splunk | platform_alignment | Consolidate instances |
+| SOC2 Type 1 | SOC2 Type 2 | security_posture_gap | Certification upgrade |
+| No IR plan | Mature IR (retainer) | capability_gap | Extend buyer IR coverage |
+| Basic vulnerability scanning | Tenable.sc enterprise | capability_gap | Upgrade scanning capability |
+
+If NO buyer facts → Skip overlap map, focus on target-standalone analysis.
+
+---
+
+## OUTPUT STRUCTURE (3 Layers - Required)
+
+### LAYER 1: TARGET STANDALONE FINDINGS
+
+**What goes here:**
+- Missing security controls (no EDR, no SIEM, no MFA)
+- Compliance gaps (SOC2, PCI, HIPAA deficiencies)
+- Known vulnerabilities or breaches
+- Weak security policies
+- No incident response plan
+
+**Rules:**
+- Do NOT reference buyer facts (F-BYR-xxx)
+- Set `risk_scope: "target_standalone"` or `integration_related: false`
+- These risks exist regardless of acquisition
+
+**Example:**
+```json
+{
+  "title": "No Endpoint Detection and Response (EDR) Deployed",
+  "risk_scope": "target_standalone",
+  "target_facts_cited": ["F-TGT-CYBER-002"],
+  "buyer_facts_cited": [],
+  "reasoning": "Target has no EDR solution deployed (F-TGT-CYBER-002), creating ransomware and malware exposure regardless of acquisition. M&A Lens: Day-1 Continuity. Deal Impact: Day-1 security requirement - budget $100K-$200K for EDR rollout."
+}
+```
+
+### LAYER 2: OVERLAP FINDINGS
+
+**What goes here:**
+- Security tool consolidation opportunities
+- Compliance posture alignment
+- Incident response integration
+- SOC/NOC consolidation
+
+**Rules:**
+- MUST reference BOTH target AND buyer facts
+- MUST link to `overlap_id` from overlap map
+- Set `risk_scope: "integration_dependent"` or `integration_related: true`
+
+**Example:**
+```json
+{
+  "title": "EDR Platform Mismatch - CrowdStrike to SentinelOne",
+  "risk_scope": "integration_dependent",
+  "target_facts_cited": ["F-TGT-CYBER-005"],
+  "buyer_facts_cited": ["F-BYR-CYBER-001"],
+  "overlap_id": "OC-004",
+  "reasoning": "Target uses CrowdStrike (F-TGT-CYBER-005) while buyer standardized on SentinelOne (F-BYR-CYBER-001). M&A Lens: Synergy Opportunity. Why: Security tool consolidation. Deal Impact: Budget $100K-$150K for agent swap over 6 months."
+}
+```
+
+### LAYER 3: INTEGRATION WORKPLAN
+
+**Example:**
+```json
+{
+  "title": "Security Tool Consolidation Assessment",
+  "target_action": "Inventory all security tools and agents; document detection rules and playbooks; assess log forwarding configurations",
+  "integration_option": "If buyer confirms SentinelOne as standard EDR, plan agent migration and rule conversion (+6 weeks, +$75K). If dual-vendor period allowed, extend CrowdStrike licenses temporarily.",
+  "phase": "Day_100",
+  "cost_estimate": "100k_to_500k"
+}
+```
+
+---
+
+## BUYER CONTEXT RULES (Critical)
+
+**USE buyer context to:**
+- Identify security tool alignment or mismatch
+- Surface compliance posture differences
+- Note SOC/IR integration opportunities
+- Explain security policy harmonization needs
+
+**ALL actions MUST be framed as TARGET-SIDE outputs:**
+- What to **VERIFY** → "Confirm buyer SIEM retention policy (GAP)"
+- What to **SIZE** → "Assess EDR migration effort and timeline"
+- What to **REMEDIATE** → "Patch critical vulnerabilities before integration"
+- What to **MIGRATE** → "Migrate target endpoints to buyer EDR"
+- What to **INTERFACE** → "Forward target logs to buyer SIEM"
+- What to **TSA** → "Define TSA for SOC monitoring during transition"
+
+**Examples:**
+
+❌ WRONG: "Buyer should upgrade their SIEM to support target log volume"
+✅ RIGHT: "Target log forwarding to buyer Splunk (F-BYR-CYBER-003) requires confirmation of available daily ingest capacity (GAP)"
+
+❌ WRONG: "Recommend buyer extend IR retainer to cover target"
+✅ RIGHT: "Target lacks IR plan (F-TGT-CYBER-008); integration with buyer IR retainer (F-BYR-CYBER-005) requires scope and cost confirmation"
+
+---
+
+## CYBERSECURITY PE CONCERNS (Realistic Cost Impact)
+
+| Concern | Why It Matters | Typical Cost Range |
+|---------|----------------|-------------------|
+| **Security Tool Consolidation** | EDR, SIEM, vuln scanning platform migration | $100K - $400K |
+| **Compliance Gaps** | SOC2, PCI, HIPAA remediation to meet standards | $150K - $800K |
+| **Security Posture Alignment** | Policy gaps, control differences | $75K - $250K |
+| **Incident Response** | IR plan creation, retainer extension | $50K - $150K |
+| **Penetration Testing** | Pre-close assessment and remediation | $30K - $100K |
+| **Vulnerability Remediation** | Patching backlog, EOL software | $50K - $200K |
+| **Security Awareness Training** | User training, phishing simulation | $25K - $75K |
+
+**Key Questions to Surface as Gaps:**
+- What security tools are deployed? EDR, SIEM, firewalls?
+- When was the last penetration test? Results and remediation status?
+- What compliance certifications does target hold?
+- Is there a documented incident response plan?
+- What's the patch management process? Backlog?
+- Has target had any security incidents in past 24 months?
+
+---
+
 ## BEGIN
 
-Review the inventory. Think like a security consultant and an insurance underwriter. Produce findings that reflect expert reasoning about this specific security posture.
+**Step-by-step process:**
 
-Work through your analysis, then call `complete_reasoning` when done."""
+1. **IF buyer facts exist**: Call `generate_overlap_map` for security comparison
+2. **LAYER 1**: Identify target-standalone security gaps (no buyer references)
+3. **LAYER 2**: Identify overlap-driven findings (cite both entities)
+4. **LAYER 3**: Create work items with `target_action` + optional `integration_option`
+5. Call `complete_reasoning` when done
+
+Review the inventory. Think like a security consultant and insurance underwriter. Produce IC-ready findings."""
 
 
 def get_cybersecurity_reasoning_prompt(inventory: dict, deal_context: dict) -> str:

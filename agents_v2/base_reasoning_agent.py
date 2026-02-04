@@ -184,8 +184,16 @@ class BaseReasoningAgent(ABC):
             }
 
         try:
-            # Build prompt with facts injected
-            inventory_text = self.fact_store.format_for_reasoning(self.domain)
+            # Build prompt with facts injected (BUYER-AWARE FIX 2026-02-04)
+            # Extract overlaps from deal_context if available
+            overlaps = (deal_context or {}).get('overlaps', [])
+
+            # Use buyer-aware formatter (includes target + buyer facts + overlaps)
+            inventory_text = self.fact_store.format_for_reasoning_with_buyer_context(
+                self.domain,
+                overlaps=overlaps
+            )
+
             system_prompt = self._build_system_prompt(inventory_text, deal_context or {})
 
             # Build initial user message

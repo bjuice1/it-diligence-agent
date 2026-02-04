@@ -15,6 +15,7 @@ import logging
 from pathlib import Path
 from typing import Dict, Any, Optional, Callable, List
 from datetime import datetime
+from dataclasses import asdict
 
 # Add parent directory for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -546,13 +547,23 @@ def _separate_documents_by_entity(documents: List[Dict], deal_context: Dict) -> 
     buyer_docs = []
 
     for i, doc in enumerate(documents):
+        # PRIORITY 1: Check explicit entity field (set during document registration)
+        if 'entity' in doc:
+            entity = doc['entity'].lower()
+            if entity == 'buyer':
+                buyer_docs.append(doc)
+            else:
+                target_docs.append(doc)
+            continue
+
+        # PRIORITY 2: Check filename/path patterns
         filename = doc.get('filename', '').lower()
         filepath = doc.get('filepath', '').lower() if 'filepath' in doc else ''
 
-        # Check filename/path prefix
-        if 'buyer_' in filename or 'buyer_' in filepath or '/buyer/' in filepath:
+        # Check for 'buyer' anywhere in filename/path (not just 'buyer_')
+        if 'buyer' in filename or '/buyer/' in filepath:
             buyer_docs.append(doc)
-        elif 'target_' in filename or 'target_' in filepath or '/target/' in filepath:
+        elif 'target' in filename or '/target/' in filepath:
             target_docs.append(doc)
         # Fallback: first N docs are target (based on upload order)
         elif target_doc_count > 0 and i < target_doc_count:
@@ -592,13 +603,15 @@ def _combine_documents_for_entity(documents: List[Dict], entity: str) -> str:
 
 def run_analysis(task: AnalysisTask, progress_callback: Callable, app=None) -> Dict[str, Any]:
     """
-    Run the full TWO-PHASE analysis pipeline.
+    Run the full MULTI-PHASE analysis pipeline.
 
     Phase 1: Analyze TARGET documents only (clean extraction)
     Phase 2: Analyze BUYER documents with TARGET facts as context
+    Phase 3.5: Generate OVERLAP MAP comparing target vs buyer facts
+    Phase 4: Run REASONING agents with buyer-aware context
 
     This prevents entity contamination by ensuring the LLM only sees
-    one entity's documents at a time.
+    one entity's documents at a time, then explicitly compares them.
 
     INCREMENTAL PERSISTENCE: Facts and findings are written to database
     immediately after extraction. If analysis crashes, data up to the
@@ -818,7 +831,63 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable, app=None) -> D
     else:
         logger.info("No BUYER documents - skipping Phase 2")
 
-    # Phase 3: Run Reasoning Agents
+    # =========================================================================
+    # PHASE 3.5: OVERLAP GENERATION (Buyer-Aware Reasoning)
+    # =========================================================================
+    # Generate overlap map by comparing TARGET and BUYER facts across domains.
+    # This produces overlaps_by_domain.json artifact for reasoning agents.
+
+    progress_callback({"phase": AnalysisPhase.OVERLAP_GENERATION})
+
+    overlaps_by_domain = {}
+    overlap_output_path = None
+
+    if buyer_docs:
+        logger.info("Starting Phase 3.5: Overlap Generation")
+
+        try:
+            from services.overlap_generator import OverlapGenerator
+
+            # Organize facts by domain and entity
+            facts_by_domain = {}
+            for domain in domains_to_analyze:
+                target_facts = [f.to_dict() for f in session.fact_store.facts
+                               if f.domain == domain and f.entity == "target"]
+                buyer_facts = [f.to_dict() for f in session.fact_store.facts
+                              if f.domain == domain and f.entity == "buyer"]
+
+                facts_by_domain[domain] = {
+                    "target": target_facts,
+                    "buyer": buyer_facts
+                }
+
+            # Generate overlaps
+            generator = OverlapGenerator()
+            overlaps_by_domain = generator.generate_overlap_map_all_domains(facts_by_domain)
+
+            # Save to file
+            overlap_output_path = f"{OUTPUT_DIR}/overlaps_{timestamp}.json"
+            generator.save_overlaps_to_file(overlaps_by_domain, overlap_output_path)
+            logger.info(f"Saved overlap map to {overlap_output_path}")
+
+            # Store overlaps in session for reasoning agents
+            session.overlaps_by_domain = overlaps_by_domain
+
+            total_overlaps = sum(len(overlaps) for overlaps in overlaps_by_domain.values())
+            logger.info(f"Phase 3.5 complete: Generated {total_overlaps} overlaps across {len(overlaps_by_domain)} domains")
+
+        except Exception as e:
+            logger.error(f"Error in overlap generation: {e}")
+            logger.error(traceback.format_exc())
+            # Graceful degradation - continue without overlaps
+            session.overlaps_by_domain = {}
+    else:
+        logger.info("No BUYER documents - skipping overlap generation")
+        session.overlaps_by_domain = {}
+
+    # =========================================================================
+    # PHASE 4: REASONING
+    # =========================================================================
     progress_callback({"phase": AnalysisPhase.REASONING})
 
     for domain in domains_to_analyze:
@@ -1111,12 +1180,25 @@ def run_reasoning_for_domain(domain: str, session) -> None:
         # Get facts for this domain
         domain_facts = [f for f in session.fact_store.facts if f.domain == domain]
 
+        # Get overlaps for this domain (if available)
+        overlaps_for_domain = []
+        if hasattr(session, 'overlaps_by_domain'):
+            overlap_objects = session.overlaps_by_domain.get(domain, [])
+            # Convert OverlapCandidate objects to dicts for JSON serialization
+            overlaps_for_domain = [asdict(overlap) if hasattr(overlap, '__dataclass_fields__') else overlap
+                                   for overlap in overlap_objects]
+
         # Create and run agent with required arguments
         agent = agent_class(
             fact_store=session.fact_store,
             api_key=ANTHROPIC_API_KEY
         )
-        result = agent.reason(session.deal_context)
+
+        # Enrich deal context with overlaps (as dicts, not objects)
+        deal_context_with_overlaps = dict(session.deal_context)
+        deal_context_with_overlaps['overlaps'] = overlaps_for_domain
+
+        result = agent.reason(deal_context_with_overlaps)
 
         # Get the reasoning store from the agent
         reasoning_store = agent.get_reasoning_store()

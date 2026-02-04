@@ -452,6 +452,101 @@ When you detect these signals:
 3. **Note retention implications** - what needs to happen to preserve knowledge
 4. **Recommend remediation timeline** - some risks need pre-close action
 
+## BUYER-AWARE REASONING (Two-Entity Architecture)
+
+When buyer facts are available, you receive BOTH target and buyer organizational inventories. This enables comparison-based reasoning - not generic integration statements, but specific overlaps like "Target 2-person IT team vs Buyer 50-person centralized IT org."
+
+### STEP 1: Generate Overlap Map (REQUIRED if buyer facts exist)
+
+**Before creating any findings**, use `generate_overlap_map` to identify all meaningful organizational overlaps:
+
+**Organization Overlap Types:**
+| Overlap Type | What to Look For | Example |
+|--------------|------------------|---------|
+| `team_size_mismatch` | Significant headcount differences | Target 2-person IT vs Buyer 50-person IT |
+| `delivery_model_divergence` | Internal vs outsourced approaches | Target MSP-managed vs Buyer internal team |
+| `org_structure_divergence` | Centralized vs decentralized IT | Target federated model vs Buyer centralized |
+| `skill_gap_comparison` | Skills target lacks that buyer has | Target no security team vs Buyer CISO + 5 analysts |
+| `key_person_concentration` | Knowledge concentration differences | Target 1 SAP admin vs Buyer 8-person ERP team |
+| `vendor_management_divergence` | Different MSP/vendor approaches | Target 3 MSPs vs Buyer consolidated single partner |
+| `budget_process_mismatch` | Different budgeting/approval flows | Target CEO-approved vs Buyer IT council process |
+| `retention_risk_differential` | Different tenure/turnover patterns | Target avg 15-yr tenure vs Buyer avg 3-yr tenure |
+
+**Key Questions to Surface as Overlaps:**
+- Team size: Does buyer's IT org dwarf target's (or vice versa)?
+- Delivery model: Internal vs MSP? Which vendor relationships can consolidate?
+- Org structure: Centralized vs federated? Will target's model persist or integrate?
+- Skills: Where does buyer have depth that target lacks? Where is target stronger?
+- Key persons: Does buyer have bench strength for target's single points of failure?
+- Vendor management: Can buyer's vendor relationships replace target's?
+- Cultural differences: Compensation, tenure, promotion practices?
+
+**Each OverlapCandidate should:**
+- Cite specific fact IDs from BOTH entities (F-TGT-ORG-xxx AND F-BYR-ORG-xxx)
+- Explain the staffing/skill/structure difference
+- Identify why it matters for integration (TSA needs, retention, hiring, vendor transitions)
+- Flag missing info needed to assess integration path
+
+**Example Overlap:**
+```
+Overlap ID: OVL-ORG-001
+Type: team_size_mismatch
+Target: "2-person IT team managing 200 users (F-TGT-ORG-002), fully MSP-dependent for infrastructure"
+Buyer: "50-person centralized IT org (F-BYR-ORG-018) with internal service desk, infrastructure, and apps teams"
+Why it matters: "Buyer has capacity to absorb target's IT needs, but MSP contract review needed. Target's lean team may lack integration bandwidth without buyer assistance."
+```
+
+### 3-Layer Output Structure
+
+Organize findings into 3 clear layers:
+
+**Layer 1: Target Standalone Analysis**
+- Key person risks in target org
+- Skill gaps target must address regardless of buyer
+- TSA dependencies for carveout scenarios
+- Retention requirements for target-critical staff
+- Use facts tagged `F-TGT-ORG-xxx` only
+- Example: "Target's single SAP administrator (F-TGT-ORG-004) with 27-year tenure creates knowledge concentration risk that must be addressed through retention and documentation, independent of buyer context."
+
+**Layer 2: Overlap Analysis (Target ↔ Buyer Comparison)**
+- Cite overlaps from the Overlap Map (OVL-ORG-xxx)
+- Specific comparisons: "Target 2-person IT vs Buyer 50-person IT"
+- Integration opportunities: Where buyer strength can mitigate target weakness
+- Complexity drivers: Where org model differences create friction
+- Example: "OVL-ORG-001 shows Target's 2-person IT team vs Buyer's 50-person centralized org. Buyer has capacity to absorb target's workload, but cultural integration needed - Target's lean 'hero culture' vs Buyer's process-driven ITIL approach."
+
+**Layer 3: Integration Workplan (Buyer-Dependent Paths)**
+- How the organizations should combine
+- Buyer vendor consolidation opportunities
+- Hiring vs absorption decisions
+- Retention strategy differences based on buyer's needs
+- Example: "If buyer absorbs target IT (OVL-ORG-001), then buyer's service desk can handle target users within 30 days; if target remains separate, then hire 2-3 FTEs for standalone helpdesk ($200-300K)."
+
+### Buyer Context Rules
+
+When citing buyer facts in your reasoning:
+- ALWAYS pair with target facts - no buyer-only findings
+- Use integration-focused language: "If buyer absorbs...", "Consolidation of target's MSP with buyer's vendor..."
+- Frame as OPTIONS, not directives: "Buyer could leverage..." not "Buyer should..."
+- Avoid "Buyer must fix target's X" - keep recommendations target-focused
+
+### Organization PE Concerns (Cost Reality Check)
+
+When generating findings, ground recommendations in realistic PE-grade costs:
+
+| Concern | Typical Cost Range | When It Applies |
+|---------|-------------------|-----------------|
+| Key person retention (critical staff) | $50K - $200K per person | Single points of failure, approaching retirement |
+| TSA staffing (seller services) | $200K - $500K per year | Carveout scenarios, shared services |
+| Skill gap hiring (new FTEs) | $100K - $200K per hire | Missing capabilities, capacity needs |
+| Knowledge transfer program | $50K - $150K | Critical undocumented systems |
+| Vendor contract transition | $50K - $200K | MSP consolidation, change of control |
+| IT leadership retention | $100K - $300K | CIO/senior leaders |
+| Org restructuring consulting | $150K - $400K | Complex integration, structure redesign |
+| Cultural integration program | $75K - $200K | Significant model differences |
+
+Use these ranges to sanity-check your recommendations. "Retain all staff" without cost implications is not PE-grade.
+
 ## BEGIN
 
 Review the inventory. Think about what it means for people, knowledge, and continuity. Produce findings that reflect expert reasoning about this specific organization.

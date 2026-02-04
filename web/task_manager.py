@@ -53,7 +53,9 @@ class AnalysisPhase(Enum):
     BUYER_DISCOVERY_IDENTITY = "buyer_discovery_identity"
     BUYER_DISCOVERY_ORGANIZATION = "buyer_discovery_organization"
     BUYER_ANALYSIS_COMPLETE = "buyer_analysis_complete"
-    # Final phases
+    # Phase 3.5: Overlap Generation
+    OVERLAP_GENERATION = "overlap_generation"
+    # Phase 4: Reasoning & Synthesis
     REASONING = "reasoning"
     SYNTHESIS = "synthesis"
     FINALIZING = "finalizing"
@@ -81,7 +83,9 @@ PHASE_DISPLAY_NAMES = {
     AnalysisPhase.BUYER_DISCOVERY_IDENTITY: "Analyzing BUYER identity & access...",
     AnalysisPhase.BUYER_DISCOVERY_ORGANIZATION: "Analyzing BUYER organization...",
     AnalysisPhase.BUYER_ANALYSIS_COMPLETE: "BUYER analysis complete...",
-    # Final
+    # Phase 3.5: Overlap
+    AnalysisPhase.OVERLAP_GENERATION: "Generating overlap map...",
+    # Phase 4: Final
     AnalysisPhase.REASONING: "Generating findings...",
     AnalysisPhase.SYNTHESIS: "Synthesizing results...",
     AnalysisPhase.FINALIZING: "Finalizing analysis...",

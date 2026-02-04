@@ -406,11 +406,186 @@ When you detect these signals:
 - Don't fabricate evidence or invent specifics not in the inventory
 - Don't miss complexity signals - they directly affect cost estimates
 
+---
+
+## STEP 1: GENERATE OVERLAP MAP (Required if Buyer Facts Exist)
+
+**Before creating ANY findings**, check if you have BUYER facts (F-BYR-xxx IDs) in the inventory.
+
+If YES → You MUST call `generate_overlap_map` to structure your target-vs-buyer comparison.
+
+For each application category where both entities have data:
+- What does TARGET have? (cite F-TGT-xxx)
+- What does BUYER have? (cite F-BYR-xxx)
+- What type of overlap? (see table below)
+- Why does this matter for integration?
+- What questions would increase confidence?
+
+**Application Overlap Types:**
+| Target Has | Buyer Has | Overlap Type | Integration Implication |
+|------------|-----------|--------------|-------------------------|
+| SAP ECC | Oracle Cloud | platform_mismatch | Full ERP migration required ($1M-$10M) |
+| SAP ECC | SAP S/4HANA | version_gap | Upgrade + consolidate ($500K-$3M) |
+| Salesforce | Salesforce | platform_alignment | Instance merge - synergy opportunity |
+| HubSpot | Salesforce | platform_mismatch | CRM migration ($200K-$800K) |
+| Custom ERP | SAP | platform_mismatch | Replace or build interfaces |
+| Point-to-point integrations | MuleSoft ESB | integration_complexity | Middleware adoption required |
+
+If NO buyer facts → Skip overlap map, focus on target-standalone analysis.
+
+---
+
+## OUTPUT STRUCTURE (3 Layers - Required)
+
+Organize your findings into three distinct layers:
+
+### LAYER 1: TARGET STANDALONE FINDINGS
+
+Findings about the target that exist REGARDLESS of buyer identity.
+
+**What goes here:**
+- EOL/EOS applications (exist whether deal happens or not)
+- Key person risk (single developer for critical app)
+- Licensing compliance gaps
+- Technical debt that needs remediation
+- Undocumented business logic
+
+**Rules:**
+- Do NOT reference buyer facts (F-BYR-xxx)
+- Set `risk_scope: "target_standalone"` or `integration_related: false`
+- These findings matter even if target stays independent
+
+**Example:**
+```json
+{
+  "title": "SAP ECC 6.0 Approaching EOL",
+  "risk_scope": "target_standalone",
+  "target_facts_cited": ["F-TGT-APP-001"],
+  "buyer_facts_cited": [],
+  "reasoning": "SAP ECC 6.0 reaches end of mainstream maintenance in 2027 (F-TGT-APP-001). With 247 custom ABAP programs documented (F-TGT-APP-012), migration to S/4HANA will require significant remediation effort regardless of acquisition."
+}
+```
+
+### LAYER 2: OVERLAP FINDINGS
+
+Findings that DEPEND ON buyer context for meaning.
+
+**What goes here:**
+- ERP/CRM platform mismatches
+- Duplicate systems creating consolidation opportunity
+- License conflicts or synergies
+- Integration architecture differences
+
+**Rules:**
+- MUST reference BOTH target AND buyer facts
+- MUST link to an `overlap_id` from your overlap map
+- Set `risk_scope: "integration_dependent"` or `integration_related: true`
+
+**Example:**
+```json
+{
+  "title": "ERP Platform Mismatch - SAP to Oracle Migration",
+  "risk_scope": "integration_dependent",
+  "target_facts_cited": ["F-TGT-APP-001", "F-TGT-APP-012"],
+  "buyer_facts_cited": ["F-BYR-APP-001"],
+  "overlap_id": "OC-001",
+  "reasoning": "Target operates SAP ECC 6.0 (F-TGT-APP-001) while buyer standardized on Oracle Cloud ERP (F-BYR-APP-001). The 247 custom ABAP programs (F-TGT-APP-012) will require conversion. M&A Lens: Synergy Opportunity. Why: ERP consolidation enables shared services. Deal Impact: Budget $1.5M-$3M for SAP-to-Oracle migration over 18-24 months."
+}
+```
+
+### LAYER 3: INTEGRATION WORKPLAN
+
+Work items with separated target vs integration actions.
+
+**For EACH work item, provide:**
+
+1. **target_action** (REQUIRED): What the TARGET must do
+   - Must be target-scoped
+   - No "Buyer should..." language
+
+2. **integration_option** (OPTIONAL): Buyer-dependent alternative
+   - Only if work changes based on buyer strategy
+   - Can reference buyer decisions/systems
+
+**Example:**
+```json
+{
+  "title": "SAP Custom Code Assessment",
+  "target_action": "Inventory all 247 custom ABAP programs (F-TGT-APP-012); classify by business criticality; assess remediation complexity; engage SAP on migration licensing terms",
+  "integration_option": "If buyer confirms Oracle Cloud as target ERP platform, add data model mapping and ETL design (+8-12 weeks). If buyer allows S/4HANA standalone, reduce to upgrade-in-place path.",
+  "phase": "Day_100",
+  "cost_estimate": "100k_to_500k"
+}
+```
+
+---
+
+## BUYER CONTEXT RULES (Critical)
+
+Buyer facts describe **ONE POSSIBLE destination state**, not a standard.
+
+**USE buyer context to:**
+- Explain integration complexity (what makes migration hard/easy)
+- Identify sequencing dependencies (what must happen first)
+- Surface consolidation opportunities (synergy potential)
+- Note optional paths based on buyer strategy
+
+**ALL actions MUST be framed as TARGET-SIDE outputs:**
+- What to **VERIFY** (gaps, unknowns) → "Confirm buyer ERP version (GAP-005)"
+- What to **SIZE** (effort, cost, timeline) → "Assess SAP migration effort"
+- What to **REMEDIATE** (technical debt, risks) → "Upgrade EOL applications"
+- What to **MIGRATE** (data, systems, processes) → "Migrate CRM data to Salesforce"
+- What to **INTERFACE** (integration points) → "Build API between target ERP and buyer warehouse system"
+- What to **TSA** (transition services needed) → "Define TSA for shared ERP access"
+
+**Examples:**
+
+❌ WRONG: "Buyer should upgrade their Oracle instance to support target data model"
+✅ RIGHT: "Target SAP migration to buyer Oracle (F-BYR-APP-001) blocked pending confirmation of Oracle version and available modules (GAP)"
+
+❌ WRONG: "Recommend buyer purchase additional Salesforce licenses"
+✅ RIGHT: "Target HubSpot migration to buyer Salesforce requires license capacity planning; 500 target users need provisioning"
+
+❌ WRONG: "Buyer needs to decide on integration strategy"
+✅ RIGHT: "Target ERP integration approach TBD - options: (1) Standalone with APIs ($200K, 6mo), (2) Full migration to buyer ERP ($2M, 18mo). Recommend buyer confirm strategy by Week 4."
+
+---
+
+## APPLICATIONS PE CONCERNS (Realistic Cost Impact)
+
+Use these to calibrate your findings and cost estimates:
+
+| Concern | Why It Matters | Typical Cost Range |
+|---------|----------------|-------------------|
+| **ERP Consolidation** | Timeline driver, data migration complexity | $1M - $10M |
+| **CRM Consolidation** | Customer data migration, user adoption | $200K - $1M |
+| **Custom App Migration** | Business-critical, undocumented logic | $100K - $2M per app |
+| **Licensing Change of Control** | Contract triggers, true-up exposure | $100K - $500K |
+| **Integration Middleware** | ESB/iPaaS adoption or migration | $100K - $400K |
+| **Application Rationalization** | Duplicate function elimination | $50K - $300K per app |
+| **EOL Application Replacement** | Security/compliance forcing function | $100K - $1M per system |
+
+**Key Questions to Surface as Gaps:**
+- What is the ERP customization level? (# of custom objects, Z-programs)
+- What are the licensing terms? Change of control clauses?
+- How many integrations touch the ERP? Are they documented?
+- What custom applications are business-critical?
+- When was the last license audit? Any compliance gaps?
+- What applications have major renewals in next 12 months?
+
+---
+
 ## BEGIN
 
-Review the inventory. Think about what it means. Produce findings that reflect expert reasoning about this specific application portfolio.
+**Step-by-step process:**
 
-Work through your analysis, then call `complete_analysis` when done."""
+1. **IF buyer facts exist**: Call `generate_overlap_map` to structure your comparison
+2. **LAYER 1**: Identify target-standalone findings (no buyer references)
+3. **LAYER 2**: Identify overlap-driven findings (cite both entities)
+4. **LAYER 3**: Create work items with `target_action` + optional `integration_option`
+5. Call `complete_reasoning` when done
+
+Review the inventory. Think about what it means for THIS specific deal. Produce IC-ready findings with realistic cost estimates."""
 
 
 def get_applications_reasoning_prompt(inventory: dict, deal_context: dict) -> str:
