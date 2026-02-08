@@ -488,6 +488,7 @@ class Deal(SoftDeleteMixin, AuditMixin, db.Model):
     analysis_runs = relationship('AnalysisRun', back_populates='deal', lazy='dynamic', cascade='all, delete-orphan')
     snapshots = relationship('DealSnapshot', back_populates='deal', lazy='dynamic', cascade='all, delete-orphan')
     pending_changes = relationship('PendingChange', back_populates='deal', lazy='dynamic', cascade='all, delete-orphan')
+    report_overrides = relationship('ReportOverride', back_populates='deal', lazy='dynamic', cascade='all, delete-orphan')
 
     # Indexes
     __table_args__ = (
@@ -1154,6 +1155,123 @@ class PendingChange(db.Model):
 
 
 # =============================================================================
+# REPORT OVERRIDE MODEL (Human Edits to AI Reports)
+# =============================================================================
+
+class ReportOverride(db.Model):
+    """
+    Stores human edits to AI-generated report text.
+    When a user edits a section in the web UI, the override is saved here
+    and applied when rendering or exporting reports.
+    """
+    __tablename__ = 'report_overrides'
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    deal_id = Column(String(36), ForeignKey('deals.id', ondelete='CASCADE'), nullable=False)
+
+    # Which report section
+    domain = Column(String(100), nullable=False)       # e.g. 'applications', 'infrastructure'
+    section = Column(String(100), nullable=False)       # 'assessment', 'implications', 'actions'
+    field_name = Column(String(200), nullable=False)    # specific field within section
+
+    # Values
+    original_value = Column(Text, default='')
+    override_value = Column(Text, nullable=False)
+
+    # Audit
+    created_by = Column(String(36), ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    active = Column(Boolean, default=True)
+
+    # Relationships
+    deal = relationship('Deal', back_populates='report_overrides')
+    creator = relationship('User', foreign_keys=[created_by])
+
+    __table_args__ = (
+        Index('idx_report_overrides_deal_domain', 'deal_id', 'domain', 'section', 'field_name'),
+    )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'id': self.id,
+            'deal_id': self.deal_id,
+            'domain': self.domain,
+            'section': self.section,
+            'field_name': self.field_name,
+            'original_value': self.original_value,
+            'override_value': self.override_value,
+            'created_by': self.created_by,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'active': self.active,
+        }
+
+
+# =============================================================================
+# DRIVER OVERRIDE MODEL (User Corrections to Extracted Drivers)
+# =============================================================================
+
+class DriverOverride(db.Model):
+    """
+    Stores user corrections to extracted driver values.
+    When a user overrides an extracted driver (e.g., user_count was 850 but should be 1200),
+    the override is saved here and applied when calculating costs.
+    """
+    __tablename__ = 'driver_overrides'
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    deal_id = Column(String(36), ForeignKey('deals.id', ondelete='CASCADE'), nullable=False)
+
+    # Which driver
+    driver_name = Column(String(100), nullable=False)  # e.g., 'total_users', 'sites', 'erp_system'
+
+    # Values - stored as JSON to handle different types (int, str, bool, list)
+    extracted_value = Column(JSON, nullable=True)      # What extraction found
+    override_value = Column(JSON, nullable=False)      # User's correction
+
+    # Source tracking
+    source_fact_id = Column(String(50), ForeignKey('facts.id', ondelete='SET NULL'), nullable=True)
+    extraction_confidence = Column(String(20), default='')  # high, medium, low
+
+    # Reason for override
+    reason = Column(Text, default='')
+
+    # Audit
+    created_by = Column(String(36), ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    active = Column(Boolean, default=True)
+
+    # Relationships
+    deal = relationship('Deal', backref=db.backref('driver_overrides', lazy='dynamic', cascade='all, delete-orphan'))
+    source_fact = relationship('Fact', foreign_keys=[source_fact_id])
+    creator = relationship('User', foreign_keys=[created_by])
+
+    __table_args__ = (
+        Index('idx_driver_overrides_deal', 'deal_id'),
+        Index('idx_driver_overrides_deal_driver', 'deal_id', 'driver_name'),
+        db.UniqueConstraint('deal_id', 'driver_name', name='uq_deal_driver_override'),
+    )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'id': self.id,
+            'deal_id': self.deal_id,
+            'driver_name': self.driver_name,
+            'extracted_value': self.extracted_value,
+            'override_value': self.override_value,
+            'source_fact_id': self.source_fact_id,
+            'extraction_confidence': self.extraction_confidence,
+            'reason': self.reason,
+            'created_by': self.created_by,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'active': self.active,
+        }
+
+
+# =============================================================================
 # DEAL SNAPSHOT MODEL (For Rollback)
 # =============================================================================
 
@@ -1350,6 +1468,97 @@ def create_all_tables(app):
         # Run lightweight migrations for schema changes
         _run_migrations()
 
+
+# =============================================================================
+# CONSOLIDATED RISK MODEL (C1: Risk Consolidation)
+# =============================================================================
+
+class ConsolidatedRisk(SoftDeleteMixin, db.Model):
+    """
+    Consolidated risk grouping related findings.
+
+    Related risks are grouped using graph-based clustering and summarized
+    into a single consolidated finding. This reduces duplication and
+    makes risk prioritization clearer.
+
+    C1 FIX: Implements graph clustering, evidence provenance, domain-first consolidation.
+    """
+    __tablename__ = 'consolidated_risks'
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    deal_id = Column(String(36), ForeignKey('deals.id', ondelete='CASCADE'), nullable=False)
+
+    # Classification
+    domain = Column(String(50), nullable=False)  # applications, infrastructure, security, etc.
+    entity = Column(String(20), default='target')
+
+    # Content
+    title = Column(String(200), nullable=False)  # Short title (under 50 chars ideal)
+    description = Column(Text, nullable=False)  # Consolidated summary
+
+    # Severity = max of all children
+    severity = Column(String(20), nullable=False)  # critical, high, medium, low
+
+    # Evidence & provenance (GPT FEEDBACK - critical for trust)
+    child_risk_ids = Column(JSON, nullable=False)  # [finding_id, ...] original risk IDs
+    supporting_facts = Column(JSON, default=list)  # Union of all child facts
+    key_systems = Column(JSON, default=list)  # Systems mentioned across children
+    field_provenance = Column(JSON, default=dict)  # Which child contributed what claims
+
+    # Consolidation metadata
+    consolidation_method = Column(String(50), default='rule_based')  # rule_based, llm, manual
+    grouping_confidence = Column(Float, default=1.0)  # 0.0 - 1.0
+    grouping_reason = Column(Text, default='')  # Why these were grouped
+
+    # Version tracking - increment when children change
+    version = Column(Integer, default=1)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    deal = relationship('Deal', backref=db.backref('consolidated_risks', lazy='dynamic', cascade='all, delete-orphan'))
+
+    # Indexes
+    __table_args__ = (
+        Index('idx_consolidated_risks_deal', 'deal_id'),
+        Index('idx_consolidated_risks_deal_domain', 'deal_id', 'domain'),
+        Index('idx_consolidated_risks_severity', 'deal_id', 'severity'),
+    )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'id': self.id,
+            'deal_id': self.deal_id,
+            'domain': self.domain,
+            'entity': self.entity,
+            'title': self.title,
+            'description': self.description,
+            'severity': self.severity,
+            'child_risk_ids': self.child_risk_ids or [],
+            'child_count': len(self.child_risk_ids or []),
+            'supporting_facts': self.supporting_facts or [],
+            'key_systems': self.key_systems or [],
+            'field_provenance': self.field_provenance or {},
+            'consolidation_method': self.consolidation_method,
+            'grouping_confidence': self.grouping_confidence,
+            'grouping_reason': self.grouping_reason,
+            'version': self.version,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+    def get_child_risks(self) -> List['Finding']:
+        """Load the child Finding objects for this consolidated risk."""
+        if not self.child_risk_ids:
+            return []
+        return Finding.query.filter(Finding.id.in_(self.child_risk_ids)).all()
+
+
+# =============================================================================
+# HELPER FUNCTIONS
+# =============================================================================
 
 def log_audit(action: str, resource_type: str = None, resource_id: str = None,
               tenant_id: str = None, deal_id: str = None, user_id: str = None,

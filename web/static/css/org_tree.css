@@ -1,0 +1,514 @@
+/* =============================================================================
+   CSS Org Tree - Pure CSS/JS tree replacing Mermaid flowchart
+   ============================================================================= */
+
+.org-tree-container {
+    background: var(--bg-surface, #fff);
+    border: 1px solid var(--border-default, #e2e8f0);
+    border-radius: 12px;
+    padding: 30px;
+    min-height: 400px;
+    overflow-x: auto;
+    overflow-y: auto;
+    max-height: 80vh;
+}
+
+/* Tree layout: vertical hierarchy with connector lines */
+.org-tree {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px 40px;
+    min-width: fit-content;
+}
+
+/* Each level of the tree */
+.org-tree-level {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    position: relative;
+    padding-top: 30px;
+    flex-wrap: nowrap;
+}
+
+/* Connector lines from parent to children */
+.org-tree-level::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 2px;
+    height: 30px;
+    background: var(--border-default, #cbd5e1);
+}
+
+/* Horizontal connector spanning all children */
+.org-tree-branch {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+}
+
+.org-tree-branch::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    left: 50%;
+    width: 2px;
+    height: 16px;
+    background: var(--border-default, #cbd5e1);
+}
+
+/* Horizontal line connecting siblings */
+.org-tree-children {
+    display: flex;
+    gap: 12px;
+    position: relative;
+    padding-top: 16px;
+}
+
+.org-tree-children::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: calc(50% - var(--half-width, 0px));
+    right: calc(50% - var(--half-width, 0px));
+    height: 2px;
+    background: var(--border-default, #cbd5e1);
+}
+
+.org-tree-children > .org-tree-branch::before {
+    top: -16px;
+    height: 16px;
+}
+
+/* Node base style */
+.org-node {
+    padding: 10px 16px;
+    border-radius: 8px;
+    text-align: center;
+    cursor: default;
+    min-width: 140px;
+    max-width: 220px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    transition: transform 0.15s, box-shadow 0.15s;
+    position: relative;
+}
+
+.org-node:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 3px 8px rgba(0,0,0,0.12);
+}
+
+/* Node types */
+.org-node.leadership {
+    background: #f97316;
+    color: white;
+    font-weight: 700;
+    font-size: 1.05em;
+    min-width: 180px;
+    padding: 14px 20px;
+}
+
+.org-node.department {
+    background: #3b82f6;
+    color: white;
+    font-weight: 600;
+    min-width: 160px;
+}
+
+.org-node.role {
+    background: #e0f2fe;
+    border: 1px solid #0ea5e9;
+    color: #0c4a6e;
+    font-size: 0.9em;
+    min-width: 120px;
+}
+
+.org-node.member {
+    background: #f0fdf4;
+    border: 1px solid #22c55e;
+    color: #14532d;
+    font-size: 0.82em;
+    min-width: 110px;
+    max-width: 180px;
+}
+
+.org-node.vendor {
+    background: #8b5cf6;
+    color: white;
+    font-weight: 600;
+    min-width: 150px;
+    border: 2px dashed #a78bfa;
+}
+
+.org-node.more {
+    background: #f1f5f9;
+    border: 1px dashed #cbd5e1;
+    color: #64748b;
+    font-style: italic;
+    font-size: 0.85em;
+    min-width: 80px;
+}
+
+/* Node content */
+.org-node .node-title {
+    display: block;
+    font-weight: inherit;
+    line-height: 1.3;
+}
+
+.org-node .node-subtitle {
+    display: block;
+    font-size: 0.82em;
+    opacity: 0.85;
+    margin-top: 3px;
+    line-height: 1.2;
+}
+
+.org-node .node-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-size: 0.75em;
+    margin-top: 4px;
+    background: rgba(255,255,255,0.25);
+    font-weight: 600;
+}
+
+.org-node.role .node-badge {
+    background: rgba(14,165,233,0.15);
+    color: #0369a1;
+}
+
+.org-node.member .node-badge {
+    background: rgba(34,197,94,0.15);
+    color: #166534;
+}
+
+/* Collapsible nodes */
+.org-node.collapsible {
+    cursor: pointer;
+}
+
+.org-node.collapsible::after {
+    content: '';
+    display: inline-block;
+    width: 0;
+    height: 0;
+    margin-left: 6px;
+    vertical-align: middle;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid currentColor;
+    opacity: 0.5;
+    transition: transform 0.2s;
+}
+
+.org-node.collapsible.collapsed::after {
+    transform: rotate(-90deg);
+}
+
+/* Hidden children when collapsed */
+.org-tree-branch.collapsed > .org-tree-children {
+    display: none;
+}
+
+.org-tree-branch.collapsed > .org-node::after {
+    transform: rotate(-90deg);
+}
+
+/* Vendor section */
+.org-vendors-section {
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 2px dashed #a78bfa;
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.org-vendors-label {
+    width: 100%;
+    text-align: center;
+    font-size: 0.9em;
+    color: #7c3aed;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+/* Flat list fallback when no hierarchy */
+.org-flat-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 12px;
+    padding: 20px;
+}
+
+.org-flat-item {
+    padding: 12px 16px;
+    border-radius: 8px;
+    background: var(--bg-surface, #fff);
+    border: 1px solid var(--border-default, #e2e8f0);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.org-flat-item .role-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75em;
+    font-weight: 600;
+    background: #e0f2fe;
+    color: #0369a1;
+}
+
+/* Print styles */
+@media print {
+    .org-tree-container {
+        max-height: none;
+        overflow: visible;
+        page-break-inside: avoid;
+    }
+    .org-node:hover {
+        transform: none;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+}
+
+
+/* =============================================================================
+   C3 FIX: NEW CSS TREE LAYOUT (UL/LI Based)
+   Generated by tools_v2/org_chart.py
+   ============================================================================= */
+
+/* Tree container with UL/LI structure */
+.org-tree ul {
+    display: flex;
+    justify-content: center;
+    padding-top: 20px;
+    position: relative;
+    list-style: none;
+    margin: 0;
+    padding-left: 0;
+}
+
+/* Vertical connector from parent */
+.org-tree ul::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 0;
+    height: 20px;
+    border-left: 2px solid #d1d5db;
+}
+
+/* No connector for root ul */
+.org-tree > ul::before {
+    display: none;
+}
+
+/* Tree nodes (LI) */
+.org-tree li {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    padding: 20px 10px 0;
+}
+
+/* Horizontal connectors */
+.org-tree li::before,
+.org-tree li::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    width: 50%;
+    height: 20px;
+    border-top: 2px solid #d1d5db;
+}
+
+.org-tree li::before {
+    right: 50%;
+    border-right: 2px solid #d1d5db;
+}
+
+.org-tree li::after {
+    left: 50%;
+}
+
+/* First/last child connector rules */
+.org-tree li:first-child::before {
+    border: none;
+    border-right: 2px solid #d1d5db;
+}
+
+.org-tree li:last-child::after {
+    border: none;
+}
+
+.org-tree li:first-child::after {
+    border-radius: 5px 0 0 0;
+}
+
+.org-tree li:last-child::before {
+    border-radius: 0 5px 0 0;
+}
+
+.org-tree li:only-child::before,
+.org-tree li:only-child::after {
+    border: none;
+}
+
+/* Node box (new format) */
+.org-tree .node {
+    padding: 10px 15px;
+    border: 2px solid #374151;
+    border-radius: 8px;
+    background: white;
+    font-size: 14px;
+    white-space: nowrap;
+    text-align: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.org-tree .node:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.org-tree .node-name {
+    display: block;
+    font-weight: 600;
+    color: #111827;
+}
+
+.org-tree .node-role {
+    display: block;
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: 2px;
+}
+
+.org-tree .node-headcount {
+    display: block;
+    font-size: 11px;
+    color: #9ca3af;
+    margin-top: 2px;
+}
+
+/* Node type styles (new format) */
+.org-tree .node.leadership {
+    background: #fef3c7;
+    border-color: #f59e0b;
+}
+
+.org-tree .node.leadership .node-name {
+    color: #92400e;
+}
+
+.org-tree .node.team {
+    background: #dbeafe;
+    border-color: #3b82f6;
+}
+
+.org-tree .node.team .node-name {
+    color: #1e40af;
+}
+
+.org-tree .node.vendor {
+    background: #f3e8ff;
+    border-color: #8b5cf6;
+    font-style: italic;
+}
+
+.org-tree .node.vendor .node-name {
+    color: #5b21b6;
+}
+
+.org-tree .node.synthetic {
+    background: #f3f4f6;
+    border-color: #9ca3af;
+    font-style: italic;
+}
+
+.org-tree .node.synthetic .node-name {
+    color: #4b5563;
+}
+
+.org-tree .node.staff {
+    background: #f0fdf4;
+    border-color: #22c55e;
+}
+
+.org-tree .node.cycle {
+    border-color: #ef4444;
+    border-style: dashed;
+}
+
+.org-tree .cycle-marker {
+    color: #ef4444;
+    font-weight: bold;
+    margin-left: 4px;
+}
+
+/* Collapsed indicator */
+.collapsed-indicator {
+    font-size: 12px;
+    color: #6b7280;
+    padding: 4px 8px;
+    background: #f3f4f6;
+    border-radius: 4px;
+    margin-top: 8px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.collapsed-indicator:hover {
+    background: #e5e7eb;
+}
+
+/* Flat list section headers */
+.org-flat-list .flat-section h4 {
+    color: #374151;
+    margin: 16px 0 8px 0;
+    font-size: 14px;
+    font-weight: 600;
+    border-bottom: 1px solid #e5e7eb;
+    padding-bottom: 4px;
+}
+
+.org-flat-list .flat-section:first-child h4 {
+    margin-top: 0;
+}
+
+.org-flat-list .flat-nodes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+/* Warning and empty states */
+.org-warning {
+    padding: 10px 15px;
+    background: #fef3c7;
+    border-left: 3px solid #f59e0b;
+    color: #92400e;
+    font-size: 13px;
+    margin-bottom: 15px;
+    border-radius: 4px;
+}
+
+.org-empty {
+    padding: 40px;
+    text-align: center;
+    color: #6b7280;
+    font-style: italic;
+}
