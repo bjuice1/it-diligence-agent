@@ -32,7 +32,7 @@ from services.organization_pipeline import OrganizationAnalysisPipeline
 
 # Phase 1: New imports for task management and session handling
 from web.task_manager import task_manager, AnalysisPhase, TaskStatus
-from web.session_store import session_store, get_or_create_session_id
+from stores.session_store import session_store, get_or_create_session_id
 from web.analysis_runner import run_analysis, run_analysis_simple
 
 # Phase 2: Authentication imports
@@ -42,6 +42,9 @@ from flask_talisman import Talisman
 
 # Phase 3: Database imports
 from web.database import db, migrate, init_db, create_all_tables
+
+# Phase 3.1: Repository imports for A2 fix (documents to DB)
+from web.repositories.document_repository import DocumentRepository
 
 # Phase 4: Session and Task imports
 from flask_session import Session as FlaskSession
@@ -64,11 +67,17 @@ app.config['WTF_CSRF_SECRET_KEY'] = SECRET_KEY
 # Check if database is enabled (for gradual migration)
 USE_DATABASE = os.environ.get('USE_DATABASE', 'false').lower() == 'true'
 
-if USE_DATABASE:
+# Check if db auth backend is used (requires database)
+AUTH_BACKEND = os.environ.get('AUTH_BACKEND', 'db').lower()
+
+# Initialize database if explicitly enabled OR if using db auth backend
+NEED_DATABASE = USE_DATABASE or AUTH_BACKEND == 'db'
+
+if NEED_DATABASE:
     init_db(app)
     # Create tables and run migrations (adds task_id column for UI resilience)
     create_all_tables(app)
-    logger.info("Database initialized with migrations")
+    logger.info(f"Database initialized (USE_DATABASE={USE_DATABASE}, AUTH_BACKEND={AUTH_BACKEND})")
 
 # =============================================================================
 # Phase 4: Session & Task Configuration
@@ -79,59 +88,109 @@ if USE_DATABASE:
 REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
 USE_REDIS_SESSIONS = os.environ.get('USE_REDIS_SESSIONS', 'false').lower() == 'true'
 
+
+# =============================================================================
+# Session Backend Health Checks (Spec 04)
+# =============================================================================
+
+def check_redis_health(redis_url: str, timeout: int = 2) -> bool:
+    """
+    Check if Redis is healthy before using it for sessions.
+
+    Args:
+        redis_url: Redis connection URL
+        timeout: Connection timeout in seconds
+
+    Returns:
+        True if Redis is reachable and responsive, False otherwise
+    """
+    try:
+        import redis
+        client = redis.from_url(
+            redis_url,
+            socket_connect_timeout=timeout,
+            socket_timeout=timeout
+        )
+        client.ping()
+        client.close()
+        return True
+    except Exception as e:
+        logger.warning(f"Redis health check failed: {e}")
+        return False
+
+
 # Helper to configure SQLAlchemy sessions
 def _configure_db_sessions():
     """Configure SQLAlchemy-backed sessions (reliable on Railway)."""
     app.config['SESSION_TYPE'] = 'sqlalchemy'
     app.config['SESSION_SQLALCHEMY'] = db
+    app.config['SESSION_SQLALCHEMY_TABLE'] = 'flask_sessions'
     app.config['SESSION_PERMANENT'] = True
     app.config['SESSION_USE_SIGNER'] = True
-    app.config['SESSION_KEY_PREFIX'] = 'session:'
+    app.config['SESSION_KEY_PREFIX'] = 'itdd:session:'
     app.config['PERMANENT_SESSION_LIFETIME'] = 86400  # 24 hours
     FlaskSession(app)
-    logger.info("SQLAlchemy database sessions enabled (Railway-compatible)")
+    logger.info("✅ Session backend: SQLAlchemy (PostgreSQL)")
 
 # Helper to configure filesystem sessions
 def _configure_fs_sessions():
-    """Configure filesystem sessions (local development only)."""
-    app.config['SESSION_TYPE'] = 'filesystem'
-    app.config['SESSION_FILE_DIR'] = '/tmp/flask_session'
+    """Configure filesystem sessions (local development only).
+
+    Note: We use Flask's built-in cookie sessions instead of Flask-Session
+    to avoid SQLAlchemy metadata conflicts when the background analysis
+    thread creates app contexts. Flask-Session's SQLAlchemy models can
+    conflict with our own models even when using filesystem storage.
+    """
+    # Just use Flask's built-in session (cookie-based)
+    # The secret key is already set, so sessions will work
     app.config['SESSION_PERMANENT'] = True
     app.config['PERMANENT_SESSION_LIFETIME'] = 86400  # 24 hours
-    FlaskSession(app)
-    logger.info("Filesystem sessions enabled")
+    # Don't call FlaskSession(app) - use Flask's built-in sessions
+    logger.info("Using Flask built-in cookie sessions (local dev)")
 
 # Session priority: Redis (if enabled & working) > SQLAlchemy (if DB available) > Filesystem
 session_configured = False
 
-if USE_REDIS_SESSIONS:
+if USE_REDIS_SESSIONS and check_redis_health(REDIS_URL):
     try:
         import redis
-        redis_client = redis.from_url(REDIS_URL)
-        redis_client.ping()
+        redis_client = redis.from_url(
+            REDIS_URL,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+            retry_on_timeout=True,
+            health_check_interval=30  # Check every 30 seconds
+        )
 
         app.config['SESSION_TYPE'] = 'redis'
         app.config['SESSION_REDIS'] = redis_client
         app.config['SESSION_PERMANENT'] = True
         app.config['SESSION_USE_SIGNER'] = True
-        app.config['SESSION_KEY_PREFIX'] = 'diligence:'
+        app.config['SESSION_KEY_PREFIX'] = 'itdd:session:'
         app.config['PERMANENT_SESSION_LIFETIME'] = 86400
         FlaskSession(app)
-        logger.info("Redis sessions enabled")
+        logger.info("✅ Session backend: Redis (healthy)")
         session_configured = True
     except Exception as e:
-        logger.warning(f"Redis connection failed: {e}")
+        logger.warning(f"Redis session configuration failed: {e}")
         # Fall through to try SQLAlchemy
+elif USE_REDIS_SESSIONS:
+    logger.warning("⚠️  Redis sessions requested but health check failed - falling back to database")
 
 if not session_configured and USE_DATABASE:
-    # Use SQLAlchemy sessions - reliable on Railway with PostgreSQL
-    _configure_db_sessions()
-    session_configured = True
+    # Only use SQLAlchemy sessions with PostgreSQL (not SQLite - causes table conflicts)
+    database_url = os.environ.get('DATABASE_URL', '')
+    if 'postgresql' in database_url.lower():
+        _configure_db_sessions()
+        session_configured = True
+        logger.info("Using PostgreSQL-backed sessions")
+    else:
+        logger.info("SQLite detected - skipping SQLAlchemy sessions (use filesystem instead)")
 
 if not session_configured:
-    # Last resort: filesystem sessions (won't persist on Railway restarts)
+    # Last resort: cookie sessions (won't persist on Railway restarts, but no DB conflicts)
     _configure_fs_sessions()
-    logger.warning("Using filesystem sessions - won't persist on server restart!")
+    logger.info("Using cookie sessions for local development")
 
 # Check if Celery is available for background tasks
 USE_CELERY = os.environ.get('USE_CELERY', 'false').lower() == 'true'
@@ -319,6 +378,75 @@ def require_authentication():
         return login_manager.unauthorized()
 
     return None
+
+
+# =============================================================================
+# Session Persistence - Auto-Restore Deal Context (Spec 03)
+# =============================================================================
+
+@app.before_request
+def auto_restore_deal_context():
+    """
+    Automatically restore deal context from database when session is empty.
+
+    This hook runs on every request for authenticated users. If the session
+    doesn't have a current_deal_id but the user has a last_deal_id in the
+    database, we restore it to the session.
+
+    This ensures users don't see "Please select a deal" errors after:
+    - Session expiry
+    - Browser restart
+    - Server restart
+    - Multi-server handoff
+
+    Note:
+        Only restores if user has access to the deal (permissions checked).
+        Does not restore if deal is deleted or access was revoked.
+    """
+    # Only run for authenticated users
+    if not current_user.is_authenticated:
+        return
+
+    # Only restore if session is empty
+    if flask_session.get('current_deal_id'):
+        return
+
+    # Attempt to restore from database
+    try:
+        last_deal = current_user.get_last_deal()
+
+        if not last_deal:
+            # User has no last deal recorded
+            return
+
+        # Verify user still has access (permissions may have changed)
+        from web.permissions import user_can_access_deal
+        if not user_can_access_deal(current_user, last_deal):
+            # User lost access to this deal - clear it from database
+            current_user.clear_last_deal()
+            db.session.commit()
+            logger.warning(f"User {current_user.id} lost access to deal {last_deal.id}, cleared last_deal_id")
+            return
+
+        # Restore to session
+        flask_session['current_deal_id'] = last_deal.id
+        flask_session.modified = True
+
+        logger.info(f"Auto-restored deal {last_deal.id} for user {current_user.id} from database")
+
+        # Optionally: Also load deal context into flask.g
+        # (This matches the existing pattern in web/context.py)
+        try:
+            from web.context import load_deal_context
+            load_deal_context()
+        except Exception as context_error:
+            # Non-fatal: session is restored even if g.deal_data fails
+            logger.warning(f"Failed to load deal context into flask.g: {context_error}")
+
+    except Exception as e:
+        # Non-fatal: Don't break the request if restoration fails
+        logger.error(f"Auto-restore deal context failed for user {current_user.id}: {e}")
+
 
 # =============================================================================
 # End Phase 2 Authentication Setup
@@ -793,7 +921,7 @@ def process_upload():
 
     # Initialize DocumentStore with deal_id for proper isolation
     try:
-        from tools_v2.document_store import DocumentStore
+        from stores.document_store import DocumentStore
         doc_store = DocumentStore.get_instance(deal_id=current_deal_id)
     except Exception as e:
         logger.error(f"Failed to initialize DocumentStore: {e}")
@@ -831,6 +959,25 @@ def process_upload():
                     target_doc_ids.append(doc.doc_id)
                     target_saved.append(doc.raw_file_path)
                     logger.info(f"Added target document: {safe_filename} (doc_id: {doc.doc_id})")
+
+                    # A2 FIX: Also insert into database for UI persistence
+                    if USE_DATABASE and current_deal_id:
+                        try:
+                            doc_repo = DocumentRepository()
+                            doc_repo.create_document(
+                                deal_id=current_deal_id,
+                                filename=safe_filename,
+                                file_hash=doc.hash_sha256,
+                                storage_path=doc.raw_file_path,
+                                entity="target",
+                                file_size=doc.file_size_bytes,
+                                mime_type=doc.mime_type,
+                                authority_level=target_authority,
+                                uploaded_by="web_upload"
+                            )
+                            logger.info(f"A2: Saved target document to DB: {safe_filename}")
+                        except Exception as db_err:
+                            logger.warning(f"A2: Failed to save document to DB: {db_err}")
                 except Exception as e:
                     logger.error(f"DocumentStore error for {safe_filename}: {e}")
                     # Fallback to legacy path
@@ -867,6 +1014,25 @@ def process_upload():
                     buyer_doc_ids.append(doc.doc_id)
                     buyer_saved.append(doc.raw_file_path)
                     logger.info(f"Added buyer document: {safe_filename} (doc_id: {doc.doc_id})")
+
+                    # A2 FIX: Also insert into database for UI persistence
+                    if USE_DATABASE and current_deal_id:
+                        try:
+                            doc_repo = DocumentRepository()
+                            doc_repo.create_document(
+                                deal_id=current_deal_id,
+                                filename=safe_filename,
+                                file_hash=doc.hash_sha256,
+                                storage_path=doc.raw_file_path,
+                                entity="buyer",
+                                file_size=doc.file_size_bytes,
+                                mime_type=doc.mime_type,
+                                authority_level=buyer_authority,
+                                uploaded_by="web_upload"
+                            )
+                            logger.info(f"A2: Saved buyer document to DB: {safe_filename}")
+                        except Exception as db_err:
+                            logger.warning(f"A2: Failed to save document to DB: {db_err}")
                 except Exception as e:
                     logger.error(f"DocumentStore error for {safe_filename}: {e}")
                     file.seek(0)
@@ -1131,6 +1297,158 @@ def cancel_analysis():
     })
 
 
+@app.route('/api/analysis/diff')
+@auth_optional
+def get_analysis_diff():
+    """
+    Get the diff for a specific run or the latest diff for current deal.
+
+    Phase 1a: Analysis Reasoning Layer - What Changed.
+
+    Query params:
+        run_id: Specific run ID to get diff for
+        deal_id: Override deal (defaults to session deal)
+
+    Returns:
+        JSON with diff metrics and summary
+    """
+    from services.run_diff_service import run_diff_service
+
+    run_id = request.args.get('run_id')
+    deal_id = request.args.get('deal_id') or flask_session.get('current_deal_id')
+
+    if not deal_id:
+        return jsonify({'error': 'No deal selected'}), 400
+
+    try:
+        if run_id:
+            diff = run_diff_service.get_diff_for_run(run_id)
+        else:
+            diff = run_diff_service.get_latest_diff(deal_id)
+
+        if not diff:
+            return jsonify({
+                'found': False,
+                'message': 'No diff available (first run or diff not generated)'
+            })
+
+        return jsonify({
+            'found': True,
+            'diff': diff.to_dict(),
+            'summary': diff.summary_text()
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to get analysis diff: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analysis/diffs')
+@auth_optional
+def get_analysis_diffs():
+    """
+    Get all diffs for the current deal.
+
+    Phase 1a: Analysis Reasoning Layer.
+
+    Query params:
+        deal_id: Override deal (defaults to session deal)
+        limit: Max number of diffs to return (default 10)
+
+    Returns:
+        JSON array of diffs
+    """
+    from services.run_diff_service import run_diff_service
+
+    deal_id = request.args.get('deal_id') or flask_session.get('current_deal_id')
+    limit = request.args.get('limit', 10, type=int)
+
+    if not deal_id:
+        return jsonify({'error': 'No deal selected'}), 400
+
+    try:
+        diffs = run_diff_service.get_diffs_for_deal(deal_id, limit=limit)
+        return jsonify({
+            'count': len(diffs),
+            'diffs': [d.to_dict() for d in diffs]
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to get analysis diffs: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/facts/<fact_id>/reasoning')
+@auth_optional
+def get_fact_reasoning(fact_id):
+    """
+    Get the reasoning for a specific fact.
+
+    Phase 1b: Analysis Reasoning Layer - Why This Matters.
+
+    Returns:
+        JSON with reasoning_text, source_refs, signal_type
+    """
+    from services.fact_reasoning_service import fact_reasoning_service
+
+    try:
+        reasoning = fact_reasoning_service.get_reasoning_for_fact(fact_id)
+        if not reasoning:
+            return jsonify({
+                'found': False,
+                'message': 'No reasoning available for this fact'
+            })
+
+        return jsonify({
+            'found': True,
+            'reasoning': reasoning
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to get fact reasoning: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/facts/reasoning')
+@auth_optional
+def get_all_fact_reasoning():
+    """
+    Get all fact reasoning for the current deal.
+
+    Phase 1b: Analysis Reasoning Layer.
+
+    Query params:
+        deal_id: Override deal (defaults to session deal)
+        signal_type: Filter by signal type
+
+    Returns:
+        JSON array of reasoning records
+    """
+    from services.fact_reasoning_service import fact_reasoning_service
+
+    deal_id = request.args.get('deal_id') or flask_session.get('current_deal_id')
+    signal_type = request.args.get('signal_type')
+
+    if not deal_id:
+        return jsonify({'error': 'No deal selected'}), 400
+
+    try:
+        reasonings = fact_reasoning_service.get_reasoning_for_deal(deal_id)
+
+        # Filter by signal type if specified
+        if signal_type:
+            reasonings = [r for r in reasonings if r.get('signal_type') == signal_type]
+
+        return jsonify({
+            'count': len(reasonings),
+            'reasonings': reasonings
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to get fact reasoning: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/dashboard')
 @auth_optional
 def dashboard():
@@ -1220,7 +1538,7 @@ def dashboard():
             target_doc_count = 0
             buyer_doc_count = 0
             try:
-                from tools_v2.document_store import DocumentStore
+                from stores.document_store import DocumentStore
                 doc_store = DocumentStore.get_instance(deal_id=current_deal_id)
                 stats = doc_store.get_statistics()
                 target_doc_count = stats["by_entity"]["target"]
@@ -1259,6 +1577,31 @@ def dashboard():
 
         logger.debug(f"Dashboard: Loaded data from database for deal {current_deal_id}")
 
+        # Get latest run diff (Phase 1a: What Changed)
+        run_diff = None
+        try:
+            from services.run_diff_service import run_diff_service
+            diff = run_diff_service.get_latest_diff(current_deal_id)
+            if diff:
+                run_diff = {
+                    'run_number': diff.current_run_number,
+                    'previous_run_number': diff.previous_run_number,
+                    'facts_created': diff.facts_created,
+                    'facts_updated': diff.facts_updated,
+                    'facts_deleted': diff.facts_deleted,
+                    'facts_total_before': diff.facts_total_before,
+                    'facts_total_after': diff.facts_total_after,
+                    'risks_created': diff.risks_created,
+                    'risks_updated': diff.risks_updated,
+                    'severity_changes': diff.severity_changes or [],
+                    'docs_added': diff.docs_added or [],
+                    'entity_scope_after': diff.entity_scope_after,
+                    'has_changes': (diff.facts_created > 0 or diff.facts_updated > 0 or
+                                   diff.risks_created > 0 or diff.risks_updated > 0)
+                }
+        except Exception as e:
+            logger.warning(f"Failed to load run diff: {e}")
+
     except Exception as e:
         logger.error(f"Dashboard: Database path failed: {e}")
         flash('Error loading dashboard. Please try again.', 'error')
@@ -1281,6 +1624,7 @@ def dashboard():
         pending_summary = {"tier1": 0, "tier2": 0, "tier3": 0, "total": 0}
         entity_summary = None
         inventory_summary = None
+        run_diff = None
 
     return render_template('dashboard.html',
                          summary=summary,
@@ -1290,6 +1634,7 @@ def dashboard():
                          pending_summary=pending_summary,
                          entity_summary=entity_summary,
                          inventory_summary=inventory_summary,
+                         run_diff=run_diff,
                          session=None)
 
 
@@ -1695,15 +2040,35 @@ def open_questions():
     s = get_session()
     deal_context = s.deal_context if hasattr(s, 'deal_context') else {}
 
-    # Find most recent open questions file
+    # A3 FIX: Get current deal_id and filter questions by deal
+    current_deal_id = flask_session.get('current_deal_id')
+
+    # Find open questions file for THIS deal only
     questions = []
-    questions_files = sorted(OUTPUT_DIR.glob("open_questions_*.json"), reverse=True)
-    if questions_files:
-        try:
-            with open(questions_files[0]) as f:
-                questions = json.load(f)
-        except Exception as e:
-            flash(f'Error loading open questions: {e}', 'error')
+    if current_deal_id:
+        # Look for deal-specific questions first (new format with deal_id)
+        deal_questions_files = sorted(
+            OUTPUT_DIR.glob(f"open_questions_{current_deal_id}_*.json"),
+            reverse=True
+        )
+        if deal_questions_files:
+            try:
+                with open(deal_questions_files[0]) as f:
+                    questions = json.load(f)
+                logger.info(f"A3: Loaded questions from {deal_questions_files[0].name}")
+            except Exception as e:
+                flash(f'Error loading open questions: {e}', 'error')
+    else:
+        # No deal selected - try legacy format (for backwards compatibility)
+        questions_files = sorted(OUTPUT_DIR.glob("open_questions_*.json"), reverse=True)
+        # Filter out deal-specific files (they have UUID pattern)
+        legacy_files = [f for f in questions_files if len(f.stem.split('_')) == 3]  # open_questions_TIMESTAMP
+        if legacy_files:
+            try:
+                with open(legacy_files[0]) as f:
+                    questions = json.load(f)
+            except Exception as e:
+                flash(f'Error loading open questions: {e}', 'error')
 
     # If no file exists, generate questions based on current context
     if not questions and deal_context.get('industry'):
@@ -1789,7 +2154,8 @@ def facts():
     """
     domain_filter = request.args.get('domain', '')
     category_filter = request.args.get('category', '')
-    entity_filter = request.args.get('entity', '')
+    # B1 FIX: Default to 'target' entity for proper buyer/target separation
+    entity_filter = request.args.get('entity', 'target')  # Default target, not empty
     search_query = request.args.get('q', '').lower()
     page = request.args.get('page', 1, type=int)
     per_page = 50
@@ -2288,7 +2654,7 @@ _org_cache_by_deal: dict = {}
 def get_organization_analysis():
     """Get or run the organization analysis.
 
-    Phase 2: Now reads from database via DealData first, with fallback to session.
+    Spec 04: InventoryStore FIRST (deduplicated), then database via DealData, then session fallback.
     IMPORTANT: This cache is now DEAL-SCOPED. Each deal has its own cache entry
     to prevent data leakage between deals.
     """
@@ -2300,7 +2666,41 @@ def get_organization_analysis():
     # Get current deal_id - this is CRITICAL for isolation
     current_deal_id = flask_session.get('current_deal_id') or 'no_deal'
 
-    # Phase 2: Try database first via DealData
+    # PRIMARY: InventoryStore (deduplicated, entity-scoped) — Spec 04
+    try:
+        from web.blueprints.inventory import get_inventory_store
+        from services.organization_bridge import build_organization_result_from_inventory_store
+
+        inv_store = get_inventory_store()
+        org_items = inv_store.get_items(inventory_type="organization", entity="target")
+        if org_items:
+            # Get target name
+            from flask import g
+            target_name = getattr(g, 'deal', None)
+            target_name = target_name.target_name if target_name and hasattr(target_name, 'target_name') else 'Target'
+
+            result, status = build_organization_result_from_inventory_store(
+                inv_store,
+                target_name=target_name,
+                deal_id=current_deal_id if current_deal_id != 'no_deal' else "",
+            )
+
+            if status == "success" and result.total_it_headcount > 0:
+                logger.info(f"Organization (InventoryStore primary): {result.total_it_headcount} headcount from {len(org_items)} items")
+                # Update DEAL-SCOPED cache with inventory source
+                _org_cache_by_deal[current_deal_id] = {
+                    'fingerprint': hash(tuple(sorted(item.item_id for item in org_items if hasattr(item, 'item_id')))),
+                    'org_count': len(org_items),
+                    'result': result,
+                    'source': 'inventory'
+                }
+                return result
+    except Exception as e:
+        import traceback
+        logger.warning(f"InventoryStore org path failed, falling back to DB: {e}")
+        logger.debug(traceback.format_exc())
+
+    # FALLBACK: Try database via DealData
     if current_deal_id and current_deal_id != 'no_deal':
         try:
             from web.deal_data import DealData, create_store_adapters_from_deal_data
@@ -3044,7 +3444,8 @@ def organization_shared_services():
 def applications_overview():
     """Applications inventory overview.
 
-    Phase 2: Now reads from database via DealData, with fallback to InventoryStore.
+    Spec 04: InventoryStore FIRST (deduplicated), with fallback to database facts (legacy).
+    Supports ?entity=buyer or ?entity=target (default) query parameter.
     """
     from services.applications_bridge import build_applications_inventory, build_applications_from_inventory_store, ApplicationsInventory
     from web.deal_data import DealData, wrap_db_facts
@@ -3060,16 +3461,46 @@ def applications_overview():
         'data_source': 'none'
     }
 
-    # Phase 2: DATABASE FIRST - this is the source of truth
     current_deal_id = flask_session.get('current_deal_id')
 
+    # Buyer entity support: allow ?entity=buyer or ?entity=target (default)
+    requested_entity = request.args.get('entity', 'target')
+    if requested_entity not in ('target', 'buyer'):
+        requested_entity = 'target'
+
+    # PRIMARY: InventoryStore (deduplicated, entity-scoped) — Spec 04
+    try:
+        from web.blueprints.inventory import get_inventory_store
+        inv_store = get_inventory_store()
+        debug_info['inventory_store_count'] = len(inv_store)
+        if len(inv_store) > 0:
+            # Check all apps vs entity-scoped apps
+            all_apps = inv_store.get_items(inventory_type="application", status="active")
+            entity_apps = inv_store.get_items(inventory_type="application", entity=requested_entity, status="active")
+            debug_info['inventory_apps_all'] = len(all_apps) if all_apps else 0
+            debug_info['inventory_apps_target'] = len(entity_apps) if entity_apps else 0
+
+            if entity_apps:
+                inventory, status = build_applications_from_inventory_store(inv_store)
+                data_source = "inventory"
+                debug_info['data_source'] = data_source
+                logger.info(f"Applications (InventoryStore primary): {len(entity_apps)} {requested_entity} apps, debug={debug_info}")
+                return render_template('applications/overview.html',
+                                      inventory=inventory,
+                                      status=status,
+                                      data_source=data_source,
+                                      debug_info=debug_info)
+    except Exception as e:
+        logger.warning(f"Could not load from InventoryStore: {e}")
+
+    # FALLBACK: Database facts (legacy runs without InventoryStore)
     if current_deal_id:
         try:
             load_deal_context(current_deal_id)
             data = DealData()
 
-            # Get TARGET facts only for applications overview (not buyer facts)
-            all_facts = data.get_all_facts(entity='target')
+            # Get facts for the requested entity
+            all_facts = data.get_all_facts(entity=requested_entity)
             app_facts = [f for f in all_facts if f.domain == "applications"]
             debug_info['fact_store_app_facts'] = len(app_facts)
 
@@ -3081,9 +3512,9 @@ def applications_overview():
                 # Wrap DB facts in adapter for bridge function
                 fact_adapter = wrap_db_facts(all_facts)
                 inventory, status = build_applications_inventory(fact_adapter)
-                data_source = "database"
+                data_source = "database_legacy"
                 debug_info['data_source'] = data_source
-                logger.info(f"Applications debug (Phase 2 DB): {debug_info}")
+                logger.info(f"Applications (DB legacy fallback): {debug_info}")
                 return render_template('applications/overview.html',
                                       inventory=inventory,
                                       status=status,
@@ -3092,32 +3523,7 @@ def applications_overview():
         except Exception as e:
             logger.warning(f"Could not load from database: {e}")
 
-    # Fallback: Try InventoryStore (structured data from imports) if no DB data
-    try:
-        from web.blueprints.inventory import get_inventory_store
-        inv_store = get_inventory_store()
-        debug_info['inventory_store_count'] = len(inv_store)
-        if len(inv_store) > 0:
-            # Check all apps vs target-only apps
-            all_apps = inv_store.get_items(inventory_type="application", status="active")
-            target_apps = inv_store.get_items(inventory_type="application", entity="target", status="active")
-            debug_info['inventory_apps_all'] = len(all_apps) if all_apps else 0
-            debug_info['inventory_apps_target'] = len(target_apps) if target_apps else 0
-
-            if target_apps:
-                inventory, status = build_applications_from_inventory_store(inv_store)
-                data_source = "inventory"
-                debug_info['data_source'] = data_source
-                logger.info(f"Applications debug (InventoryStore fallback): {debug_info}")
-                return render_template('applications/overview.html',
-                                      inventory=inventory,
-                                      status=status,
-                                      data_source=data_source,
-                                      debug_info=debug_info)
-    except Exception as e:
-        logger.warning(f"Could not load from InventoryStore: {e}")
-
-    # Fallback: Return empty inventory
+    # EMPTY: No data from either source
     inventory = ApplicationsInventory()
     status = "no_facts"
     data_source = "none"
@@ -3185,42 +3591,29 @@ def applications_category(category):
 def infrastructure_overview():
     """Infrastructure inventory overview.
 
-    Phase 2: DATABASE FIRST - this is the source of truth, with fallback to InventoryStore.
+    Spec 04: InventoryStore FIRST (deduplicated), with fallback to database facts (legacy).
     """
     from services.infrastructure_bridge import build_infrastructure_inventory, build_infrastructure_from_inventory_store, InfrastructureInventory
     from web.deal_data import DealData, wrap_db_facts
     from web.context import load_deal_context
 
-    # Phase 2: DATABASE FIRST - this is the source of truth
     current_deal_id = flask_session.get('current_deal_id')
 
-    if current_deal_id:
-        try:
-            load_deal_context(current_deal_id)
-            data = DealData()
-            # Get TARGET facts only for infrastructure overview (not buyer facts)
-            all_facts = data.get_all_facts(entity='target')
+    # Buyer entity support: allow ?entity=buyer or ?entity=target (default)
+    requested_entity = request.args.get('entity', 'target')
+    if requested_entity not in ('target', 'buyer'):
+        requested_entity = 'target'
 
-            if all_facts:
-                fact_adapter = wrap_db_facts(all_facts)
-                inventory, status = build_infrastructure_inventory(fact_adapter)
-                data_source = "database"
-                return render_template('infrastructure/overview.html',
-                                      inventory=inventory,
-                                      status=status,
-                                      data_source=data_source)
-        except Exception as e:
-            logger.warning(f"Could not load from database: {e}")
-
-    # Fallback: Try InventoryStore (structured data from imports) if no DB data
+    # PRIMARY: InventoryStore (deduplicated, entity-scoped) — Spec 04
     try:
         from web.blueprints.inventory import get_inventory_store
         inv_store = get_inventory_store()
         if len(inv_store) > 0:
-            infra_items = inv_store.get_items(inventory_type="infrastructure", entity="target", status="active")
+            infra_items = inv_store.get_items(inventory_type="infrastructure", entity=requested_entity, status="active")
             if infra_items:
                 inventory, status = build_infrastructure_from_inventory_store(inv_store)
                 data_source = "inventory"
+                logger.info(f"Infrastructure (InventoryStore primary): {len(infra_items)} {requested_entity} items")
                 return render_template('infrastructure/overview.html',
                                       inventory=inventory,
                                       status=status,
@@ -3228,7 +3621,27 @@ def infrastructure_overview():
     except Exception as e:
         logger.warning(f"Could not load from InventoryStore: {e}")
 
-    # Fallback: Return empty inventory
+    # FALLBACK: Database facts (legacy runs without InventoryStore)
+    if current_deal_id:
+        try:
+            load_deal_context(current_deal_id)
+            data = DealData()
+            # Get facts for the requested entity
+            all_facts = data.get_all_facts(entity=requested_entity)
+
+            if all_facts:
+                fact_adapter = wrap_db_facts(all_facts)
+                inventory, status = build_infrastructure_inventory(fact_adapter)
+                data_source = "database_legacy"
+                logger.info(f"Infrastructure (DB legacy fallback): {len(all_facts)} facts")
+                return render_template('infrastructure/overview.html',
+                                      inventory=inventory,
+                                      status=status,
+                                      data_source=data_source)
+        except Exception as e:
+            logger.warning(f"Could not load from database: {e}")
+
+    # EMPTY: No data from either source
     inventory = InfrastructureInventory()
     status = "no_facts"
     data_source = "none"
@@ -3440,6 +3853,84 @@ def api_health_detailed():
     })
 
 
+@app.route('/api/health/session')
+def session_health():
+    """
+    Health check endpoint for session backend (Spec 04).
+
+    Returns session backend status and health information.
+    Used for monitoring and load balancer health checks.
+
+    Returns:
+        JSON with backend type, health status, and metrics
+    """
+    backend = app.config.get('SESSION_TYPE', 'unknown')
+    status = {
+        'backend': backend,
+        'healthy': False,
+        'details': {}
+    }
+
+    if backend == 'redis':
+        try:
+            redis_client = app.config.get('SESSION_REDIS')
+            if redis_client:
+                # Ping Redis
+                redis_client.ping()
+
+                # Get basic stats
+                info = redis_client.info('stats')
+                status['healthy'] = True
+                status['details'] = {
+                    'total_connections': info.get('total_connections_received', 0),
+                    'connected_clients': info.get('connected_clients', 0),
+                    'used_memory_human': info.get('used_memory_human', 'unknown'),
+                }
+            else:
+                status['details'] = {'error': 'Redis client not configured'}
+        except Exception as e:
+            status['healthy'] = False
+            status['details'] = {'error': str(e)}
+
+    elif backend == 'sqlalchemy':
+        try:
+            # Check if session table exists and query count
+            from sqlalchemy import inspect
+            inspector = inspect(db.engine)
+
+            if 'flask_sessions' in inspector.get_table_names():
+                result = db.session.execute(db.text(
+                    "SELECT COUNT(*) FROM flask_sessions"
+                )).scalar()
+                status['healthy'] = True
+                status['details'] = {
+                    'active_sessions': result,
+                    'table_exists': True
+                }
+            else:
+                status['healthy'] = False
+                status['details'] = {
+                    'error': 'flask_sessions table not found',
+                    'table_exists': False
+                }
+        except Exception as e:
+            status['healthy'] = False
+            status['details'] = {'error': str(e)}
+
+    elif backend == 'filesystem' or backend is None:
+        # Filesystem/cookie sessions - always "healthy" but note limitations
+        status['healthy'] = True
+        status['details'] = {
+            'note': 'Cookie-based sessions (not recommended for production)',
+            'persistent': False
+        }
+
+    else:
+        status['details'] = {'error': f'Unknown backend type: {backend}'}
+
+    return jsonify(status), 200 if status['healthy'] else 503
+
+
 @app.route('/api/session/info')
 def session_info():
     """Get current session/deal information.
@@ -3596,6 +4087,152 @@ def get_deal_analysis_runs(deal_id):
         ],
         'total': len(runs)
     })
+
+
+# =============================================================================
+# Deal Selection API (Spec 02 - Session Persistence Fix)
+# =============================================================================
+
+@app.route('/api/deals/list')
+@login_required
+def list_user_deals():
+    """
+    Get list of deals accessible by the current user.
+
+    Returns deals owned by user, or in same tenant if multi-tenancy enabled.
+    Used by deal selector UI component.
+
+    Returns:
+        JSON array of deals with id, name, target_name, status, etc.
+    """
+    from web.permissions import get_user_deals
+    from web.database import Deal
+
+    try:
+        deals_query = get_user_deals(current_user, include_tenant_deals=True)
+        deals = deals_query.order_by(Deal.last_accessed_at.desc()).limit(50).all()
+
+        return jsonify({
+            'success': True,
+            'deals': [
+                {
+                    'id': deal.id,
+                    'name': deal.name or deal.target_name,
+                    'target_name': deal.target_name,
+                    'buyer_name': deal.buyer_name,
+                    'status': deal.status,
+                    'created_at': deal.created_at.isoformat() if deal.created_at else None,
+                    'last_accessed_at': deal.last_accessed_at.isoformat() if deal.last_accessed_at else None,
+                    'is_owner': deal.owner_id == current_user.id,
+                }
+                for deal in deals
+            ],
+            'total': len(deals)
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to list deals for user {current_user.id}: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to load deals'
+        }), 500
+
+
+@app.route('/api/deals/<deal_id>/select', methods=['POST'])
+@login_required
+def select_deal(deal_id):
+    """
+    Select a deal as the current working deal.
+
+    This endpoint updates BOTH:
+    1. flask_session['current_deal_id'] (ephemeral session)
+    2. User.last_deal_id (persistent database)
+
+    This dual persistence ensures deal selection survives session loss.
+
+    Args:
+        deal_id: The deal ID to select
+
+    Returns:
+        JSON with success status and deal info
+
+    Example:
+        POST /api/deals/abc-123/select
+        Response: {"success": true, "deal": {...}}
+    """
+    from web.permissions import user_can_access_deal
+    from web.database import Deal
+    from datetime import datetime
+
+    try:
+        # Get deal
+        deal = Deal.query.get(deal_id)
+        if not deal or deal.is_deleted:
+            return jsonify({
+                'success': False,
+                'error': 'Deal not found'
+            }), 404
+
+        # Check permissions
+        if not user_can_access_deal(current_user, deal):
+            logger.warning(
+                f"User {current_user.id} attempted to access deal {deal_id} without permission"
+            )
+            return jsonify({
+                'success': False,
+                'error': 'Access denied'
+            }), 403
+
+        # Update session (ephemeral)
+        flask_session['current_deal_id'] = deal_id
+        flask_session.modified = True
+
+        # Update database (persistent - Spec 01)
+        current_user.update_last_deal(deal_id)
+
+        # Update deal access time
+        deal.last_accessed_at = datetime.utcnow()
+
+        db.session.commit()
+
+        # Audit log (if enabled)
+        if USE_AUDIT_LOGGING:
+            try:
+                from web.audit_service import audit_service
+                audit_service.log(
+                    action='select_deal',
+                    resource_type='deal',
+                    resource_id=deal_id,
+                    user_id=current_user.id,
+                    details={
+                        'deal_name': deal.name or deal.target_name,
+                        'method': 'api'
+                    }
+                )
+            except Exception as audit_error:
+                logger.warning(f"Audit logging failed: {audit_error}")
+
+        logger.info(f"User {current_user.id} selected deal {deal_id} ({deal.target_name})")
+
+        return jsonify({
+            'success': True,
+            'deal': {
+                'id': deal.id,
+                'name': deal.name or deal.target_name,
+                'target_name': deal.target_name,
+                'buyer_name': deal.buyer_name,
+                'status': deal.status,
+            },
+            'message': f'Selected deal: {deal.name or deal.target_name}'
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to select deal {deal_id}: {e}")
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': 'Failed to select deal'
+        }), 500
 
 
 @app.route('/api/audit')
@@ -3985,7 +4622,7 @@ def entity_summary():
         # Get document counts from DocumentStore if available
         doc_stats = {"target": 0, "buyer": 0}
         try:
-            from tools_v2.document_store import DocumentStore
+            from stores.document_store import DocumentStore
             doc_store = DocumentStore.get_instance(deal_id=current_deal_id)
             stats = doc_store.get_statistics()
             doc_stats["target"] = stats["by_entity"]["target"]
@@ -4020,7 +4657,7 @@ def api_document_store():
     """Get document store statistics and list."""
     current_deal_id = flask_session.get('current_deal_id')
     try:
-        from tools_v2.document_store import DocumentStore
+        from stores.document_store import DocumentStore
         doc_store = DocumentStore.get_instance(deal_id=current_deal_id)
 
         entity = request.args.get('entity')
@@ -4869,20 +5506,29 @@ def export_excel():
 
 
 @app.route('/api/export/dossiers/<domain>')
+@app.route('/api/export/dossiers/<domain>/<entity>')
 @auth_optional
-def export_dossiers(domain):
+def export_dossiers(domain, entity=None):
     """Export comprehensive dossiers for a specific domain.
 
     Phase 2+: Database-first implementation.
+    Phase 8: Entity filtering and comparison view support.
+
+    Args:
+        domain: Domain to export (applications, infrastructure, etc.)
+        entity: Optional entity filter ("target", "buyer", or "comparison")
     """
     from flask import send_file, request
     from io import BytesIO
     from datetime import datetime
 
     format_type = request.args.get('format', 'html')  # html, md, json
+    # Allow entity in query param as well as path
+    if not entity:
+        entity = request.args.get('entity')  # None means show all
 
     try:
-        from services.inventory_dossier import DossierBuilder, DossierMarkdownExporter, DossierJSONExporter, DossierHTMLExporter
+        from services.inventory_dossier import DossierBuilder, DossierMarkdownExporter, DossierJSONExporter, DossierHTMLExporter, ExportGate
     except ImportError as e:
         return jsonify({'error': f'Dossier service not available: {e}'}), 500
 
@@ -4967,18 +5613,61 @@ def export_dossiers(domain):
 
     actual_domain = domain_map.get(domain.lower(), domain)
 
+    # Phase 8: Handle comparison view
+    if entity == 'comparison':
+        from services.delta_comparator import DeltaComparator, render_delta_html
+
+        if actual_domain == 'all':
+            return jsonify({'error': 'Comparison view not supported for all domains. Select a specific domain.'}), 400
+
+        # Build dossiers for both entities
+        target_dossiers = builder.build_domain_dossiers(actual_domain, entity='target')
+        buyer_dossiers = builder.build_domain_dossiers(actual_domain, entity='buyer')
+
+        # Compute delta
+        comparator = DeltaComparator()
+        deltas = comparator.match_items(target_dossiers, buyer_dossiers)
+
+        # Render to HTML
+        content = render_delta_html(deltas, actual_domain)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        buffer = BytesIO(content.encode('utf-8'))
+        buffer.seek(0)
+
+        return send_file(
+            buffer,
+            mimetype='text/html',
+            as_attachment=True,
+            download_name=f"delta_{actual_domain}_{timestamp}.html"
+        )
+
+    # Normal export: filter by entity if specified
     if actual_domain == 'all':
         # Export all domains
         all_dossiers = {}
         for d in ['applications', 'infrastructure', 'cybersecurity', 'network', 'identity_access', 'organization']:
-            all_dossiers[d] = builder.build_domain_dossiers(d)
+            all_dossiers[d] = builder.build_domain_dossiers(d, entity=entity)
     else:
-        all_dossiers = {actual_domain: builder.build_domain_dossiers(actual_domain)}
+        all_dossiers = {actual_domain: builder.build_domain_dossiers(actual_domain, entity=entity)}
+
+    # Phase 9: Run export gate check
+    export_gate = ExportGate()
+    readiness = export_gate.check_readiness(all_dossiers)
+    readiness_banner = export_gate.render_readiness_banner(readiness)
 
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
     if format_type == 'md':
         content_parts = []
+        # Add readiness header for markdown
+        if not readiness.is_ready:
+            content_parts.append("# ⛔ EXPORT BLOCKED - DATA QUALITY ISSUES\n\n" +
+                               '\n'.join(f"- {issue}" for issue in readiness.blocking_issues) +
+                               "\n\n---\n")
+        elif readiness.warnings:
+            content_parts.append("# ⚠️ DATA QUALITY WARNINGS\n\n" +
+                               '\n'.join(f"- {w}" for w in readiness.warnings) +
+                               "\n\n---\n")
         for d, dossiers in all_dossiers.items():
             content_parts.append(DossierMarkdownExporter.export_to_string(dossiers, d))
         content = '\n\n---\n\n'.join(content_parts)
@@ -4989,9 +5678,19 @@ def export_dossiers(domain):
 
     elif format_type == 'json':
         import json
-        all_data = {}
+        all_data = {
+            'export_readiness': {
+                'is_ready': readiness.is_ready,
+                'blocking_issues': readiness.blocking_issues,
+                'warnings': readiness.warnings,
+                'unknown_entity_count': readiness.unknown_entity_count,
+                'unresolved_conflicts': readiness.unresolved_conflicts,
+                'average_completeness': readiness.average_completeness,
+            },
+            'domains': {}
+        }
         for d, dossiers in all_dossiers.items():
-            all_data[d] = json.loads(DossierJSONExporter.export_to_string(dossiers, d))
+            all_data['domains'][d] = json.loads(DossierJSONExporter.export_to_string(dossiers, d))
         content = json.dumps(all_data, indent=2)
 
         buffer = BytesIO(content.encode('utf-8'))
@@ -5002,11 +5701,15 @@ def export_dossiers(domain):
         content_parts = []
         for d, dossiers in all_dossiers.items():
             content_parts.append(DossierHTMLExporter.export_to_string(dossiers, d))
-        # Combine HTML exports
+        # Combine HTML exports with readiness banner
         if len(content_parts) == 1:
+            # Inject readiness banner into single domain HTML
             content = content_parts[0]
+            if readiness_banner:
+                # Insert banner after <body> tag
+                content = content.replace('<body>', f'<body>\n{readiness_banner}\n', 1)
         else:
-            # Create a combined HTML with navigation
+            # Create a combined HTML with navigation and readiness banner
             content = f"""<!DOCTYPE html>
 <html><head><title>IT Due Diligence - All Dossiers</title>
 <style>
@@ -5015,6 +5718,7 @@ body {{ font-family: -apple-system, sans-serif; margin: 20px; }}
 .domain-nav a {{ margin-right: 15px; color: #0066cc; text-decoration: none; }}
 .domain-section {{ margin-bottom: 40px; padding-top: 20px; border-top: 2px solid #ddd; }}
 </style></head><body>
+{readiness_banner}
 <h1>IT Due Diligence - Complete Dossiers</h1>
 <div class="domain-nav">
 {''.join(f'<a href="#domain-{d}">{d.replace("_", " ").title()}</a>' for d in all_dossiers.keys())}
@@ -5548,14 +6252,70 @@ def documents_page():
     """Document management and incremental update page."""
     s = get_session()
 
-    # Get or create document registry
-    if not hasattr(s, 'document_registry'):
-        from tools_v2.document_registry import DocumentRegistry
-        s.document_registry = DocumentRegistry()
+    # A2 FIX: Query documents from database (source of truth)
+    docs = []
+    stats = {'total_documents': 0, 'total_facts_linked': 0, 'analysis_runs': 0}
+    runs = []
 
-    docs = s.document_registry.get_all_documents()
-    stats = s.document_registry.get_stats()
-    runs = s.document_registry.get_analysis_runs()
+    current_deal_id = flask_session.get('current_deal_id')
+
+    if USE_DATABASE and current_deal_id:
+        try:
+            from enum import Enum
+
+            # Create a simple status enum wrapper for template compatibility
+            class StatusWrapper:
+                def __init__(self, status_str):
+                    self.value = status_str
+
+            doc_repo = DocumentRepository()
+            db_docs = doc_repo.get_by_deal(current_deal_id, current_only=True)
+
+            # Convert DB documents to object-like dicts for template
+            total_facts_linked = 0
+            for db_doc in db_docs:
+                # Create an object-like wrapper the template can use with dot notation
+                class DocWrapper:
+                    pass
+                doc_obj = DocWrapper()
+                doc_obj.doc_id = db_doc.id
+                doc_obj.filename = db_doc.filename
+                doc_obj.entity = db_doc.entity
+                doc_obj.status = StatusWrapper(db_doc.status or 'pending')
+                doc_obj.document_type = db_doc.document_type or 'document'
+                doc_obj.version = db_doc.version or 1
+                # Count facts linked to this document from FactStore
+                if s and s.fact_store:
+                    doc_facts = s.fact_store.get_facts_by_source(db_doc.filename)
+                    doc_obj.fact_count = len(doc_facts)
+                    total_facts_linked += len(doc_facts)
+                else:
+                    doc_obj.fact_count = 0
+                doc_obj.last_processed_at = db_doc.processed_at.isoformat() if db_doc.processed_at else None
+                docs.append(doc_obj)
+
+            # Calculate stats from DB docs
+            stats['total_documents'] = len(db_docs)
+            stats['total_facts_linked'] = total_facts_linked
+            stats['analysis_runs'] = len(s.fact_store.get_source_documents()) if s and s.fact_store else 0
+
+            logger.info(f"A2: Loaded {len(db_docs)} documents from DB for deal {current_deal_id}")
+        except Exception as e:
+            logger.warning(f"A2: Failed to load documents from DB: {e}")
+            # Fall back to session-based registry
+            if not hasattr(s, 'document_registry'):
+                from tools_v2.document_registry import DocumentRegistry
+                s.document_registry = DocumentRegistry()
+            docs = s.document_registry.get_all_documents()
+            stats = s.document_registry.get_stats()
+    else:
+        # Fallback: use session-based registry when DB not enabled
+        if not hasattr(s, 'document_registry'):
+            from tools_v2.document_registry import DocumentRegistry
+            s.document_registry = DocumentRegistry()
+        docs = s.document_registry.get_all_documents()
+        stats = s.document_registry.get_stats()
+        runs = s.document_registry.get_analysis_runs()
 
     # Get "What's New" data if we have a fact merger
     whats_new = {"new": [], "updated": [], "conflicts": []}
@@ -5602,9 +6362,43 @@ def api_documents():
     from tools_v2.document_registry import DocumentRegistry
     from config_v2 import OUTPUT_DIR
 
+    current_deal_id = flask_session.get('current_deal_id')
+
+    # A2 FIX: Query from database when available
+    if USE_DATABASE and current_deal_id:
+        try:
+            doc_repo = DocumentRepository()
+            db_docs = doc_repo.get_by_deal(current_deal_id, current_only=True)
+
+            docs = []
+            for db_doc in db_docs:
+                docs.append({
+                    'id': db_doc.id,
+                    'filename': db_doc.filename,
+                    'entity': db_doc.entity,
+                    'status': db_doc.status,
+                    'uploaded_at': db_doc.uploaded_at.isoformat() if db_doc.uploaded_at else '',
+                    'file_size': db_doc.file_size or 0,
+                    'authority_level': db_doc.authority_level or 1,
+                    'page_count': db_doc.page_count or 0
+                })
+
+            stats = {
+                'total': len(db_docs),
+                'target': len([d for d in db_docs if d.entity == 'target']),
+                'buyer': len([d for d in db_docs if d.entity == 'buyer']),
+                'pending': len([d for d in db_docs if d.status == 'pending']),
+                'completed': len([d for d in db_docs if d.status == 'completed'])
+            }
+
+            return jsonify({"documents": docs, "stats": stats})
+        except Exception as e:
+            logger.warning(f"A2: Failed to load documents from DB for API: {e}")
+            # Fall through to session-based
+
+    # Fallback to session-based registry
     s = get_session()
 
-    # Load document registry from file if not in session
     if not hasattr(s, 'document_registry'):
         registry_file = OUTPUT_DIR / "document_registry.json"
         if registry_file.exists():
@@ -5621,6 +6415,65 @@ def api_documents():
     stats = s.document_registry.get_stats()
 
     return jsonify({"documents": docs, "stats": stats})
+
+
+@app.route('/api/documents/backfill', methods=['POST'])
+@auth_optional
+def api_backfill_documents():
+    """A2 FIX: Backfill documents from manifest.json to database.
+
+    This syncs any documents that were uploaded before the DB insert was added.
+    Idempotent: skips documents that already exist in DB by hash.
+    """
+    if not USE_DATABASE:
+        return jsonify({"error": "Database not enabled"}), 400
+
+    current_deal_id = flask_session.get('current_deal_id')
+    if not current_deal_id:
+        return jsonify({"error": "No active deal selected"}), 400
+
+    from stores.document_store import DocumentStore
+
+    try:
+        doc_store = DocumentStore.get_instance(deal_id=current_deal_id)
+        manifest_docs = doc_store.get_all_documents()
+
+        doc_repo = DocumentRepository()
+        synced = 0
+        skipped = 0
+
+        for doc in manifest_docs:
+            # Check if already in DB by hash
+            existing = doc_repo.get_by_hash(current_deal_id, doc.hash_sha256)
+            if existing:
+                skipped += 1
+                continue
+
+            # Insert into DB
+            doc_repo.create_document(
+                deal_id=current_deal_id,
+                filename=doc.filename,
+                file_hash=doc.hash_sha256,
+                storage_path=doc.raw_file_path,
+                entity=doc.entity,
+                file_size=doc.file_size_bytes,
+                mime_type=doc.mime_type,
+                authority_level=doc.authority_level,
+                uploaded_by=doc.uploaded_by
+            )
+            synced += 1
+
+        logger.info(f"A2 Backfill: synced={synced}, skipped={skipped} for deal {current_deal_id}")
+        return jsonify({
+            "success": True,
+            "synced": synced,
+            "skipped": skipped,
+            "message": f"Backfilled {synced} documents ({skipped} already existed)"
+        })
+
+    except Exception as e:
+        logger.error(f"A2 Backfill error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route('/api/documents/upload', methods=['POST'])

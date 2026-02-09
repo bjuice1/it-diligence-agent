@@ -389,9 +389,14 @@ class User(db.Model, UserMixin):
     created_at = Column(DateTime, default=datetime.utcnow)
     last_login = Column(DateTime, nullable=True)
 
+    # Last accessed deal (for session restoration - Spec 01)
+    last_deal_id = Column(String(36), ForeignKey('deals.id', ondelete='SET NULL'), nullable=True, index=True)
+    last_deal_accessed_at = Column(DateTime, nullable=True)
+
     # Relationships
     tenant = relationship('Tenant', back_populates='users')
     deals = relationship('Deal', back_populates='owner', lazy='dynamic', foreign_keys='Deal.owner_id')
+    last_deal = relationship('Deal', foreign_keys=[last_deal_id], lazy='select')
     notifications = relationship('Notification', back_populates='user', lazy='dynamic', cascade='all, delete-orphan')
 
     def get_id(self):
@@ -417,6 +422,8 @@ class User(db.Model, UserMixin):
             'active': self.active,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'last_login': self.last_login.isoformat() if self.last_login else None,
+            'last_deal_id': self.last_deal_id,
+            'last_deal_accessed_at': self.last_deal_accessed_at.isoformat() if self.last_deal_accessed_at else None,
         }
 
     @classmethod
@@ -432,6 +439,60 @@ class User(db.Model, UserMixin):
     def get_unread_notification_count(self) -> int:
         """Get count of unread notifications."""
         return self.notifications.filter_by(read=False).count()
+
+    # Session persistence methods (Spec 01)
+    def update_last_deal(self, deal_id: str) -> None:
+        """
+        Update the user's last accessed deal.
+
+        This is called when a user explicitly selects a deal or navigates to a deal page.
+        Used for session restoration when flask_session is lost.
+
+        Args:
+            deal_id: The deal ID to set as last accessed
+
+        Note:
+            Does NOT commit the transaction. Caller must handle db.session.commit().
+        """
+        self.last_deal_id = deal_id
+        self.last_deal_accessed_at = datetime.utcnow()
+
+    def get_last_deal(self) -> Optional['Deal']:
+        """
+        Get the user's last accessed deal, if it exists and is not deleted.
+
+        Returns:
+            Deal object if found and not soft-deleted, None otherwise
+
+        Usage:
+            last_deal = current_user.get_last_deal()
+            if last_deal:
+                flask_session['current_deal_id'] = last_deal.id
+        """
+        if not self.last_deal_id:
+            return None
+
+        # The relationship loads the deal, but we need to check if it's deleted
+        deal = self.last_deal
+        if deal and not deal.is_deleted:
+            return deal
+
+        return None
+
+    def clear_last_deal(self) -> None:
+        """
+        Clear the user's last accessed deal.
+
+        Called when:
+        - User explicitly logs out
+        - User's access to a deal is revoked
+        - Deal is deleted
+
+        Note:
+            Does NOT commit the transaction. Caller must handle db.session.commit().
+        """
+        self.last_deal_id = None
+        self.last_deal_accessed_at = None
 
 
 # =============================================================================
@@ -790,6 +851,8 @@ class Finding(SoftDeleteMixin, db.Model):
 
     # Type classification
     finding_type = Column(String(50), nullable=False)  # risk, work_item, recommendation, strategic_consideration
+    entity = Column(String(20), default='target')       # "target" or "buyer"
+    risk_scope = Column(String(50), default='')          # "target_standalone", "integration_dependent", "buyer_action"
 
     # Common fields
     domain = Column(String(50), nullable=False)
@@ -817,6 +880,7 @@ class Finding(SoftDeleteMixin, db.Model):
     priority = Column(String(20), nullable=True)
     owner_type = Column(String(50), nullable=True)  # buyer, target, shared, vendor
     cost_estimate = Column(String(50), nullable=True)  # under_25k, 25k_to_100k, etc.
+    cost_buildup_json = Column(JSON, default=None)       # Serialized CostBuildUp dict
     triggered_by_risks = Column(JSON, default=list)  # Risk IDs
     dependencies = Column(JSON, default=list)  # Other work item IDs
 
@@ -852,6 +916,7 @@ class Finding(SoftDeleteMixin, db.Model):
         Index('idx_findings_severity', 'deal_id', 'finding_type', 'severity'),
         Index('idx_findings_deleted', 'deleted_at'),
         Index('idx_findings_change_type', 'deal_id', 'change_type'),
+        Index('idx_findings_entity', 'deal_id', 'entity'),
     )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -859,6 +924,8 @@ class Finding(SoftDeleteMixin, db.Model):
             'finding_id': self.id,
             'deal_id': self.deal_id,
             'finding_type': self.finding_type,
+            'entity': self.entity or 'target',
+            'risk_scope': self.risk_scope or '',
             'domain': self.domain,
             'title': self.title,
             'description': self.description,
@@ -885,6 +952,7 @@ class Finding(SoftDeleteMixin, db.Model):
                 'priority': self.priority,
                 'owner_type': self.owner_type,
                 'cost_estimate': self.cost_estimate,
+                'cost_buildup_json': self.cost_buildup_json,
                 'triggered_by_risks': self.triggered_by_risks,
                 'dependencies': self.dependencies,
             })
@@ -1460,6 +1528,114 @@ def _run_migrations():
         logger.warning(f"task_id migration failed (non-fatal): {e}")
         db.session.rollback()
 
+    # Migration 3: Add entity, risk_scope, cost_buildup_json to findings (Spec 04/05)
+    _add_column_if_missing('findings', 'entity', "VARCHAR(20) DEFAULT 'target'", logger)
+    _add_column_if_missing('findings', 'risk_scope', "VARCHAR(50) DEFAULT ''", logger)
+    _add_column_if_missing('findings', 'cost_buildup_json', "JSON DEFAULT NULL", logger)
+
+    # Migration 4: Add last_deal_id and last_deal_accessed_at to users (Session Persistence Fix - Spec 01)
+    _add_column_if_missing('users', 'last_deal_id', "VARCHAR(36)", logger)
+    _add_column_if_missing('users', 'last_deal_accessed_at', "TIMESTAMP", logger)
+
+    # Add index for last_deal_id lookups
+    try:
+        dialect = db.engine.dialect.name
+        if dialect == 'postgresql':
+            db.session.execute(db.text(
+                "CREATE INDEX IF NOT EXISTS idx_users_last_deal ON users(last_deal_id)"
+            ))
+            db.session.commit()
+            logger.info("Index idx_users_last_deal ensured")
+        elif dialect == 'sqlite':
+            # SQLite CREATE INDEX IF NOT EXISTS is already supported
+            db.session.execute(db.text(
+                "CREATE INDEX IF NOT EXISTS idx_users_last_deal ON users(last_deal_id)"
+            ))
+            db.session.commit()
+            logger.info("Index idx_users_last_deal ensured (SQLite)")
+    except Exception as e:
+        logger.warning(f"idx_users_last_deal index creation failed (non-fatal): {e}")
+        db.session.rollback()
+
+    # Migration 5: Create flask_sessions table for SQLAlchemy session backend (Spec 04)
+    _create_session_table(logger)
+
+
+def _create_session_table(logger):
+    """Create flask_sessions table if it doesn't exist (Spec 04 - Session Architecture Hardening)."""
+    try:
+        # Check if table exists
+        from sqlalchemy import inspect
+        inspector = inspect(db.engine)
+        if 'flask_sessions' in inspector.get_table_names():
+            logger.debug("flask_sessions table already exists")
+            return
+
+        dialect = db.engine.dialect.name
+        logger.info("Creating flask_sessions table for SQLAlchemy session backend...")
+
+        # Create table based on Flask-Session schema
+        if dialect == 'postgresql':
+            db.session.execute(db.text("""
+                CREATE TABLE flask_sessions (
+                    id SERIAL PRIMARY KEY,
+                    session_id VARCHAR(255) UNIQUE NOT NULL,
+                    data BYTEA,
+                    expiry TIMESTAMP
+                )
+            """))
+            db.session.execute(db.text(
+                "CREATE INDEX idx_flask_sessions_expiry ON flask_sessions(expiry)"
+            ))
+            db.session.commit()
+            logger.info("✅ Created flask_sessions table (PostgreSQL)")
+        elif dialect == 'sqlite':
+            db.session.execute(db.text("""
+                CREATE TABLE flask_sessions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id VARCHAR(255) UNIQUE NOT NULL,
+                    data BLOB,
+                    expiry TIMESTAMP
+                )
+            """))
+            db.session.execute(db.text(
+                "CREATE INDEX idx_flask_sessions_expiry ON flask_sessions(expiry)"
+            ))
+            db.session.commit()
+            logger.info("✅ Created flask_sessions table (SQLite)")
+
+    except Exception as e:
+        logger.warning(f"flask_sessions table creation failed (non-fatal): {e}")
+        db.session.rollback()
+
+
+def _add_column_if_missing(table: str, column: str, col_def: str, logger):
+    """Add a column to a table if it doesn't already exist (SQLite + PostgreSQL safe)."""
+    try:
+        # Use PRAGMA for SQLite, information_schema for PostgreSQL
+        dialect = db.engine.dialect.name
+        if dialect == 'sqlite':
+            result = db.session.execute(db.text(f"PRAGMA table_info({table})"))
+            cols = [row[1] for row in result.fetchall()]
+            exists = column in cols
+        else:
+            result = db.session.execute(db.text(
+                f"SELECT column_name FROM information_schema.columns "
+                f"WHERE table_name = '{table}' AND column_name = '{column}'"
+            ))
+            exists = result.fetchone() is not None
+
+        if not exists:
+            logger.info(f"Adding {table}.{column}...")
+            db.session.execute(db.text(f"ALTER TABLE {table} ADD COLUMN {column} {col_def}"))
+            db.session.commit()
+            logger.info(f"Migration complete: {table}.{column} added")
+        else:
+            logger.debug(f"{table}.{column} already exists")
+    except Exception as e:
+        logger.warning(f"{table}.{column} migration failed (non-fatal): {e}")
+        db.session.rollback()
+
 
 def create_all_tables(app):
     """Create all database tables and run migrations."""
@@ -1554,6 +1730,232 @@ class ConsolidatedRisk(SoftDeleteMixin, db.Model):
         if not self.child_risk_ids:
             return []
         return Finding.query.filter(Finding.id.in_(self.child_risk_ids)).all()
+
+
+# =============================================================================
+# RUN DIFF MODEL (Phase 1a: What Changed Between Runs)
+# =============================================================================
+
+class RunDiff(db.Model):
+    """
+    Metric-driven diff between analysis runs.
+
+    Tracks what changed between runs: documents, facts, risks.
+    This is debugging/audit data, not narrative - just metrics.
+
+    Phase 1a: Analysis Reasoning Layer
+    """
+    __tablename__ = 'run_diffs'
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    deal_id = Column(String(36), ForeignKey('deals.id', ondelete='CASCADE'), nullable=False)
+
+    # Run references
+    previous_run_id = Column(String(36), ForeignKey('analysis_runs.id', ondelete='SET NULL'), nullable=True)
+    current_run_id = Column(String(36), ForeignKey('analysis_runs.id', ondelete='CASCADE'), nullable=False)
+    previous_run_number = Column(Integer, nullable=True)
+    current_run_number = Column(Integer, nullable=False)
+
+    # Document changes
+    docs_added = Column(JSON, default=list)       # [{id, filename}]
+    docs_removed = Column(JSON, default=list)     # [{id, filename}]
+    docs_updated = Column(JSON, default=list)     # [{id, filename, reason}] (re-processed, new version)
+    docs_total_before = Column(Integer, default=0)
+    docs_total_after = Column(Integer, default=0)
+
+    # Chunk/processing metrics
+    chunks_before = Column(Integer, default=0)
+    chunks_after = Column(Integer, default=0)
+
+    # Fact changes
+    facts_created = Column(Integer, default=0)
+    facts_updated = Column(Integer, default=0)    # Same stable_id, different content
+    facts_deleted = Column(Integer, default=0)    # Soft-deleted or removed
+    facts_unchanged = Column(Integer, default=0)
+    facts_total_before = Column(Integer, default=0)
+    facts_total_after = Column(Integer, default=0)
+
+    # Detailed fact changes (IDs for drill-down)
+    facts_created_ids = Column(JSON, default=list)   # [fact_id, ...]
+    facts_updated_ids = Column(JSON, default=list)
+    facts_deleted_ids = Column(JSON, default=list)
+
+    # Risk/finding changes
+    risks_created = Column(Integer, default=0)
+    risks_updated = Column(Integer, default=0)
+    risks_deleted = Column(Integer, default=0)
+    risks_total_before = Column(Integer, default=0)
+    risks_total_after = Column(Integer, default=0)
+
+    # Severity changes (important for risk management)
+    severity_changes = Column(JSON, default=list)  # [{risk_id, old_severity, new_severity}]
+
+    # Scope changes
+    entity_scope_before = Column(String(50), default='')   # 'target', 'buyer', 'both'
+    entity_scope_after = Column(String(50), default='')
+    domains_before = Column(JSON, default=list)
+    domains_after = Column(JSON, default=list)
+
+    # Summary metrics
+    net_facts_change = Column(Integer, default=0)    # facts_after - facts_before
+    net_risks_change = Column(Integer, default=0)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    deal = relationship('Deal', backref=db.backref('run_diffs', lazy='dynamic', cascade='all, delete-orphan'))
+    previous_run = relationship('AnalysisRun', foreign_keys=[previous_run_id])
+    current_run = relationship('AnalysisRun', foreign_keys=[current_run_id])
+
+    # Indexes
+    __table_args__ = (
+        Index('idx_run_diffs_deal', 'deal_id'),
+        Index('idx_run_diffs_current_run', 'current_run_id'),
+        Index('idx_run_diffs_created', 'created_at'),
+    )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'id': self.id,
+            'deal_id': self.deal_id,
+            'previous_run_id': self.previous_run_id,
+            'current_run_id': self.current_run_id,
+            'previous_run_number': self.previous_run_number,
+            'current_run_number': self.current_run_number,
+            # Documents
+            'docs_added': self.docs_added or [],
+            'docs_removed': self.docs_removed or [],
+            'docs_updated': self.docs_updated or [],
+            'docs_total_before': self.docs_total_before,
+            'docs_total_after': self.docs_total_after,
+            # Chunks
+            'chunks_before': self.chunks_before,
+            'chunks_after': self.chunks_after,
+            # Facts
+            'facts_created': self.facts_created,
+            'facts_updated': self.facts_updated,
+            'facts_deleted': self.facts_deleted,
+            'facts_unchanged': self.facts_unchanged,
+            'facts_total_before': self.facts_total_before,
+            'facts_total_after': self.facts_total_after,
+            'net_facts_change': self.net_facts_change,
+            # Risks
+            'risks_created': self.risks_created,
+            'risks_updated': self.risks_updated,
+            'risks_deleted': self.risks_deleted,
+            'risks_total_before': self.risks_total_before,
+            'risks_total_after': self.risks_total_after,
+            'net_risks_change': self.net_risks_change,
+            'severity_changes': self.severity_changes or [],
+            # Scope
+            'entity_scope_before': self.entity_scope_before,
+            'entity_scope_after': self.entity_scope_after,
+            'domains_before': self.domains_before or [],
+            'domains_after': self.domains_after or [],
+            # Meta
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+    def summary_text(self) -> str:
+        """Generate a human-readable summary of changes."""
+        lines = []
+
+        # Documents
+        if self.docs_added:
+            lines.append(f"Documents added: {len(self.docs_added)}")
+        if self.docs_removed:
+            lines.append(f"Documents removed: {len(self.docs_removed)}")
+
+        # Facts
+        if self.facts_created:
+            lines.append(f"Facts created: +{self.facts_created}")
+        if self.facts_updated:
+            lines.append(f"Facts updated: {self.facts_updated}")
+        if self.facts_deleted:
+            lines.append(f"Facts removed: -{self.facts_deleted}")
+        lines.append(f"Facts total: {self.facts_total_before} → {self.facts_total_after}")
+
+        # Risks
+        if self.risks_created:
+            lines.append(f"Risks created: +{self.risks_created}")
+        if self.severity_changes:
+            lines.append(f"Severity changes: {len(self.severity_changes)}")
+        lines.append(f"Risks total: {self.risks_total_before} → {self.risks_total_after}")
+
+        # Scope
+        if self.entity_scope_before != self.entity_scope_after:
+            lines.append(f"Scope: {self.entity_scope_before or 'none'} → {self.entity_scope_after}")
+
+        return "\n".join(lines)
+
+
+# =============================================================================
+# FACT REASONING MODEL (Phase 1b: Why This Matters)
+# =============================================================================
+
+class FactReasoning(db.Model):
+    """
+    Why this fact matters - attached to high-signal facts only.
+
+    Phase 1b: Analysis Reasoning Layer
+
+    Stores brief reasoning (1-2 sentences) explaining the significance
+    of a fact for IT due diligence. Only generated for high-signal facts
+    (core apps, security controls, financial metrics, etc.) to control costs.
+
+    GUARDRAILS:
+    - Must cite evidence (source_refs required)
+    - 40-60 tokens max
+    - No claims beyond source document
+    """
+    __tablename__ = 'fact_reasoning'
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    fact_id = Column(String(50), ForeignKey('facts.id', ondelete='CASCADE'), nullable=False)
+    run_id = Column(String(36), ForeignKey('analysis_runs.id', ondelete='SET NULL'), nullable=True)
+
+    # The reasoning itself (40-60 tokens max, ~200-300 chars)
+    reasoning_text = Column(String(500), nullable=False)
+
+    # Evidence citations (REQUIRED - no orphan claims)
+    source_refs = Column(JSON, nullable=False)  # [{doc_id, doc_name, page, chunk_id}]
+    related_fact_ids = Column(JSON, default=list)  # Cross-references to other facts
+
+    # Why this fact qualified for reasoning
+    signal_type = Column(String(50), nullable=False)  # core_application, security_control, etc.
+    signal_score = Column(Float, default=1.0)  # 0.0-1.0, higher = more significant
+
+    # Visibility control
+    visibility = Column(String(20), default='client_safe')  # client_safe, internal_only
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    fact = relationship('Fact', backref=db.backref('reasoning', uselist=False, cascade='all, delete-orphan'))
+    analysis_run = relationship('AnalysisRun')
+
+    # Indexes
+    __table_args__ = (
+        Index('idx_fact_reasoning_fact', 'fact_id'),
+        Index('idx_fact_reasoning_run', 'run_id'),
+        Index('idx_fact_reasoning_signal', 'signal_type'),
+    )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'id': self.id,
+            'fact_id': self.fact_id,
+            'run_id': self.run_id,
+            'reasoning_text': self.reasoning_text,
+            'source_refs': self.source_refs or [],
+            'related_fact_ids': self.related_fact_ids or [],
+            'signal_type': self.signal_type,
+            'signal_score': self.signal_score,
+            'visibility': self.visibility,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
 
 
 # =============================================================================
