@@ -206,6 +206,9 @@
         const hasMitigation = data.mitigation && data.mitigation !== 'No mitigation specified';
         const hasExpandable = hasReasoning || hasMitigation;
 
+        // Debug: Log the risk ID
+        console.log('Opening drawer for risk:', data.id, 'Display ID:', data.displayId);
+
         openDrawer(
             data.title,
             `
@@ -257,7 +260,7 @@
             </div>
             `,
             `
-            <a href="/risk/${data.id}" class="btn btn-primary">View Full Details</a>
+            <a href="/risk/${encodeURIComponent(data.id)}" class="btn btn-primary" onclick="console.log('Navigating to:', this.href)">View Full Details</a>
             <button class="btn btn-secondary" onclick="closeDrawer()">Close</button>
             `
         );
