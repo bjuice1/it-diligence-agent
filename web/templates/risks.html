@@ -61,7 +61,7 @@
         <tbody>
             {% if risks %}
             {% for risk in risks %}
-            <tr data-id="{{ risk.finding_id }}"
+            <tr data-id="{{ risk.id }}"
                 data-display-id="R-{{ '%03d'|format(loop.index) }}"
                 data-severity="{{ risk.severity }}"
                 data-domain="{{ risk.domain }}"
@@ -73,9 +73,9 @@
                 <td>
                     <span class="badge badge-{{ risk.severity }}">{{ risk.severity|upper }}</span>
                 </td>
-                <td class="font-mono text-sm" title="{{ risk.finding_id }}">R-{{ '%03d'|format(loop.index) }}</td>
+                <td class="font-mono text-sm" title="{{ risk.id }}">R-{{ '%03d'|format(loop.index) }}</td>
                 <td>
-                    <a href="{{ url_for('risk_detail', risk_id=risk.finding_id) }}" class="risk-title-link">
+                    <a href="{{ url_for('risk_detail', risk_id=risk.id) }}" class="risk-title-link">
                         {{ risk.title }}
                     </a>
                     {% if risk.reasoning %}
