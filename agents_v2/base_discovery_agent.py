@@ -237,6 +237,13 @@ class BaseDiscoveryAgent(ABC):
                 print(f"[DETERMINISTIC] Extracted {preprocess_result.facts_created} facts from tables")
                 self.logger.info(f"Deterministic preprocessing: {preprocess_result.facts_created} facts from tables")
 
+                # MONITORING: Track InventoryStore population for deduplication verification
+                if self.inventory_store:
+                    inv_count = len(self.inventory_store)
+                    self.logger.info(f"[INVENTORY] InventoryStore now has {inv_count} items after deterministic parse (entity={entity})")
+                else:
+                    self.logger.warning(f"[INVENTORY] No InventoryStore attached - items not being deduplicated")
+
             # Use remaining prose for LLM (tables already handled)
             remaining_text = preprocess_result.remaining_text or document_text
         except Exception as e:

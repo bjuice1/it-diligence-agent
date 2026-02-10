@@ -764,6 +764,11 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable, app=None) -> D
     # Create session with deal_id for proper data isolation
     session = Session(deal_id=deal_id)
 
+    # Create InventoryStore for deduplication and structured inventory tracking
+    from stores.inventory_store import InventoryStore
+    inventory_store = InventoryStore(deal_id=deal_id)
+    session._inventory_store = inventory_store  # Attach to session for pipeline access
+
     # Add deal context - properly populate the dict for reasoning agents
     session.deal_context = {
         'deal_id': deal_context.get('deal_id'),  # CRITICAL: Required for database persistence
@@ -842,7 +847,8 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable, app=None) -> D
             try:
                 # Phase 1: Only TARGET content, entity forced to "target"
                 facts, gaps = run_discovery_for_domain(
-                    domain, target_content, session, target_doc_names,
+                    domain, target_content, session, session._inventory_store,
+                    target_doc_names,
                     entity="target", analysis_phase="target_extraction"
                 )
 
@@ -902,7 +908,8 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable, app=None) -> D
             try:
                 # Phase 2: Only BUYER content, with TARGET context, entity forced to "buyer"
                 facts, gaps = run_discovery_for_domain(
-                    domain, buyer_content, session, buyer_doc_names,
+                    domain, buyer_content, session, session._inventory_store,
+                    buyer_doc_names,
                     entity="buyer", analysis_phase="buyer_extraction",
                     target_context=target_snapshot
                 )
@@ -1098,6 +1105,22 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable, app=None) -> D
     # Save results - session.save_to_files returns dict with actual saved paths
     saved_files = session.save_to_files(OUTPUT_DIR, timestamp)
 
+    # Save InventoryStore to deal-specific JSON file for deduplication
+    if hasattr(session, '_inventory_store') and session._inventory_store:
+        try:
+            session._inventory_store.save()
+            item_count = len(session._inventory_store)
+            logger.info(f"✅ [INVENTORY] Saved {item_count} inventory items to {session._inventory_store.storage_path}")
+            saved_files['inventory'] = session._inventory_store.storage_path
+        except Exception as e:
+            # CRITICAL MONITORING: InventoryStore save failure means deduplication won't work
+            logger.error(f"❌ [INVENTORY] Failed to save InventoryStore for deal {deal_id}: {e}")
+            logger.error(f"[INVENTORY] Path attempted: {session._inventory_store.storage_path if session._inventory_store else 'N/A'}")
+            import traceback
+            logger.debug(f"[INVENTORY] Stack trace: {traceback.format_exc()}")
+            # Continue - Facts are still persisted, InventoryStore is optional optimization
+            # UI will fall back to Facts (may show duplicates)
+
     # ==========================================================================
     # DATABASE PERSISTENCE: Finalize or fall back to batch
     # ==========================================================================
@@ -1188,6 +1211,7 @@ def run_discovery_for_domain(
     domain: str,
     content: str,
     session,
+    inventory_store,
     document_names: str = "",
     entity: str = "target",
     analysis_phase: str = "target_extraction",
@@ -1199,6 +1223,7 @@ def run_discovery_for_domain(
         domain: Domain to analyze (infrastructure, network, etc.)
         content: Combined document content (for ONE entity only)
         session: Analysis session with fact_store
+        inventory_store: InventoryStore for deduplication and structured items
         document_names: Comma-separated list of source document filenames for traceability
         entity: "target" or "buyer" - which entity we're extracting facts for
         analysis_phase: "target_extraction" or "buyer_extraction"
@@ -1263,7 +1288,8 @@ def run_discovery_for_domain(
         agent = agent_class(
             fact_store=session.fact_store,
             api_key=ANTHROPIC_API_KEY,
-            target_name=company_name  # This is the company being analyzed
+            target_name=company_name,  # This is the company being analyzed
+            inventory_store=inventory_store  # Enable InventoryStore population
         )
 
         # Prepare content with optional TARGET context for Phase 2
