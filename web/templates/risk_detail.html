@@ -25,19 +25,44 @@
         </div>
     </div>
 
-    <!-- Risk Description -->
+    <!-- Risk Description + Inline Context (MVP Enhancement) -->
     <div class="card mb-4">
         <div class="card-header">
             <h3>Description</h3>
         </div>
         <div class="card-body">
             <p>{{ risk.description }}</p>
+
+            <!-- NEW: Inline Reasoning (MVP Feature) -->
+            {% if risk.reasoning %}
+            <div class="inline-context">
+                <span class="context-icon">💡</span>
+                <span class="context-text">{{ risk.reasoning.split('.')[0] + '.' if '.' in risk.reasoning else risk.reasoning }}</span>
+            </div>
+            {% endif %}
+
+            <!-- NEW: Action Buttons (MVP Feature) -->
+            <div class="inline-actions">
+                {% if (mna_context and mna_context.implication) or risk.mitigation or risk.reasoning %}
+                <button class="btn btn-link btn-sm" onclick="toggleDetails()" id="explainBtn">
+                    <span id="explainBtnText">Explain This ▼</span>
+                </button>
+                {% endif %}
+
+                {% if risk.cost_buildup_json %}
+                <button class="btn btn-link btn-sm" onclick="openCostModal()">
+                    View Calculation ▶
+                </button>
+                {% endif %}
+            </div>
         </div>
     </div>
 
-    <!-- M&A Implications -->
-    {% if mna_context and (mna_context.implication or mna_context.timeline) %}
-    <div class="card mb-4 mna-card">
+    <!-- NEW: Expandable Details Section (MVP Feature) -->
+    <div id="expandedDetails" class="expanded-details-section" style="display: none;">
+        <!-- M&A Implications -->
+        {% if mna_context and (mna_context.implication or mna_context.timeline) %}
+        <div class="card mb-4 mna-card">
         <div class="card-header">
             <h3>M&A Deal Implications</h3>
         </div>
@@ -85,6 +110,8 @@
         </div>
     </div>
     {% endif %}
+    </div>
+    <!-- END: Expandable Details Section -->
 
     <!-- Evidence Chain Section -->
     <div class="card mb-4 evidence-chain-card">
@@ -268,6 +295,120 @@
             </div>
         </div>
     </div>
+
+    <!-- NEW: Cost Breakdown Modal (MVP Feature) -->
+    {% if risk.cost_buildup_json %}
+    <div id="costModal" class="modal" style="display: none;">
+        <div class="modal-overlay" onclick="closeCostModal()"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Cost Breakdown</h3>
+                <button class="modal-close" onclick="closeCostModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                {% set cost = risk.cost_buildup_json %}
+
+                <!-- Total Cost Range -->
+                <div class="cost-total">
+                    <div class="cost-label">Estimated Cost Range</div>
+                    <div class="cost-value">
+                        {% if cost.cost_low and cost.cost_high %}
+                        ${{ "{:,.0f}".format(cost.cost_low) }} - ${{ "{:,.0f}".format(cost.cost_high) }}
+                        {% elif cost.cost_low %}
+                        ${{ "{:,.0f}".format(cost.cost_low) }}
+                        {% else %}
+                        Not specified
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Calculation Method -->
+                {% if cost.estimation_method %}
+                <div class="cost-section">
+                    <div class="section-label">Estimation Method</div>
+                    <div class="estimation-method-badge">{{ cost.estimation_method|replace('_', ' ')|title }}</div>
+                </div>
+                {% endif %}
+
+                <!-- Formula (if available) -->
+                {% if cost.quantity and cost.unit_cost_low %}
+                <div class="cost-section">
+                    <div class="section-label">Calculation Formula</div>
+                    <div class="cost-formula">
+                        {{ cost.quantity }} × ${{ "{:,.0f}".format(cost.unit_cost_low) }}
+                        {% if cost.unit_cost_high %}
+                        - ${{ "{:,.0f}".format(cost.unit_cost_high) }}
+                        {% endif %}
+                        = ${{ "{:,.0f}".format(cost.cost_low) }}
+                        {% if cost.cost_high %}
+                        - ${{ "{:,.0f}".format(cost.cost_high) }}
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Assumptions -->
+                {% if cost.assumptions and cost.assumptions|length > 0 %}
+                <div class="cost-section">
+                    <div class="section-label">Assumptions</div>
+                    <ul class="assumptions-list">
+                        {% for assumption in cost.assumptions %}
+                        <li>{{ assumption }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                <!-- Cost Components Breakdown -->
+                {% if cost.cost_components and cost.cost_components|length > 0 %}
+                <div class="cost-section">
+                    <div class="section-label">Cost Components</div>
+                    <div class="cost-components-list">
+                        {% for component in cost.cost_components %}
+                        <div class="cost-component">
+                            <span class="component-label">{{ component.label }}</span>
+                            <span class="component-value">
+                                ${{ "{:,.0f}".format(component.cost_low) }}
+                                {% if component.cost_high %}
+                                - ${{ "{:,.0f}".format(component.cost_high) }}
+                                {% endif %}
+                            </span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Source Facts -->
+                {% if cost.source_facts and cost.source_facts|length > 0 %}
+                <div class="cost-section">
+                    <div class="section-label">Based On Facts</div>
+                    <div class="source-facts-chips">
+                        {% for fact_id in cost.source_facts %}
+                        <a href="{{ url_for('facts') }}?q={{ fact_id }}" class="fact-chip" target="_blank">{{ fact_id }}</a>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Confidence Level -->
+                {% if cost.confidence %}
+                <div class="cost-section">
+                    <div class="section-label">Confidence Level</div>
+                    <div class="confidence-display">
+                        <div class="confidence-bar">
+                            <div class="confidence-fill" style="width: {{ (cost.confidence * 100)|int }}%"></div>
+                        </div>
+                        <span class="confidence-text">{{ (cost.confidence * 100)|int }}% Confident</span>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    <!-- END: Cost Breakdown Modal -->
+
 </div>
 {% endblock %}
 
@@ -695,5 +836,363 @@
     color: #b45309;
     text-transform: uppercase;
 }
+
+/* ========================================
+   MVP ENHANCEMENTS - Explanatory UI
+   ======================================== */
+
+/* Inline Context Display */
+.inline-context {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    margin-top: var(--space-3);
+    background: #f6f8fa;
+    border-left: 3px solid #0969da;
+    border-radius: var(--radius-sm);
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+.inline-context .context-icon {
+    font-size: 1.2rem;
+    flex-shrink: 0;
+}
+
+.inline-context .context-text {
+    color: var(--text);
+    font-weight: 500;
+}
+
+/* Inline Action Buttons */
+.inline-actions {
+    display: flex;
+    gap: var(--space-3);
+    margin-top: var(--space-3);
+}
+
+.inline-actions .btn-link {
+    padding: var(--space-1) var(--space-2);
+    font-size: 0.875rem;
+    color: var(--accent);
+    text-decoration: none;
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.inline-actions .btn-link:hover {
+    text-decoration: underline;
+    color: #0550ae;
+}
+
+/* Expandable Details Section */
+.expanded-details-section {
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Modal Styles */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1000;
+}
+
+.modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.modal-content {
+    position: relative;
+    max-width: 700px;
+    max-height: 90vh;
+    margin: 5vh auto;
+    background: white;
+    border-radius: var(--radius-lg);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-4);
+    background: linear-gradient(135deg, var(--accent) 0%, #3b82f6 100%);
+    color: white;
+}
+
+.modal-header h3 {
+    margin: 0;
+    color: white;
+    font-size: 1.25rem;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 2rem;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    transition: background 0.2s;
+}
+
+.modal-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.modal-body {
+    padding: var(--space-4);
+    overflow-y: auto;
+}
+
+/* Cost Breakdown Styles */
+.cost-total {
+    text-align: center;
+    padding: var(--space-4);
+    background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-4);
+}
+
+.cost-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--space-1);
+}
+
+.cost-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #0369a1;
+}
+
+.cost-section {
+    margin-bottom: var(--space-4);
+    padding-bottom: var(--space-4);
+    border-bottom: 1px solid var(--border-muted);
+}
+
+.cost-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.estimation-method-badge {
+    display: inline-block;
+    padding: var(--space-1) var(--space-3);
+    background: #dbeafe;
+    color: #1e40af;
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.cost-formula {
+    padding: var(--space-3);
+    background: var(--bg-surface-sunken);
+    border-radius: var(--radius-sm);
+    font-family: 'Monaco', 'Courier New', monospace;
+    font-size: 0.95rem;
+    color: var(--text);
+    border-left: 3px solid var(--accent);
+}
+
+.assumptions-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.assumptions-list li {
+    padding: var(--space-2);
+    margin-bottom: var(--space-2);
+    background: var(--bg-surface-sunken);
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    padding-left: var(--space-4);
+    position: relative;
+}
+
+.assumptions-list li::before {
+    content: "•";
+    position: absolute;
+    left: var(--space-2);
+    color: var(--accent);
+    font-weight: bold;
+}
+
+.cost-components-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.cost-component {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-2) var(--space-3);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-muted);
+    border-radius: var(--radius-sm);
+}
+
+.component-label {
+    font-weight: 500;
+    color: var(--text);
+}
+
+.component-value {
+    font-weight: 600;
+    color: var(--accent);
+}
+
+.source-facts-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+
+.fact-chip {
+    display: inline-block;
+    padding: var(--space-1) var(--space-2);
+    background: var(--bg-surface-sunken);
+    border: 1px solid var(--border-muted);
+    border-radius: var(--radius-sm);
+    font-size: 0.8rem;
+    font-family: 'Monaco', 'Courier New', monospace;
+    color: var(--accent);
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+.fact-chip:hover {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+}
+
+.confidence-display {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.confidence-bar {
+    flex: 1;
+    height: 8px;
+    background: var(--bg-surface-sunken);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.confidence-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+    transition: width 0.3s ease;
+}
+
+.confidence-text {
+    font-weight: 600;
+    color: var(--text);
+    font-size: 0.875rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .modal-content {
+        max-width: 95%;
+        margin: 2vh auto;
+        max-height: 96vh;
+    }
+
+    .cost-value {
+        font-size: 1.5rem;
+    }
+
+    .inline-actions {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+
 </style>
+
+<script>
+// Toggle expandable details section
+function toggleDetails() {
+    const detailsSection = document.getElementById('expandedDetails');
+    const btnText = document.getElementById('explainBtnText');
+
+    if (detailsSection.style.display === 'none') {
+        detailsSection.style.display = 'block';
+        btnText.textContent = 'Hide Details ▲';
+    } else {
+        detailsSection.style.display = 'none';
+        btnText.textContent = 'Explain This ▼';
+    }
+}
+
+// Open cost breakdown modal
+function openCostModal() {
+    const modal = document.getElementById('costModal');
+    if (modal) {
+        modal.style.display = 'block';
+        document.body.style.overflow = 'hidden'; // Prevent background scroll
+    }
+}
+
+// Close cost breakdown modal
+function closeCostModal() {
+    const modal = document.getElementById('costModal');
+    if (modal) {
+        modal.style.display = 'none';
+        document.body.style.overflow = ''; // Restore scroll
+    }
+}
+
+// Close modal on Escape key
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        closeCostModal();
+    }
+});
+</script>
+
 {% endblock %}

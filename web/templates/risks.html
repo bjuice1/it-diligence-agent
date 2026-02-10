@@ -74,7 +74,17 @@
                     <span class="badge badge-{{ risk.severity }}">{{ risk.severity|upper }}</span>
                 </td>
                 <td class="font-mono text-sm" title="{{ risk.finding_id }}">R-{{ '%03d'|format(loop.index) }}</td>
-                <td>{{ risk.title }}</td>
+                <td>
+                    <a href="{{ url_for('risk_detail', risk_id=risk.finding_id) }}" class="risk-title-link">
+                        {{ risk.title }}
+                    </a>
+                    {% if risk.reasoning %}
+                    <div class="risk-inline-hint">
+                        <span class="hint-icon">💡</span>
+                        <span class="hint-text">{{ (risk.reasoning.split('.')[0] + '.') if '.' in risk.reasoning else (risk.reasoning[:60] + '...' if risk.reasoning|length > 60 else risk.reasoning) }}</span>
+                    </div>
+                    {% endif %}
+                </td>
                 <td class="text-muted text-sm">{{ risk.domain|replace('_', ' ')|title }}</td>
                 <td class="text-sm">
                     {% if risk.based_on_facts %}
@@ -291,6 +301,44 @@
     text-transform: uppercase;
     letter-spacing: 0.05em;
     margin-bottom: var(--space-2);
+}
+
+/* ========================================
+   MVP ENHANCEMENTS - List View
+   ======================================== */
+.risk-title-link {
+    color: var(--text);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s;
+}
+
+.risk-title-link:hover {
+    color: var(--accent);
+    text-decoration: underline;
+}
+
+.risk-inline-hint {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    margin-top: 6px;
+    padding: 6px 8px;
+    background: #f6f8fa;
+    border-left: 2px solid #0969da;
+    border-radius: 3px;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    color: var(--text-muted);
+}
+
+.risk-inline-hint .hint-icon {
+    font-size: 0.9rem;
+    flex-shrink: 0;
+}
+
+.risk-inline-hint .hint-text {
+    flex: 1;
 }
 </style>
 {% endblock %}
