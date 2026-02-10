@@ -46,7 +46,7 @@ class ParserResult:
 
 # Column headers that indicate an application inventory table
 APP_INVENTORY_HEADERS = {
-    "application", "app", "app name", "application name", "system", "software",
+    "application", "app", "app name", "application name", "system", "software", "platform",
     "vendor", "category", "version", "hosting", "deployment", "users",
     "user count", "annual cost", "cost", "criticality", "critical"
 }
@@ -371,6 +371,7 @@ def _app_table_to_facts(
         "application name": "item",
         "system": "item",
         "software": "item",
+        "platform": "item",
         # Details fields
         "vendor": "vendor",
         "category": "category_detail",  # Don't overwrite domain category
@@ -393,7 +394,7 @@ def _app_table_to_facts(
     for row in table.rows:
         # Find the application name
         item_name = None
-        for header in ["application", "app", "app name", "application name", "system", "software"]:
+        for header in ["application", "app", "app name", "application name", "system", "software", "platform"]:
             if header in row and row[header]:
                 item_name = row[header]
                 break
