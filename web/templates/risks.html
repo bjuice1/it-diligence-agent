@@ -184,10 +184,27 @@
 
         // Format reasoning with arrow chain highlighting
         let reasoningHtml = data.reasoning || 'No reasoning provided';
-        if (reasoningHtml && reasoningHtml !== 'No reasoning provided') {
+        let hasReasoning = data.reasoning && data.reasoning !== 'No reasoning provided';
+        if (hasReasoning) {
             // Highlight the reasoning chain arrows
             reasoningHtml = reasoningHtml.replace(/→/g, '<span class="reasoning-arrow">→</span>');
         }
+
+        // Extract first sentence for inline context (MVP feature)
+        let inlineReasoning = '';
+        if (hasReasoning) {
+            const firstSentence = data.reasoning.split('.')[0];
+            inlineReasoning = `
+                <div class="inline-context" style="display: flex; align-items: flex-start; gap: 8px; padding: 12px; margin: 12px 0; background: #f6f8fa; border-left: 3px solid #0969da; border-radius: 4px;">
+                    <span style="font-size: 1.2rem; flex-shrink: 0;">💡</span>
+                    <span style="color: #24292f; font-weight: 500; line-height: 1.6;">${firstSentence}.</span>
+                </div>
+            `;
+        }
+
+        // Check if has expandable content (MVP feature)
+        const hasMitigation = data.mitigation && data.mitigation !== 'No mitigation specified';
+        const hasExpandable = hasReasoning || hasMitigation;
 
         openDrawer(
             data.title,
@@ -208,19 +225,33 @@
             </div>
             <div class="drawer-section">
                 <div class="drawer-section-title">Description</div>
-                <div class="drawer-section-content">${data.description || 'No description available'}</div>
-            </div>
-            <div class="drawer-section">
-                <div class="drawer-section-title">Mitigation</div>
-                <div class="drawer-section-content">${data.mitigation || 'No mitigation specified'}</div>
-            </div>
-            <div class="drawer-section evidence-chain-section">
-                <div class="drawer-section-title">Why This Conclusion? (Evidence Chain)</div>
                 <div class="drawer-section-content">
-                    <div class="reasoning-chain">${reasoningHtml}</div>
-                    <div class="supporting-facts">
-                        <div class="supporting-facts-label">Supporting Facts (click to see source evidence):</div>
-                        <div class="font-mono text-sm">${formatFactLinks(data.basedOn)}</div>
+                    ${data.description || 'No description available'}
+                    ${inlineReasoning}
+                    ${hasExpandable ? `
+                        <div style="margin-top: 12px;">
+                            <button class="btn btn-link btn-sm" onclick="toggleDrawerDetails()" id="explainDrawerBtn" style="padding: 4px 8px; font-size: 0.875rem; color: #0969da; background: none; border: none; cursor: pointer;">
+                                <span id="explainDrawerBtnText">Explain This ▼</span>
+                            </button>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+            <div id="drawerExpandedDetails" style="display: none;">
+                ${hasMitigation ? `
+                <div class="drawer-section">
+                    <div class="drawer-section-title">Mitigation</div>
+                    <div class="drawer-section-content">${data.mitigation}</div>
+                </div>
+                ` : ''}
+                <div class="drawer-section evidence-chain-section">
+                    <div class="drawer-section-title">Why This Conclusion? (Evidence Chain)</div>
+                    <div class="drawer-section-content">
+                        <div class="reasoning-chain">${reasoningHtml}</div>
+                        <div class="supporting-facts">
+                            <div class="supporting-facts-label">Supporting Facts (click to see source evidence):</div>
+                            <div class="font-mono text-sm">${formatFactLinks(data.basedOn)}</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -231,6 +262,21 @@
             `
         );
     });
+
+    // Toggle drawer expanded details (MVP feature)
+    window.toggleDrawerDetails = function() {
+        const detailsSection = document.getElementById('drawerExpandedDetails');
+        const btnText = document.getElementById('explainDrawerBtnText');
+        if (detailsSection && btnText) {
+            if (detailsSection.style.display === 'none') {
+                detailsSection.style.display = 'block';
+                btnText.textContent = 'Hide Details ▲';
+            } else {
+                detailsSection.style.display = 'none';
+                btnText.textContent = 'Explain This ▼';
+            }
+        }
+    };
 
     // Live search filtering
     const searchInput = document.getElementById('filter-search');
