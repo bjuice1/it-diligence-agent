@@ -7852,7 +7852,7 @@ def admin_cleanup():
 @auth_optional
 def admin_delete_deal(deal_id):
     """Delete a specific deal."""
-    from web.database import Deal
+    from web.database import Deal, Fact, Finding, Gap, Document, AnalysisRun
 
     deal = Deal.query.get(deal_id)
     if not deal:
@@ -7861,8 +7861,19 @@ def admin_delete_deal(deal_id):
 
     try:
         deal_name = deal.name
+
+        # Explicitly delete related records to avoid FK constraint issues
+        # SQLAlchemy relationships don't always handle cascade correctly
+        Gap.query.filter_by(deal_id=deal_id).delete()
+        Fact.query.filter_by(deal_id=deal_id).delete()
+        Finding.query.filter_by(deal_id=deal_id).delete()
+        Document.query.filter_by(deal_id=deal_id).delete()
+        AnalysisRun.query.filter_by(deal_id=deal_id).delete()
+
+        # Now delete the deal itself
         db.session.delete(deal)
         db.session.commit()
+
         flash(f'✅ Deleted deal "{deal_name}" and all associated data', 'success')
     except Exception as e:
         db.session.rollback()
