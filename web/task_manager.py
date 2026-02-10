@@ -495,7 +495,10 @@ class AnalysisTaskManager:
                     # Get deal_id from task context
                     deal_id = deal_id or task.deal_context.get('deal_id')
                     if not deal_id:
-                        logger.warning(f"Cannot save task {task.task_id} - no deal_id")
+                        logger.error(f"Cannot save task {task.task_id} - no deal_id in context")
+                        logger.error(f"  deal_context keys: {list(task.deal_context.keys())}")
+                        logger.error(f"  target_name: {task.deal_context.get('target_name', 'MISSING')}")
+                        logger.error(f"This indicates deal creation failed during upload. Check logs for FK violations or other DB errors.")
                         return  # Can't save without deal_id
 
                     # Get next run number

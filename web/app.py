@@ -1119,6 +1119,11 @@ def process_upload():
     # ==========================================================================
     deal_id = None
     try:
+        # DEFENSIVE: Ensure session is clean before deal operations
+        # If document save failed and rolled back, session might be in bad state
+        from web.database import db
+        db.session.rollback()
+
         from web.services.deal_service import get_deal_service
         deal_service = get_deal_service()
 
@@ -1148,9 +1153,14 @@ def process_upload():
                 deal_service.set_active_deal_for_session(deal_id)
                 logger.info(f"Created new deal: {deal_id} ({new_deal.name})")
             else:
-                logger.warning(f"Failed to create deal: {error}")
+                logger.error(f"Failed to create deal: {error}")
+                logger.error(f"  user_id={user.id if user else None}")
+                logger.error(f"  deal_name={deal_name}")
+                logger.error(f"  target_name={target_name}")
     except Exception as e:
-        logger.warning(f"Deal integration skipped: {e}")
+        import traceback
+        logger.error(f"Deal integration failed with exception: {e}")
+        logger.error(f"Traceback:\n{traceback.format_exc()}")
 
     # Create deal context dict with entity info
     deal_context = {
