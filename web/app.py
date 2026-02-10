@@ -1794,6 +1794,11 @@ def risk_detail(risk_id):
         'confidence': getattr(risk, 'confidence', None),
     }
 
+    # MVP Enhancement: Extract reasoning explicitly for template access
+    risk_reasoning = getattr(risk, 'reasoning', None) or ''
+    risk_mitigation = getattr(risk, 'mitigation', None) or ''
+    has_cost_data = getattr(risk, 'cost_buildup_json', None) is not None
+
     return render_template('risk_detail.html',
                          risk=risk,
                          facts=facts,
@@ -1801,7 +1806,10 @@ def risk_detail(risk_id):
                          affected_items=affected_items,
                          affected_cost_total=affected_cost_total,
                          affected_users_total=affected_users_total,
-                         mna_context=mna_context)
+                         mna_context=mna_context,
+                         risk_reasoning=risk_reasoning,
+                         risk_mitigation=risk_mitigation,
+                         has_cost_data=has_cost_data)
 
 
 @app.route('/risk/<risk_id>/adjust', methods=['POST'])

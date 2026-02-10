@@ -34,22 +34,22 @@
             <p>{{ risk.description }}</p>
 
             <!-- NEW: Inline Reasoning (MVP Feature) -->
-            {% if risk.reasoning %}
+            {% if risk_reasoning %}
             <div class="inline-context">
                 <span class="context-icon">💡</span>
-                <span class="context-text">{{ risk.reasoning.split('.')[0] + '.' if '.' in risk.reasoning else risk.reasoning }}</span>
+                <span class="context-text">{{ risk_reasoning.split('.')[0] + '.' if '.' in risk_reasoning else (risk_reasoning[:100] + '...' if risk_reasoning|length > 100 else risk_reasoning) }}</span>
             </div>
             {% endif %}
 
             <!-- NEW: Action Buttons (MVP Feature) -->
             <div class="inline-actions">
-                {% if (mna_context and mna_context.implication) or risk.mitigation or risk.reasoning %}
+                {% if (mna_context and mna_context.implication) or risk_mitigation or risk_reasoning %}
                 <button class="btn btn-link btn-sm" onclick="toggleDetails()" id="explainBtn">
                     <span id="explainBtnText">Explain This ▼</span>
                 </button>
                 {% endif %}
 
-                {% if risk.cost_buildup_json %}
+                {% if has_cost_data %}
                 <button class="btn btn-link btn-sm" onclick="openCostModal()">
                     View Calculation ▶
                 </button>
