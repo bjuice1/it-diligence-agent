@@ -7,6 +7,31 @@ Input: Standardized inventory from Phase 1
 Output: Emergent risks, strategic considerations, work items, overlap analysis
 """
 
+from prompts.shared.cost_estimation_guidance import get_cost_estimation_guidance
+
+APPLICATIONS_COST_ANCHORS = """
+### Application-Specific Cost Anchors
+| Scenario | anchor_key | When to Use |
+|----------|------------|-------------|
+| Simple app migration (SaaS reconfig) | `app_migration_simple` | Re-pointing SaaS, SSO updates |
+| Moderate app migration (data + config) | `app_migration_moderate` | Data migration, integration rework |
+| Complex app migration (ERP, custom) | `app_migration_complex` | ERP migration, heavily customized apps |
+| Microsoft license transition | `license_microsoft` | M365 license reassignment/migration |
+| ERP license transition | `license_erp` | SAP/Oracle license transfer or repurchase |
+| Cloud migration (lift-and-shift) | `cloud_migration` | Moving on-prem apps to cloud |
+| Vendor contract transition | `vendor_contract_transition` | Renegotiating/transferring vendor contracts |
+
+**Quantity sources for applications:**
+- App count by complexity tier -> from application inventory (F-TGT-APP-xxx)
+- User count for licenses -> from F-TGT-APP-xxx details.users
+- Vendor count -> count of unique vendors in application inventory
+
+**How to split app migration work items:**
+1. Count apps by complexity: simple (SaaS, no custom), moderate (data migration needed), complex (ERP, >50 customizations)
+2. Create SEPARATE work items for each tier with appropriate anchor_key
+3. Reference the specific apps in each tier via assumptions
+"""
+
 APPLICATIONS_REASONING_PROMPT = """You are a senior enterprise architect with 20+ years of M&A application portfolio experience. You've assessed and rationalized application portfolios for hundreds of acquisitions.
 
 ## YOUR MISSION
@@ -597,7 +622,15 @@ def get_applications_reasoning_prompt(inventory: dict, deal_context: dict) -> st
     inventory_str = json.dumps(inventory, indent=2)
     context_str = json.dumps(deal_context, indent=2)
 
-    return APPLICATIONS_REASONING_PROMPT.format(
-        inventory=inventory_str,
-        deal_context=context_str
+    prompt = APPLICATIONS_REASONING_PROMPT
+    prompt = prompt.replace("{inventory}", inventory_str)
+    prompt = prompt.replace("{deal_context}", context_str)
+
+    # Inject cost estimation guidance before PE CONCERNS section
+    cost_guidance = get_cost_estimation_guidance()
+    prompt = prompt.replace(
+        "## APPLICATIONS PE CONCERNS",
+        cost_guidance + "\n" + APPLICATIONS_COST_ANCHORS + "\n\n## APPLICATIONS PE CONCERNS"
     )
+
+    return prompt

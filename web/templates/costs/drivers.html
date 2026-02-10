@@ -1,0 +1,866 @@
+{% extends "base.html" %}
+
+{% block title %}Cost Drivers - IT Due Diligence{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="header-content">
+        <div>
+            <h1>Cost Drivers</h1>
+            <p>Quantitative inputs for cost calculations. Edit values to refine estimates.</p>
+        </div>
+        <div class="header-actions">
+            <a href="{{ url_for('costs.cost_center') }}" class="btn btn-secondary">
+                View Costs
+            </a>
+            <button class="btn btn-primary" onclick="downloadDriversCSV()">
+                Download CSV
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Summary Banner -->
+<div class="drivers-summary-banner">
+    <div class="summary-stat">
+        <div class="stat-value" id="extracted-count">{{ summary.total_extracted }}</div>
+        <div class="stat-label">Extracted</div>
+    </div>
+    <div class="summary-stat">
+        <div class="stat-value stat-warning" id="assumed-count">{{ summary.total_assumed }}</div>
+        <div class="stat-label">Assumed</div>
+    </div>
+    <div class="summary-stat">
+        <div class="stat-value stat-override" id="overridden-count">{{ summary.total_overridden }}</div>
+        <div class="stat-label">Overridden</div>
+    </div>
+</div>
+
+<!-- Help Text -->
+<div class="drivers-help">
+    <span class="help-item">
+        <span class="indicator indicator-extracted"></span>
+        Extracted from documents
+    </span>
+    <span class="help-item">
+        <span class="indicator indicator-assumed"></span>
+        Assumed (verify these)
+    </span>
+    <span class="help-item">
+        <span class="indicator indicator-override"></span>
+        Override applied
+    </span>
+</div>
+
+<!-- Driver Groups -->
+<div class="driver-groups">
+    <!-- Scale Drivers -->
+    <div class="driver-group">
+        <h3>Scale Drivers</h3>
+        <table class="driver-table">
+            <thead>
+                <tr>
+                    <th>Driver</th>
+                    <th class="text-right">Value</th>
+                    <th>Source</th>
+                    <th>Confidence</th>
+                    <th class="text-center">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for driver in drivers if driver.name in ['total_users', 'it_headcount', 'sites', 'countries', 'endpoints'] %}
+                <tr class="driver-row {{ 'row-override' if driver.is_overridden else 'row-assumed' if driver.confidence == 'low' else '' }}"
+                    data-driver="{{ driver.name }}">
+                    <td class="driver-name">
+                        <span class="indicator {{ 'indicator-override' if driver.is_overridden else 'indicator-assumed' if driver.confidence == 'low' else 'indicator-extracted' }}"></span>
+                        {{ driver.name|replace('_', ' ')|title }}
+                    </td>
+                    <td class="text-right">
+                        <span class="driver-value" data-original="{{ driver.extracted_value }}">
+                            {% if driver.value is not none %}
+                                {% if driver.value is number %}
+                                    {{ "{:,}".format(driver.value) }}
+                                {% else %}
+                                    {{ driver.value }}
+                                {% endif %}
+                            {% else %}
+                                <span class="text-muted">Not found</span>
+                            {% endif %}
+                        </span>
+                        <input type="text" class="driver-input hidden" value="{{ driver.value or '' }}">
+                    </td>
+                    <td class="driver-source">
+                        {% if driver.source_fact_id %}
+                            <span class="source-tag">{{ driver.source_fact_id }}</span>
+                        {% elif driver.source_type == 'override' %}
+                            <span class="source-tag source-override">User Override</span>
+                        {% elif driver.source_type == 'default' %}
+                            <span class="source-tag source-assumed">Default</span>
+                        {% else %}
+                            <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="confidence-badge confidence-{{ driver.confidence }}">
+                            {{ driver.confidence|upper }}
+                        </span>
+                    </td>
+                    <td class="text-center">
+                        <button class="btn-icon btn-edit" onclick="toggleEdit(this)" title="Edit">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                        </button>
+                        <button class="btn-icon btn-save hidden" onclick="saveEdit(this)" title="Save">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M20 6L9 17l-5-5"/>
+                            </svg>
+                        </button>
+                        <button class="btn-icon btn-cancel hidden" onclick="cancelEdit(this)" title="Cancel">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18"/>
+                                <line x1="6" y1="6" x2="18" y2="18"/>
+                            </svg>
+                        </button>
+                        {% if driver.is_overridden %}
+                        <button class="btn-icon btn-reset" onclick="resetOverride('{{ driver.name }}')" title="Reset to extracted">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                                <path d="M3 3v5h5"/>
+                            </svg>
+                        </button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Application Drivers -->
+    <div class="driver-group">
+        <h3>Application Drivers</h3>
+        <table class="driver-table">
+            <thead>
+                <tr>
+                    <th>Driver</th>
+                    <th class="text-right">Value</th>
+                    <th>Source</th>
+                    <th>Confidence</th>
+                    <th class="text-center">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for driver in drivers if driver.name in ['total_apps', 'erp_system', 'erp_users', 'crm_system', 'crm_users', 'custom_apps', 'saas_apps'] %}
+                <tr class="driver-row {{ 'row-override' if driver.is_overridden else 'row-assumed' if driver.confidence == 'low' else '' }}"
+                    data-driver="{{ driver.name }}">
+                    <td class="driver-name">
+                        <span class="indicator {{ 'indicator-override' if driver.is_overridden else 'indicator-assumed' if driver.confidence == 'low' else 'indicator-extracted' }}"></span>
+                        {{ driver.name|replace('_', ' ')|title }}
+                    </td>
+                    <td class="text-right">
+                        <span class="driver-value" data-original="{{ driver.extracted_value }}">
+                            {% if driver.value is not none %}
+                                {% if driver.value is number %}
+                                    {{ "{:,}".format(driver.value) }}
+                                {% else %}
+                                    {{ driver.value }}
+                                {% endif %}
+                            {% else %}
+                                <span class="text-muted">Not found</span>
+                            {% endif %}
+                        </span>
+                        <input type="text" class="driver-input hidden" value="{{ driver.value or '' }}">
+                    </td>
+                    <td class="driver-source">
+                        {% if driver.source_fact_id %}
+                            <span class="source-tag">{{ driver.source_fact_id }}</span>
+                        {% elif driver.source_type == 'override' %}
+                            <span class="source-tag source-override">User Override</span>
+                        {% else %}
+                            <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="confidence-badge confidence-{{ driver.confidence }}">
+                            {{ driver.confidence|upper }}
+                        </span>
+                    </td>
+                    <td class="text-center">
+                        <button class="btn-icon btn-edit" onclick="toggleEdit(this)" title="Edit">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                        </button>
+                        <button class="btn-icon btn-save hidden" onclick="saveEdit(this)" title="Save">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M20 6L9 17l-5-5"/>
+                            </svg>
+                        </button>
+                        <button class="btn-icon btn-cancel hidden" onclick="cancelEdit(this)" title="Cancel">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18"/>
+                                <line x1="6" y1="6" x2="18" y2="18"/>
+                            </svg>
+                        </button>
+                        {% if driver.is_overridden %}
+                        <button class="btn-icon btn-reset" onclick="resetOverride('{{ driver.name }}')" title="Reset">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                                <path d="M3 3v5h5"/>
+                            </svg>
+                        </button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Infrastructure Drivers -->
+    <div class="driver-group">
+        <h3>Infrastructure Drivers</h3>
+        <table class="driver-table">
+            <thead>
+                <tr>
+                    <th>Driver</th>
+                    <th class="text-right">Value</th>
+                    <th>Source</th>
+                    <th>Confidence</th>
+                    <th class="text-center">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for driver in drivers if driver.name in ['data_centers', 'servers', 'vms', 'cloud_provider', 'cloud_spend_annual', 'storage_tb'] %}
+                <tr class="driver-row {{ 'row-override' if driver.is_overridden else 'row-assumed' if driver.confidence == 'low' else '' }}"
+                    data-driver="{{ driver.name }}">
+                    <td class="driver-name">
+                        <span class="indicator {{ 'indicator-override' if driver.is_overridden else 'indicator-assumed' if driver.confidence == 'low' else 'indicator-extracted' }}"></span>
+                        {{ driver.name|replace('_', ' ')|title }}
+                    </td>
+                    <td class="text-right">
+                        <span class="driver-value" data-original="{{ driver.extracted_value }}">
+                            {% if driver.value is not none %}
+                                {% if driver.value is number %}
+                                    {{ "{:,}".format(driver.value) }}
+                                {% else %}
+                                    {{ driver.value }}
+                                {% endif %}
+                            {% else %}
+                                <span class="text-muted">Not found</span>
+                            {% endif %}
+                        </span>
+                        <input type="text" class="driver-input hidden" value="{{ driver.value or '' }}">
+                    </td>
+                    <td class="driver-source">
+                        {% if driver.source_fact_id %}
+                            <span class="source-tag">{{ driver.source_fact_id }}</span>
+                        {% else %}
+                            <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="confidence-badge confidence-{{ driver.confidence }}">
+                            {{ driver.confidence|upper }}
+                        </span>
+                    </td>
+                    <td class="text-center">
+                        <button class="btn-icon btn-edit" onclick="toggleEdit(this)" title="Edit">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                        </button>
+                        <button class="btn-icon btn-save hidden" onclick="saveEdit(this)" title="Save">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M20 6L9 17l-5-5"/>
+                            </svg>
+                        </button>
+                        <button class="btn-icon btn-cancel hidden" onclick="cancelEdit(this)" title="Cancel">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18"/>
+                                <line x1="6" y1="6" x2="18" y2="18"/>
+                            </svg>
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Ownership Drivers (Parent Dependencies) -->
+    <div class="driver-group">
+        <h3>Parent Dependencies</h3>
+        <p class="group-description">Services shared with or owned by parent company</p>
+        <table class="driver-table">
+            <thead>
+                <tr>
+                    <th>Service</th>
+                    <th>Owner</th>
+                    <th>Source</th>
+                    <th>Confidence</th>
+                    <th class="text-center">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for driver in drivers if driver.name in ['identity_owned_by', 'dc_owned_by', 'wan_owned_by', 'erp_owned_by', 'email_owned_by', 'soc_owned_by'] %}
+                <tr class="driver-row {{ 'row-parent' if driver.value == 'parent' else '' }}"
+                    data-driver="{{ driver.name }}">
+                    <td class="driver-name">
+                        <span class="indicator {{ 'indicator-parent' if driver.value == 'parent' else 'indicator-extracted' }}"></span>
+                        {{ driver.name|replace('_owned_by', '')|replace('_', ' ')|title }}
+                    </td>
+                    <td>
+                        <span class="owner-badge owner-{{ driver.value }}">
+                            {{ (driver.value or 'unknown')|title }}
+                        </span>
+                    </td>
+                    <td class="driver-source">
+                        {% if driver.source_fact_id %}
+                            <span class="source-tag">{{ driver.source_fact_id }}</span>
+                        {% else %}
+                            <span class="text-muted">Derived</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="confidence-badge confidence-{{ driver.confidence }}">
+                            {{ driver.confidence|upper }}
+                        </span>
+                    </td>
+                    <td class="text-center">
+                        <button class="btn-icon btn-edit" onclick="toggleEdit(this)" title="Edit">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                        </button>
+                        <button class="btn-icon btn-save hidden" onclick="saveEdit(this)" title="Save">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M20 6L9 17l-5-5"/>
+                            </svg>
+                        </button>
+                        <button class="btn-icon btn-cancel hidden" onclick="cancelEdit(this)" title="Cancel">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18"/>
+                                <line x1="6" y1="6" x2="18" y2="18"/>
+                            </svg>
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- Shared with Parent Summary -->
+        {% if shared_with_parent %}
+        <div class="shared-summary">
+            <strong>Shared with Parent:</strong>
+            {% for service in shared_with_parent %}
+            <span class="service-chip">{{ service|title }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Toast for save feedback -->
+<div id="toast" class="toast hidden">
+    <span id="toast-message"></span>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+/* Header */
+.page-header {
+    margin-bottom: var(--space-4);
+}
+
+.header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.header-actions {
+    display: flex;
+    gap: var(--space-2);
+}
+
+/* Summary Banner */
+.drivers-summary-banner {
+    display: flex;
+    justify-content: center;
+    gap: var(--space-8);
+    padding: var(--space-4);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-muted);
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--space-4);
+}
+
+.summary-stat {
+    text-align: center;
+}
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+.stat-value.stat-warning {
+    color: #f59e0b;
+}
+
+.stat-value.stat-override {
+    color: #8b5cf6;
+}
+
+.stat-label {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+}
+
+/* Help Legend */
+.drivers-help {
+    display: flex;
+    gap: var(--space-4);
+    padding: var(--space-2) var(--space-3);
+    background: var(--bg-surface-sunken);
+    border-radius: var(--radius-sm);
+    margin-bottom: var(--space-4);
+    font-size: 0.8rem;
+}
+
+.help-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+}
+
+.indicator {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+
+.indicator-extracted {
+    background: #22c55e;
+}
+
+.indicator-assumed {
+    background: #f59e0b;
+}
+
+.indicator-override {
+    background: #8b5cf6;
+}
+
+.indicator-parent {
+    background: #dc2626;
+}
+
+/* Driver Groups */
+.driver-groups {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.driver-group {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-muted);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+}
+
+.driver-group h3 {
+    margin: 0 0 var(--space-3) 0;
+    font-size: 1rem;
+    color: var(--text);
+}
+
+.group-description {
+    margin: -var(--space-2) 0 var(--space-3) 0;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+/* Driver Table */
+.driver-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.driver-table th,
+.driver-table td {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--border-muted);
+}
+
+.driver-table th {
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.driver-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.driver-row {
+    transition: background 0.2s;
+}
+
+.driver-row:hover {
+    background: var(--bg-surface-sunken);
+}
+
+.driver-row.row-override {
+    background: rgba(139, 92, 246, 0.05);
+    border-left: 3px solid #8b5cf6;
+}
+
+.driver-row.row-assumed {
+    background: rgba(245, 158, 11, 0.05);
+    border-left: 3px solid #f59e0b;
+}
+
+.driver-row.row-parent {
+    background: rgba(220, 38, 38, 0.05);
+    border-left: 3px solid #dc2626;
+}
+
+.driver-name {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-weight: 500;
+}
+
+.driver-value {
+    font-family: var(--font-mono);
+    font-weight: 600;
+}
+
+.driver-input {
+    width: 100%;
+    max-width: 150px;
+    padding: var(--space-1) var(--space-2);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    text-align: right;
+}
+
+.driver-input:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+/* Source Tags */
+.source-tag {
+    font-size: 0.75rem;
+    padding: 2px 6px;
+    background: #e0f2fe;
+    color: #0369a1;
+    border-radius: var(--radius-sm);
+}
+
+.source-tag.source-override {
+    background: #f3e8ff;
+    color: #7c3aed;
+}
+
+.source-tag.source-assumed {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+/* Confidence Badges */
+.confidence-badge {
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+}
+
+.confidence-high {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.confidence-medium {
+    background: #e0f2fe;
+    color: #0369a1;
+}
+
+.confidence-low {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.confidence-override {
+    background: #f3e8ff;
+    color: #7c3aed;
+}
+
+.confidence-unknown {
+    background: #f3f4f6;
+    color: #6b7280;
+}
+
+/* Owner Badges */
+.owner-badge {
+    font-size: 0.8rem;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    font-weight: 500;
+}
+
+.owner-parent {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.owner-target {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.owner-shared {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.owner-unknown {
+    background: #f3f4f6;
+    color: #6b7280;
+}
+
+/* Action Buttons */
+.btn-icon {
+    padding: var(--space-1);
+    background: none;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: color 0.2s, background 0.2s;
+}
+
+.btn-icon:hover {
+    background: var(--bg-surface-sunken);
+    color: var(--text);
+}
+
+.btn-icon.btn-save {
+    color: #16a34a;
+}
+
+.btn-icon.btn-save:hover {
+    background: #dcfce7;
+}
+
+.btn-icon.btn-cancel {
+    color: #dc2626;
+}
+
+.btn-icon.btn-cancel:hover {
+    background: #fee2e2;
+}
+
+.btn-icon.btn-reset {
+    color: #f59e0b;
+}
+
+/* Shared Summary */
+.shared-summary {
+    margin-top: var(--space-3);
+    padding: var(--space-3);
+    background: #fef2f2;
+    border-radius: var(--radius-sm);
+    border: 1px solid #fecaca;
+}
+
+.service-chip {
+    display: inline-block;
+    margin-left: var(--space-1);
+    padding: 2px 8px;
+    background: #fee2e2;
+    color: #991b1b;
+    border-radius: var(--radius-sm);
+    font-size: 0.8rem;
+}
+
+/* Toast */
+.toast {
+    position: fixed;
+    bottom: var(--space-4);
+    right: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    background: #1f2937;
+    color: white;
+    border-radius: var(--radius-md);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    z-index: 1000;
+    transition: opacity 0.3s, transform 0.3s;
+}
+
+.toast.hidden {
+    opacity: 0;
+    transform: translateY(20px);
+    pointer-events: none;
+}
+
+.toast.success {
+    background: #16a34a;
+}
+
+.toast.error {
+    background: #dc2626;
+}
+
+.hidden {
+    display: none !important;
+}
+</style>
+
+<script>
+const dealId = '{{ deal_id }}';
+
+function toggleEdit(btn) {
+    const row = btn.closest('.driver-row');
+    const valueSpan = row.querySelector('.driver-value');
+    const input = row.querySelector('.driver-input');
+    const editBtn = row.querySelector('.btn-edit');
+    const saveBtn = row.querySelector('.btn-save');
+    const cancelBtn = row.querySelector('.btn-cancel');
+
+    valueSpan.classList.add('hidden');
+    input.classList.remove('hidden');
+    input.focus();
+    input.select();
+
+    editBtn.classList.add('hidden');
+    saveBtn.classList.remove('hidden');
+    cancelBtn.classList.remove('hidden');
+}
+
+function cancelEdit(btn) {
+    const row = btn.closest('.driver-row');
+    const valueSpan = row.querySelector('.driver-value');
+    const input = row.querySelector('.driver-input');
+    const editBtn = row.querySelector('.btn-edit');
+    const saveBtn = row.querySelector('.btn-save');
+    const cancelBtn = row.querySelector('.btn-cancel');
+
+    // Reset input value
+    input.value = valueSpan.textContent.trim().replace(/,/g, '');
+
+    valueSpan.classList.remove('hidden');
+    input.classList.add('hidden');
+
+    editBtn.classList.remove('hidden');
+    saveBtn.classList.add('hidden');
+    cancelBtn.classList.add('hidden');
+}
+
+async function saveEdit(btn) {
+    const row = btn.closest('.driver-row');
+    const driverName = row.dataset.driver;
+    const input = row.querySelector('.driver-input');
+    const newValue = input.value.trim();
+
+    try {
+        const response = await fetch(`/costs/api/drivers/${dealId}/override`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                driver_name: driverName,
+                override_value: newValue,
+                reason: 'User edit from driver page'
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast('Override saved', 'success');
+            // Refresh page to show updated values
+            setTimeout(() => location.reload(), 500);
+        } else {
+            showToast('Error: ' + data.error, 'error');
+        }
+    } catch (err) {
+        showToast('Network error', 'error');
+        console.error(err);
+    }
+}
+
+async function resetOverride(driverName) {
+    if (!confirm('Reset this driver to its extracted value?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/costs/api/drivers/${dealId}/override/${driverName}`, {
+            method: 'DELETE',
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast('Override removed', 'success');
+            setTimeout(() => location.reload(), 500);
+        } else {
+            showToast('Error: ' + data.error, 'error');
+        }
+    } catch (err) {
+        showToast('Network error', 'error');
+        console.error(err);
+    }
+}
+
+function downloadDriversCSV() {
+    window.location.href = `/costs/api/drivers/${dealId}/export`;
+}
+
+function showToast(message, type = 'success') {
+    const toast = document.getElementById('toast');
+    const msgEl = document.getElementById('toast-message');
+
+    msgEl.textContent = message;
+    toast.className = `toast ${type}`;
+
+    setTimeout(() => {
+        toast.classList.add('hidden');
+    }, 3000);
+}
+
+// Handle Enter key in inputs
+document.querySelectorAll('.driver-input').forEach(input => {
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            const row = e.target.closest('.driver-row');
+            const saveBtn = row.querySelector('.btn-save');
+            saveEdit(saveBtn);
+        } else if (e.key === 'Escape') {
+            const row = e.target.closest('.driver-row');
+            const cancelBtn = row.querySelector('.btn-cancel');
+            cancelEdit(cancelBtn);
+        }
+    });
+});
+</script>
+{% endblock %}

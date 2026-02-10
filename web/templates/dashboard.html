@@ -133,6 +133,101 @@
     {% endif %}
 </div>
 
+<!-- What Changed (Latest Run Diff) -->
+{% if run_diff and run_diff.has_changes %}
+<div class="card mb-4" style="border-left: 4px solid var(--info); background: rgba(59, 130, 246, 0.03);">
+    <div class="card-header" style="cursor: pointer; padding: 12px 16px;" onclick="this.parentElement.querySelector('.diff-details').classList.toggle('hidden')">
+        <div class="flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--info)" stroke-width="2">
+                    <path d="M12 20V10"/>
+                    <path d="M18 20V4"/>
+                    <path d="M6 20v-4"/>
+                </svg>
+                <span style="font-weight: 600; color: var(--info);">What Changed</span>
+                <span class="text-muted text-sm">Run #{{ run_diff.run_number }}{% if run_diff.previous_run_number %} vs #{{ run_diff.previous_run_number }}{% else %} (first run){% endif %}</span>
+            </div>
+            <div class="flex gap-3">
+                {% if run_diff.facts_created > 0 %}
+                <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #059669;">+{{ run_diff.facts_created }} facts</span>
+                {% endif %}
+                {% if run_diff.risks_created > 0 %}
+                <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #dc2626;">+{{ run_diff.risks_created }} risks</span>
+                {% endif %}
+                {% if run_diff.severity_changes|length > 0 %}
+                <span class="badge" style="background: rgba(234, 179, 8, 0.15); color: #b45309;">{{ run_diff.severity_changes|length }} severity changes</span>
+                {% endif %}
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="diff-chevron">
+                    <polyline points="6 9 12 15 18 9"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+    <div class="diff-details hidden" style="padding: 0 16px 16px;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+            <!-- Facts Summary -->
+            <div style="padding: 12px; background: var(--bg-secondary); border-radius: 6px;">
+                <div class="text-sm text-muted mb-2">Facts</div>
+                <div style="font-size: 1.25rem; font-weight: 600;">
+                    {{ run_diff.facts_total_before }} → {{ run_diff.facts_total_after }}
+                </div>
+                <div class="text-sm" style="margin-top: 4px;">
+                    {% if run_diff.facts_created > 0 %}<span style="color: #059669;">+{{ run_diff.facts_created }} new</span>{% endif %}
+                    {% if run_diff.facts_updated > 0 %}<span style="color: #b45309; margin-left: 8px;">{{ run_diff.facts_updated }} updated</span>{% endif %}
+                    {% if run_diff.facts_deleted > 0 %}<span style="color: #dc2626; margin-left: 8px;">-{{ run_diff.facts_deleted }} removed</span>{% endif %}
+                </div>
+            </div>
+            <!-- Risks Summary -->
+            <div style="padding: 12px; background: var(--bg-secondary); border-radius: 6px;">
+                <div class="text-sm text-muted mb-2">Risks</div>
+                <div style="font-size: 1.25rem; font-weight: 600;">
+                    {% if run_diff.risks_created > 0 %}+{{ run_diff.risks_created }} identified{% else %}No new risks{% endif %}
+                </div>
+                {% if run_diff.severity_changes|length > 0 %}
+                <div class="text-sm" style="margin-top: 4px; color: #b45309;">
+                    {{ run_diff.severity_changes|length }} severity change(s)
+                </div>
+                {% endif %}
+            </div>
+            <!-- Documents -->
+            {% if run_diff.docs_added|length > 0 %}
+            <div style="padding: 12px; background: var(--bg-secondary); border-radius: 6px;">
+                <div class="text-sm text-muted mb-2">Documents Added</div>
+                <div style="font-size: 1.25rem; font-weight: 600;">+{{ run_diff.docs_added|length }}</div>
+                <div class="text-sm text-muted" style="margin-top: 4px;">
+                    {% for doc in run_diff.docs_added[:3] %}
+                    {{ doc.filename }}{% if not loop.last %}, {% endif %}
+                    {% endfor %}
+                    {% if run_diff.docs_added|length > 3 %}...{% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% if run_diff.severity_changes|length > 0 %}
+        <div style="margin-top: 12px; padding: 12px; background: rgba(234, 179, 8, 0.05); border-radius: 6px; border: 1px solid rgba(234, 179, 8, 0.2);">
+            <div class="text-sm" style="font-weight: 600; color: #b45309; margin-bottom: 8px;">Severity Changes</div>
+            {% for change in run_diff.severity_changes[:5] %}
+            <div class="text-sm" style="margin-bottom: 4px;">
+                <span class="text-muted">{{ change.title[:50] }}{% if change.title|length > 50 %}...{% endif %}</span>:
+                <span style="text-decoration: line-through; color: #6b7280;">{{ change.old_severity }}</span>
+                →
+                <span style="font-weight: 600; color: {% if change.new_severity == 'critical' %}#dc2626{% elif change.new_severity == 'high' %}#ea580c{% else %}#b45309{% endif %};">{{ change.new_severity }}</span>
+            </div>
+            {% endfor %}
+            {% if run_diff.severity_changes|length > 5 %}
+            <div class="text-sm text-muted">...and {{ run_diff.severity_changes|length - 5 }} more</div>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+<style>
+.diff-details.hidden { display: none; }
+.diff-chevron { transition: transform 0.2s; }
+.card-header:hover .diff-chevron { transform: translateY(2px); }
+</style>
+{% endif %}
+
 <!-- Pending Updates Alert -->
 {% if pending_summary and pending_summary.total > 0 %}
 <div class="card mb-4" style="border-left: 4px solid var(--warning); background: rgba(234, 179, 8, 0.05);">

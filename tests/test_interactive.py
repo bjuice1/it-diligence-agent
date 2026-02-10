@@ -14,7 +14,7 @@ from interactive.commands import (
     VALID_SEVERITIES, VALID_PHASES, VALID_PRIORITIES, VALID_OWNERS, VALID_COST_ESTIMATES,
     VALID_DOMAINS
 )
-from tools_v2.fact_store import FactStore
+from stores.fact_store import FactStore
 from tools_v2.reasoning_tools import ReasoningStore
 
 
@@ -32,7 +32,7 @@ class TestSession:
 
     def test_create_session_with_stores(self):
         """Test creating session with existing stores."""
-        fact_store = FactStore()
+        fact_store = FactStore(deal_id="test-deal")
         reasoning_store = ReasoningStore(fact_store=fact_store)
 
         session = Session(
@@ -775,7 +775,7 @@ class TestManualEntryCommands:
         output = cmd_add(session, ["fact", "infrastructure", "Primary DC is in Chicago"])
 
         assert "Added fact" in output
-        assert "F-INFRA-001" in output
+        assert "F-TGT-INFRA-001" in output
         assert len(session.fact_store.facts) == 1
         assert session.fact_store.facts[0].item == "Primary DC is in Chicago"
 
@@ -831,7 +831,7 @@ class TestManualEntryCommands:
         output = cmd_add(session, ["gap", "cybersecurity", "Missing penetration test results"])
 
         assert "Added gap" in output
-        assert "G-CYBER-001" in output
+        assert "G-TGT-CYBER-001" in output
         assert len(session.fact_store.gaps) == 1
         assert session.fact_store.gaps[0].description == "Missing penetration test results"
 
@@ -897,7 +897,7 @@ class TestDeleteCommand:
         )
 
         assert len(session.fact_store.facts) == 1
-        output = cmd_delete(session, ["F-INFRA-001"])
+        output = cmd_delete(session, ["F-TGT-INFRA-001"])
 
         assert "Deleted fact" in output
         assert len(session.fact_store.facts) == 0
@@ -984,7 +984,7 @@ class TestSearchCommand:
         output = cmd_search(session, ["VMware"])
 
         assert "VMware" in output
-        assert "F-INFRA-001" in output
+        assert "F-TGT-INFRA-001" in output
 
     def test_search_risks(self):
         """Test searching risks."""

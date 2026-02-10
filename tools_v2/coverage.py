@@ -7,7 +7,7 @@ coverage quality based on FactStore contents.
 
 from dataclasses import dataclass
 from typing import Dict, List, Any, Optional
-from tools_v2.fact_store import FactStore
+from stores.fact_store import FactStore
 
 # Import caching
 try:

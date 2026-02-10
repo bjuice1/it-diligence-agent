@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 import json
 import re
 
+from tools_v2.document_preprocessor import DocumentPreprocessor
+
 
 @dataclass
 class DocumentSection:
@@ -127,6 +129,7 @@ class PDFParser:
     
     def __init__(self):
         self.documents: List[ParsedDocument] = []
+        self._preprocessor = DocumentPreprocessor(aggressive=False)
     
     def parse_file(self, filepath: Path) -> ParsedDocument:
         """Parse a single PDF file"""
@@ -152,24 +155,31 @@ class PDFParser:
         
         # Extract text page by page
         all_text = []
+
+        for page_num, page in enumerate(doc, 1):
+            page_text = page.get_text("text")
+            page_text = self._preprocessor.clean(page_text)
+            all_text.append(page_text)
+
+        # Merge tables that span page boundaries before section detection
+        merged_texts = self._merge_split_tables(all_text)
+
+        # Build sections from merged page texts
         current_section = None
         current_content = []
         current_pages = []
-        
-        for page_num, page in enumerate(doc, 1):
-            page_text = page.get_text("text")
-            all_text.append(page_text)
-            
+
+        for page_num, page_text in enumerate(merged_texts, 1):
             # Try to identify sections
             lines = page_text.split('\n')
             for line in lines:
                 line = line.strip()
                 if not line:
                     continue
-                
+
                 # Check if this line is a header
                 is_header = self._is_header(line)
-                
+
                 if is_header and current_section:
                     # Save previous section
                     parsed.sections.append(DocumentSection(
@@ -187,7 +197,7 @@ class PDFParser:
                     current_content.append(line)
                     if page_num not in current_pages:
                         current_pages.append(page_num)
-        
+
         # Don't forget the last section
         if current_section and current_content:
             parsed.sections.append(DocumentSection(
@@ -195,8 +205,8 @@ class PDFParser:
                 content='\n'.join(current_content),
                 page_numbers=current_pages
             ))
-        
-        parsed.raw_text = '\n\n'.join(all_text)
+
+        parsed.raw_text = '\n\n'.join(merged_texts)
         
         doc.close()
         self.documents.append(parsed)
@@ -218,6 +228,59 @@ class PDFParser:
         
         return results
     
+    def _merge_split_tables(self, pages_text: List[str]) -> List[str]:
+        """Detect and merge tables that span page boundaries.
+
+        Strategy: If a page ends with a partial markdown table row (line starts with '|'
+        but the table has fewer columns than the previous table block), merge the
+        continuation rows into the previous page's table block.
+
+        Also handles: page ending mid-row (line ends with '|' and next page starts with '|')
+        """
+        if len(pages_text) < 2:
+            return pages_text
+
+        merged = [pages_text[0]]
+        for i in range(1, len(pages_text)):
+            prev = merged[-1]
+            curr = pages_text[i]
+
+            prev_lines = prev.rstrip().split('\n')
+            curr_lines = curr.lstrip().split('\n')
+
+            # Check if previous page ends inside a table
+            prev_in_table = (
+                len(prev_lines) >= 2
+                and prev_lines[-1].strip().startswith('|')
+            )
+
+            # Check if current page starts with table continuation
+            curr_continues_table = (
+                len(curr_lines) >= 1
+                and curr_lines[0].strip().startswith('|')
+            )
+
+            if prev_in_table and curr_continues_table:
+                # Find where table continuation ends in current page
+                table_end = 0
+                for j, line in enumerate(curr_lines):
+                    if line.strip().startswith('|'):
+                        table_end = j + 1
+                    else:
+                        break
+
+                # Merge table rows into previous page
+                table_continuation = '\n'.join(curr_lines[:table_end])
+                remaining = '\n'.join(curr_lines[table_end:])
+
+                merged[-1] = prev + '\n' + table_continuation
+                if remaining.strip():
+                    merged.append(remaining)
+            else:
+                merged.append(curr)
+
+        return merged
+
     def _is_header(self, line: str) -> bool:
         """Determine if a line is likely a section header"""
         # Too long to be a header

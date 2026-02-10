@@ -52,7 +52,8 @@ def generate_dashboard_data(
     reasoning_store: "ReasoningStore",
     deal_context: Optional[DealContext] = None,
     domain_reports: Optional[Dict[str, DomainReportData]] = None,
-    target_name: str = "Target Company"
+    target_name: str = "Target Company",
+    entity: str = "target"
 ) -> ExecutiveDashboardData:
     """
     Generate executive dashboard data from analysis results.
@@ -63,10 +64,13 @@ def generate_dashboard_data(
         deal_context: Optional deal context
         domain_reports: Optional pre-generated domain reports
         target_name: Name of target company
+        entity: Entity to filter by ("target" or "buyer") - Phase 7
 
     Returns:
         ExecutiveDashboardData for rendering
     """
+    # Note: entity filtering happens at the domain generator level
+    # This function receives pre-filtered data or filters via domain_reports
     # Extract budget summary
     budget_summary = extract_it_budget_summary(fact_store, deal_context)
 

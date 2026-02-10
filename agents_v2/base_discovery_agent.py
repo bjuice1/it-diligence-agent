@@ -18,9 +18,10 @@ import logging
 from time import time
 from dataclasses import dataclass
 
-from tools_v2.fact_store import FactStore
+from stores.fact_store import FactStore
 from tools_v2.discovery_tools import DISCOVERY_TOOLS, execute_discovery_tool
 from tools_v2.discovery_logger import DiscoveryLogger
+from tools_v2.deterministic_parser import preprocess_document as deterministic_preprocess
 
 # Import cost estimation, rate limiter, circuit breaker, and temperature
 try:
@@ -85,7 +86,8 @@ class BaseDiscoveryAgent(ABC):
         model: str = None,
         max_tokens: int = None,
         max_iterations: int = None,
-        target_name: Optional[str] = None
+        target_name: Optional[str] = None,
+        inventory_store: Optional[Any] = None,
     ):
         if not api_key:
             raise ValueError("API key must be provided")
@@ -113,6 +115,7 @@ class BaseDiscoveryAgent(ABC):
         self.max_tokens = max_tokens
         self.max_iterations = max_iterations
         self.target_name = target_name  # Name of the target company being analyzed
+        self.inventory_store = inventory_store  # Optional InventoryStore for bidirectional linking (Spec 03)
 
         # State
         self.messages: List[Dict] = []
@@ -219,9 +222,31 @@ class BaseDiscoveryAgent(ABC):
             document_length=len(document_text)
         )
 
+        # =================================================================
+        # DETERMINISTIC PREPROCESSING - Extract tables WITHOUT LLM
+        # =================================================================
         try:
-            # Build initial user message
-            user_message = self._build_user_message(document_text)
+            preprocess_result = deterministic_preprocess(
+                document_text=document_text,
+                fact_store=self.fact_store,
+                entity=entity,
+                source_document=document_name,
+                inventory_store=self.inventory_store,
+            )
+            if preprocess_result.facts_created > 0:
+                print(f"[DETERMINISTIC] Extracted {preprocess_result.facts_created} facts from tables")
+                self.logger.info(f"Deterministic preprocessing: {preprocess_result.facts_created} facts from tables")
+
+            # Use remaining prose for LLM (tables already handled)
+            remaining_text = preprocess_result.remaining_text or document_text
+        except Exception as e:
+            self.logger.warning(f"Deterministic preprocessing failed, using full text: {e}")
+            remaining_text = document_text
+        # =================================================================
+
+        try:
+            # Build initial user message (with remaining prose after table extraction)
+            user_message = self._build_user_message(remaining_text)
             self.messages = [{"role": "user", "content": user_message}]
 
             # Discovery loop

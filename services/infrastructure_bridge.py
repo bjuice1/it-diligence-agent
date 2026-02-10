@@ -10,7 +10,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
 
-from tools_v2.fact_store import FactStore, Fact
+from stores.fact_store import FactStore, Fact
 
 logger = logging.getLogger(__name__)
 

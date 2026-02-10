@@ -19,7 +19,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from utils.file_hasher import compute_sha256, compute_sha256_from_bytes, verify_file_hash
-from tools_v2.document_store import (
+from stores.document_store import (
     DocumentStore,
     Document,
     DocumentStatus,

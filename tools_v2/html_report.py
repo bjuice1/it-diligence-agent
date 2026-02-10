@@ -13,7 +13,7 @@ COST CALCULATION:
 from pathlib import Path
 from typing import List
 from datetime import datetime
-from tools_v2.fact_store import FactStore
+from stores.fact_store import FactStore
 from tools_v2.reasoning_tools import ReasoningStore
 from tools_v2.reasoning_tools import COST_RANGE_VALUES
 from tools_v2.consistency_engine import (
@@ -962,6 +962,24 @@ def _build_work_items_section(
                 {related_risks}
             </div>'''
 
+        # Build cost buildup detail section if available
+        cost_buildup_html = ""
+        if hasattr(wi, 'cost_buildup') and wi.cost_buildup:
+            cb = wi.cost_buildup
+            assumptions_text = "; ".join(cb.assumptions) if cb.assumptions else "None stated"
+            cost_buildup_html = f'''
+                    <dt>Cost Buildup (Anchor-Based)</dt>
+                    <dd>
+                        <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px; padding: 0.75rem; margin: 0.25rem 0;">
+                            <strong>Basis:</strong> {cb.anchor_name} (<code>{cb.anchor_key}</code>)<br>
+                            <strong>Method:</strong> {cb.estimation_method} &times; {cb.quantity} {cb.unit_label}<br>
+                            <strong>Unit Range:</strong> ${cb.unit_cost_low:,.0f} - ${cb.unit_cost_high:,.0f} per {cb.unit_label}<br>
+                            <strong>Total:</strong> <span style="font-weight: 700; color: #166534;">${cb.total_low:,.0f} - ${cb.total_high:,.0f}</span><br>
+                            <strong>Confidence:</strong> {cb.confidence} ({cb.estimation_source})<br>
+                            <strong>Assumptions:</strong> {assumptions_text}
+                        </div>
+                    </dd>'''
+
         items_html.append(f'''
         <div class="item" id="wi-{wi.finding_id}"
              data-domain="{wi.domain}"
@@ -980,6 +998,7 @@ def _build_work_items_section(
                     <dd class="cost"><strong>${det_low:,.0f} - ${det_high:,.0f}</strong> <span style="font-size: 0.8em; color: #666;">({category})</span></dd>
                     <dt>AI Initial Estimate</dt>
                     <dd style="color: #888; font-size: 0.9em;">{wi.cost_estimate.replace("_", " ")} (${ai_cost_range['low']:,.0f} - ${ai_cost_range['high']:,.0f})</dd>
+                    {cost_buildup_html}
                     <dt>Reasoning</dt>
                     <dd>{wi.reasoning}</dd>
                 </dl>

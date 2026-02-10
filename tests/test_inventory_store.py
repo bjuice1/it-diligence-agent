@@ -348,7 +348,7 @@ class TestInventoryStore:
 
     def test_add_item(self):
         """Test adding items to store."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
 
         item_id = store.add_item(
             inventory_type="application",
@@ -363,7 +363,7 @@ class TestInventoryStore:
 
     def test_add_duplicate_returns_existing(self):
         """Adding duplicate item returns existing ID."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
 
         id1 = store.add_item(
             inventory_type="application",
@@ -382,7 +382,7 @@ class TestInventoryStore:
 
     def test_get_item(self):
         """Test retrieving items."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
 
         item_id = store.add_item(
             inventory_type="application",
@@ -400,7 +400,7 @@ class TestInventoryStore:
 
     def test_update_item(self):
         """Test updating items."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
 
         item_id = store.add_item(
             inventory_type="application",
@@ -420,7 +420,7 @@ class TestInventoryStore:
 
     def test_remove_item(self):
         """Test removing items."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
 
         item_id = store.add_item(
             inventory_type="application",
@@ -440,7 +440,7 @@ class TestInventoryStore:
 
     def test_get_items_by_type(self):
         """Test filtering by inventory type."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
 
         store.add_item("application", {"name": "App1"}, "target")
         store.add_item("application", {"name": "App2"}, "target")
@@ -454,7 +454,7 @@ class TestInventoryStore:
 
     def test_get_items_by_entity(self):
         """Test filtering by entity."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
 
         store.add_item("application", {"name": "App1"}, "target")
         store.add_item("application", {"name": "App2"}, "buyer")
@@ -467,7 +467,7 @@ class TestInventoryStore:
 
     def test_find_by_name(self):
         """Test finding items by name."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
 
         store.add_item("application", {"name": "Salesforce CRM", "vendor": "Salesforce"}, "target")
         store.add_item("application", {"name": "SAP ERP", "vendor": "SAP"}, "target")
@@ -487,7 +487,7 @@ class TestInventoryStore:
 
     def test_search(self):
         """Test text search."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
 
         store.add_item("application", {"name": "Salesforce", "vendor": "Salesforce", "notes": "CRM system"}, "target")
         store.add_item("application", {"name": "SAP", "vendor": "SAP", "notes": "ERP system"}, "target")
@@ -502,7 +502,7 @@ class TestInventoryStore:
 
     def test_count_and_sum(self):
         """Test aggregation methods."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
 
         store.add_item("application", {"name": "App1", "cost": 10000}, "target")
         store.add_item("application", {"name": "App2", "cost": 20000}, "target")
@@ -515,7 +515,7 @@ class TestInventoryStore:
 
     def test_get_summary(self):
         """Test summary generation."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
 
         store.add_item("application", {"name": "App1", "cost": 10000}, "target")
         store.add_item("application", {"name": "App2", "cost": 20000}, "target")
@@ -534,14 +534,14 @@ class TestInventoryStore:
             path = Path(tmpdir) / "inventory.json"
 
             # Create and save
-            store1 = InventoryStore()
+            store1 = InventoryStore(deal_id="test-deal")
             store1.add_item("application", {"name": "App1", "cost": 10000}, "target")
             store1.add_item("application", {"name": "App2", "cost": 20000}, "target")
             store1.save(path)
 
             # Load into new store
-            store2 = InventoryStore()
-            store2.load(path)
+            store2 = InventoryStore(deal_id="test-deal")
+            store2.load_from_file(path)
 
             assert len(store2) == 2
             assert store2.sum_costs() == 30000.0
@@ -557,20 +557,20 @@ class TestInventoryStore:
             path = Path(tmpdir) / "inventory.json"
 
             # Create and save
-            store1 = InventoryStore(storage_path=path)
+            store1 = InventoryStore(deal_id="test-deal", storage_path=path)
             store1.add_item("application", {"name": "App1"}, "target")
             store1.save()
 
             # Create new store with same path - should auto-load
-            store2 = InventoryStore(storage_path=path)
+            store2 = InventoryStore(deal_id="test-deal", storage_path=path)
             assert len(store2) == 1
 
     def test_merge_add_new(self):
         """Test merge with add_new strategy."""
-        store1 = InventoryStore()
+        store1 = InventoryStore(deal_id="test-deal")
         store1.add_item("application", {"name": "App1"}, "target")
 
-        store2 = InventoryStore()
+        store2 = InventoryStore(deal_id="test-deal")
         store2.add_item("application", {"name": "App1"}, "target")  # Same
         store2.add_item("application", {"name": "App2"}, "target")  # New
 
@@ -582,10 +582,10 @@ class TestInventoryStore:
 
     def test_merge_update(self):
         """Test merge with update strategy."""
-        store1 = InventoryStore()
+        store1 = InventoryStore(deal_id="test-deal")
         store1.add_item("application", {"name": "App1", "cost": 1000}, "target")
 
-        store2 = InventoryStore()
+        store2 = InventoryStore(deal_id="test-deal")
         store2.add_item("application", {"name": "App1", "cost": 2000}, "target")  # Updated cost
 
         result = store1.merge_from(store2, strategy="update")
@@ -596,7 +596,7 @@ class TestInventoryStore:
 
     def test_add_from_table(self):
         """Test bulk add from table data."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
 
         rows = [
             {"name": "App1", "vendor": "Vendor1", "cost": 10000},
@@ -658,7 +658,7 @@ class TestIntegration:
             path = Path(tmpdir) / "inventory.json"
 
             # Create store and add items
-            store = InventoryStore()
+            store = InventoryStore(deal_id="test-deal")
 
             app_id = store.add_item(
                 "application",
@@ -697,8 +697,8 @@ class TestIntegration:
             store.save(path)
 
             # Load into new store
-            store2 = InventoryStore()
-            store2.load(path)
+            store2 = InventoryStore(deal_id="test-deal")
+            store2.load_from_file(path)
 
             # Verify
             assert len(store2) == 2
@@ -714,14 +714,14 @@ class TestIntegration:
 
     def test_reimport_workflow(self):
         """Test re-importing updated data."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
 
         # Initial import
         rows_v1 = [
             {"name": "App1", "vendor": "Vendor1", "cost": 10000},
             {"name": "App2", "vendor": "Vendor2", "cost": 20000},
         ]
-        store.add_from_table("application", rows_v1, "target", "v1.xlsx")
+        store.add_from_table("application", rows_v1, "target", source_file="v1.xlsx")
 
         assert len(store) == 2
 
@@ -733,8 +733,8 @@ class TestIntegration:
         ]
 
         # Create new store for merge
-        store2 = InventoryStore()
-        store2.add_from_table("application", rows_v2, "target", "v2.xlsx")
+        store2 = InventoryStore(deal_id="test-deal")
+        store2.add_from_table("application", rows_v2, "target", source_file="v2.xlsx")
 
         # Merge with update strategy
         result = store.merge_from(store2, strategy="update")

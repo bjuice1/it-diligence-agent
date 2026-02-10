@@ -448,6 +448,8 @@ class IncrementalDBWriter:
                 'deal_id': deal_id,
                 'analysis_run_id': analysis_run_id,
                 'finding_type': finding_data.get('finding_type', 'risk'),
+                'entity': finding_data.get('entity', 'target'),
+                'risk_scope': finding_data.get('risk_scope', ''),
                 'domain': finding_data.get('domain', 'general'),
                 'title': finding_data.get('title', ''),
                 'description': finding_data.get('description', ''),
@@ -474,6 +476,7 @@ class IncrementalDBWriter:
                     'priority': finding_data.get('priority'),
                     'owner_type': finding_data.get('owner_type'),
                     'cost_estimate': finding_data.get('cost_estimate'),
+                    'cost_buildup_json': finding_data.get('cost_buildup_json'),
                     'triggered_by_risks': finding_data.get('triggered_by_risks', []),
                     'dependencies': finding_data.get('dependencies', []),
                 })

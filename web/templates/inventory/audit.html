@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+
+{% block title %}Inventory Audit Report - IT Due Diligence{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="flex justify-between items-start">
+        <div>
+            <h1>Inventory Audit Report</h1>
+            <p>Post-discovery integrity check and data quality assessment</p>
+        </div>
+        <div class="flex gap-2">
+            <a href="{{ url_for('inventory.inventory_home') }}" class="btn btn-secondary">
+                Back to Inventory
+            </a>
+        </div>
+    </div>
+</div>
+
+{% if not report %}
+<div class="alert alert-info">No audit report available. Run analysis first.</div>
+{% else %}
+
+<div class="audit-health {{ report.overall_health }}" style="padding: 1rem; margin-bottom: 1.5rem; border-radius: 8px; {% if report.overall_health == 'healthy' %}background: #d1fae5; border: 1px solid #10b981;{% elif report.overall_health == 'fair' %}background: #fef3c7; border: 1px solid #f59e0b;{% else %}background: #fee2e2; border: 1px solid #ef4444;{% endif %}">
+    <strong>Overall Health:</strong> {{ report.overall_health | upper }}
+    <span class="timestamp" style="float: right; color: #6b7280; font-size: 0.875rem;">Generated: {{ report.generated_at }}</span>
+</div>
+
+{% if report.issues %}
+<div class="audit-issues" style="margin-bottom: 1.5rem;">
+    <h4>Issues</h4>
+    <ul style="list-style: none; padding: 0;">
+    {% for issue in report.issues %}
+        <li class="issue-item" style="padding: 0.5rem 0.75rem; margin-bottom: 0.5rem; background: #fef3c7; border-left: 3px solid #f59e0b; border-radius: 4px;">{{ issue }}</li>
+    {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<div class="audit-section" style="margin-bottom: 1.5rem;">
+    <h4>Inventory Counts</h4>
+    <table class="table" style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid #e5e7eb;">
+                <th style="text-align: left; padding: 0.5rem;">Type</th>
+                <th style="text-align: right; padding: 0.5rem;">Target</th>
+                <th style="text-align: right; padding: 0.5rem;">Buyer</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for inv_type in ['application', 'infrastructure', 'organization', 'vendor'] %}
+            <tr style="border-bottom: 1px solid #f3f4f6;">
+                <td style="padding: 0.5rem;">{{ inv_type | capitalize }}</td>
+                <td style="text-align: right; padding: 0.5rem;">{{ report.inventory_counts.target[inv_type] | default(0) }}</td>
+                <td style="text-align: right; padding: 0.5rem;">{{ report.inventory_counts.buyer[inv_type] | default(0) }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="audit-section" style="margin-bottom: 1.5rem;">
+    <h4>Linking Coverage</h4>
+    <table class="table" style="width: 100%; border-collapse: collapse;">
+        <tr style="border-bottom: 1px solid #f3f4f6;">
+            <td style="padding: 0.5rem;">Total Items</td>
+            <td style="text-align: right; padding: 0.5rem;">{{ report.linking.total_items }}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #f3f4f6;">
+            <td style="padding: 0.5rem;">Linked Items</td>
+            <td style="text-align: right; padding: 0.5rem;">{{ report.linking.linked_items }} ({{ report.linking.item_link_rate }}%)</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #f3f4f6;">
+            <td style="padding: 0.5rem;">Total Facts</td>
+            <td style="text-align: right; padding: 0.5rem;">{{ report.linking.total_facts }}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #f3f4f6;">
+            <td style="padding: 0.5rem;">Linked Facts</td>
+            <td style="text-align: right; padding: 0.5rem;">{{ report.linking.linked_facts }} ({{ report.linking.fact_link_rate }}%)</td>
+        </tr>
+    </table>
+</div>
+
+{% if report.duplicates %}
+<div class="audit-section" style="margin-bottom: 1.5rem;">
+    <h4>Duplicates Detected ({{ report.duplicates | length }})</h4>
+    <table class="table" style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid #e5e7eb;">
+                <th style="text-align: left; padding: 0.5rem;">Name</th>
+                <th style="text-align: left; padding: 0.5rem;">Entity</th>
+                <th style="text-align: left; padding: 0.5rem;">Type</th>
+                <th style="text-align: left; padding: 0.5rem;">ID A</th>
+                <th style="text-align: left; padding: 0.5rem;">ID B</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for dup in report.duplicates %}
+            <tr style="border-bottom: 1px solid #f3f4f6;">
+                <td style="padding: 0.5rem;">{{ dup.name }}</td>
+                <td style="padding: 0.5rem;">{{ dup.entity }}</td>
+                <td style="padding: 0.5rem;">{{ dup.type }}</td>
+                <td style="padding: 0.5rem;"><code>{{ dup.id_a }}</code></td>
+                <td style="padding: 0.5rem;"><code>{{ dup.id_b }}</code></td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if report.data_quality and report.data_quality.items_with_missing_fields > 0 %}
+<div class="audit-section" style="margin-bottom: 1.5rem;">
+    <h4>Data Quality Issues ({{ report.data_quality.items_with_missing_fields }} items)</h4>
+    <table class="table" style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid #e5e7eb;">
+                <th style="text-align: left; padding: 0.5rem;">Item ID</th>
+                <th style="text-align: left; padding: 0.5rem;">Name</th>
+                <th style="text-align: left; padding: 0.5rem;">Missing Fields</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for item in report.data_quality.details %}
+            <tr style="border-bottom: 1px solid #f3f4f6;">
+                <td style="padding: 0.5rem;"><code>{{ item.item_id }}</code></td>
+                <td style="padding: 0.5rem;">{{ item.name }}</td>
+                <td style="padding: 0.5rem;">{{ item.missing_fields | join(', ') }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if report.orphans and report.orphans.item_count > 0 %}
+<div class="audit-section" style="margin-bottom: 1.5rem;">
+    <h4>Orphaned Items ({{ report.orphans.item_count }} items, {{ report.orphans.fact_count }} facts)</h4>
+    <table class="table" style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid #e5e7eb;">
+                <th style="text-align: left; padding: 0.5rem;">Item ID</th>
+                <th style="text-align: left; padding: 0.5rem;">Name</th>
+                <th style="text-align: left; padding: 0.5rem;">Type</th>
+                <th style="text-align: left; padding: 0.5rem;">Entity</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for item in report.orphans.items %}
+            <tr style="border-bottom: 1px solid #f3f4f6;">
+                <td style="padding: 0.5rem;"><code>{{ item.item_id }}</code></td>
+                <td style="padding: 0.5rem;">{{ item.name }}</td>
+                <td style="padding: 0.5rem;">{{ item.type }}</td>
+                <td style="padding: 0.5rem;">{{ item.entity }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}

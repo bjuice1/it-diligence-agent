@@ -92,7 +92,7 @@ def _generate_stable_id(prefix: str, domain: str, title: str, owner: Optional[st
     return f"{prefix}-{short_hash}"
 
 if TYPE_CHECKING:
-    from tools_v2.fact_store import FactStore
+    from stores.fact_store import FactStore
 
 logger = logging.getLogger(__name__)
 
@@ -298,7 +298,8 @@ class Risk:
 
     # === Entity Tracking (PE-Grade) ===
     # Separates target vs buyer fact citations for clarity
-    risk_scope: str = "target_standalone"  # "target_standalone" or "integration_dependent"
+    entity: str = "target"  # "target" or "buyer" - inferred from cited facts
+    risk_scope: str = "target_standalone"  # "target_standalone", "integration_dependent", "buyer_action"
     target_facts_cited: List[str] = field(default_factory=list)  # F-TGT-xxx IDs
     buyer_facts_cited: List[str] = field(default_factory=list)   # F-BYR-xxx IDs (empty if standalone)
     overlap_id: Optional[str] = None  # Link to OverlapCandidate (OC-xxx) if integration-related
@@ -312,6 +313,7 @@ class Risk:
     @classmethod
     def from_dict(cls, data: Dict) -> "Risk":
         # Handle missing new fields for backwards compatibility
+        data.setdefault("entity", "target")
         data.setdefault("risk_scope", "target_standalone")
         data.setdefault("target_facts_cited", [])
         data.setdefault("buyer_facts_cited", [])
@@ -336,6 +338,7 @@ class StrategicConsideration:
     mna_implication: str = ""  # Specific deal implication (1-2 sentences)
 
     # === Entity Tracking (PE-Grade) ===
+    entity: str = "target"  # "target" or "buyer" - inferred from cited facts
     integration_related: bool = False  # True if this consideration involves buyer comparison
     target_facts_cited: List[str] = field(default_factory=list)  # F-TGT-xxx IDs
     buyer_facts_cited: List[str] = field(default_factory=list)   # F-BYR-xxx IDs
@@ -349,6 +352,7 @@ class StrategicConsideration:
     @classmethod
     def from_dict(cls, data: Dict) -> "StrategicConsideration":
         # Handle missing new fields for backwards compatibility
+        data.setdefault("entity", "target")
         data.setdefault("integration_related", False)
         data.setdefault("target_facts_cited", [])
         data.setdefault("buyer_facts_cited", [])
@@ -490,6 +494,7 @@ class WorkItem:
     integration_option: Optional[str] = None  # e.g., "If Oracle harmonization, add ETL + 6 months"
 
     # === Entity Tracking ===
+    entity: str = "target"  # "target" or "buyer" - inferred from cited facts
     integration_related: bool = False  # True if depends on buyer context
     target_facts_cited: List[str] = field(default_factory=list)  # F-TGT-xxx IDs
     buyer_facts_cited: List[str] = field(default_factory=list)   # F-BYR-xxx IDs
@@ -511,6 +516,7 @@ class WorkItem:
         if data.get('cost_buildup') and isinstance(data['cost_buildup'], dict):
             data['cost_buildup'] = CostBuildUp.from_dict(data['cost_buildup'])
         # Handle missing new fields for backwards compatibility
+        data.setdefault("entity", "target")
         data.setdefault("target_action", "")
         data.setdefault("integration_option", None)
         data.setdefault("integration_related", False)
@@ -541,6 +547,7 @@ class Recommendation:
     mna_implication: str = ""  # Specific deal implication (1-2 sentences)
 
     # === Entity Tracking (PE-Grade) ===
+    entity: str = "target"  # "target" or "buyer" - inferred from cited facts
     integration_related: bool = False  # True if recommendation involves buyer context
     target_facts_cited: List[str] = field(default_factory=list)  # F-TGT-xxx IDs
     buyer_facts_cited: List[str] = field(default_factory=list)   # F-BYR-xxx IDs
@@ -554,6 +561,7 @@ class Recommendation:
     @classmethod
     def from_dict(cls, data: Dict) -> "Recommendation":
         # Handle missing new fields for backwards compatibility
+        data.setdefault("entity", "target")
         data.setdefault("integration_related", False)
         data.setdefault("target_facts_cited", [])
         data.setdefault("buyer_facts_cited", [])
@@ -802,9 +810,13 @@ class ReasoningStore:
             kwargs["target_facts_cited"] = target_facts
             kwargs["buyer_facts_cited"] = buyer_facts
 
+            # Ensure entity is set (infer from citations if not explicitly provided)
+            if "entity" not in kwargs:
+                kwargs["entity"] = _infer_entity_from_citations(based_on, self.fact_store)
+
             risk = Risk(**kwargs)
             self.risks.append(risk)
-            logger.debug(f"Added risk {risk_id}: {risk.title}")
+            logger.debug(f"Added risk {risk_id}: {risk.title} [entity={risk.entity}]")
             return risk_id
 
     def add_strategic_consideration(self, **kwargs) -> str:
@@ -828,9 +840,13 @@ class ReasoningStore:
             kwargs["target_facts_cited"] = target_facts
             kwargs["buyer_facts_cited"] = buyer_facts
 
+            # Ensure entity is set (infer from citations if not explicitly provided)
+            if "entity" not in kwargs:
+                kwargs["entity"] = _infer_entity_from_citations(based_on, self.fact_store)
+
             sc = StrategicConsideration(**kwargs)
             self.strategic_considerations.append(sc)
-            logger.debug(f"Added strategic consideration {sc_id}: {sc.title}")
+            logger.debug(f"Added strategic consideration {sc_id}: {sc.title} [entity={sc.entity}]")
             return sc_id
 
     def add_work_item(self, **kwargs) -> str:
@@ -857,6 +873,10 @@ class ReasoningStore:
             kwargs["target_facts_cited"] = target_facts
             kwargs["buyer_facts_cited"] = buyer_facts
 
+            # Ensure entity is set (infer from citations if not explicitly provided)
+            if "entity" not in kwargs:
+                kwargs["entity"] = _infer_entity_from_citations(all_ids, self.fact_store)
+
             # Validate cost estimate - fail fast instead of silent default
             cost_estimate = kwargs.get("cost_estimate")
             if not cost_estimate:
@@ -873,7 +893,10 @@ class ReasoningStore:
 
             wi = WorkItem(**kwargs)
             self.work_items.append(wi)
-            logger.debug(f"Added work item {wi_id}: {wi.title} (cost: {wi.cost_estimate})")
+            buildup_info = ""
+            if wi.cost_buildup is not None:
+                buildup_info = f" [buildup: {wi.cost_buildup.anchor_key} ${wi.cost_buildup.total_low:,.0f}-${wi.cost_buildup.total_high:,.0f}]"
+            logger.debug(f"Added work item {wi_id}: {wi.title} (cost: {wi.cost_estimate}){buildup_info} [entity={wi.entity}]")
             return wi_id
 
     def add_recommendation(self, **kwargs) -> str:
@@ -897,9 +920,13 @@ class ReasoningStore:
             kwargs["target_facts_cited"] = target_facts
             kwargs["buyer_facts_cited"] = buyer_facts
 
+            # Ensure entity is set (infer from citations if not explicitly provided)
+            if "entity" not in kwargs:
+                kwargs["entity"] = _infer_entity_from_citations(based_on, self.fact_store)
+
             rec = Recommendation(**kwargs)
             self.recommendations.append(rec)
-            logger.debug(f"Added recommendation {rec_id}: {rec.title}")
+            logger.debug(f"Added recommendation {rec_id}: {rec.title} [entity={rec.entity}]")
             return rec_id
 
     def add_function_story(self, **kwargs) -> str:
@@ -2260,6 +2287,74 @@ REASONING_TOOLS = [
                     "enum": COST_RANGES,
                     "description": "Estimated cost range: under_25k (<$25K), 25k_to_100k ($25K-$100K), 100k_to_500k ($100K-$500K), 500k_to_1m ($500K-$1M), over_1m (>$1M)"
                 },
+                "cost_buildup": {
+                    "type": "object",
+                    "description": (
+                        "Optional structured cost breakdown using benchmark anchors. "
+                        "When provided, this gives transparent, auditable cost estimates "
+                        "instead of vague ranges. Use anchor_key from the COST ANCHORS reference table."
+                    ),
+                    "properties": {
+                        "anchor_key": {
+                            "type": "string",
+                            "description": "Key from COST_ANCHORS (e.g., 'app_migration_simple', 'identity_separation', 'cloud_migration')",
+                            "enum": [
+                                # Application anchors
+                                "app_migration_simple", "app_migration_moderate", "app_migration_complex",
+                                "license_microsoft", "license_erp",
+                                # Infrastructure anchors
+                                "dc_migration", "cloud_migration", "storage_migration",
+                                # Identity anchors
+                                "identity_separation",
+                                # Network anchors
+                                "network_separation", "wan_setup",
+                                # Security anchors
+                                "security_remediation", "security_tool_deployment",
+                                # Data anchors
+                                "data_segregation",
+                                # Vendor anchors
+                                "vendor_contract_transition",
+                                # PMO & Change anchors
+                                "pmo_overhead", "change_management",
+                                # TSA Exit anchors
+                                "tsa_exit_identity", "tsa_exit_email", "tsa_exit_service_desk",
+                                "tsa_exit_infrastructure", "tsa_exit_network", "tsa_exit_security",
+                                "tsa_exit_erp_support",
+                            ],
+                        },
+                        "quantity": {
+                            "type": "integer",
+                            "description": "Number of units (users, apps, sites, etc.) — use 1 for fixed costs. MUST come from cited facts.",
+                            "minimum": 1,
+                        },
+                        "unit_label": {
+                            "type": "string",
+                            "description": "What the quantity represents",
+                            "enum": ["users", "applications", "sites", "servers", "vendors",
+                                     "data_centers", "terabytes", "organization", "endpoints"],
+                        },
+                        "size_tier": {
+                            "type": "string",
+                            "description": "For fixed_by_size anchors: which tier applies based on quantity",
+                            "enum": ["small", "medium", "large"],
+                        },
+                        "assumptions": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "List of assumptions underlying this estimate (e.g., 'Standard complexity migration', '500 users from F-TGT-APP-001')",
+                        },
+                        "source_facts": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Fact IDs that provide the quantities used (e.g., 'F-TGT-APP-001' for user count)",
+                        },
+                        "notes": {
+                            "type": "string",
+                            "description": "Additional context about the estimate",
+                        },
+                    },
+                    "required": ["anchor_key", "quantity", "unit_label", "source_facts"],
+                },
                 "triggered_by_risks": {
                     "type": "array",
                     "items": {"type": "string"},
@@ -2897,6 +2992,30 @@ def _execute_identify_risk(
                 "message": "Risk must cite at least one fact (based_on_facts required)"
             }
 
+        # Entity validation: validate risk_scope
+        risk_scope = input_data.get("risk_scope", "target_standalone")
+        VALID_RISK_SCOPES = ["target_standalone", "integration_dependent", "buyer_action"]
+        if risk_scope not in VALID_RISK_SCOPES:
+            return {
+                "status": "error",
+                "message": f"Invalid risk_scope '{risk_scope}'. Must be one of: {VALID_RISK_SCOPES}"
+            }
+
+        # Determine entity from cited facts
+        entity = _infer_entity_from_citations(based_on, reasoning_store.fact_store)
+
+        # ANCHOR RULE enforcement:
+        # If buyer facts are cited, at least one target fact must also be cited
+        buyer_facts = [f for f in based_on if "BYR" in f.upper()]
+        target_facts = [f for f in based_on if "TGT" in f.upper()]
+
+        if buyer_facts and not target_facts:
+            return {
+                "status": "error",
+                "message": "ANCHOR RULE violation: Risks citing buyer facts must also cite at least one target fact. "
+                           "Buyer facts provide context, but risks must be anchored to target observations."
+            }
+
         risk_id = reasoning_store.add_risk(
             domain=domain,
             title=input_data.get("title"),
@@ -2913,12 +3032,14 @@ def _execute_identify_risk(
             mna_implication=input_data.get("mna_implication", ""),
             integration_related=input_data.get("integration_related", False),
             overlap_id=input_data.get("overlap_id"),
-            risk_scope=input_data.get("risk_scope", "target_standalone")
+            entity=entity,
+            risk_scope=risk_scope,
         )
 
         return {
             "status": "success",
             "risk_id": risk_id,
+            "entity": entity,
             "message": f"Risk recorded: {input_data.get('title')}"
         }
 
@@ -2944,6 +3065,23 @@ def _execute_create_strategic_consideration(
                 "message": "Strategic consideration must cite facts (based_on_facts required)"
             }
 
+        # Entity inference from citations
+        entity = _infer_entity_from_citations(based_on, reasoning_store.fact_store)
+
+        # ANCHOR RULE for buyer-context considerations
+        buyer_facts = [f for f in based_on if "BYR" in f.upper()]
+        target_facts = [f for f in based_on if "TGT" in f.upper()]
+
+        if buyer_facts and not target_facts:
+            # Exception: buyer_alignment lens may cite buyer-only facts
+            is_buyer_alignment = input_data.get("lens") == "buyer_alignment"
+            if not is_buyer_alignment:
+                return {
+                    "status": "error",
+                    "message": "ANCHOR RULE violation: Strategic considerations citing buyer facts must also cite "
+                               "at least one target fact to anchor the analysis."
+                }
+
         sc_id = reasoning_store.add_strategic_consideration(
             domain=input_data.get("domain"),
             title=input_data.get("title"),
@@ -2956,12 +3094,14 @@ def _execute_create_strategic_consideration(
             mna_lens=input_data.get("mna_lens", ""),
             mna_implication=input_data.get("mna_implication", ""),
             integration_related=input_data.get("integration_related", False),
-            overlap_id=input_data.get("overlap_id")
+            overlap_id=input_data.get("overlap_id"),
+            entity=entity,
         )
 
         return {
             "status": "success",
             "consideration_id": sc_id,
+            "entity": entity,
             "message": f"Strategic consideration recorded: {input_data.get('title')}"
         }
 
@@ -3025,6 +3165,43 @@ def _execute_create_work_item(
                 "message": f"Invalid cost_estimate. Must be one of: {', '.join(COST_RANGES)}"
             }
 
+        # Process cost_buildup if provided
+        cost_buildup_obj = None
+        cost_buildup_input = input_data.get("cost_buildup")
+
+        if cost_buildup_input:
+            try:
+                from tools_v2.cost_estimator import estimate_cost
+
+                anchor_key = cost_buildup_input.get("anchor_key")
+                quantity = cost_buildup_input.get("quantity", 1)
+                unit_label = cost_buildup_input.get("unit_label", "organization")
+                size_tier = cost_buildup_input.get("size_tier")
+                assumptions = cost_buildup_input.get("assumptions", [])
+                source_facts = cost_buildup_input.get("source_facts", [])
+                notes = cost_buildup_input.get("notes", "")
+
+                # Call the cost estimator to create a CostBuildUp object
+                cost_buildup_obj = estimate_cost(
+                    anchor_key=anchor_key,
+                    quantity=quantity,
+                    size_tier=size_tier,
+                    source_facts=source_facts,
+                    assumptions=assumptions,
+                    notes=notes,
+                    estimation_source="benchmark",
+                    confidence="medium",
+                )
+
+                if cost_buildup_obj is None:
+                    # Invalid anchor_key or estimation failure - log warning but don't block
+                    logger.warning(
+                        f"cost_buildup estimation failed for anchor_key='{anchor_key}'. "
+                        f"Falling back to cost_estimate='{cost_estimate}'."
+                    )
+            except Exception as e:
+                logger.warning(f"cost_buildup processing error: {e}. Using cost_estimate fallback.")
+
         triggered_by = input_data.get("triggered_by", [])
         if not triggered_by:
             return {
@@ -3045,6 +3222,7 @@ def _execute_create_work_item(
             confidence=input_data.get("confidence"),
             reasoning=input_data.get("reasoning"),
             cost_estimate=cost_estimate,
+            cost_buildup=cost_buildup_obj,
             triggered_by_risks=input_data.get("triggered_by_risks", []),
             mna_lens=input_data.get("mna_lens", ""),
             mna_implication=input_data.get("mna_implication", ""),
@@ -3054,11 +3232,18 @@ def _execute_create_work_item(
             target_action=input_data.get("target_action", "")
         )
 
-        return {
+        result = {
             "status": "success",
             "work_item_id": wi_id,
             "message": f"Work item recorded: {input_data.get('title')}"
         }
+
+        # Include cost transparency in response
+        if cost_buildup_obj:
+            result["cost_buildup_summary"] = cost_buildup_obj.format_summary()
+            result["cost_buildup_range"] = f"${cost_buildup_obj.total_low:,.0f} - ${cost_buildup_obj.total_high:,.0f}"
+
+        return result
 
     except ValueError as e:
         logger.error(f"Validation error in create_work_item: {e}")
@@ -3081,6 +3266,20 @@ def _execute_create_recommendation(
                 "message": "Recommendation must cite facts (based_on_facts required)"
             }
 
+        # Entity inference from citations
+        entity = _infer_entity_from_citations(based_on, reasoning_store.fact_store)
+
+        # ANCHOR RULE enforcement
+        buyer_facts = [f for f in based_on if "BYR" in f.upper()]
+        target_facts = [f for f in based_on if "TGT" in f.upper()]
+
+        if buyer_facts and not target_facts:
+            return {
+                "status": "error",
+                "message": "ANCHOR RULE violation: Recommendations citing buyer facts must also cite "
+                           "at least one target fact to anchor the analysis."
+            }
+
         rec_id = reasoning_store.add_recommendation(
             domain=input_data.get("domain"),
             title=input_data.get("title"),
@@ -3094,12 +3293,14 @@ def _execute_create_recommendation(
             mna_lens=input_data.get("mna_lens", ""),
             mna_implication=input_data.get("mna_implication", ""),
             integration_related=input_data.get("integration_related", False),
-            overlap_id=input_data.get("overlap_id")
+            overlap_id=input_data.get("overlap_id"),
+            entity=entity,
         )
 
         return {
             "status": "success",
             "recommendation_id": rec_id,
+            "entity": entity,
             "message": f"Recommendation recorded: {input_data.get('title')}"
         }
 
@@ -3191,6 +3392,40 @@ def _execute_complete_reasoning(
 def get_reasoning_tools() -> List[Dict]:
     """Get all reasoning tool definitions."""
     return REASONING_TOOLS
+
+
+def _infer_entity_from_citations(
+    fact_ids: List[str],
+    fact_store: "FactStore" = None,
+) -> str:
+    """Infer the entity scope from cited fact IDs.
+
+    Rules:
+    - All target facts -> "target"
+    - All buyer facts -> "buyer"
+    - Mixed facts -> "target" (target takes precedence; buyer facts provide context)
+    - No facts -> "target" (default)
+    """
+    if not fact_ids:
+        return "target"
+
+    has_target = any("TGT" in fid.upper() for fid in fact_ids)
+    has_buyer = any("BYR" in fid.upper() for fid in fact_ids)
+
+    if has_target:
+        return "target"  # Target takes precedence (even if mixed)
+    elif has_buyer:
+        return "buyer"
+    else:
+        # Fallback: check fact_store for entity field
+        if fact_store:
+            for fid in fact_ids:
+                fact = fact_store.get_fact(fid)
+                if fact:
+                    entity = getattr(fact, 'entity', None)
+                    if entity:
+                        return entity
+        return "target"
 
 
 def validate_reasoning_input(tool_name: str, tool_input: Dict) -> Optional[str]:

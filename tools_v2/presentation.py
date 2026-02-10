@@ -19,11 +19,12 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 from dataclasses import dataclass
-from tools_v2.fact_store import FactStore
+from stores.fact_store import FactStore
 from tools_v2.reasoning_tools import ReasoningStore, COST_RANGE_VALUES
 from tools_v2.narrative_tools import NarrativeStore
 from tools_v2.complexity_scorer import calculate_complexity_score, get_complexity_assessment
 from tools_v2.cost_calculator import calculate_costs_from_work_items, format_cost_summary
+from services.field_normalizer import normalize_detail, normalize_category
 
 
 # Domain display configuration
@@ -307,10 +308,10 @@ def _build_app_landscape_html(fact_store: FactStore, entity: str = "target") -> 
     if not app_facts:
         return ""
 
-    # Organize by category
+    # Organize by normalized category
     categories = {}
     for f in app_facts:
-        cat = f.category
+        cat = normalize_category(f.category)
         if cat not in categories:
             categories[cat] = []
         categories[cat].append(f)
@@ -320,12 +321,14 @@ def _build_app_landscape_html(fact_store: FactStore, entity: str = "target") -> 
         ('erp', 'ERP / Core Business'),
         ('crm', 'CRM / Sales'),
         ('hcm', 'HCM / HR'),
-        ('finance', 'Finance'),
+        ('finance', 'Finance & Accounting'),
+        ('vertical', 'Industry-Specific'),
         ('custom', 'Custom / Proprietary'),
         ('productivity', 'Productivity'),
         ('integration', 'Integration / Middleware'),
-        ('database', 'Database'),
+        ('database', 'Databases & Analytics'),
         ('saas', 'SaaS Applications'),
+        ('other', 'Other Applications'),
     ]
 
     html_parts = []
@@ -336,7 +339,7 @@ def _build_app_landscape_html(fact_store: FactStore, entity: str = "target") -> 
         if cat_key in categories:
             apps = categories[cat_key]
             count = len(apps)
-            vendors = list(set(f.details.get('vendor', 'Unknown') for f in apps))[:3]
+            vendors = list(set(normalize_detail(f.details, 'vendor') or 'Unknown' for f in apps))[:3]
             vendor_str = ', '.join(vendors)
             if len(vendors) >= 3:
                 vendor_str += '...'
@@ -351,7 +354,7 @@ def _build_app_landscape_html(fact_store: FactStore, entity: str = "target") -> 
     for cat_key, apps in categories.items():
         if cat_key not in [c[0] for c in category_order]:
             count = len(apps)
-            vendors = list(set(f.details.get('vendor', 'Unknown') for f in apps))[:3]
+            vendors = list(set(normalize_detail(f.details, 'vendor') or 'Unknown' for f in apps))[:3]
             vendor_str = ', '.join(vendors)
             summary_rows.append(f'''
                 <tr>
@@ -381,20 +384,21 @@ def _build_app_landscape_html(fact_store: FactStore, entity: str = "target") -> 
     # Build detailed app table for key applications
     key_apps = []
     for f in app_facts:
-        criticality = f.details.get('criticality', f.details.get('business_criticality', '')).lower()
-        user_count = f.details.get('user_count', 0)
-        if criticality in ('high', 'critical') or (isinstance(user_count, int) and user_count > 100):
+        criticality_val = normalize_detail(f.details, 'criticality') or ''
+        criticality_lower = str(criticality_val).lower()
+        user_count = normalize_detail(f.details, 'user_count') or 0
+        if criticality_lower in ('high', 'critical') or (isinstance(user_count, int) and user_count > 100):
             key_apps.append(f)
 
     if key_apps:
         detail_rows = []
         for f in key_apps[:10]:  # Limit to top 10
             app_name = f.item
-            vendor = f.details.get('vendor', '-')
-            version = f.details.get('version', '-')
-            deployment = f.details.get('deployment', '-')
-            users = f.details.get('user_count', '-')
-            criticality = f.details.get('criticality', f.details.get('business_criticality', '-'))
+            vendor = normalize_detail(f.details, 'vendor') or '-'
+            version = normalize_detail(f.details, 'version') or '-'
+            deployment = normalize_detail(f.details, 'deployment') or '-'
+            users = normalize_detail(f.details, 'user_count') or '-'
+            criticality = normalize_detail(f.details, 'criticality') or '-'
             detail_rows.append(f'''
                 <tr>
                     <td><strong>{app_name}</strong></td>

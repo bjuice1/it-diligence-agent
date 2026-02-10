@@ -29,11 +29,50 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class SourceEvidence:
-    """Evidence from source documents."""
+    """Evidence from source documents (Phase 3 - Enhanced Traceability)."""
     quote: str
     source_document: str
     source_section: str = ""
+    source_page: str = ""           # Page number if available
+    source_line: str = ""           # Line number if available
+    source_anchor: str = ""         # heading_path, table_name, or chunk_id for non-page docs
     fact_id: str = ""
+    is_exact_quote: bool = True     # vs paraphrase
+
+    def format_citation(self) -> str:
+        """Format as auditable citation."""
+        parts = [self.source_document] if self.source_document else ["Unknown source"]
+        if self.source_section:
+            parts.append(f"§{self.source_section}")
+        if self.source_page:
+            parts.append(f"p.{self.source_page}")
+        if self.source_anchor and not self.source_page:
+            # Use anchor when page not available
+            parts.append(f"@{self.source_anchor}")
+        if self.source_line:
+            parts.append(f"L{self.source_line}")
+        return " | ".join(parts)
+
+    def quality_score(self) -> int:
+        """
+        Evidence quality score for status calculation (0-3).
+
+        Scoring:
+        - +1: Has citation metadata (section, page, or anchor)
+        - +1: Is exact quote (not paraphrase)
+        - +1: Quote contains a number (backs a key field like cost, count)
+        """
+        score = 0
+        # Has citation metadata
+        if self.source_section or self.source_page or self.source_anchor:
+            score += 1
+        # Is exact quote (not paraphrase)
+        if self.is_exact_quote:
+            score += 1
+        # Quote contains a number (backs a key field)
+        if self.quote and any(c.isdigit() for c in self.quote):
+            score += 1
+        return score
 
 
 @dataclass
@@ -74,6 +113,7 @@ class ItemDossier:
     domain: str
     category: str = ""
     entity: str = "target"
+    entity_was_inferred: bool = False  # True if entity was defaulted (not from source data)
     item_type: str = ""  # "application", "server", "control", etc.
 
     # Core attributes (domain-specific)
@@ -106,6 +146,16 @@ class ItemDossier:
     key_considerations: List[str] = field(default_factory=list)
     overall_status: str = "green"  # green, yellow, red
     recommendation: str = ""
+
+    # Data completeness tracking (Phase 1 - Entity Separation)
+    data_gaps: List[str] = field(default_factory=list)  # Missing critical fields
+    data_completeness: float = 1.0  # 0.0 to 1.0
+    canonical_key: str = ""  # For delta matching (entity:domain:item:vendor:instance)
+
+    # Conflict tracking (Phase 6)
+    attribute_conflicts: Dict[str, List[Any]] = field(default_factory=dict)
+    has_conflicts: bool = False
+    conflict_count: int = 0
 
     # Metadata
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
@@ -150,20 +200,37 @@ class DossierBuilder:
         self.findings = findings
         self.narratives = narratives or {}
 
+        # Data quality tracking (Phase 1 - Entity Separation)
+        self.unknown_entity_count = 0  # Facts missing entity field
+
         # Build indexes for efficient lookup
         self._index_facts()
         self._index_findings()
 
+        # Log data quality warning if needed
+        if self.unknown_entity_count > 0:
+            logger.warning(f"{self.unknown_entity_count} facts missing entity field - data quality defect")
+
     def _index_facts(self):
-        """Index facts by ID and by item name."""
+        """Index facts by ID and by item name (entity-aware)."""
         self.facts_by_id: Dict[str, Dict] = {}
         self.facts_by_domain: Dict[str, List[Dict]] = {}
-        self.facts_by_item: Dict[str, List[Dict]] = {}  # item_name -> facts
+        self.facts_by_item: Dict[str, List[Dict]] = {}  # entity:domain:item -> facts
+        self.facts_by_canonical_key: Dict[str, List[Dict]] = {}  # canonical_key -> facts
+        self.items_with_inferred_entity: Set[str] = set()  # Track which items had entity inferred
 
         for fact in self.facts:
             fact_id = fact.get('fact_id', '')
-            domain = fact.get('domain', 'general')
+            domain = self._normalize_domain(fact.get('domain', 'general'))
             item = fact.get('item', '').strip()
+
+            # Track entity - flag when we have to infer it
+            entity = fact.get('entity')
+            entity_was_inferred = False
+            if entity is None:
+                entity = 'target'
+                entity_was_inferred = True
+                self.unknown_entity_count += 1  # Track the defect
 
             if fact_id:
                 self.facts_by_id[fact_id] = fact
@@ -173,10 +240,21 @@ class DossierBuilder:
             self.facts_by_domain[domain].append(fact)
 
             if item:
-                item_key = f"{domain}:{item.lower()}"
+                # FIXED: Include entity in key to prevent Target/Buyer mixing
+                item_key = f"{entity}:{domain}:{item.lower()}"
                 if item_key not in self.facts_by_item:
                     self.facts_by_item[item_key] = []
                 self.facts_by_item[item_key].append(fact)
+
+                # Track items that had entity inferred (Phase 9 fix)
+                if entity_was_inferred:
+                    self.items_with_inferred_entity.add(item_key)
+
+                # Also index by canonical key for robust matching
+                canonical_key = self._generate_canonical_key(fact)
+                if canonical_key not in self.facts_by_canonical_key:
+                    self.facts_by_canonical_key[canonical_key] = []
+                self.facts_by_canonical_key[canonical_key].append(fact)
 
     def _index_findings(self):
         """Index findings and build fact_id -> finding mappings."""
@@ -205,6 +283,102 @@ class DossierBuilder:
                 if fact_id not in self.findings_by_fact_id:
                     self.findings_by_fact_id[fact_id] = []
                 self.findings_by_fact_id[fact_id].append(finding)
+
+    # =========================================================================
+    # ENTITY & DOMAIN NORMALIZATION (Phase 1 - Entity Separation)
+    # =========================================================================
+
+    # Domain name normalization mapping
+    DOMAIN_ALIASES = {
+        'identity & access': 'identity_access',
+        'identity and access': 'identity_access',
+        'iam': 'identity_access',
+        'security': 'cybersecurity',
+        'cyber': 'cybersecurity',
+        'infra': 'infrastructure',
+        'apps': 'applications',
+        'network & connectivity': 'network',
+        'org': 'organization',
+        'people': 'organization',
+    }
+
+    # Critical fields by domain - missing these should be flagged as data gaps (Phase 4)
+    CRITICAL_FIELDS = {
+        'applications': ['user_count', 'vendor', 'version', 'criticality', 'annual_cost'],
+        'infrastructure': ['location', 'capacity', 'age', 'annual_cost', 'vendor'],
+        'cybersecurity': ['coverage', 'deployment_scope', 'last_assessment', 'vendor'],
+        'identity_access': ['user_count', 'mfa_coverage', 'sso_enabled', 'vendor'],
+        'network': ['bandwidth', 'redundancy', 'vendor', 'annual_cost'],
+        'organization': ['headcount', 'reporting_to', 'tenure', 'location'],
+    }
+
+    # Values that indicate "not stated" - should be treated as gaps
+    NOT_STATED_VALUES = {'not_stated', 'not_specified', 'unknown', 'n/a', 'none', '', 'tbd', 'to be determined'}
+
+    def _normalize_domain(self, domain: str) -> str:
+        """Normalize domain name to canonical form."""
+        if not domain:
+            return 'general'
+        normalized = domain.lower().strip()
+        return self.DOMAIN_ALIASES.get(normalized, normalized)
+
+    def _calculate_data_gaps(self, dossier: ItemDossier) -> None:
+        """
+        Calculate data gaps based on missing critical fields (Phase 4).
+
+        Modifies dossier in place to set:
+        - data_gaps: List of missing critical field names
+        - data_completeness: Float 0.0 to 1.0
+        """
+        normalized_domain = self._normalize_domain(dossier.domain)
+        domain_critical = self.CRITICAL_FIELDS.get(normalized_domain, [])
+
+        if not domain_critical:
+            dossier.data_completeness = 1.0
+            return
+
+        missing_critical = []
+        for field in domain_critical:
+            value = dossier.attributes.get(field)
+            # Check if value is missing or is a "not stated" value
+            if not value or str(value).lower().strip() in self.NOT_STATED_VALUES:
+                missing_critical.append(field)
+
+        dossier.data_gaps = missing_critical
+        dossier.data_completeness = 1.0 - (len(missing_critical) / len(domain_critical))
+
+    def _generate_canonical_key(self, fact: Dict) -> str:
+        """
+        Generate stable item identity beyond just name.
+
+        Handles: "ADP Workforce Now" vs "ADP" vs "ADP (Payroll Instance)"
+        Key format: entity:domain:item[:vendor][:instance]
+        """
+        entity = fact.get('entity', 'target')
+        domain = self._normalize_domain(fact.get('domain', 'general'))
+        item = fact.get('item', '').strip().lower()
+
+        # Extract vendor if available
+        details = fact.get('details', {})
+        vendor = details.get('vendor', '').strip().lower() if details else ''
+
+        # Extract instance/environment if available
+        instance = ''
+        if details:
+            instance = details.get('instance', details.get('environment', '')).strip().lower()
+
+        # Build canonical key
+        parts = [entity, domain, item]
+        if vendor and vendor not in item:
+            parts.append(vendor)
+        if instance:
+            parts.append(instance)
+
+        return ":".join(parts)
+
+    # =========================================================================
+    # FINDING LOOKUP METHODS
+    # =========================================================================
 
     def _find_related_findings(self, fact_ids: List[str], item_name: str) -> tuple:
         """
@@ -269,21 +443,66 @@ class DossierBuilder:
 
         return excerpts[:3]  # Limit to 3 excerpts
 
-    def _calculate_status(self, risks: List[Dict]) -> str:
-        """Calculate overall status based on risks."""
-        if not risks:
-            return "green"
+    def _calculate_status(self, risks: List[Dict], dossier: ItemDossier = None) -> str:
+        """
+        Calculate status based on risks AND evidence quality (Phase 5).
 
-        severities = [r.get('severity', '').lower() for r in risks]
+        Status criteria:
+        - RED: Critical/high risks OR <25% data completeness OR unknown entity
+        - YELLOW: Medium risks OR <50% data completeness OR evidence quality < 3
+        - GREEN: No significant risks AND >75% completeness AND evidence quality >= 3
 
-        if 'critical' in severities:
+        Args:
+            risks: List of risk dictionaries
+            dossier: Optional ItemDossier for quality-based assessment
+        """
+        # Check risk severity
+        severities = [r.get('severity', 'medium').lower() for r in risks]
+        has_critical = 'critical' in severities
+        has_high = 'high' in severities
+        has_medium = 'medium' in severities
+
+        if dossier:
+            completeness = getattr(dossier, 'data_completeness', 1.0)
+
+            # Calculate total evidence quality score
+            evidence_quality = sum(
+                ev.quality_score() if hasattr(ev, 'quality_score') else 1
+                for ev in dossier.evidence
+            )
+
+            # Unknown entity is a RED flag
+            if dossier.entity not in ['target', 'buyer']:
+                return "red"
+
+            # RED conditions
+            if has_critical or has_high:
+                return "red"
+            if completeness < 0.25:
+                return "red"
+
+            # YELLOW conditions
+            if has_medium:
+                return "yellow"
+            if completeness < 0.50:
+                return "yellow"
+            if evidence_quality < 3:  # Quality threshold, not just count
+                return "yellow"
+            if getattr(dossier, 'has_conflicts', False):  # Conflicts require review
+                return "yellow"
+
+            # GREEN requires actual quality evidence
+            if completeness >= 0.75 and evidence_quality >= 3:
+                return "green"
+
+            return "yellow"  # Default to yellow if uncertain
+
+        # Fallback: risk-only logic (no dossier provided)
+        if has_critical or has_high:
             return "red"
-        elif 'high' in severities:
-            return "red"
-        elif 'medium' in severities:
+        elif has_medium:
             return "yellow"
-        else:
-            return "yellow" if risks else "green"
+        return "yellow"  # Default to yellow, not green
 
     def _get_highest_severity(self, risks: List[Dict]) -> str:
         """Get highest severity from risks."""
@@ -359,36 +578,49 @@ class DossierBuilder:
         else:
             return "No immediate action required - continue standard operations"
 
-    def build_dossier(self, item_name: str, domain: str) -> Optional[ItemDossier]:
+    def build_dossier(self, item_name: str, domain: str, entity: str = "target") -> Optional[ItemDossier]:
         """
         Build a complete dossier for a single item.
 
         Args:
             item_name: Name of the item (app name, server name, etc.)
             domain: Domain (applications, infrastructure, etc.)
+            entity: Entity to filter by ("target" or "buyer")
 
         Returns:
             ItemDossier or None if no data found
         """
-        item_key = f"{domain}:{item_name.lower()}"
+        # Normalize domain name
+        normalized_domain = self._normalize_domain(domain)
+
+        # FIXED: Use entity-aware key (Phase 1)
+        item_key = f"{entity}:{normalized_domain}:{item_name.lower()}"
         item_facts = self.facts_by_item.get(item_key, [])
 
         if not item_facts:
-            # Try fuzzy match
+            # Try fuzzy match within same entity
             for key, facts in self.facts_by_item.items():
-                if key.startswith(f"{domain}:") and item_name.lower() in key:
+                if key.startswith(f"{entity}:{normalized_domain}:") and item_name.lower() in key:
                     item_facts = facts
                     break
 
         if not item_facts:
             return None
 
+        # Generate canonical key for this dossier
+        canonical_key = self._generate_canonical_key(item_facts[0]) if item_facts else ""
+
+        # Check if this item had entity inferred during indexing (Phase 9 fix)
+        entity_was_inferred = item_key in self.items_with_inferred_entity
+
         # Initialize dossier
         dossier = ItemDossier(
             name=item_name,
-            domain=domain,
-            entity=item_facts[0].get('entity', 'target'),
-            item_type=self._get_item_type(domain)
+            domain=normalized_domain,
+            entity=entity,
+            item_type=self._get_item_type(normalized_domain),
+            canonical_key=canonical_key,
+            entity_was_inferred=entity_was_inferred
         )
 
         # Collect fact IDs and evidence
@@ -397,14 +629,22 @@ class DossierBuilder:
             if fact_id:
                 dossier.fact_ids.append(fact_id)
 
-            # Extract evidence
+            # Extract evidence with enhanced traceability (Phase 3)
             evidence = fact.get('evidence', {})
             if isinstance(evidence, dict) and evidence.get('exact_quote'):
+                # Try multiple fields for anchor (heading_path, table_name, chunk_id)
+                source_anchor = evidence.get('heading_path',
+                                evidence.get('table_name',
+                                evidence.get('chunk_id', '')))
                 dossier.evidence.append(SourceEvidence(
                     quote=evidence['exact_quote'],
                     source_document=fact.get('source_document', ''),
                     source_section=evidence.get('source_section', ''),
-                    fact_id=fact_id
+                    source_page=str(evidence.get('page_number', evidence.get('page', ''))) if evidence.get('page_number') or evidence.get('page') else '',
+                    source_line=str(evidence.get('line_number', '')) if evidence.get('line_number') else '',
+                    source_anchor=source_anchor,
+                    fact_id=fact_id,
+                    is_exact_quote=True  # Our extraction always uses exact quotes
                 ))
 
             # Track source documents
@@ -416,10 +656,28 @@ class DossierBuilder:
             if fact.get('category') and not dossier.category:
                 dossier.category = fact['category']
 
-            # Extract attributes from details
+            # Extract attributes from details WITH conflict detection (Phase 6)
             details = fact.get('details', {})
             for key, value in details.items():
-                if key not in dossier.attributes and value:
+                # Skip empty/not_stated values
+                if not value or str(value).lower().strip() in self.NOT_STATED_VALUES:
+                    continue
+
+                if key in dossier.attributes:
+                    existing = dossier.attributes[key]
+                    # Normalize for comparison
+                    existing_norm = str(existing).lower().strip()
+                    value_norm = str(value).lower().strip()
+
+                    if existing_norm != value_norm:
+                        # Conflict detected!
+                        if key not in dossier.attribute_conflicts:
+                            dossier.attribute_conflicts[key] = [existing]
+                        if value not in dossier.attribute_conflicts[key]:
+                            dossier.attribute_conflicts[key].append(value)
+                        dossier.has_conflicts = True
+                        dossier.conflict_count += 1
+                else:
                     dossier.attributes[key] = value
 
         dossier.fact_count = len(dossier.fact_ids)
@@ -469,8 +727,11 @@ class DossierBuilder:
         # Extract narrative mentions
         dossier.narrative_excerpts = self._extract_narrative_mentions(item_name, domain)
 
-        # Calculate overall status
-        dossier.overall_status = self._calculate_status(related_risks)
+        # Calculate data gaps (Phase 4)
+        self._calculate_data_gaps(dossier)
+
+        # Calculate overall status (now uses data_completeness)
+        dossier.overall_status = self._calculate_status(related_risks, dossier)
 
         # Generate AI assessment fields
         dossier.summary = self._generate_summary(dossier)
@@ -491,54 +752,254 @@ class DossierBuilder:
         }
         return type_map.get(domain, 'Item')
 
-    def build_domain_dossiers(self, domain: str) -> List[ItemDossier]:
+    def build_domain_dossiers(self, domain: str, entity: str = None) -> List[ItemDossier]:
         """
         Build dossiers for all items in a domain.
 
         Args:
             domain: Domain to process
+            entity: If specified, filter to that entity only.
+                    If None, build for ALL entities separately (no mixing).
 
         Returns:
-            List of ItemDossier objects
+            List of ItemDossier objects (never mixed across entities)
         """
         dossiers = []
-        domain_facts = self.facts_by_domain.get(domain, [])
 
-        # Get unique item names
-        item_names = set()
+        # Normalize domain name
+        normalized_domain = self._normalize_domain(domain)
+        domain_facts = self.facts_by_domain.get(normalized_domain, [])
+
+        # If no domain_facts found with normalized name, try original
+        if not domain_facts:
+            domain_facts = self.facts_by_domain.get(domain, [])
+
+        # Filter by entity if specified
+        if entity:
+            domain_facts = [f for f in domain_facts if f.get('entity', 'target') == entity]
+
+        # Get unique items by entity + item name (Phase 1 fix)
+        # This ensures same-name items from different entities stay separate
+        # Key format: entity:item_name (simple grouping key)
+        items_by_entity_name: Dict[str, str] = {}  # "entity:item_lower" -> item_name (original case)
         for fact in domain_facts:
-            item = fact.get('item', '').strip()
-            if item:
-                item_names.add(item)
+            fact_entity = fact.get('entity', 'target')
+            item_name = fact.get('item', '').strip()
+            if item_name:
+                grouping_key = f"{fact_entity}:{item_name.lower()}"
+                # Keep first occurrence's item name (preserve case)
+                if grouping_key not in items_by_entity_name:
+                    items_by_entity_name[grouping_key] = item_name
 
-        # Build dossier for each item
-        for item_name in sorted(item_names):
-            dossier = self.build_dossier(item_name, domain)
+        # Build dossier for each unique entity:item
+        for grouping_key, item_name in sorted(items_by_entity_name.items()):
+            item_entity = grouping_key.split(':')[0]
+            dossier = self.build_dossier(item_name, normalized_domain, entity=item_entity)
             if dossier:
                 dossiers.append(dossier)
 
-        # Sort by status (red first, then yellow, then green)
+        # Sort by entity first, then status (red first), then name
         status_order = {'red': 0, 'yellow': 1, 'green': 2}
-        dossiers.sort(key=lambda d: (status_order.get(d.overall_status, 3), d.name))
+        entity_order = {'target': 0, 'buyer': 1}
+        dossiers.sort(key=lambda d: (
+            entity_order.get(d.entity, 2),
+            status_order.get(d.overall_status, 3),
+            d.name
+        ))
 
         return dossiers
 
-    def build_all_dossiers(self) -> Dict[str, List[ItemDossier]]:
+    def build_all_dossiers(self, entity: str = None) -> Dict[str, List[ItemDossier]]:
         """
         Build dossiers for all domains.
+
+        Args:
+            entity: If specified, filter to that entity only.
+                    If None, build for ALL entities separately.
 
         Returns:
             Dict mapping domain -> list of dossiers
         """
         all_dossiers = {}
 
+        # Normalize domain names and deduplicate
+        seen_domains = set()
         for domain in self.facts_by_domain.keys():
-            dossiers = self.build_domain_dossiers(domain)
+            normalized = self._normalize_domain(domain)
+            if normalized in seen_domains:
+                continue
+            seen_domains.add(normalized)
+
+            dossiers = self.build_domain_dossiers(normalized, entity=entity)
             if dossiers:
-                all_dossiers[domain] = dossiers
-                logger.info(f"Built {len(dossiers)} dossiers for {domain}")
+                all_dossiers[normalized] = dossiers
+                target_count = len([d for d in dossiers if d.entity == 'target'])
+                buyer_count = len([d for d in dossiers if d.entity == 'buyer'])
+                logger.info(f"Built {len(dossiers)} dossiers for {normalized} "
+                           f"(target: {target_count}, buyer: {buyer_count})")
 
         return all_dossiers
+
+    def get_data_quality_summary(self) -> Dict[str, Any]:
+        """
+        Get summary of data quality issues found during indexing.
+
+        Returns:
+            Dict with quality metrics
+        """
+        return {
+            'unknown_entity_count': self.unknown_entity_count,
+            'total_facts': len(self.facts),
+            'has_quality_issues': self.unknown_entity_count > 0,
+            'quality_score': 1.0 - (self.unknown_entity_count / max(len(self.facts), 1))
+        }
+
+
+# =============================================================================
+# EXPORT GATE (Phase 9 - Team-Ready Check)
+# =============================================================================
+
+@dataclass
+class ExportReadiness:
+    """Result of team-ready gate check."""
+    is_ready: bool
+    blocking_issues: List[str] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
+    unknown_entity_count: int = 0
+    unresolved_conflicts: int = 0
+    low_completeness_domains: List[str] = field(default_factory=list)
+    average_completeness: float = 1.0
+
+
+class ExportGate:
+    """
+    Team-ready export gate (Phase 9).
+
+    Blocks exports that have critical data quality issues:
+    - Unknown entity facts
+    - High number of unresolved conflicts
+    - Very low data completeness
+
+    Warns on issues that should be reviewed but don't block:
+    - Some conflicts
+    - Low completeness in specific domains
+    """
+
+    # Thresholds for blocking
+    UNKNOWN_ENTITY_BLOCK_THRESHOLD = 0  # Any unknown entities block
+    CONFLICT_BLOCK_THRESHOLD = 10        # More than 10 conflicts block
+    COMPLETENESS_BLOCK_THRESHOLD = 0.25  # Less than 25% avg completeness blocks
+
+    # Thresholds for warnings
+    CONFLICT_WARN_THRESHOLD = 1
+    COMPLETENESS_WARN_THRESHOLD = 0.50
+
+    def check_readiness(self, dossiers: Dict[str, List[ItemDossier]]) -> ExportReadiness:
+        """
+        Check if dossiers are ready for team distribution.
+
+        Args:
+            dossiers: Dict mapping domain -> list of ItemDossier
+
+        Returns:
+            ExportReadiness with blocking issues and warnings
+        """
+        blocking = []
+        warnings = []
+        unknown_count = 0
+        conflict_count = 0
+        low_completeness = []
+        all_completeness = []
+
+        for domain, domain_dossiers in dossiers.items():
+            domain_completeness = []
+
+            for d in domain_dossiers:
+                # Check for inferred entities (Phase 9 fix)
+                # These are items where source data didn't specify target/buyer
+                if d.entity_was_inferred:
+                    unknown_count += 1
+
+                # Check for unresolved conflicts
+                if d.has_conflicts:
+                    conflict_count += d.conflict_count
+
+                # Track completeness
+                domain_completeness.append(d.data_completeness)
+                all_completeness.append(d.data_completeness)
+
+            # Check domain-level completeness
+            if domain_completeness:
+                avg_completeness = sum(domain_completeness) / len(domain_completeness)
+                if avg_completeness < self.COMPLETENESS_WARN_THRESHOLD:
+                    low_completeness.append(f"{domain}: {avg_completeness:.0%}")
+
+        # Calculate overall average
+        overall_avg = sum(all_completeness) / len(all_completeness) if all_completeness else 1.0
+
+        # Determine blocking issues
+        if unknown_count > self.UNKNOWN_ENTITY_BLOCK_THRESHOLD:
+            blocking.append(f"{unknown_count} facts with unknown entity - CANNOT EXPORT (fix entity assignment)")
+
+        if conflict_count > self.CONFLICT_BLOCK_THRESHOLD:
+            blocking.append(f"{conflict_count} unresolved attribute conflicts - REVIEW REQUIRED before distribution")
+
+        if overall_avg < self.COMPLETENESS_BLOCK_THRESHOLD:
+            blocking.append(f"Average data completeness is {overall_avg:.0%} - TOO LOW for distribution")
+
+        # Determine warnings (non-blocking)
+        if conflict_count > self.CONFLICT_WARN_THRESHOLD and conflict_count <= self.CONFLICT_BLOCK_THRESHOLD:
+            warnings.append(f"{conflict_count} attribute conflicts should be reviewed")
+
+        if low_completeness:
+            warnings.append(f"Low completeness domains: {', '.join(low_completeness)}")
+
+        return ExportReadiness(
+            is_ready=len(blocking) == 0,
+            blocking_issues=blocking,
+            warnings=warnings,
+            unknown_entity_count=unknown_count,
+            unresolved_conflicts=conflict_count,
+            low_completeness_domains=low_completeness,
+            average_completeness=overall_avg
+        )
+
+    def render_readiness_banner(self, readiness: ExportReadiness) -> str:
+        """
+        Render HTML banner showing export readiness status.
+
+        Args:
+            readiness: ExportReadiness result
+
+        Returns:
+            HTML string for banner
+        """
+        if readiness.blocking_issues:
+            issues_html = ''.join(f'<li>{issue}</li>' for issue in readiness.blocking_issues)
+            return f'''
+            <div style="background: #f8d7da; color: #721c24; padding: 15px 20px; border-radius: 8px;
+                        border-left: 5px solid #dc3545; margin-bottom: 20px;">
+                <h3 style="margin: 0 0 10px 0;">🚫 NOT READY FOR TEAM DISTRIBUTION</h3>
+                <ul style="margin: 0; padding-left: 20px;">{issues_html}</ul>
+            </div>'''
+
+        elif readiness.warnings:
+            warnings_html = ''.join(f'<li>{w}</li>' for w in readiness.warnings)
+            return f'''
+            <div style="background: #fff3cd; color: #856404; padding: 15px 20px; border-radius: 8px;
+                        border-left: 5px solid #ffc107; margin-bottom: 20px;">
+                <h3 style="margin: 0 0 10px 0;">⚠️ REVIEW RECOMMENDED</h3>
+                <ul style="margin: 0; padding-left: 20px;">{warnings_html}</ul>
+                <p style="margin: 10px 0 0 0; font-size: 0.9em;">Export is allowed but review these items before sharing.</p>
+            </div>'''
+
+        else:
+            return f'''
+            <div style="background: #d4edda; color: #155724; padding: 15px 20px; border-radius: 8px;
+                        border-left: 5px solid #28a745; margin-bottom: 20px;">
+                <h3 style="margin: 0;">✅ TEAM READY</h3>
+                <p style="margin: 5px 0 0 0;">Data completeness: {readiness.average_completeness:.0%} | No blocking issues found.</p>
+            </div>'''
 
 
 # =============================================================================
@@ -838,6 +1299,25 @@ class DossierHTMLExporter:
         .badge.risk {{ background: #dc354520; color: #dc3545; }}
         .badge.work {{ background: #007bff20; color: #007bff; }}
 
+        /* Entity badges (Phase 2 - Entity Separation) */
+        .entity-badge {{
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 4px;
+            font-size: 0.75em;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-right: 10px;
+            letter-spacing: 0.5px;
+        }}
+        .entity-badge.target {{ background: #007bff; color: white; }}
+        .entity-badge.buyer {{ background: #6f42c1; color: white; }}
+        .entity-badge.unknown {{ background: #dc3545; color: white; }}
+
+        /* Entity stat cards */
+        .stat-card.target {{ border-top: 3px solid #007bff; }}
+        .stat-card.buyer {{ border-top: 3px solid #6f42c1; }}
+
         .dossier-content {{
             display: none;
             padding: 20px;
@@ -937,6 +1417,14 @@ class DossierHTMLExporter:
             <div class="count">{len([d for d in dossiers if d.overall_status == 'green'])}</div>
             <div>No Issues</div>
         </div>
+        <div class="stat-card target">
+            <div class="count">{len([d for d in dossiers if d.entity == 'target'])}</div>
+            <div>🎯 Target</div>
+        </div>
+        <div class="stat-card buyer">
+            <div class="count">{len([d for d in dossiers if d.entity == 'buyer'])}</div>
+            <div>🏢 Buyer</div>
+        </div>
     </div>
 
     <div class="filter-bar">
@@ -944,16 +1432,39 @@ class DossierHTMLExporter:
         <button class="filter-btn" onclick="filterDossiers('red')">🔴 Critical ({len([d for d in dossiers if d.overall_status == 'red'])})</button>
         <button class="filter-btn" onclick="filterDossiers('yellow')">🟡 Moderate ({len([d for d in dossiers if d.overall_status == 'yellow'])})</button>
         <button class="filter-btn" onclick="filterDossiers('green')">🟢 OK ({len([d for d in dossiers if d.overall_status == 'green'])})</button>
+        <span style="border-left: 1px solid #ccc; margin: 0 10px;"></span>
+        <button class="filter-btn" onclick="filterByEntity('target')">🎯 Target Only ({len([d for d in dossiers if d.entity == 'target'])})</button>
+        <button class="filter-btn" onclick="filterByEntity('buyer')">🏢 Buyer Only ({len([d for d in dossiers if d.entity == 'buyer'])})</button>
     </div>
 """
 
         for dossier in dossiers:
-            # Build evidence HTML
+            # Build evidence HTML with quality indicators (Phase 3)
             evidence_html = ""
-            for ev in dossier.evidence[:2]:
+            for ev in dossier.evidence[:3]:  # Show up to 3 evidence items
                 quote = ev.quote if hasattr(ev, 'quote') else ev.get('quote', '')
-                source = ev.source_document if hasattr(ev, 'source_document') else ev.get('source_document', '')
-                evidence_html += f'<div class="evidence">"{quote[:250]}{"..." if len(quote) > 250 else ""}"<div class="source">— {source}</div></div>'
+
+                # Get formatted citation if available
+                if hasattr(ev, 'format_citation'):
+                    citation = ev.format_citation()
+                else:
+                    citation = ev.source_document if hasattr(ev, 'source_document') else ev.get('source_document', '')
+
+                # Get quality score for indicator
+                if hasattr(ev, 'quality_score'):
+                    quality = ev.quality_score()
+                    quality_indicator = "⭐" * quality if quality > 0 else "⚠️"
+                else:
+                    quality_indicator = ""
+
+                # Get fact ID for traceability
+                fact_id = ev.fact_id if hasattr(ev, 'fact_id') else ev.get('fact_id', '')
+                fact_id_html = f'<span style="color:#007bff;font-weight:500">[{fact_id}]</span> ' if fact_id else ''
+
+                evidence_html += f'''<div class="evidence">
+                    "{quote[:250]}{"..." if len(quote) > 250 else ""}"
+                    <div class="source">{fact_id_html}{quality_indicator} — {citation}</div>
+                </div>'''
 
             # Build risks HTML
             risks_html = ""
@@ -982,10 +1493,47 @@ class DossierHTMLExporter:
             for key, value in list(dossier.attributes.items())[:8]:
                 attrs_html += f'<tr><td>{key.replace("_", " ").title()}</td><td>{value}</td></tr>'
 
+            # Build data gaps HTML (Phase 4)
+            gaps_html = ""
+            if dossier.data_gaps:
+                completeness_pct = int(dossier.data_completeness * 100)
+                completeness_class = "red" if completeness_pct < 50 else "yellow"
+                gaps_list = ''.join(f'<li>{g.replace("_", " ").title()}</li>' for g in dossier.data_gaps)
+                gaps_html = f'''
+                <div class="section" style="background: #fff3cd; padding: 15px; border-radius: 4px; border-left: 3px solid #ffc107;">
+                    <h4 style="color: #856404; margin-top: 0;">⚠️ Data Gaps ({len(dossier.data_gaps)} critical fields missing)</h4>
+                    <ul style="margin: 10px 0;">{gaps_list}</ul>
+                    <p style="margin: 0; color: #856404;">
+                        <strong>Data completeness:</strong> {completeness_pct}%
+                        <span style="margin-left: 15px;">📋 These fields should be added to VDR request list.</span>
+                    </p>
+                </div>'''
+
+            # Build conflicts HTML (Phase 6)
+            conflicts_html = ""
+            if dossier.has_conflicts and dossier.attribute_conflicts:
+                conflicts_rows = ''.join(
+                    f'<tr><td><strong>{k.replace("_", " ").title()}</strong></td><td>{" vs ".join(str(v) for v in vals)}</td></tr>'
+                    for k, vals in dossier.attribute_conflicts.items()
+                )
+                conflicts_html = f'''
+                <div class="section" style="background: #f8d7da; padding: 15px; border-radius: 4px; border-left: 3px solid #dc3545;">
+                    <h4 style="color: #721c24; margin-top: 0;">⚠️ Data Conflicts Detected ({dossier.conflict_count})</h4>
+                    <p style="color: #721c24;">Multiple values found for the same attribute. Review source documents:</p>
+                    <table style="width: 100%;"><tbody>{conflicts_rows}</tbody></table>
+                </div>'''
+
+            # Determine entity class for badge styling
+            entity_class = dossier.entity if dossier.entity in ['target', 'buyer'] else 'unknown'
+            entity_label = dossier.entity.upper() if dossier.entity else 'UNKNOWN'
+
             html += f"""
-    <div class="dossier" data-status="{dossier.overall_status}">
+    <div class="dossier" data-status="{dossier.overall_status}" data-entity="{dossier.entity}">
         <div class="dossier-header {dossier.overall_status}" onclick="toggleDossier(this.parentElement)">
-            <h3>{dossier.name}</h3>
+            <h3>
+                <span class="entity-badge {entity_class}">{entity_label}</span>
+                {dossier.name}
+            </h3>
             <div class="badges">
                 {f'<span class="badge risk">{dossier.risk_count} Risks</span>' if dossier.risk_count else ''}
                 {f'<span class="badge work">{dossier.work_item_count} Work Items</span>' if dossier.work_item_count else ''}
@@ -1001,6 +1549,10 @@ class DossierHTMLExporter:
             {'<div class="section"><h4>Key Considerations</h4><ul>' + ''.join(f'<li>{c}</li>' for c in dossier.key_considerations) + '</ul></div>' if dossier.key_considerations else ''}
 
             {'<div class="section"><h4>Attributes</h4><table class="attributes-table">' + attrs_html + '</table></div>' if attrs_html else ''}
+
+            {gaps_html}
+
+            {conflicts_html}
 
             {'<div class="section"><h4>Source Evidence</h4>' + evidence_html + '</div>' if evidence_html else ''}
 
@@ -1018,21 +1570,50 @@ class DossierHTMLExporter:
 
         html += """
     <script>
+        // Track current filters
+        let currentStatusFilter = 'all';
+        let currentEntityFilter = 'all';
+
         function toggleDossier(el) {
             el.classList.toggle('open');
         }
 
-        function filterDossiers(status) {
-            document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-            event.target.classList.add('active');
-
+        function applyFilters() {
             document.querySelectorAll('.dossier').forEach(d => {
-                if (status === 'all' || d.dataset.status === status) {
-                    d.style.display = 'block';
-                } else {
-                    d.style.display = 'none';
+                const matchesStatus = currentStatusFilter === 'all' || d.dataset.status === currentStatusFilter;
+                const matchesEntity = currentEntityFilter === 'all' || d.dataset.entity === currentEntityFilter;
+                d.style.display = (matchesStatus && matchesEntity) ? 'block' : 'none';
+            });
+        }
+
+        function filterDossiers(status) {
+            // Update status filter buttons
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                if (btn.onclick && btn.onclick.toString().includes('filterDossiers')) {
+                    btn.classList.remove('active');
                 }
             });
+            event.target.classList.add('active');
+
+            currentStatusFilter = status;
+            applyFilters();
+        }
+
+        function filterByEntity(entity) {
+            // Update entity filter buttons
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                if (btn.onclick && btn.onclick.toString().includes('filterByEntity')) {
+                    btn.classList.remove('active');
+                }
+            });
+            if (currentEntityFilter !== entity) {
+                event.target.classList.add('active');
+                currentEntityFilter = entity;
+            } else {
+                // Toggle off - show all entities
+                currentEntityFilter = 'all';
+            }
+            applyFilters();
         }
 
         // Expand first red item by default

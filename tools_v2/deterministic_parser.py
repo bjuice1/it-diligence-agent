@@ -64,6 +64,17 @@ CONTRACT_HEADERS = {
     "renewal", "term", "value", "annual value", "tcv", "acv"
 }
 
+# Column headers that indicate organization/staffing table
+ORG_INVENTORY_HEADERS = {
+    "team", "team name", "department", "group", "function",
+    "role", "title", "job title", "position",
+    "headcount", "hc", "head count", "fte", "ftes",
+    "reports to", "reporting to", "manager", "reports",
+    "location", "office", "site",
+    "responsibilities", "scope", "focus area",
+    "name", "lead", "leader", "director", "vp",
+}
+
 # Minimum columns required to consider something a valid inventory table
 MIN_COLUMNS_FOR_INVENTORY = 3
 
@@ -208,20 +219,60 @@ def _normalize_header(header: str) -> str:
 
 
 def _clean_cell_value(value: str) -> str:
-    """Clean a cell value"""
-    # Remove markdown formatting but preserve the content
-    value = re.sub(r'\*\*([^*]+)\*\*', r'\1', value)  # **bold** -> bold
-    value = re.sub(r'\*([^*]+)\*', r'\1', value)      # *italic* -> italic
+    """Clean a cell value: remove formatting, Unicode artifacts, normalize numbers."""
+    # Remove markdown formatting but preserve content
+    value = re.sub(r'\*\*([^*]+)\*\*', r'\1', value)
+    value = re.sub(r'\*([^*]+)\*', r'\1', value)
 
-    # Remove citation markers like fileciteturn3file0L35-L38
-    # Also handle unicode citation wrapper characters
+    # Remove citation markers
     value = re.sub(r'filecite[a-zA-Z0-9\-_]+', '', value)
-    value = re.sub(r'[\ue200\ue201\ue202]', '', value)  # Unicode citation wrappers
+
+    # Remove ALL private-use Unicode characters (full BMP PUA range)
+    value = re.sub(r'[\ue000-\uf8ff]+', '', value)
+
+    # Remove supplementary private-use area characters
+    value = re.sub(r'[\U000F0000-\U000FFFFF]+', '', value)
+    value = re.sub(r'[\U00100000-\U0010FFFF]+', '', value)
 
     # Clean up whitespace
     value = ' '.join(value.split())
 
     return value.strip()
+
+
+def _normalize_numeric(value: str) -> Optional[str]:
+    """Normalize numeric strings for consistent storage.
+
+    - Strip currency symbols ($, EUR, GBP, etc.)
+    - Remove thousands separators (commas)
+    - Convert 'N/A', 'TBD', '-', 'Unknown' to None
+    - Preserve non-numeric strings as-is
+
+    Returns: Cleaned numeric string, or None for null-equivalent values.
+    """
+    if not value:
+        return None
+
+    stripped = value.strip()
+
+    # Null-equivalent values
+    NULL_VALUES = {'n/a', 'na', 'tbd', '-', '--', 'unknown', 'none', ''}
+    if stripped.lower() in NULL_VALUES:
+        return None
+
+    # Try to extract numeric value
+    # Remove currency symbols and whitespace
+    numeric = re.sub(r'[$\u20ac\u00a3\u00a5]', '', stripped)  # $, EUR, GBP, JPY
+    numeric = numeric.replace(',', '')  # Remove thousands separator
+    numeric = numeric.strip()
+
+    # Validate it's actually numeric
+    try:
+        float(numeric)
+        return numeric
+    except ValueError:
+        # Not numeric — return original cleaned string
+        return stripped
 
 
 # =============================================================================
@@ -234,7 +285,7 @@ def detect_table_type(table: ParsedTable) -> str:
 
     Returns:
         "application_inventory", "infrastructure_inventory",
-        "contract_inventory", or "unknown"
+        "contract_inventory", "organization_inventory", or "unknown"
     """
     headers_lower = {h.lower() for h in table.headers if h}
 
@@ -242,14 +293,22 @@ def detect_table_type(table: ParsedTable) -> str:
     app_score = len(headers_lower & APP_INVENTORY_HEADERS)
     infra_score = len(headers_lower & INFRA_INVENTORY_HEADERS)
     contract_score = len(headers_lower & CONTRACT_HEADERS)
+    org_score = len(headers_lower & ORG_INVENTORY_HEADERS)
 
-    # Need minimum overlap to classify
-    if app_score >= 3 and app_score > infra_score and app_score > contract_score:
-        return "application_inventory"
-    elif infra_score >= 3 and infra_score > app_score:
-        return "infrastructure_inventory"
-    elif contract_score >= 3:
-        return "contract_inventory"
+    # Score-based classification with priority ordering
+    scores = {
+        "application_inventory": app_score,
+        "infrastructure_inventory": infra_score,
+        "contract_inventory": contract_score,
+        "organization_inventory": org_score,
+    }
+
+    # Find highest scoring type with minimum threshold of 3
+    best_type = max(scores, key=scores.get)
+    best_score = scores[best_type]
+
+    if best_score >= 3:
+        return best_type
 
     return "unknown"
 
@@ -262,16 +321,18 @@ def table_to_facts(
     table: ParsedTable,
     fact_store: "FactStore",
     entity: str = "target",
-    source_document: str = ""
+    source_document: str = "",
+    inventory_store: Optional["InventoryStore"] = None,
 ) -> int:
     """
-    Convert a parsed table directly into FactStore entries.
+    Convert a parsed table directly into FactStore entries (and optionally InventoryStore items).
 
     Args:
         table: Parsed markdown table
         fact_store: FactStore instance
         entity: "target" or "buyer"
         source_document: Source filename for traceability
+        inventory_store: Optional InventoryStore for bidirectional linking (Spec 03)
 
     Returns:
         Number of facts created
@@ -279,11 +340,13 @@ def table_to_facts(
     table_type = detect_table_type(table)
 
     if table_type == "application_inventory":
-        return _app_table_to_facts(table, fact_store, entity, source_document)
+        return _app_table_to_facts(table, fact_store, entity, source_document, inventory_store)
     elif table_type == "infrastructure_inventory":
-        return _infra_table_to_facts(table, fact_store, entity, source_document)
+        return _infra_table_to_facts(table, fact_store, entity, source_document, inventory_store)
     elif table_type == "contract_inventory":
-        return _contract_table_to_facts(table, fact_store, entity, source_document)
+        return _contract_table_to_facts(table, fact_store, entity, source_document, inventory_store)
+    elif table_type == "organization_inventory":
+        return _org_table_to_facts(table, fact_store, entity, source_document, inventory_store)
     else:
         logger.warning(f"Unknown table type, skipping: headers={table.headers[:5]}")
         return 0
@@ -293,9 +356,10 @@ def _app_table_to_facts(
     table: ParsedTable,
     fact_store: "FactStore",
     entity: str,
-    source_document: str
+    source_document: str,
+    inventory_store: Optional["InventoryStore"] = None,
 ) -> int:
-    """Convert application inventory table to facts"""
+    """Convert application inventory table to facts (and optionally inventory items)."""
     facts_created = 0
 
     # Map common header variations to standard fields
@@ -351,23 +415,60 @@ def _app_table_to_facts(
             if std_field == "item":
                 continue
 
-            details[std_field] = value
+            # Normalize numeric fields (cost, user counts)
+            if std_field in ('user_count', 'annual_cost', 'license_count'):
+                normalized = _normalize_numeric(value)
+                if normalized is None:
+                    continue  # Skip null-equivalent values
+                details[std_field] = normalized
+            else:
+                details[std_field] = value
 
-        # Determine category based on category_detail or default
-        category = "saas"  # Default
+        # Use confidence-aware lookup from app_category_mappings
+        from stores.app_category_mappings import categorize_app
+        category, mapping, confidence, inferred_from = categorize_app(item_name)
+
+        # If no mapping found, try keyword-based inference from category_detail
         cat_detail = details.get("category_detail", "").lower()
-        if "erp" in cat_detail:
-            category = "erp"
-        elif "crm" in cat_detail or "agency" in cat_detail:
-            category = "crm"
-        elif "hr" in cat_detail or "hcm" in cat_detail:
-            category = "saas"  # HR apps typically SaaS
-        elif "custom" in cat_detail or "proprietary" in cat_detail:
-            category = "custom"
-        elif "integration" in cat_detail or "middleware" in cat_detail:
-            category = "integration"
-        elif "database" in cat_detail or "db" in cat_detail:
-            category = "database"
+        if category == "unknown" and cat_detail:
+            if "erp" in cat_detail:
+                category = "erp"
+            elif "crm" in cat_detail or "agency" in cat_detail:
+                category = "crm"
+            elif "hr" in cat_detail or "hcm" in cat_detail:
+                category = "hcm"
+            elif "custom" in cat_detail or "proprietary" in cat_detail:
+                category = "custom"
+            elif "integration" in cat_detail or "middleware" in cat_detail:
+                category = "integration"
+            elif "database" in cat_detail or "db" in cat_detail:
+                category = "database"
+            # NEW branches for verticals:
+            elif any(kw in cat_detail for kw in ("insurance", "policy", "claims", "underwriting", "billing engine")):
+                category = "industry_vertical"
+            elif any(kw in cat_detail for kw in ("healthcare", "ehr", "clinical", "medical", "patient")):
+                category = "industry_vertical"
+            elif any(kw in cat_detail for kw in ("manufacturing", "mes", "scada", "plm", "cad", "cam")):
+                category = "industry_vertical"
+            elif any(kw in cat_detail for kw in ("retail", "pos", "point of sale", "ecommerce", "warehouse")):
+                category = "industry_vertical"
+            elif any(kw in cat_detail for kw in ("security", "siem", "edr", "mfa", "iam")):
+                category = "security"
+            elif any(kw in cat_detail for kw in ("analytics", "bi", "reporting", "dashboard")):
+                category = "bi_analytics"
+            elif any(kw in cat_detail for kw in ("collaboration", "chat", "video", "meeting")):
+                category = "collaboration"
+            elif any(kw in cat_detail for kw in ("saas", "cloud", "subscription")):
+                category = "saas"
+
+            if category != "unknown":
+                confidence = "low"
+                inferred_from = "keyword_inference"
+
+        # Store provenance in the fact details dict
+        details["source_category"] = cat_detail  # Raw from document
+        details["category_confidence"] = confidence
+        details["category_inferred_from"] = inferred_from
 
         # Create evidence from the row data
         evidence = {
@@ -386,11 +487,55 @@ def _app_table_to_facts(
                 evidence=evidence,
                 entity=entity,
                 source_document=source_document,
-                needs_review=False,
-                extraction_method="deterministic_parser"  # Track that this was parsed, not LLM-extracted
+                needs_review=False
             )
             facts_created += 1
             logger.debug(f"Created fact {fact_id}: {item_name}")
+
+            # Spec 03: Also create inventory item if store available
+            if inventory_store is not None and fact_id:
+                try:
+                    inv_data = {
+                        "name": item_name,
+                        "vendor": details.get("vendor", ""),
+                        "version": details.get("version", ""),
+                        "hosting": details.get("deployment", ""),
+                        "users": details.get("user_count", ""),
+                        "cost": details.get("annual_cost", ""),
+                        "criticality": details.get("criticality", ""),
+                        "category": category,
+                        "source_category": details.get("source_category", ""),
+                        "category_confidence": details.get("category_confidence", ""),
+                        "category_inferred_from": details.get("category_inferred_from", ""),
+                    }
+                    # Remove empty values
+                    inv_data = {k: v for k, v in inv_data.items() if v}
+
+                    inv_item_id = inventory_store.add_item(
+                        inventory_type="application",
+                        entity=entity,
+                        data=inv_data,
+                        source_file=source_document,
+                        source_type="discovery",
+                        deal_id=fact_store.deal_id,
+                    )
+
+                    # Bidirectional linking
+                    if inv_item_id:
+                        # Link fact -> inventory
+                        fact = fact_store.get_fact(fact_id)
+                        if fact:
+                            fact.inventory_item_id = inv_item_id
+
+                        # Link inventory -> fact
+                        inv_item = inventory_store.get_item(inv_item_id)
+                        if inv_item:
+                            if fact_id not in inv_item.source_fact_ids:
+                                inv_item.source_fact_ids.append(fact_id)
+
+                        logger.debug(f"Linked fact {fact_id} <-> inventory {inv_item_id}")
+                except Exception as inv_e:
+                    logger.warning(f"Failed to create inventory item for {item_name}: {inv_e}")
 
         except Exception as e:
             logger.error(f"Failed to create fact for {item_name}: {e}")
@@ -402,9 +547,10 @@ def _infra_table_to_facts(
     table: ParsedTable,
     fact_store: "FactStore",
     entity: str,
-    source_document: str
+    source_document: str,
+    inventory_store: Optional["InventoryStore"] = None,
 ) -> int:
-    """Convert infrastructure inventory table to facts"""
+    """Convert infrastructure inventory table to facts (and optionally inventory items)."""
     facts_created = 0
 
     header_mapping = {
@@ -473,10 +619,47 @@ def _infra_table_to_facts(
                 status="documented",
                 evidence=evidence,
                 entity=entity,
-                source_document=source_document,
-                extraction_method="deterministic_parser"
+                source_document=source_document
             )
             facts_created += 1
+
+            # Spec 03: Also create inventory item if store available
+            if inventory_store is not None and fact_id:
+                try:
+                    inv_data = {
+                        "name": item_name,
+                        "type": details.get("server_type", ""),
+                        "os": details.get("operating_system", ""),
+                        "environment": details.get("environment", ""),
+                        "ip": details.get("ip_address", ""),
+                        "location": details.get("location", "") or details.get("datacenter", ""),
+                        "cpu": details.get("cpu", "") or details.get("cpu_cores", ""),
+                        "memory": details.get("memory", ""),
+                        "storage": details.get("storage", ""),
+                    }
+                    inv_data = {k: v for k, v in inv_data.items() if v}
+
+                    inv_item_id = inventory_store.add_item(
+                        inventory_type="infrastructure",
+                        entity=entity,
+                        data=inv_data,
+                        source_file=source_document,
+                        source_type="discovery",
+                        deal_id=fact_store.deal_id,
+                    )
+
+                    if inv_item_id:
+                        fact = fact_store.get_fact(fact_id)
+                        if fact:
+                            fact.inventory_item_id = inv_item_id
+                        inv_item = inventory_store.get_item(inv_item_id)
+                        if inv_item:
+                            if fact_id not in inv_item.source_fact_ids:
+                                inv_item.source_fact_ids.append(fact_id)
+                        logger.debug(f"Linked infra fact {fact_id} <-> inventory {inv_item_id}")
+                except Exception as inv_e:
+                    logger.warning(f"Failed to create infra inventory item for {item_name}: {inv_e}")
+
         except Exception as e:
             logger.error(f"Failed to create infra fact for {item_name}: {e}")
 
@@ -487,9 +670,10 @@ def _contract_table_to_facts(
     table: ParsedTable,
     fact_store: "FactStore",
     entity: str,
-    source_document: str
+    source_document: str,
+    inventory_store: Optional["InventoryStore"] = None,
 ) -> int:
-    """Convert contract/vendor table to facts"""
+    """Convert contract/vendor table to facts (and optionally inventory items)."""
     facts_created = 0
 
     for row in table.rows:
@@ -520,12 +704,220 @@ def _contract_table_to_facts(
                 status="documented",
                 evidence=evidence,
                 entity=entity,
-                source_document=source_document,
-                extraction_method="deterministic_parser"
+                source_document=source_document
             )
             facts_created += 1
+
+            # Spec 03: Also create inventory item if store available
+            if inventory_store is not None and fact_id:
+                try:
+                    inv_data = {
+                        "name": item_name,
+                        "contract_type": details.get("contract", ""),
+                        "start_date": details.get("start_date", "") or details.get("start date", ""),
+                        "end_date": details.get("end_date", "") or details.get("end date", "") or details.get("expiration", ""),
+                        "acv": details.get("acv", "") or details.get("annual_value", ""),
+                        "tcv": details.get("tcv", ""),
+                    }
+                    inv_data = {k: v for k, v in inv_data.items() if v}
+
+                    inv_item_id = inventory_store.add_item(
+                        inventory_type="vendor",
+                        entity=entity,
+                        data=inv_data,
+                        source_file=source_document,
+                        source_type="discovery",
+                        deal_id=fact_store.deal_id,
+                    )
+
+                    if inv_item_id:
+                        fact = fact_store.get_fact(fact_id)
+                        if fact:
+                            fact.inventory_item_id = inv_item_id
+                        inv_item = inventory_store.get_item(inv_item_id)
+                        if inv_item:
+                            if fact_id not in inv_item.source_fact_ids:
+                                inv_item.source_fact_ids.append(fact_id)
+                        logger.debug(f"Linked contract fact {fact_id} <-> inventory {inv_item_id}")
+                except Exception as inv_e:
+                    logger.warning(f"Failed to create vendor inventory item for {item_name}: {inv_e}")
+
         except Exception as e:
             logger.error(f"Failed to create contract fact for {item_name}: {e}")
+
+    return facts_created
+
+
+def _org_table_to_facts(
+    table: ParsedTable,
+    fact_store: "FactStore",
+    entity: str,
+    source_document: str,
+    inventory_store: Optional["InventoryStore"] = None,
+) -> int:
+    """Convert organization/staffing table to facts (and optionally inventory items).
+
+    Handles tables with team/role data: Team Summary, Role Breakdown,
+    IT Org Structure, Staffing tables.
+    """
+    facts_created = 0
+
+    header_mapping = {
+        # Team/group identifiers
+        "team": "item",
+        "team name": "item",
+        "department": "item",
+        "group": "item",
+        "function": "item",
+        # Role identifiers (if team not present)
+        "role": "role",
+        "title": "role",
+        "job title": "role",
+        "position": "role",
+        # Person name
+        "name": "person_name",
+        "lead": "person_name",
+        "leader": "person_name",
+        "director": "person_name",
+        "vp": "person_name",
+        # Staffing numbers
+        "headcount": "headcount",
+        "hc": "headcount",
+        "head count": "headcount",
+        "fte": "fte",
+        "ftes": "fte",
+        # Reporting
+        "reports to": "reports_to",
+        "reporting to": "reports_to",
+        "manager": "reports_to",
+        "reports": "reports_to",
+        # Other
+        "location": "location",
+        "office": "location",
+        "site": "location",
+        "responsibilities": "responsibilities",
+        "scope": "responsibilities",
+        "focus area": "responsibilities",
+    }
+
+    for row in table.rows:
+        # Find the team/role name (primary identifier)
+        item_name = None
+
+        # Priority: team name > role > person name
+        for header in ["team", "team name", "department", "group", "function"]:
+            if header in row and row[header]:
+                item_name = row[header]
+                break
+
+        if not item_name:
+            for header in ["role", "title", "job title", "position"]:
+                if header in row and row[header]:
+                    item_name = row[header]
+                    break
+
+        if not item_name:
+            for header in ["name", "lead", "leader"]:
+                if header in row and row[header]:
+                    item_name = row[header]
+                    break
+
+        if not item_name:
+            logger.warning(f"Skipping org row without identifiable name: {row}")
+            continue
+
+        # Build details
+        details = {}
+        for header, value in row.items():
+            if not value:
+                continue
+            std_field = header_mapping.get(header.lower(), header.lower().replace(" ", "_"))
+            if std_field == "item":
+                continue  # Skip the name field itself
+            # Normalize numeric fields
+            if std_field in ("headcount", "fte"):
+                normalized = _normalize_numeric(value)
+                if normalized is not None:
+                    details[std_field] = normalized
+            else:
+                details[std_field] = value
+
+        # Determine category based on content
+        category = "central_it"  # Default
+        item_lower = item_name.lower()
+        if any(kw in item_lower for kw in ["leader", "cio", "cto", "vp", "director", "head of"]):
+            category = "leadership"
+        elif any(kw in item_lower for kw in ["outsourc", "msp", "managed service", "contractor"]):
+            category = "outsourcing"
+        elif any(kw in item_lower for kw in ["embed", "shadow", "business"]):
+            category = "embedded_it"
+
+        evidence = {
+            "exact_quote": f"{item_name} | HC: {details.get('headcount', 'N/A')} | FTE: {details.get('fte', 'N/A')}",
+            "source_section": "Organization/Staffing Table"
+        }
+
+        try:
+            fact_id = fact_store.add_fact(
+                domain="organization",
+                category=category,
+                item=item_name,
+                details=details,
+                status="documented",
+                evidence=evidence,
+                entity=entity,
+                source_document=source_document,
+                needs_review=False,
+            )
+            facts_created += 1
+            logger.debug(f"Created org fact {fact_id}: {item_name}")
+
+            # Create inventory item if store available (Spec 03 linking)
+            if inventory_store is not None and fact_id:
+                try:
+                    inv_data = {
+                        "role": details.get("role", item_name),
+                        "name": details.get("person_name", ""),
+                        "team": item_name if category == "central_it" else "",
+                        "department": "IT",
+                        "headcount": details.get("headcount", ""),
+                        "fte": details.get("fte", ""),
+                        "location": details.get("location", ""),
+                        "reports_to": details.get("reports_to", ""),
+                        "responsibilities": details.get("responsibilities", ""),
+                    }
+                    # Remove empty values
+                    inv_data = {k: v for k, v in inv_data.items() if v}
+
+                    # Ensure required 'role' field is present
+                    if "role" not in inv_data:
+                        inv_data["role"] = item_name
+
+                    inv_item_id = inventory_store.add_item(
+                        inventory_type="organization",
+                        entity=entity,
+                        data=inv_data,
+                        source_file=source_document,
+                        source_type="discovery",
+                        deal_id=fact_store.deal_id,
+                    )
+
+                    # Bidirectional linking
+                    if inv_item_id:
+                        fact = fact_store.get_fact(fact_id)
+                        if fact:
+                            fact.inventory_item_id = inv_item_id
+                        inv_item = inventory_store.get_item(inv_item_id)
+                        if inv_item:
+                            if fact_id not in inv_item.source_fact_ids:
+                                inv_item.source_fact_ids.append(fact_id)
+                        logger.debug(f"Linked org fact {fact_id} <-> inventory {inv_item_id}")
+
+                except Exception as inv_e:
+                    logger.warning(f"Failed to create org inventory item for {item_name}: {inv_e}")
+
+        except Exception as e:
+            logger.error(f"Failed to create org fact for {item_name}: {e}")
 
     return facts_created
 
@@ -538,7 +930,8 @@ def preprocess_document(
     document_text: str,
     fact_store: "FactStore",
     entity: str = "target",
-    source_document: str = ""
+    source_document: str = "",
+    inventory_store: Optional["InventoryStore"] = None,
 ) -> ParserResult:
     """
     Preprocess a document: extract structured tables deterministically,
@@ -549,6 +942,7 @@ def preprocess_document(
         fact_store: FactStore instance
         entity: "target" or "buyer"
         source_document: Source filename
+        inventory_store: Optional InventoryStore for bidirectional linking (Spec 03)
 
     Returns:
         ParserResult with tables parsed, facts created, and remaining text
@@ -579,12 +973,13 @@ def preprocess_document(
             logger.info(f"Skipping unknown table type: {parsed.headers[:5]}")
             continue
 
-        # Convert to facts
+        # Convert to facts (and optionally inventory items)
         facts_created = table_to_facts(
             table=parsed,
             fact_store=fact_store,
             entity=entity,
-            source_document=source_document
+            source_document=source_document,
+            inventory_store=inventory_store,
         )
 
         result.facts_created += facts_created

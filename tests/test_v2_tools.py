@@ -17,7 +17,7 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from tools_v2.fact_store import FactStore, Fact, Gap, DOMAIN_PREFIXES
+from stores.fact_store import FactStore, Fact, Gap, DOMAIN_PREFIXES
 from tools_v2.discovery_tools import (
     DISCOVERY_TOOLS,
     execute_discovery_tool,
@@ -40,7 +40,7 @@ class TestFactStore:
 
     def test_create_empty_store(self):
         """Test creating an empty FactStore."""
-        store = FactStore()
+        store = FactStore(deal_id="test-deal")
         assert store.facts == []
         assert store.gaps == []
         assert len(store._fact_counters) == 0
@@ -48,7 +48,7 @@ class TestFactStore:
 
     def test_add_fact_returns_id(self):
         """Test that add_fact returns a unique ID."""
-        store = FactStore()
+        store = FactStore(deal_id="test-deal")
 
         fact_id = store.add_fact(
             domain="infrastructure",
@@ -59,12 +59,12 @@ class TestFactStore:
             evidence={"exact_quote": "VMware vSphere 6.7 environment"}
         )
 
-        assert fact_id == "F-INFRA-001"
+        assert fact_id == "F-TGT-INFRA-001"
         assert len(store.facts) == 1
 
     def test_add_fact_increments_counter(self):
         """Test that fact IDs increment correctly."""
-        store = FactStore()
+        store = FactStore(deal_id="test-deal")
 
         id1 = store.add_fact(
             domain="infrastructure",
@@ -91,13 +91,13 @@ class TestFactStore:
             evidence={"exact_quote": "MPLS network"}
         )
 
-        assert id1 == "F-INFRA-001"
-        assert id2 == "F-INFRA-002"
-        assert id3 == "F-NET-001"  # Different domain, new counter
+        assert id1 == "F-TGT-INFRA-001"
+        assert id2 == "F-TGT-INFRA-002"
+        assert id3 == "F-TGT-NET-001"  # Different domain, new counter
 
     def test_add_gap_returns_id(self):
         """Test that add_gap returns a unique ID."""
-        store = FactStore()
+        store = FactStore(deal_id="test-deal")
 
         gap_id = store.add_gap(
             domain="infrastructure",
@@ -106,12 +106,12 @@ class TestFactStore:
             importance="high"
         )
 
-        assert gap_id == "G-INFRA-001"
+        assert gap_id == "G-TGT-INFRA-001"
         assert len(store.gaps) == 1
 
     def test_get_fact_by_id(self):
         """Test retrieving a fact by ID."""
-        store = FactStore()
+        store = FactStore(deal_id="test-deal")
 
         store.add_fact(
             domain="infrastructure",
@@ -122,20 +122,20 @@ class TestFactStore:
             evidence={"exact_quote": "VMware 7.0"}
         )
 
-        fact = store.get_fact("F-INFRA-001")
+        fact = store.get_fact("F-TGT-INFRA-001")
         assert fact is not None
         assert fact.item == "VMware"
         assert fact.details["version"] == "7.0"
 
     def test_get_fact_returns_none_for_invalid_id(self):
         """Test that get_fact returns None for non-existent ID."""
-        store = FactStore()
-        fact = store.get_fact("F-INFRA-999")
+        store = FactStore(deal_id="test-deal")
+        fact = store.get_fact("F-TGT-INFRA-999")
         assert fact is None
 
     def test_get_domain_facts(self):
         """Test getting all facts for a domain."""
-        store = FactStore()
+        store = FactStore(deal_id="test-deal")
 
         # Add facts to different domains
         store.add_fact(
@@ -180,7 +180,7 @@ class TestFactStore:
 
     def test_validate_fact_citations(self):
         """Test validating fact ID citations."""
-        store = FactStore()
+        store = FactStore(deal_id="test-deal")
 
         store.add_fact(
             domain="infrastructure",
@@ -200,20 +200,20 @@ class TestFactStore:
         )
 
         result = store.validate_fact_citations([
-            "F-INFRA-001",
-            "F-INFRA-002",
-            "F-INFRA-999"  # Invalid
+            "F-TGT-INFRA-001",
+            "F-TGT-INFRA-002",
+            "F-TGT-INFRA-999"  # Invalid
         ])
 
         assert len(result["valid"]) == 2
         assert len(result["invalid"]) == 1
-        assert "F-INFRA-999" in result["invalid"]
+        assert "F-TGT-INFRA-999" in result["invalid"]
         assert result["validation_rate"] == pytest.approx(2/3, rel=0.01)
 
     def test_merge_from_other_store(self):
         """Test merging facts from another store."""
-        store1 = FactStore()
-        store2 = FactStore()
+        store1 = FactStore(deal_id="test-deal")
+        store2 = FactStore(deal_id="test-deal")
 
         store1.add_fact(
             domain="infrastructure",
@@ -246,11 +246,11 @@ class TestFactStore:
         assert len(store1.facts) == 2
         assert len(store1.gaps) == 1
         # Merged facts get new IDs
-        assert store1.facts[1].fact_id == "F-NET-001"
+        assert store1.facts[1].fact_id == "F-TGT-NET-001"
 
     def test_save_and_load(self):
         """Test saving and loading FactStore to JSON."""
-        store = FactStore()
+        store = FactStore(deal_id="test-deal")
 
         store.add_fact(
             domain="infrastructure",
@@ -291,14 +291,14 @@ class TestFactStore:
                 status="documented",
                 evidence={"exact_quote": "NetApp storage"}
             )
-            assert new_id == "F-INFRA-002"  # Continues from 001
+            assert new_id == "F-TGT-INFRA-002"  # Continues from 001
 
         finally:
             Path(temp_path).unlink()
 
     def test_format_for_reasoning(self):
         """Test formatting facts for reasoning agent prompt."""
-        store = FactStore()
+        store = FactStore(deal_id="test-deal")
 
         store.add_fact(
             domain="infrastructure",
@@ -318,14 +318,14 @@ class TestFactStore:
         formatted = store.format_for_reasoning("infrastructure")
 
         assert "INFRASTRUCTURE INVENTORY" in formatted
-        assert "F-INFRA-001" in formatted
+        assert "F-TGT-INFRA-001" in formatted
         assert "VMware Environment" in formatted
         assert "IDENTIFIED GAPS" in formatted
-        assert "G-INFRA-001" in formatted
+        assert "G-TGT-INFRA-001" in formatted
 
     def test_mark_discovery_complete(self):
         """Test marking discovery complete for a domain."""
-        store = FactStore()
+        store = FactStore(deal_id="test-deal")
 
         store.mark_discovery_complete(
             domain="infrastructure",
@@ -349,7 +349,7 @@ class TestFactStore:
 
     def test_verify_fact(self):
         """Test verifying a fact."""
-        store = FactStore()
+        store = FactStore(deal_id="test-deal")
         fact_id = store.add_fact(
             domain="infrastructure",
             category="compute",
@@ -377,7 +377,7 @@ class TestFactStore:
 
     def test_verification_stats(self):
         """Test verification statistics."""
-        store = FactStore()
+        store = FactStore(deal_id="test-deal")
 
         # Add some facts
         id1 = store.add_fact(
@@ -404,7 +404,7 @@ class TestFactStore:
 
     def test_bulk_verify(self):
         """Test bulk verification."""
-        store = FactStore()
+        store = FactStore(deal_id="test-deal")
 
         ids = []
         for i in range(5):
@@ -448,7 +448,30 @@ class TestDiscoveryTools:
 
     def test_execute_create_inventory_entry(self):
         """Test executing create_inventory_entry tool."""
-        store = FactStore()
+        store = FactStore(deal_id="test-deal")
+
+        result = execute_discovery_tool(
+            tool_name="create_inventory_entry",
+            tool_input={
+                "domain": "infrastructure",
+                "category": "compute",
+                "item": "VMware Environment",
+                "details": {"version": "7.0"},
+                "status": "documented",
+                "evidence": {"exact_quote": "VMware vSphere 7.0 cluster"},
+                "entity": "target"
+            },
+            fact_store=store
+        )
+
+        assert result["status"] == "success"
+        assert "fact_id" in result
+        assert result["fact_id"] == "F-TGT-INFRA-001"
+        assert len(store.facts) == 1
+
+    def test_execute_create_inventory_entry_rejects_missing_entity(self):
+        """Test create_inventory_entry rejects calls without explicit entity."""
+        store = FactStore(deal_id="test-deal")
 
         result = execute_discovery_tool(
             tool_name="create_inventory_entry",
@@ -459,18 +482,18 @@ class TestDiscoveryTools:
                 "details": {"version": "7.0"},
                 "status": "documented",
                 "evidence": {"exact_quote": "VMware vSphere 7.0 cluster"}
+                # entity intentionally omitted
             },
             fact_store=store
         )
 
-        assert result["status"] == "success"
-        assert "fact_id" in result
-        assert result["fact_id"] == "F-INFRA-001"
-        assert len(store.facts) == 1
+        assert result["status"] == "error"
+        assert result["reason"] == "missing_entity"
+        assert len(store.facts) == 0
 
     def test_execute_create_inventory_entry_missing_fields(self):
         """Test create_inventory_entry fails with missing required fields."""
-        store = FactStore()
+        store = FactStore(deal_id="test-deal")
 
         result = execute_discovery_tool(
             tool_name="create_inventory_entry",
@@ -478,7 +501,8 @@ class TestDiscoveryTools:
                 "domain": "infrastructure",
                 # Missing category, item
                 "status": "documented",
-                "evidence": {"exact_quote": "test"}
+                "evidence": {"exact_quote": "test"},
+                "entity": "target"
             },
             fact_store=store
         )
@@ -488,7 +512,7 @@ class TestDiscoveryTools:
 
     def test_execute_create_inventory_entry_short_quote(self):
         """Test create_inventory_entry fails with too short quote."""
-        store = FactStore()
+        store = FactStore(deal_id="test-deal")
 
         result = execute_discovery_tool(
             tool_name="create_inventory_entry",
@@ -497,7 +521,8 @@ class TestDiscoveryTools:
                 "category": "compute",
                 "item": "VMware",
                 "status": "documented",
-                "evidence": {"exact_quote": "VM"}  # Too short
+                "evidence": {"exact_quote": "VM"},  # Too short
+                "entity": "target"
             },
             fact_store=store
         )
@@ -507,7 +532,7 @@ class TestDiscoveryTools:
 
     def test_execute_flag_gap(self):
         """Test executing flag_gap tool."""
-        store = FactStore()
+        store = FactStore(deal_id="test-deal")
 
         result = execute_discovery_tool(
             tool_name="flag_gap",
@@ -515,19 +540,20 @@ class TestDiscoveryTools:
                 "domain": "infrastructure",
                 "category": "backup_dr",
                 "description": "No DR RTO/RPO values documented",
-                "importance": "high"
+                "importance": "high",
+                "entity": "target"
             },
             fact_store=store
         )
 
         assert result["status"] == "success"
         assert "gap_id" in result
-        assert result["gap_id"] == "G-INFRA-001"
+        assert result["gap_id"] == "G-TGT-INFRA-001"
         assert len(store.gaps) == 1
 
     def test_execute_complete_discovery(self):
         """Test executing complete_discovery tool."""
-        store = FactStore()
+        store = FactStore(deal_id="test-deal")
 
         # Add some facts first
         store.add_fact(
@@ -556,7 +582,7 @@ class TestDiscoveryTools:
 
     def test_execute_unknown_tool(self):
         """Test executing unknown tool returns error."""
-        store = FactStore()
+        store = FactStore(deal_id="test-deal")
 
         result = execute_discovery_tool(
             tool_name="unknown_tool",
@@ -596,7 +622,7 @@ class TestDiscoveryTools:
 
     def test_duplicate_fact_detection_exact_match(self):
         """Test that exact duplicate facts are detected."""
-        store = FactStore()
+        store = FactStore(deal_id="test-deal")
 
         # Add first fact
         result1 = execute_discovery_tool(
@@ -606,7 +632,8 @@ class TestDiscoveryTools:
                 "category": "compute",
                 "item": "VMware vSphere",
                 "status": "documented",
-                "evidence": {"exact_quote": "VMware vSphere 6.7"}
+                "evidence": {"exact_quote": "VMware vSphere 6.7"},
+                "entity": "target"
             },
             store
         )
@@ -620,7 +647,8 @@ class TestDiscoveryTools:
                 "category": "compute",
                 "item": "VMware vSphere",  # Exact same item
                 "status": "documented",
-                "evidence": {"exact_quote": "Different quote"}
+                "evidence": {"exact_quote": "Different quote"},
+                "entity": "target"
             },
             store
         )
@@ -629,7 +657,7 @@ class TestDiscoveryTools:
 
     def test_duplicate_fact_detection_fuzzy_match(self):
         """Test that similar facts are detected as duplicates."""
-        store = FactStore()
+        store = FactStore(deal_id="test-deal")
 
         # Add first fact
         result1 = execute_discovery_tool(
@@ -639,7 +667,8 @@ class TestDiscoveryTools:
                 "category": "compute",
                 "item": "VMware vSphere Environment",
                 "status": "documented",
-                "evidence": {"exact_quote": "VMware vSphere 6.7 environment"}
+                "evidence": {"exact_quote": "VMware vSphere 6.7 environment"},
+                "entity": "target"
             },
             store
         )
@@ -653,7 +682,8 @@ class TestDiscoveryTools:
                 "category": "compute",
                 "item": "VMware vSphere Environments",  # Slightly different
                 "status": "documented",
-                "evidence": {"exact_quote": "Different evidence"}
+                "evidence": {"exact_quote": "Different evidence"},
+                "entity": "target"
             },
             store
         )
@@ -661,7 +691,7 @@ class TestDiscoveryTools:
 
     def test_duplicate_gap_detection(self):
         """Test that duplicate gaps are detected."""
-        store = FactStore()
+        store = FactStore(deal_id="test-deal")
 
         # Add first gap
         result1 = execute_discovery_tool(
@@ -670,7 +700,8 @@ class TestDiscoveryTools:
                 "domain": "infrastructure",
                 "category": "backup_dr",
                 "description": "No DR RTO/RPO defined",
-                "importance": "high"
+                "importance": "high",
+                "entity": "target"
             },
             store
         )
@@ -683,7 +714,8 @@ class TestDiscoveryTools:
                 "domain": "infrastructure",
                 "category": "backup_dr",
                 "description": "No DR RTO/RPO defined",  # Exact same
-                "importance": "critical"
+                "importance": "critical",
+                "entity": "target"
             },
             store
         )
@@ -692,7 +724,7 @@ class TestDiscoveryTools:
 
     def test_different_domain_not_duplicate(self):
         """Test that same item in different domain is not a duplicate."""
-        store = FactStore()
+        store = FactStore(deal_id="test-deal")
 
         # Add fact in infrastructure
         result1 = execute_discovery_tool(
@@ -702,7 +734,8 @@ class TestDiscoveryTools:
                 "category": "compute",
                 "item": "Windows Server",
                 "status": "documented",
-                "evidence": {"exact_quote": "Windows Server 2019"}
+                "evidence": {"exact_quote": "Windows Server 2019"},
+                "entity": "target"
             },
             store
         )
@@ -716,7 +749,8 @@ class TestDiscoveryTools:
                 "category": "erp",
                 "item": "Windows Server",
                 "status": "documented",
-                "evidence": {"exact_quote": "Windows Server hosting ERP"}
+                "evidence": {"exact_quote": "Windows Server hosting ERP"},
+                "entity": "target"
             },
             store
         )
@@ -741,7 +775,7 @@ class TestReasoningStore:
 
     def test_create_with_fact_store(self):
         """Test creating ReasoningStore with FactStore for validation."""
-        fact_store = FactStore()
+        fact_store = FactStore(deal_id="test-deal")
         fact_store.add_fact(
             domain="infrastructure",
             category="compute",
@@ -873,7 +907,7 @@ class TestReasoningStore:
 
     def test_validate_fact_citations_with_fact_store(self):
         """Test that citations are validated against FactStore."""
-        fact_store = FactStore()
+        fact_store = FactStore(deal_id="test-deal")
         fact_store.add_fact(
             domain="infrastructure",
             category="compute",
@@ -886,16 +920,16 @@ class TestReasoningStore:
         reasoning_store = ReasoningStore(fact_store=fact_store)
 
         # Valid citation
-        result = reasoning_store.validate_fact_citations(["F-INFRA-001"])
+        result = reasoning_store.validate_fact_citations(["F-TGT-INFRA-001"])
         assert len(result["valid"]) == 1
 
         # Invalid citation
-        result = reasoning_store.validate_fact_citations(["F-INFRA-999"])
+        result = reasoning_store.validate_fact_citations(["F-TGT-INFRA-999"])
         assert len(result["invalid"]) == 1
 
     def test_get_evidence_chain(self):
         """Test getting evidence chain for a finding."""
-        fact_store = FactStore()
+        fact_store = FactStore(deal_id="test-deal")
         fact_store.add_fact(
             domain="infrastructure",
             category="compute",
@@ -914,7 +948,7 @@ class TestReasoningStore:
             severity="high",
             integration_dependent=False,
             mitigation="Upgrade",
-            based_on_facts=["F-INFRA-001"],
+            based_on_facts=["F-TGT-INFRA-001"],
             confidence="high",
             reasoning="6.7 reached EOL"
         )
@@ -930,7 +964,7 @@ class TestReasoningStore:
     def test_save_and_load(self):
         """Test ReasoningStore save and load preserves all data."""
         # Create store with findings
-        fact_store = FactStore()
+        fact_store = FactStore(deal_id="test-deal")
         fact_store.add_fact(
             domain="infrastructure",
             category="compute",
@@ -951,7 +985,7 @@ class TestReasoningStore:
             severity="high",
             integration_dependent=False,
             mitigation="Upgrade to 8.0",
-            based_on_facts=["F-INFRA-001"],
+            based_on_facts=["F-TGT-INFRA-001"],
             confidence="high",
             reasoning="6.7 EOL Oct 2022"
         )
@@ -964,8 +998,8 @@ class TestReasoningStore:
             phase="Day_1",
             priority="high",
             owner_type="target",
-            triggered_by=["F-INFRA-001"],  # Must be facts, not risk IDs
-            based_on_facts=["F-INFRA-001"],
+            triggered_by=["F-TGT-INFRA-001"],  # Must be facts, not risk IDs
+            based_on_facts=["F-TGT-INFRA-001"],
             confidence="high",
             reasoning="VMware 6.7 is EOL and needs upgrade",
             cost_estimate="100k_to_500k"
@@ -1288,7 +1322,7 @@ class TestIntegration:
     def test_full_discovery_to_reasoning_flow(self):
         """Test complete flow from discovery to reasoning."""
         # Phase 1: Discovery
-        fact_store = FactStore()
+        fact_store = FactStore(deal_id="test-deal")
 
         # Extract facts
         execute_discovery_tool(
@@ -1299,7 +1333,8 @@ class TestIntegration:
                 "item": "VMware Environment",
                 "details": {"version": "6.7", "vm_count": 150},
                 "status": "documented",
-                "evidence": {"exact_quote": "VMware vSphere 6.7 with 150 VMs"}
+                "evidence": {"exact_quote": "VMware vSphere 6.7 with 150 VMs"},
+                "entity": "target"
             },
             fact_store
         )
@@ -1310,7 +1345,8 @@ class TestIntegration:
                 "domain": "infrastructure",
                 "category": "backup_dr",
                 "description": "No DR RTO/RPO documented",
-                "importance": "high"
+                "importance": "high",
+                "entity": "target"
             },
             fact_store
         )
@@ -1339,9 +1375,9 @@ class TestIntegration:
                 "severity": "high",
                 "integration_dependent": False,
                 "mitigation": "Upgrade to VMware 8.0",
-                "based_on_facts": ["F-INFRA-001"],
+                "based_on_facts": ["F-TGT-INFRA-001"],
                 "confidence": "high",
-                "reasoning": "Fact F-INFRA-001 shows VMware 6.7"
+                "reasoning": "Fact F-TGT-INFRA-001 shows VMware 6.7"
             },
             reasoning_store
         )
@@ -1355,7 +1391,7 @@ class TestIntegration:
                 "phase": "Day_100",
                 "priority": "high",
                 "owner_type": "target",
-                "triggered_by": ["F-INFRA-001"],
+                "triggered_by": ["F-TGT-INFRA-001"],
                 "based_on_facts": [],
                 "confidence": "high",
                 "reasoning": "VMware EOL requires upgrade",
@@ -1379,7 +1415,7 @@ class TestIntegration:
 
     def test_citation_validation_catches_invalid_facts(self):
         """Test that invalid fact citations are caught."""
-        fact_store = FactStore()
+        fact_store = FactStore(deal_id="test-deal")
         fact_store.add_fact(
             domain="infrastructure",
             category="compute",
@@ -1400,7 +1436,7 @@ class TestIntegration:
             severity="high",
             integration_dependent=False,
             mitigation="Test",
-            based_on_facts=["F-INFRA-001", "F-INFRA-999"],  # 999 is invalid
+            based_on_facts=["F-TGT-INFRA-001", "F-TGT-INFRA-999"],  # 999 is invalid
             confidence="high",
             reasoning="Test"
         )
@@ -1409,5 +1445,5 @@ class TestIntegration:
         assert len(reasoning_store.risks) == 1
 
         # Explicit validation shows the issue
-        result = reasoning_store.validate_fact_citations(["F-INFRA-001", "F-INFRA-999"])
-        assert "F-INFRA-999" in result["invalid"]
+        result = reasoning_store.validate_fact_citations(["F-TGT-INFRA-001", "F-TGT-INFRA-999"])
+        assert "F-TGT-INFRA-999" in result["invalid"]

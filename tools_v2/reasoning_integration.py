@@ -16,7 +16,7 @@ import csv
 import io
 import logging
 
-from tools_v2.fact_store import FactStore, Fact as FactStoreFact
+from stores.fact_store import FactStore, Fact as FactStoreFact
 from tools_v2.reasoning_engine import ReasoningEngine, ReasoningOutput
 
 logger = logging.getLogger(__name__)

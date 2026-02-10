@@ -10,7 +10,8 @@ from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
 
-from tools_v2.fact_store import FactStore, Fact
+from stores.fact_store import FactStore, Fact
+from services.field_normalizer import normalize_detail, normalize_category
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,8 @@ class AppCategory(Enum):
     INTEGRATION = "integration"
     DATABASE = "database"
     VERTICAL = "vertical"
+    PRODUCTIVITY = "productivity"
+    FINANCE = "finance"
     OTHER = "other"
 
     @property
@@ -36,8 +39,10 @@ class AppCategory(Enum):
             "saas": "SaaS Applications",
             "hcm": "HCM/HR Systems",
             "integration": "Integration/Middleware",
-            "database": "Databases",
+            "database": "Databases & Analytics",
             "vertical": "Industry-Specific",
+            "productivity": "Productivity Tools",
+            "finance": "Finance & Accounting",
             "other": "Other Applications"
         }
         return names.get(self.value, self.value.title())
@@ -53,6 +58,8 @@ class AppCategory(Enum):
             "integration": "🔗",
             "database": "🗄️",
             "vertical": "🏭",
+            "productivity": "📝",
+            "finance": "💰",
             "other": "📦"
         }
         return icons.get(self.value, "📦")
@@ -227,24 +234,29 @@ def _parse_cost(value: Any) -> float:
 
 
 def _determine_category(fact: Fact) -> AppCategory:
-    """Determine application category from fact."""
-    cat = fact.category.lower() if fact.category else ""
+    """Determine application category from fact using centralized normalizer."""
+    raw_cat = fact.category or ""
+
+    # Use centralized normalizer first (handles 60+ category variants)
+    normalized = normalize_category(raw_cat)
     try:
-        return AppCategory(cat)
+        return AppCategory(normalized)
     except ValueError:
-        # Try to infer from item name
-        item_lower = (fact.item or "").lower()
-        if any(k in item_lower for k in ['erp', 'sap', 'oracle', 'netsuite']):
-            return AppCategory.ERP
-        elif any(k in item_lower for k in ['salesforce', 'crm', 'hubspot']):
-            return AppCategory.CRM
-        elif any(k in item_lower for k in ['workday', 'adp', 'payroll', 'hr']):
-            return AppCategory.HCM
-        elif any(k in item_lower for k in ['mulesoft', 'integration', 'middleware', 'api']):
-            return AppCategory.INTEGRATION
-        elif any(k in item_lower for k in ['sql', 'database', 'postgres', 'mongo', 'snowflake']):
-            return AppCategory.DATABASE
-        return AppCategory.OTHER
+        pass
+
+    # Fall back to item-name heuristics for truly unknown categories
+    item_lower = (fact.item or "").lower()
+    if any(k in item_lower for k in ['erp', 'sap', 'oracle', 'netsuite']):
+        return AppCategory.ERP
+    elif any(k in item_lower for k in ['salesforce', 'crm', 'hubspot']):
+        return AppCategory.CRM
+    elif any(k in item_lower for k in ['workday', 'adp', 'payroll', 'hr']):
+        return AppCategory.HCM
+    elif any(k in item_lower for k in ['mulesoft', 'integration', 'middleware', 'api']):
+        return AppCategory.INTEGRATION
+    elif any(k in item_lower for k in ['sql', 'database', 'postgres', 'mongo', 'snowflake']):
+        return AppCategory.DATABASE
+    return AppCategory.OTHER
 
 
 def build_applications_inventory(fact_store: FactStore) -> Tuple[ApplicationsInventory, str]:
@@ -282,18 +294,18 @@ def build_applications_inventory(fact_store: FactStore) -> Tuple[ApplicationsInv
 
         app = ApplicationItem(
             id=fact.fact_id,
-            name=fact.item or details.get('vendor', 'Unknown Application'),
+            name=fact.item or normalize_detail(details, 'vendor') or 'Unknown Application',
             category=_determine_category(fact),
-            vendor=details.get('vendor', ''),
-            version=details.get('version', ''),
-            deployment=_parse_deployment(details.get('deployment')),
-            user_count=_parse_int(details.get('user_count', 0)),
-            criticality=_parse_criticality(details.get('criticality')),
+            vendor=normalize_detail(details, 'vendor') or '',
+            version=normalize_detail(details, 'version') or '',
+            deployment=_parse_deployment(normalize_detail(details, 'deployment')),
+            user_count=_parse_int(normalize_detail(details, 'user_count') or 0),
+            criticality=_parse_criticality(normalize_detail(details, 'criticality')),
             modules=details.get('modules', []) if isinstance(details.get('modules'), list) else [],
             integrations=details.get('integrations', []) if isinstance(details.get('integrations'), list) else [],
-            support_status=details.get('support_status', ''),
+            support_status=normalize_detail(details, 'support_model') or '',
             license_type=details.get('license_type', ''),
-            annual_cost=_parse_cost(details.get('annual_cost', 0)),
+            annual_cost=_parse_cost(normalize_detail(details, 'annual_cost') or 0),
             entity=fact.entity or 'target',
             notes=str(details) if details else '',
             evidence=_get_evidence_str(fact),
@@ -330,40 +342,12 @@ def build_applications_inventory(fact_store: FactStore) -> Tuple[ApplicationsInv
 
 
 def _map_category_from_inventory(category_str: str) -> AppCategory:
-    """Map inventory category string to AppCategory enum."""
-    if not category_str:
+    """Map inventory category string to AppCategory enum using centralized normalizer."""
+    normalized = normalize_category(category_str)
+    try:
+        return AppCategory(normalized)
+    except ValueError:
         return AppCategory.OTHER
-    cat_lower = category_str.lower().replace(" ", "_").replace("/", "_")
-
-    category_map = {
-        "erp": AppCategory.ERP,
-        "crm": AppCategory.CRM,
-        "crm_agency_management": AppCategory.CRM,
-        "hr": AppCategory.HCM,
-        "hr_hcm": AppCategory.HCM,
-        "hcm": AppCategory.HCM,
-        "policy_administration": AppCategory.VERTICAL,
-        "claims_management": AppCategory.VERTICAL,
-        "billing": AppCategory.VERTICAL,
-        "finance": AppCategory.OTHER,
-        "analytics": AppCategory.DATABASE,
-        "analytics_actuarial": AppCategory.DATABASE,
-        "data_analytics": AppCategory.DATABASE,
-        "collaboration": AppCategory.SAAS,
-        "email_communication": AppCategory.SAAS,
-        "document_management": AppCategory.SAAS,
-        "it_service_management": AppCategory.SAAS,
-        "identity_access": AppCategory.OTHER,
-        "security": AppCategory.OTHER,
-        "backup_dr": AppCategory.OTHER,
-        "integration": AppCategory.INTEGRATION,
-        "custom": AppCategory.CUSTOM,
-    }
-
-    for key, val in category_map.items():
-        if key in cat_lower:
-            return val
-    return AppCategory.OTHER
 
 
 def build_applications_from_inventory_store(inventory_store) -> Tuple[ApplicationsInventory, str]:
@@ -401,19 +385,19 @@ def build_applications_from_inventory_store(inventory_store) -> Tuple[Applicatio
             id=item.item_id,
             name=item.name,
             category=_map_category_from_inventory(data.get('category', '')),
-            vendor=data.get('vendor', ''),
-            version=data.get('version', ''),
-            deployment=_parse_deployment(data.get('hosting', '')),
-            user_count=_parse_int(data.get('users', 0)),
-            criticality=_parse_criticality(data.get('criticality', '')),
+            vendor=normalize_detail(data, 'vendor') or '',
+            version=normalize_detail(data, 'version') or '',
+            deployment=_parse_deployment(normalize_detail(data, 'deployment')),
+            user_count=_parse_int(normalize_detail(data, 'user_count') or 0),
+            criticality=_parse_criticality(normalize_detail(data, 'criticality') or ''),
             modules=[],
             integrations=[],
-            support_status='',
+            support_status=normalize_detail(data, 'support_model') or '',
             license_type='',
-            annual_cost=item.cost or 0.0,
+            annual_cost=item.cost or _parse_cost(normalize_detail(data, 'annual_cost') or 0),
             entity=item.entity or 'target',
             notes=str(data),
-            evidence=f"{item.name} | {data.get('vendor', '')} | {data.get('category', '')} | {data.get('hosting', '')} | {data.get('users', '')} | ${item.cost:,.0f}" if item.cost else "",
+            evidence=f"{item.name} | {normalize_detail(data, 'vendor') or ''} | {data.get('category', '')} | {normalize_detail(data, 'deployment') or ''} | {normalize_detail(data, 'user_count') or ''} | ${item.cost or 0:,.0f}" if item.cost or normalize_detail(data, 'vendor') else "",
             fact_id='',
             source_document=item.source_file or '',
             confidence_score=1.0,
@@ -444,3 +428,81 @@ def build_applications_from_inventory_store(inventory_store) -> Tuple[Applicatio
 
     logger.info(f"Built applications inventory from store with {len(applications)} apps")
     return inventory, "success"
+
+
+def merge_inventories(primary: ApplicationsInventory, secondary: ApplicationsInventory) -> ApplicationsInventory:
+    """
+    Merge two ApplicationsInventory objects, deduplicating by app name.
+
+    The primary inventory takes precedence. Secondary apps are added if they
+    don't already exist, and missing attributes on primary apps are filled
+    from matching secondary apps.
+
+    Args:
+        primary: Primary inventory (higher priority)
+        secondary: Secondary inventory (fills gaps)
+
+    Returns:
+        Merged ApplicationsInventory
+    """
+    # Index primary apps by normalized name
+    by_name: Dict[str, ApplicationItem] = {}
+    merged_apps: List[ApplicationItem] = []
+
+    for app in primary.applications:
+        key = app.name.lower().strip()
+        by_name[key] = app
+        merged_apps.append(app)
+
+    # Process secondary apps
+    for app in secondary.applications:
+        key = app.name.lower().strip()
+        if key in by_name:
+            # Fill missing attributes from secondary
+            existing = by_name[key]
+            if not existing.vendor and app.vendor:
+                existing.vendor = app.vendor
+            if not existing.version and app.version:
+                existing.version = app.version
+            if existing.deployment == DeploymentType.UNKNOWN and app.deployment != DeploymentType.UNKNOWN:
+                existing.deployment = app.deployment
+            if existing.user_count == 0 and app.user_count > 0:
+                existing.user_count = app.user_count
+            if existing.criticality == Criticality.UNKNOWN and app.criticality != Criticality.UNKNOWN:
+                existing.criticality = app.criticality
+            if existing.annual_cost == 0.0 and app.annual_cost > 0.0:
+                existing.annual_cost = app.annual_cost
+            if not existing.support_status and app.support_status:
+                existing.support_status = app.support_status
+            if not existing.source_document and app.source_document:
+                existing.source_document = app.source_document
+        else:
+            # New app from secondary source
+            by_name[key] = app
+            merged_apps.append(app)
+
+    # Rebuild inventory with merged apps
+    inventory = ApplicationsInventory()
+    inventory.applications = merged_apps
+    inventory.total_count = len(merged_apps)
+    inventory.critical_count = len([a for a in merged_apps if a.criticality == Criticality.CRITICAL])
+    inventory.saas_count = len([a for a in merged_apps if a.deployment in [DeploymentType.SAAS, DeploymentType.CLOUD]])
+    inventory.on_prem_count = len([a for a in merged_apps if a.deployment in [DeploymentType.ON_PREM, DeploymentType.HYBRID]])
+    inventory.total_users = sum(a.user_count for a in merged_apps)
+    inventory.total_cost = sum(a.annual_cost for a in merged_apps)
+
+    # Build category summaries
+    for category in AppCategory:
+        cat_apps = [a for a in merged_apps if a.category == category]
+        if cat_apps:
+            inventory.by_category[category.value] = CategorySummary(
+                category=category,
+                total_count=len(cat_apps),
+                critical_count=len([a for a in cat_apps if a.criticality == Criticality.CRITICAL]),
+                total_users=sum(a.user_count for a in cat_apps),
+                total_cost=sum(a.annual_cost for a in cat_apps),
+                applications=cat_apps
+            )
+
+    logger.info(f"Merged inventories: {primary.total_count} + {secondary.total_count} -> {inventory.total_count} apps")
+    return inventory

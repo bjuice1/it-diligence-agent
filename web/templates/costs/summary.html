@@ -1,0 +1,681 @@
+{% extends "base.html" %}
+
+{% block title %}Cost Summary - IT Due Diligence{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="header-content">
+        <div>
+            <h1>Cost Summary</h1>
+            <p>Driver-based cost estimates with three scenarios for IC presentation</p>
+        </div>
+        {% if summary %}
+        <div class="header-actions">
+            <a href="{{ url_for('costs.drivers_page') }}" class="btn btn-secondary">
+                Edit Drivers
+            </a>
+            <div class="dropdown">
+                <button class="btn btn-primary dropdown-toggle" onclick="toggleDropdown(this)">
+                    Export
+                </button>
+                <div class="dropdown-menu">
+                    <a href="/costs/api/export/{{ deal_id }}/costs" class="dropdown-item">Download Costs CSV</a>
+                    <a href="/costs/api/export/{{ deal_id }}/assumptions" class="dropdown-item">Download Assumptions CSV</a>
+                    <a href="/costs/api/drivers/{{ deal_id }}/export" class="dropdown-item">Download Drivers CSV</a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if error %}
+<div class="alert alert-error" style="background: #fee2e2; border: 1px solid #fca5a5; color: #991b1b; padding: var(--space-4); border-radius: var(--radius-md); margin-bottom: var(--space-4);">
+    <strong>Error loading cost data:</strong> {{ error }}
+    <p style="margin-top: var(--space-2);">Please ensure a deal is selected and facts have been loaded.</p>
+    <a href="{{ url_for('deals.deals_list_page') }}" class="btn btn-secondary" style="margin-top: var(--space-2);">Select Deal</a>
+</div>
+{% elif not summary %}
+<div class="alert alert-warning" style="background: #fef3c7; border: 1px solid #fcd34d; color: #92400e; padding: var(--space-4); border-radius: var(--radius-md); margin-bottom: var(--space-4);">
+    <strong>No cost data available.</strong>
+    <p style="margin-top: var(--space-2);">Please select a deal to view cost estimates.</p>
+    <a href="{{ url_for('deals.deals_list_page') }}" class="btn btn-secondary" style="margin-top: var(--space-2);">Select Deal</a>
+</div>
+{% else %}
+<!-- Executive Summary Banner -->
+<div class="cost-executive-banner">
+    <div class="scenario-cards">
+        <div class="scenario-card scenario-upside">
+            <div class="scenario-label">Upside</div>
+            <div class="scenario-value">${{ "{:,.0f}".format(summary.total_one_time_upside) }}</div>
+            <div class="scenario-sublabel">Best case</div>
+        </div>
+        <div class="scenario-card scenario-base active">
+            <div class="scenario-label">Base Case</div>
+            <div class="scenario-value">${{ "{:,.0f}".format(summary.total_one_time_base) }}</div>
+            <div class="scenario-sublabel">Expected</div>
+        </div>
+        <div class="scenario-card scenario-stress">
+            <div class="scenario-label">Stress</div>
+            <div class="scenario-value">${{ "{:,.0f}".format(summary.total_one_time_stress) }}</div>
+            <div class="scenario-sublabel">Worst case</div>
+        </div>
+    </div>
+    <div class="annual-licenses">
+        <div class="licenses-label">Annual License Costs</div>
+        <div class="licenses-value">${{ "{:,.0f}".format(summary.total_annual_licenses) }}/yr</div>
+    </div>
+</div>
+
+<!-- Main Content -->
+<div class="cost-content">
+    <div class="cost-main">
+        <!-- Tower Breakdown -->
+        <div class="section">
+            <h2>Costs by Tower</h2>
+            <table class="tower-table">
+                <thead>
+                    <tr>
+                        <th>Tower</th>
+                        <th class="text-right scenario-col upside">Upside</th>
+                        <th class="text-right scenario-col base">Base</th>
+                        <th class="text-right scenario-col stress">Stress</th>
+                        <th class="text-right">Annual Licenses</th>
+                        <th>Work Items</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tower, costs in summary.tower_costs.items() %}
+                    <tr class="tower-row">
+                        <td class="tower-name">
+                            <span class="tower-icon">
+                                {% if tower == 'Identity' %}🔐
+                                {% elif tower == 'Apps' %}📱
+                                {% elif tower == 'Infra' %}🏢
+                                {% elif tower == 'Network' %}🌐
+                                {% elif tower == 'Security' %}🛡️
+                                {% elif tower == 'EUC' %}💻
+                                {% elif tower == 'PMO' %}📋
+                                {% else %}📁{% endif %}
+                            </span>
+                            {{ tower }}
+                        </td>
+                        <td class="text-right scenario-col upside">${{ "{:,.0f}".format(costs['one_time_upside']) }}</td>
+                        <td class="text-right scenario-col base">${{ "{:,.0f}".format(costs['one_time_base']) }}</td>
+                        <td class="text-right scenario-col stress">${{ "{:,.0f}".format(costs['one_time_stress']) }}</td>
+                        <td class="text-right">${{ "{:,.0f}".format(costs['annual_licenses']) }}</td>
+                        <td class="tower-items">
+                            {% for item in costs['items'] %}
+                            <span class="item-chip">{{ item }}</span>
+                            {% endfor %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="total-row">
+                        <td><strong>TOTAL</strong></td>
+                        <td class="text-right scenario-col upside"><strong>${{ "{:,.0f}".format(summary.total_one_time_upside) }}</strong></td>
+                        <td class="text-right scenario-col base"><strong>${{ "{:,.0f}".format(summary.total_one_time_base) }}</strong></td>
+                        <td class="text-right scenario-col stress"><strong>${{ "{:,.0f}".format(summary.total_one_time_stress) }}</strong></td>
+                        <td class="text-right"><strong>${{ "{:,.0f}".format(summary.total_annual_licenses) }}</strong></td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        <!-- Work Item Details -->
+        <div class="section">
+            <h2>Work Item Details</h2>
+            <div class="work-items-list">
+                {% for estimate in summary.estimates %}
+                <div class="work-item-card">
+                    <div class="work-item-header">
+                        <div class="work-item-title">
+                            <span class="tower-badge tower-{{ estimate.tower|lower }}">{{ estimate.tower }}</span>
+                            <h4>{{ estimate.display_name }}</h4>
+                        </div>
+                        <div class="work-item-timeline">
+                            <span class="timeline-icon">📅</span>
+                            {{ estimate.estimated_months }} months
+                        </div>
+                    </div>
+                    <div class="work-item-costs">
+                        <div class="cost-scenario">
+                            <span class="cost-label">Upside</span>
+                            <span class="cost-value upside">${{ "{:,.0f}".format(estimate.one_time_upside) }}</span>
+                        </div>
+                        <div class="cost-scenario">
+                            <span class="cost-label">Base</span>
+                            <span class="cost-value base">${{ "{:,.0f}".format(estimate.one_time_base) }}</span>
+                        </div>
+                        <div class="cost-scenario">
+                            <span class="cost-label">Stress</span>
+                            <span class="cost-value stress">${{ "{:,.0f}".format(estimate.one_time_stress) }}</span>
+                        </div>
+                        <div class="cost-scenario licenses">
+                            <span class="cost-label">Annual</span>
+                            <span class="cost-value">${{ "{:,.0f}".format(estimate.annual_licenses) }}</span>
+                        </div>
+                    </div>
+                    <div class="work-item-meta">
+                        <span class="complexity-badge complexity-{{ estimate.complexity }}">
+                            Complexity: {{ estimate.complexity|title }}
+                        </span>
+                        <span class="drivers-used">
+                            Drivers:
+                            {% for driver, value in estimate.drivers_used.items() if value %}
+                            <span class="driver-tag">{{ driver }}={{ value }}</span>
+                            {% endfor %}
+                        </span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="cost-sidebar">
+        <!-- Assumptions Panel -->
+        <div class="sidebar-section">
+            <h3>Key Assumptions</h3>
+            <ul class="assumptions-list">
+                {% for assumption in summary.top_assumptions %}
+                <li>{{ assumption }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <!-- Tighten Estimates Panel -->
+        {% if summary.drivers_missing or summary.drivers_assumed %}
+        <div class="sidebar-section tighten-section">
+            <h3>To Tighten Estimates</h3>
+            <p class="section-description">Verify these values to improve accuracy:</p>
+
+            {% if summary.drivers_missing %}
+            <div class="tighten-group">
+                <span class="tighten-label missing">Missing</span>
+                <ul>
+                    {% for driver in summary.drivers_missing %}
+                    <li>{{ driver|replace('_', ' ')|title }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+
+            {% if summary.drivers_assumed %}
+            <div class="tighten-group">
+                <span class="tighten-label assumed">Assumed</span>
+                <ul>
+                    {% for driver in summary.drivers_assumed %}
+                    <li>{{ driver|replace('_', ' ')|title }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+
+            <a href="{{ url_for('costs.drivers_page') }}" class="btn btn-secondary btn-sm btn-full">
+                Edit Drivers
+            </a>
+        </div>
+        {% endif %}
+
+        <!-- Quick Stats -->
+        <div class="sidebar-section">
+            <h3>Quick Stats</h3>
+            <div class="quick-stats">
+                <div class="stat-item">
+                    <span class="stat-label">Work Items</span>
+                    <span class="stat-value">{{ summary.estimates|length }}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Towers</span>
+                    <span class="stat-value">{{ summary.tower_costs|length }}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Variance</span>
+                    <span class="stat-value">
+                        {% set variance = ((summary.total_one_time_stress - summary.total_one_time_upside) / summary.total_one_time_base * 100) if summary.total_one_time_base > 0 else 0 %}
+                        {{ "{:.0f}".format(variance) }}%
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<style>
+/* Page Header */
+.header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.header-actions {
+    display: flex;
+    gap: var(--space-2);
+}
+
+/* Dropdown */
+.dropdown {
+    position: relative;
+}
+
+.dropdown-menu {
+    position: absolute;
+    right: 0;
+    top: 100%;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-muted);
+    border-radius: var(--radius-md);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    min-width: 200px;
+    z-index: 100;
+    display: none;
+}
+
+.dropdown-menu.show {
+    display: block;
+}
+
+.dropdown-item {
+    display: block;
+    padding: var(--space-2) var(--space-3);
+    color: var(--text);
+    text-decoration: none;
+}
+
+.dropdown-item:hover {
+    background: var(--bg-surface-sunken);
+}
+
+/* Executive Banner */
+.cost-executive-banner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+    color: white;
+    padding: var(--space-6);
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--space-4);
+}
+
+.scenario-cards {
+    display: flex;
+    gap: var(--space-4);
+}
+
+.scenario-card {
+    text-align: center;
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, 0.1);
+    min-width: 140px;
+}
+
+.scenario-card.active {
+    background: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5);
+}
+
+.scenario-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    opacity: 0.8;
+}
+
+.scenario-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.scenario-sublabel {
+    font-size: 0.7rem;
+    opacity: 0.6;
+}
+
+.scenario-upside .scenario-value { color: #86efac; }
+.scenario-stress .scenario-value { color: #fca5a5; }
+
+.annual-licenses {
+    text-align: right;
+}
+
+.licenses-label {
+    font-size: 0.75rem;
+    opacity: 0.8;
+}
+
+.licenses-value {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #fef08a;
+}
+
+/* Content Layout */
+.cost-content {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: var(--space-4);
+}
+
+.cost-main {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.section {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-muted);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+}
+
+.section h2 {
+    margin: 0 0 var(--space-3) 0;
+    font-size: 1.1rem;
+}
+
+/* Tower Table */
+.tower-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.tower-table th,
+.tower-table td {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--border-muted);
+}
+
+.tower-table th {
+    text-align: left;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.tower-name {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-weight: 500;
+}
+
+.tower-icon {
+    font-size: 1.1rem;
+}
+
+.scenario-col.upside { color: #16a34a; }
+.scenario-col.base { color: var(--accent); font-weight: 600; }
+.scenario-col.stress { color: #dc2626; }
+
+.tower-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.item-chip {
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    background: var(--bg-surface-sunken);
+    border-radius: var(--radius-sm);
+}
+
+.total-row {
+    background: var(--bg-surface-sunken);
+}
+
+.total-row td {
+    border-bottom: none;
+}
+
+/* Work Item Cards */
+.work-items-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.work-item-card {
+    border: 1px solid var(--border-muted);
+    border-radius: var(--radius-md);
+    padding: var(--space-3);
+}
+
+.work-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: var(--space-3);
+}
+
+.work-item-title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.work-item-title h4 {
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+.tower-badge {
+    font-size: 0.65rem;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.tower-badge.tower-identity { background: #dbeafe; color: #1e40af; }
+.tower-badge.tower-apps { background: #f3e8ff; color: #7c3aed; }
+.tower-badge.tower-infra { background: #ccfbf1; color: #0d9488; }
+.tower-badge.tower-network { background: #fef3c7; color: #92400e; }
+.tower-badge.tower-security { background: #fee2e2; color: #991b1b; }
+.tower-badge.tower-euc { background: #e0e7ff; color: #4338ca; }
+.tower-badge.tower-pmo { background: #f3f4f6; color: #374151; }
+
+.work-item-timeline {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.work-item-costs {
+    display: flex;
+    gap: var(--space-4);
+    padding: var(--space-2) 0;
+    border-top: 1px solid var(--border-muted);
+    border-bottom: 1px solid var(--border-muted);
+}
+
+.cost-scenario {
+    text-align: center;
+    flex: 1;
+}
+
+.cost-scenario.licenses {
+    border-left: 1px solid var(--border-muted);
+    padding-left: var(--space-4);
+}
+
+.cost-label {
+    display: block;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.cost-value {
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.cost-value.upside { color: #16a34a; }
+.cost-value.base { color: var(--accent); }
+.cost-value.stress { color: #dc2626; }
+
+.work-item-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: var(--space-2);
+    font-size: 0.75rem;
+}
+
+.complexity-badge {
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+}
+
+.complexity-low { background: #dcfce7; color: #166534; }
+.complexity-medium { background: #fef3c7; color: #92400e; }
+.complexity-high { background: #fee2e2; color: #991b1b; }
+
+.drivers-used {
+    color: var(--text-muted);
+}
+
+.driver-tag {
+    background: var(--bg-surface-sunken);
+    padding: 1px 4px;
+    border-radius: 2px;
+    margin-left: 2px;
+    font-family: var(--font-mono);
+}
+
+/* Sidebar */
+.cost-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.sidebar-section {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-muted);
+    border-radius: var(--radius-lg);
+    padding: var(--space-3);
+}
+
+.sidebar-section h3 {
+    margin: 0 0 var(--space-2) 0;
+    font-size: 0.9rem;
+}
+
+.section-description {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-bottom: var(--space-2);
+}
+
+.assumptions-list {
+    margin: 0;
+    padding-left: var(--space-3);
+    font-size: 0.8rem;
+}
+
+.assumptions-list li {
+    margin-bottom: var(--space-1);
+    color: var(--text-muted);
+}
+
+/* Tighten Section */
+.tighten-section {
+    background: #fffbeb;
+    border-color: #fcd34d;
+}
+
+.tighten-group {
+    margin-bottom: var(--space-2);
+}
+
+.tighten-label {
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.tighten-label.missing { background: #fee2e2; color: #991b1b; }
+.tighten-label.assumed { background: #fef3c7; color: #92400e; }
+
+.tighten-group ul {
+    margin: var(--space-1) 0 0 var(--space-3);
+    padding: 0;
+    list-style: disc;
+    font-size: 0.8rem;
+}
+
+/* Quick Stats */
+.quick-stats {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.stat-item {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+}
+
+.stat-item .stat-label {
+    color: var(--text-muted);
+}
+
+.stat-item .stat-value {
+    font-weight: 600;
+}
+
+/* Utilities */
+.btn-full {
+    width: 100%;
+    text-align: center;
+}
+
+.btn-sm {
+    padding: var(--space-1) var(--space-2);
+    font-size: 0.8rem;
+}
+
+@media (max-width: 1024px) {
+    .cost-content {
+        grid-template-columns: 1fr;
+    }
+
+    .cost-sidebar {
+        order: -1;
+    }
+}
+</style>
+
+<script>
+function toggleDropdown(btn) {
+    const menu = btn.nextElementSibling;
+    menu.classList.toggle('show');
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', (e) => {
+    if (!e.target.matches('.dropdown-toggle')) {
+        document.querySelectorAll('.dropdown-menu').forEach(m => m.classList.remove('show'));
+    }
+});
+</script>
+{% endblock %}

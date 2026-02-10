@@ -37,6 +37,9 @@ INVENTORY_SCHEMAS: Dict[str, Dict[str, Any]] = {
             "owner",            # business owner
             "support_model",    # vendor, internal, hybrid
             "notes",
+            "source_category",        # raw category string from source document
+            "category_confidence",    # high, medium, low, none
+            "category_inferred_from", # mapping_exact, mapping_alias, mapping_partial, keyword_inference, default
         ],
         "id_fields": ["name", "vendor"],  # Used for content-hashing
     },

@@ -7,8 +7,24 @@
     <p class="subtitle">{{ inventory.total_count }} applications identified across {{ inventory.by_category|length }} categories</p>
 </div>
 
-{% if data_source == 'none' or status != 'success' %}
+{% if data_source == 'inventory' %}
+<div class="data-source-banner data-source-analysis">
+    <span class="data-source-badge inventory" style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; font-weight: bold; background: #d4edda; color: #155724; margin-right: 8px;">Inventory Store (Deduplicated)</span>
+    <strong>Analysis Data</strong> - Showing deduplicated applications from Inventory Store.
+</div>
+{% elif data_source == 'database_legacy' %}
+<div class="data-source-banner data-source-analysis">
+    <span class="data-source-badge legacy" style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; font-weight: bold; background: #fff3cd; color: #856404; margin-right: 8px;">Legacy Facts (May contain duplicates)</span>
+    <strong>Analysis Data</strong> - Showing applications from legacy fact store.
+</div>
+{% elif data_source == 'database' %}
+<div class="data-source-banner data-source-analysis">
+    <span class="data-source-badge legacy" style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; font-weight: bold; background: #fff3cd; color: #856404; margin-right: 8px;">Legacy Facts (May contain duplicates)</span>
+    <strong>Analysis Data</strong> - Showing applications from database facts.
+</div>
+{% elif data_source == 'none' or status != 'success' %}
 <div class="data-source-banner data-source-demo">
+    <span class="data-source-badge empty" style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; font-weight: bold; background: #f8d7da; color: #721c24; margin-right: 8px;">No data</span>
     <strong>No Data</strong> - Run an analysis with documents containing application information to populate this inventory.
 </div>
 {% else %}

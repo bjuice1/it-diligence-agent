@@ -29,7 +29,7 @@ class TestInventoryNavigation:
 
     def test_nav_link_shows_count(self):
         """Nav link should show total inventory count."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
         store.add_item(
             inventory_type="application",
             data={"name": "App1"},
@@ -50,7 +50,7 @@ class TestInventoryNavigation:
 
     def test_stat_card_shows_counts(self):
         """Stat card should show item count and flagged count."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
 
         # Add regular item
         store.add_item(
@@ -86,7 +86,7 @@ class TestApplicationsTable:
 
     def test_table_includes_item_id(self):
         """Table should include item ID for reference."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
         item_id = store.add_item(
             inventory_type="application",
             data={"name": "Salesforce", "vendor": "Salesforce"},
@@ -102,7 +102,7 @@ class TestApplicationsTable:
 
     def test_table_shows_cost(self):
         """Table should format costs correctly."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
         store.add_item(
             inventory_type="application",
             data={"name": "SAP", "cost": 150000},
@@ -117,7 +117,7 @@ class TestApplicationsTable:
 
     def test_table_shows_enrichment_indicator(self):
         """Enriched items should show info indicator."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
         item_id = store.add_item(
             inventory_type="application",
             data={"name": "Duck Creek"},
@@ -138,7 +138,7 @@ class TestApplicationsTable:
 
     def test_table_shows_investigate_badge(self):
         """Flagged items should show investigate badge."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
         item_id = store.add_item(
             inventory_type="application",
             data={"name": "Custom Tool"},
@@ -164,7 +164,7 @@ class TestInfrastructureTable:
 
     def test_table_includes_fields(self):
         """Table should include key infrastructure fields."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
         store.add_item(
             inventory_type="infrastructure",
             data={
@@ -201,7 +201,7 @@ class TestFlaggedSection:
 
     def test_flagged_section_lists_items(self):
         """Flagged section should list all flagged items."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
 
         for i in range(3):
             item_id = store.add_item(
@@ -256,7 +256,7 @@ class TestFullInventorySection:
 
     def test_section_has_all_subsections(self):
         """Section should include all inventory types."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
 
         store.add_item(
             inventory_type="application",
@@ -281,7 +281,7 @@ class TestFullInventorySection:
 
     def test_section_shows_summary_stats(self):
         """Section should show summary statistics."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
 
         for i in range(5):
             store.add_item(

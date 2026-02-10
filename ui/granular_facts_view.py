@@ -22,7 +22,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 try:
-    from tools_v2.granular_facts_store import GranularFactsStore
+    from stores.granular_facts_store import GranularFactsStore
     from tools_v2.system_registry import SystemRegistry
     from tools_v2.validation_engine import ValidationReport, load_validation_report
     from tools_v2.excel_exporter import ExcelExporter, OPENPYXL_AVAILABLE

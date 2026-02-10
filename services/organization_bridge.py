@@ -11,7 +11,7 @@ import logging
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 
-from tools_v2.fact_store import FactStore, Fact
+from stores.fact_store import FactStore, Fact
 from models.organization_models import (
     StaffMember, RoleSummary, CategorySummary,
     MSPRelationship, MSPService, SharedServiceDependency,
@@ -185,6 +185,187 @@ def build_organization_from_facts(fact_store: FactStore, target_name: str = "Tar
     logger.info(f"  FTEs: {store.total_internal_fte}, Contractors: {store.total_contractor}, Total Comp: ${store.total_compensation:,.0f}")
 
     return store, "success"
+
+
+def build_organization_from_inventory_store(
+    inventory_store,
+    target_name: str = "Target",
+    deal_id: str = "",
+) -> Tuple[OrganizationDataStore, str]:
+    """Build OrganizationDataStore from InventoryStore organization items.
+
+    This is the InventoryStore-based equivalent of build_organization_from_facts().
+    Used when InventoryStore is populated (post Spec 01+02+03) to provide
+    deduplicated, entity-scoped organization data.
+
+    Args:
+        inventory_store: InventoryStore with organization items
+        target_name: Company name for display
+        deal_id: Deal ID for filtering
+
+    Returns:
+        Tuple of (OrganizationDataStore, status_message)
+    """
+    store = OrganizationDataStore()
+    store.target_name = target_name
+
+    # Get org items scoped to target entity
+    org_items = inventory_store.get_items(
+        inventory_type="organization", entity="target", status="active"
+    )
+
+    if not org_items:
+        return store, "no_org_items"
+
+    staff_members = []
+
+    for item in org_items:
+        data = item.data if hasattr(item, 'data') and item.data else {}
+        role = data.get("role", data.get("role_title", "Unknown Role"))
+        team = data.get("team", "")
+        headcount = _safe_int(data.get("headcount", ""))
+        fte = _safe_float(data.get("fte", ""))
+        location = data.get("location", "Unknown")
+        reports_to = data.get("reports_to", "")
+        name = data.get("name", "")
+        department = data.get("department", "IT")
+
+        # Determine role category from team/role name
+        category = _determine_category_from_name(
+            team if team else role, RoleCategory.OTHER
+        )
+
+        # Determine employment type
+        emp_type_str = data.get("employment_type", "fte").lower()
+        if emp_type_str in ("contractor", "contract"):
+            emp_type = EmploymentType.CONTRACTOR
+        else:
+            emp_type = EmploymentType.FTE
+
+        # Determine compensation
+        base_comp = _safe_float(data.get("base_compensation", ""))
+        if not base_comp:
+            base_comp = float(DEFAULT_SALARIES.get(category, 100000))
+
+        effective_headcount = headcount if headcount else 1
+        effective_fte = fte if fte else float(effective_headcount)
+
+        # Create one StaffMember per inventory item
+        # (InventoryStore items are already deduplicated)
+        # Note: StaffMember does not have 'team' or 'inventory_item_id' fields;
+        # we store team info in department and item_id in notes.
+        member = StaffMember(
+            id=gen_id("STAFF"),
+            role_title=role,
+            name=name if name else role,
+            role_category=category,
+            department=team if team else department,
+            employment_type=emp_type,
+            base_compensation=base_comp,
+            location=location,
+            reports_to=reports_to if reports_to else None,
+            entity=data.get("entity", "target"),
+            deal_id=deal_id,
+            notes=f"Source: inventory item {item.item_id}" if hasattr(item, 'item_id') else "Source: inventory",
+        )
+        staff_members.append(member)
+
+    store.staff_members = staff_members
+
+    # Build category and role summaries
+    store.category_summaries = _build_category_summaries(staff_members)
+    store.role_summaries = _build_role_summaries(staff_members)
+
+    # Calculate totals using the store's internal method
+    store._update_counts()
+
+    status = f"Built org from {len(org_items)} inventory items"
+    logger.info(status)
+
+    return store, "success"
+
+
+def build_organization_result_from_inventory_store(
+    inventory_store,
+    target_name: str = "Target",
+    deal_id: str = "",
+) -> Tuple['OrganizationAnalysisResult', str]:
+    """Build a complete OrganizationAnalysisResult from InventoryStore.
+
+    This is the InventoryStore-based equivalent of build_organization_result().
+    Wraps build_organization_from_inventory_store() with summaries and benchmarks.
+
+    Args:
+        inventory_store: InventoryStore with organization items
+        target_name: Company name for display
+        deal_id: Deal ID for filtering
+
+    Returns:
+        Tuple of (OrganizationAnalysisResult, status)
+    """
+    from models.organization_stores import StaffingComparisonResult
+    from datetime import datetime
+
+    store, status = build_organization_from_inventory_store(
+        inventory_store, target_name, deal_id=deal_id
+    )
+
+    # Calculate summaries
+    msp_summary = _build_msp_summary(store.msp_relationships)
+    shared_summary = SharedServicesSummary()
+    cost_summary = _build_cost_summary(store)
+
+    # Create placeholder benchmark comparison
+    benchmark = StaffingComparisonResult(
+        benchmark_profile_id="from_inventory",
+        benchmark_profile_name=f"{target_name} Inventory Analysis",
+        comparison_date=datetime.now().isoformat(),
+        total_actual=len(store.staff_members),
+        total_expected_min=0,
+        total_expected_typical=0,
+        total_expected_max=0,
+        overall_status="analyzed" if status == "success" else "no_data"
+    )
+
+    headcount = store.get_target_headcount()
+    logger.info(
+        f"Inventory org result: headcount={headcount}, "
+        f"staff_members={len(store.staff_members)}"
+    )
+
+    result = OrganizationAnalysisResult(
+        msp_summary=msp_summary,
+        shared_services_summary=shared_summary,
+        cost_summary=cost_summary,
+        benchmark_comparison=benchmark,
+        total_it_headcount=headcount,
+        total_it_cost=store.total_compensation
+    )
+
+    # Add the data_store (expected by templates)
+    result.data_store = store
+
+    return result, status
+
+
+def _safe_int(value) -> int:
+    """Safely convert to int, returning 0 on failure."""
+    if not value:
+        return 0
+    try:
+        return int(float(str(value).replace(",", "")))
+    except (ValueError, TypeError):
+        return 0
+
+
+def _safe_float(value) -> float:
+    """Safely convert to float, returning 0.0 on failure."""
+    if not value:
+        return 0.0
+    try:
+        return float(str(value).replace(",", ""))
+    except (ValueError, TypeError):
+        return 0.0
 
 
 def _create_staff_from_leadership_fact(fact: Fact, deal_id: str = "") -> List[StaffMember]:

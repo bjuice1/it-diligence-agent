@@ -77,7 +77,11 @@ class CostBreakdown:
 
 def calculate_costs_from_work_items(work_items: List[Any]) -> CostBreakdown:
     """
-    Calculate cost breakdown SOLELY from work items.
+    Calculate cost breakdown from work items, preferring CostBuildUp when available.
+
+    Priority:
+    1. CostBuildUp (precise, anchor-based) - if work_item.cost_buildup exists
+    2. cost_estimate string (vague range) - fallback
 
     This is the ONLY function that should be used for cost calculations
     to ensure consistency across the system.
@@ -96,26 +100,36 @@ def calculate_costs_from_work_items(work_items: List[Any]) -> CostBreakdown:
 
     # Process each work item
     for wi in work_items:
-        # Get cost estimate
-        cost_estimate = getattr(wi, 'cost_estimate', None)
-        if not cost_estimate:
-            logger.warning(f"Work item {getattr(wi, 'finding_id', 'unknown')} has no cost_estimate")
-            continue
-
-        cost_range = COST_RANGE_VALUES.get(cost_estimate)
-        if not cost_range:
-            logger.warning(f"Unknown cost_estimate '{cost_estimate}' for work item {getattr(wi, 'finding_id', 'unknown')}")
-            continue
-
         # Get attributes
         wi_id = getattr(wi, 'finding_id', 'unknown')
         phase = getattr(wi, 'phase', 'Day_100')
         domain = getattr(wi, 'domain', 'unknown')
         owner = getattr(wi, 'owner_type', 'combined')
         title = getattr(wi, 'title', '')
+        cost_estimate = getattr(wi, 'cost_estimate', None)
 
-        low = cost_range['low']
-        high = cost_range['high']
+        # Prefer CostBuildUp for precise estimates
+        cost_buildup = getattr(wi, 'cost_buildup', None)
+        if cost_buildup is not None:
+            low = cost_buildup.total_low
+            high = cost_buildup.total_high
+            estimation_source = "cost_buildup"
+            anchor_key = cost_buildup.anchor_key
+        else:
+            # Fallback to vague range from cost_estimate string
+            if not cost_estimate:
+                logger.warning(f"Work item {wi_id} has no cost_estimate")
+                continue
+
+            cost_range = COST_RANGE_VALUES.get(cost_estimate)
+            if not cost_range:
+                logger.warning(f"Unknown cost_estimate '{cost_estimate}' for work item {wi_id}")
+                continue
+
+            low = cost_range['low']
+            high = cost_range['high']
+            estimation_source = "cost_range"
+            anchor_key = None
 
         # Record individual work item cost
         wi_cost = {
@@ -126,7 +140,9 @@ def calculate_costs_from_work_items(work_items: List[Any]) -> CostBreakdown:
             "owner": owner,
             "cost_estimate": cost_estimate,
             "low": low,
-            "high": high
+            "high": high,
+            "estimation_source": estimation_source,
+            "anchor_key": anchor_key,
         }
         breakdown.work_item_costs.append(wi_cost)
 

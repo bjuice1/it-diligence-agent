@@ -23,7 +23,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 try:
-    from tools_v2.fact_store import FactStore
+    from stores.fact_store import FactStore
     from tools_v2.reasoning_tools import ReasoningStore
     from tools_v2.consistency_engine import (
         generate_consistency_report,

@@ -103,6 +103,10 @@ def clear_inventory_store_for_deal(deal_id: str = None):
 @inventory_bp.route('/')
 def inventory_home():
     """Show inventory overview."""
+    from flask import session
+    from web.database import db, Fact
+    from stores.inventory_store import InventoryItem
+
     store = get_inventory_store()
 
     apps = store.get_items(inventory_type="application", entity="target", status="active")
@@ -110,10 +114,73 @@ def inventory_home():
     org = store.get_items(inventory_type="organization", entity="target", status="active")
     vendors = store.get_items(inventory_type="vendor", entity="target", status="active")
 
+    # If InventoryStore is empty, also check database Facts
+    current_deal_id = session.get('current_deal_id')
+    if len(store) == 0 and current_deal_id:
+        logger.info(f"InventoryStore empty, loading from database for deal {current_deal_id}")
+
+        # Query application facts from database
+        db_app_facts = Fact.query.filter_by(deal_id=current_deal_id, domain='applications').all()
+        for i, fact in enumerate(db_app_facts):
+            details = fact.details or {}
+            apps.append(InventoryItem(
+                item_id=f"DB-APP-{i:04d}",
+                inventory_type="application",
+                entity="target",
+                deal_id=current_deal_id,
+                status="active",
+                data={
+                    'name': fact.item,
+                    'vendor': details.get('vendor') or details.get('provider', ''),
+                    'category': fact.category or details.get('category', ''),
+                    'version': details.get('version', ''),
+                    'criticality': details.get('criticality') or details.get('business_criticality', ''),
+                    'deployment': details.get('deployment') or details.get('hosting', ''),
+                    'user_count': details.get('user_count') or details.get('users', 0),
+                    'cost': details.get('annual_cost') or details.get('cost', 0),
+                },
+            ))
+
+        # Query infrastructure facts
+        db_infra_facts = Fact.query.filter_by(deal_id=current_deal_id, domain='infrastructure').all()
+        for i, fact in enumerate(db_infra_facts):
+            details = fact.details or {}
+            infra.append(InventoryItem(
+                item_id=f"DB-INF-{i:04d}",
+                inventory_type="infrastructure",
+                entity="target",
+                deal_id=current_deal_id,
+                status="active",
+                data={
+                    'name': fact.item,
+                    'type': fact.category or details.get('type', ''),
+                    'os': details.get('os', ''),
+                    'environment': details.get('environment', ''),
+                },
+            ))
+
+        # Query organization facts
+        db_org_facts = Fact.query.filter_by(deal_id=current_deal_id, domain='organization').all()
+        for i, fact in enumerate(db_org_facts):
+            details = fact.details or {}
+            org_data = {'name': fact.item}
+            org_data.update(details)
+            org.append(InventoryItem(
+                item_id=f"DB-ORG-{i:04d}",
+                inventory_type="organization",
+                entity="target",
+                deal_id=current_deal_id,
+                status="active",
+                data=org_data,
+            ))
+
+        logger.info(f"Loaded from DB: {len(apps)} apps, {len(infra)} infra, {len(org)} org")
+
     # Calculate stats
     total_cost = sum(app.cost or 0 for app in apps)
     flagged = [i for i in store.get_items(entity="target") if i.needs_investigation]
     enriched = [i for i in store.get_items(entity="target") if i.is_enriched]
+    total_count = len(store) if len(store) > 0 else (len(apps) + len(infra) + len(org) + len(vendors))
 
     return render_template('inventory/home.html',
         apps=apps,
@@ -123,8 +190,28 @@ def inventory_home():
         total_cost=total_cost,
         flagged_count=len(flagged),
         enriched_count=len(enriched),
-        total_count=len(store),
+        total_count=total_count,
     )
+
+
+@inventory_bp.route('/audit')
+def inventory_audit():
+    """Display the inventory audit report for the current deal."""
+    import json
+    from flask import session
+
+    current_deal_id = session.get('current_deal_id')
+    if not current_deal_id:
+        return render_template('inventory/audit.html', report=None)
+
+    audit_path = Path(f"output/deals/{current_deal_id}/inventory_audit.json")
+    if audit_path.exists():
+        with open(audit_path) as f:
+            report = json.load(f)
+    else:
+        report = None
+
+    return render_template('inventory/audit.html', report=report)
 
 
 @inventory_bp.route('/insights')

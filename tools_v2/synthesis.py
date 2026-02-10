@@ -12,7 +12,7 @@ Performs cross-domain analysis to:
 from dataclasses import dataclass
 from typing import Dict, List, Any, Set
 from datetime import datetime
-from tools_v2.fact_store import FactStore
+from stores.fact_store import FactStore
 from tools_v2.reasoning_tools import ReasoningStore, COST_RANGE_VALUES
 from tools_v2.coverage import CoverageAnalyzer
 

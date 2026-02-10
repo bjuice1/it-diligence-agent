@@ -3,8 +3,7 @@
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/organization.css') }}">
-<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-<script>mermaid.initialize({startOnLoad:false, theme:'neutral'});</script>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/org_tree.css') }}">
 {% endblock %}
 
 {% block content %}
@@ -49,7 +48,7 @@
         </button>
     </div>
 
-    <!-- Org Chart View (Mermaid) -->
+    <!-- Org Chart View (CSS Tree) -->
     <div id="chart-view" class="view-content" style="display: none;">
         {% if categories %}
         <div class="chart-controls">
@@ -66,18 +65,10 @@
                 <option value="{{ cat_name }}">{{ categories[cat_name].display_name }}</option>
                 {% endfor %}
             </select>
-            <div class="zoom-controls">
-                <button class="zoom-btn" onclick="zoomChart(-0.1)" title="Zoom Out">&#8722;</button>
-                <span class="zoom-level" id="zoom-level">100%</span>
-                <button class="zoom-btn" onclick="zoomChart(0.1)" title="Zoom In">&#43;</button>
-                <button class="zoom-btn zoom-fit" onclick="fitToScreen()" title="Fit to Screen">Fit</button>
-                <button class="zoom-btn" onclick="resetZoom()" title="Reset Zoom">Reset</button>
-            </div>
         </div>
-        <div id="mermaid-container" class="mermaid-container">
-            <div class="mermaid-wrapper" id="mermaid-wrapper">
-                <div class="mermaid" id="org-chart">
-                </div>
+        <div class="org-tree-container" id="org-tree-container">
+            <div class="org-tree" id="org-tree-root">
+                <!-- Populated by JavaScript -->
             </div>
         </div>
         {% else %}
@@ -259,69 +250,7 @@
     border-radius: 6px;
     background: var(--bg-surface);
 }
-/* Zoom Controls */
-.zoom-controls {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-left: auto;
-    background: var(--bg-surface-sunken);
-    padding: 6px 10px;
-    border-radius: 6px;
-}
-.zoom-btn {
-    width: 32px;
-    height: 32px;
-    border: 1px solid var(--border-default);
-    border-radius: 4px;
-    background: var(--bg-surface);
-    cursor: pointer;
-    font-size: 1.1em;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s;
-}
-.zoom-btn:hover {
-    background: var(--accent);
-    color: white;
-    border-color: var(--accent);
-}
-.zoom-btn.zoom-fit {
-    width: auto;
-    padding: 0 10px;
-    font-size: 0.85em;
-}
-.zoom-level {
-    min-width: 45px;
-    text-align: center;
-    font-size: 0.85em;
-    color: var(--text-secondary);
-}
-/* Mermaid Container - Fixed Layout */
-.mermaid-container {
-    background: var(--bg-surface);
-    border: 1px solid var(--border-default);
-    border-radius: 12px;
-    padding: 20px;
-    min-height: 500px;
-    max-height: 80vh;
-    overflow: auto;
-    width: 100%;
-    position: relative;
-}
-.mermaid-wrapper {
-    display: inline-block;
-    transform-origin: top left;
-    transition: transform 0.2s ease;
-}
-.mermaid {
-    display: inline-block;
-}
-.mermaid svg {
-    max-width: none !important;
-    height: auto !important;
-}
+/* Org tree container overrides */
 /* Person display enhancements */
 .person-role-title {
     font-weight: 500;
@@ -388,11 +317,6 @@ const mspData = [
     {% endif %}
 ];
 
-// Zoom state
-let currentZoom = 1.0;
-const MIN_ZOOM = 0.3;
-const MAX_ZOOM = 2.0;
-
 function showView(view) {
     const treeView = document.getElementById('tree-view');
     const chartView = document.getElementById('chart-view');
@@ -413,230 +337,169 @@ function showView(view) {
     }
 }
 
-function zoomChart(delta) {
-    currentZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, currentZoom + delta));
-    applyZoom();
+// =========================================================================
+// CSS Tree Builder — replaces Mermaid
+// =========================================================================
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
-function resetZoom() {
-    currentZoom = 1.0;
-    applyZoom();
+function createNode(type, title, subtitle, badge) {
+    const node = document.createElement('div');
+    node.className = `org-node ${type}`;
+
+    let html = `<span class="node-title">${escapeHtml(title)}</span>`;
+    if (subtitle) html += `<span class="node-subtitle">${escapeHtml(subtitle)}</span>`;
+    if (badge) html += `<span class="node-badge">${escapeHtml(badge)}</span>`;
+    node.innerHTML = html;
+    return node;
 }
 
-function fitToScreen() {
-    const container = document.getElementById('mermaid-container');
-    const wrapper = document.getElementById('mermaid-wrapper');
-    const svg = wrapper.querySelector('svg');
+function createBranch(nodeEl, children) {
+    const branch = document.createElement('div');
+    branch.className = 'org-tree-branch';
+    branch.appendChild(nodeEl);
 
-    if (!svg) return;
+    if (children && children.length > 0) {
+        nodeEl.classList.add('collapsible');
+        nodeEl.addEventListener('click', function(e) {
+            e.stopPropagation();
+            branch.classList.toggle('collapsed');
+        });
 
-    // Get natural dimensions
-    const svgRect = svg.getBoundingClientRect();
-    const containerRect = container.getBoundingClientRect();
+        const childrenContainer = document.createElement('div');
+        childrenContainer.className = 'org-tree-children';
+        children.forEach(child => childrenContainer.appendChild(child));
 
-    // Calculate scale to fit
-    const scaleX = (containerRect.width - 40) / (svgRect.width / currentZoom);
-    const scaleY = (containerRect.height - 40) / (svgRect.height / currentZoom);
+        // Set CSS variable for horizontal connector width
+        setTimeout(() => {
+            if (children.length > 1) {
+                const firstRect = children[0].getBoundingClientRect();
+                const lastRect = children[children.length - 1].getBoundingClientRect();
+                const totalWidth = lastRect.left + lastRect.width / 2 - firstRect.left - firstRect.width / 2;
+                childrenContainer.style.setProperty('--half-width', Math.abs(totalWidth / 2) + 'px');
+            }
+        }, 50);
 
-    currentZoom = Math.min(scaleX, scaleY, 1.5); // Cap at 150%
-    currentZoom = Math.max(MIN_ZOOM, currentZoom);
-    applyZoom();
-}
+        branch.appendChild(childrenContainer);
+    }
 
-function applyZoom() {
-    const wrapper = document.getElementById('mermaid-wrapper');
-    wrapper.style.transform = `scale(${currentZoom})`;
-    document.getElementById('zoom-level').textContent = Math.round(currentZoom * 100) + '%';
+    return branch;
 }
 
 function updateChart() {
     const filter = document.getElementById('dept-filter').value;
     const level = document.getElementById('chart-level').value;
-    const chartDiv = document.getElementById('org-chart');
+    const root = document.getElementById('org-tree-root');
 
-    // Build mermaid code - use LR (left-right) for wider layout
-    let lines = ['flowchart TB'];
-    lines.push('    CEO["👔 CIO / IT Leader"]');
+    root.innerHTML = '';
 
-    // Add MSP/Vendor support section
-    if (mspData.length > 0) {
-        lines.push('    subgraph VENDORS["🏢 External Vendor Support"]');
-        mspData.forEach((msp, idx) => {
-            const mspId = `MSP${idx}`;
-            const svcText = msp.services.length > 0 ? msp.services.slice(0, 2).join(', ') : msp.scope;
-            lines.push(`        ${mspId}["🔗 ${msp.name}<br/>(${msp.fte_equivalent} FTE eq.)<br/><i>${svcText}</i>"]`);
-        });
-        lines.push('    end');
-    }
+    // Build department branches
+    const deptBranches = [];
 
-    let deptIndex = 0;
-    let deptIds = [];
-    let roleIds = [];
     for (const [catName, catData] of Object.entries(orgData)) {
         if (filter !== 'all' && catName !== filter) continue;
 
-        const deptId = `DEPT${deptIndex}`;
-        deptIds.push(deptId);
-        lines.push(`    ${deptId}["📁 ${catData.display_name}<br/><b>${catData.total} FTE</b>"]`);
-        lines.push(`    CEO --> ${deptId}`);
+        const deptNode = createNode('department', catData.display_name, `${catData.total} FTE`, null);
 
-        // Level 2: Add roles (limit to 8 for readability)
-        if (level === '2') {
-            catData.roles.slice(0, 8).forEach((role, roleIndex) => {
-                const roleId = `R${deptIndex}_${roleIndex}`;
-                roleIds.push(roleId);
-                const hcText = role.headcount > 1 ? `<br/>(${role.headcount})` : '';
-                lines.push(`    ${roleId}["${role.title}${hcText}"]`);
-                lines.push(`    ${deptId} --> ${roleId}`);
-            });
+        let roleBranches = [];
 
-            // Show "+N more" if there are more roles
-            if (catData.roles.length > 8) {
-                const moreId = `MORE${deptIndex}`;
-                lines.push(`    ${moreId}["... +${catData.roles.length - 8} more roles"]`);
-                lines.push(`    ${deptId} --> ${moreId}`);
-                lines.push(`    style ${moreId} fill:#f1f5f9,stroke:#cbd5e1,stroke-dasharray:5,font-style:italic`);
-            }
-        }
+        if (level === '2' || level === '3') {
+            const maxRoles = (level === '3' && filter === 'all') ? 4 : 8;
+            const visibleRoles = catData.roles.slice(0, maxRoles);
 
-        // Level 3: Add roles AND individual contributors
-        if (level === '3') {
-            // Limit roles shown for manageability
-            const maxRoles = filter === 'all' ? 4 : 8;
-            const maxMembersPerRole = 5;
+            roleBranches = visibleRoles.map(role => {
+                const hcText = role.headcount > 1 ? `(${role.headcount})` : '';
+                const roleNode = createNode('role', role.title, null, hcText || null);
 
-            catData.roles.slice(0, maxRoles).forEach((role, roleIndex) => {
-                const roleId = `R${deptIndex}_${roleIndex}`;
-                roleIds.push(roleId);
-                const hcText = role.headcount > 1 ? `<br/>(${role.headcount} total)` : '';
-                lines.push(`    ${roleId}["📋 ${role.title}${hcText}"]`);
-                lines.push(`    ${deptId} --> ${roleId}`);
+                let memberBranches = [];
 
-                // Add individual members (limit per role)
-                role.members.slice(0, maxMembersPerRole).forEach((member, memberIndex) => {
-                    const memberId = `M${deptIndex}_${roleIndex}_${memberIndex}`;
-                    // Show name if it's a real name, otherwise show role title + number
-                    let memberLabel;
-                    if (member.name && !member.name.startsWith('Staff ')) {
-                        memberLabel = member.name;
-                    } else {
-                        memberLabel = `${role.title} #${memberIndex + 1}`;
+                if (level === '3') {
+                    const maxMembers = 5;
+                    const visibleMembers = role.members.slice(0, maxMembers);
+
+                    memberBranches = visibleMembers.map(member => {
+                        let memberLabel;
+                        if (member.name && !member.name.startsWith('Staff ')) {
+                            memberLabel = member.name;
+                        } else {
+                            memberLabel = role.title;
+                        }
+                        const typeIcon = member.employment_type === 'contractor' ? '📝' : '👤';
+                        const compText = member.compensation > 0
+                            ? `$${(member.compensation/1000).toFixed(0)}k`
+                            : null;
+                        const memberNode = createNode('member',
+                            `${typeIcon} ${memberLabel}`, compText, member.employment_type.toUpperCase()
+                        );
+                        return createBranch(memberNode, null);
+                    });
+
+                    if (role.members.length > maxMembers) {
+                        const moreNode = createNode('more',
+                            `+${role.members.length - maxMembers} more`, null, null
+                        );
+                        memberBranches.push(createBranch(moreNode, null));
                     }
-                    const typeIcon = member.employment_type === 'contractor' ? '📝' : '👤';
-                    const compText = member.compensation > 0 ? `<br/>$${(member.compensation/1000).toFixed(0)}k` : '';
-                    lines.push(`    ${memberId}["${typeIcon} ${memberLabel}${compText}"]`);
-                    lines.push(`    ${roleId} --> ${memberId}`);
-                    // Style individual contributors
-                    lines.push(`    style ${memberId} fill:#f0fdf4,stroke:#22c55e,font-size:11px`);
-                });
-
-                // Show "+N more" if there are more members
-                if (role.members.length > maxMembersPerRole) {
-                    const moreMembersId = `MM${deptIndex}_${roleIndex}`;
-                    lines.push(`    ${moreMembersId}["... +${role.members.length - maxMembersPerRole} more"]`);
-                    lines.push(`    ${roleId} --> ${moreMembersId}`);
-                    lines.push(`    style ${moreMembersId} fill:#f1f5f9,stroke:#cbd5e1,stroke-dasharray:3,font-size:10px`);
                 }
+
+                return createBranch(roleNode, memberBranches.length > 0 ? memberBranches : null);
             });
 
-            // Show "+N more roles" if there are more
             if (catData.roles.length > maxRoles) {
-                const moreId = `MORE${deptIndex}`;
-                lines.push(`    ${moreId}["... +${catData.roles.length - maxRoles} more roles"]`);
-                lines.push(`    ${deptId} --> ${moreId}`);
-                lines.push(`    style ${moreId} fill:#f1f5f9,stroke:#cbd5e1,stroke-dasharray:5,font-style:italic`);
+                const moreNode = createNode('more',
+                    `+${catData.roles.length - maxRoles} more roles`, null, null
+                );
+                roleBranches.push(createBranch(moreNode, null));
             }
         }
 
-        deptIndex++;
+        deptBranches.push(createBranch(deptNode, roleBranches.length > 0 ? roleBranches : null));
     }
 
-    // Connect MSPs to relevant departments (dotted lines)
+    // Build full tree: CEO -> Departments
+    const ceoNode = createNode('leadership', 'CIO / IT Leader', null, null);
+    const tree = createBranch(ceoNode, deptBranches);
+    root.appendChild(tree);
+
+    // Add vendors section below the tree
     if (mspData.length > 0) {
-        mspData.forEach((msp, idx) => {
-            const mspId = `MSP${idx}`;
-            // Connect to first department as support relationship
-            if (deptIds.length > 0) {
-                // Find relevant dept based on service scope
-                const scope = (msp.scope || '').toLowerCase();
-                let targetDept = deptIds[0];
-                if (scope.includes('infra') && deptIds.find(d => orgData[Object.keys(orgData)[deptIds.indexOf(d)]]?.display_name?.toLowerCase().includes('infra'))) {
-                    targetDept = deptIds.find(d => orgData[Object.keys(orgData)[deptIds.indexOf(d)]]?.display_name?.toLowerCase().includes('infra')) || deptIds[0];
+        const vendorsSection = document.createElement('div');
+        vendorsSection.className = 'org-vendors-section';
+        vendorsSection.innerHTML = '<div class="org-vendors-label">External Vendor Support</div>';
+
+        mspData.forEach(msp => {
+            const svcText = msp.services.length > 0
+                ? msp.services.slice(0, 2).join(', ')
+                : msp.scope;
+            const vendorNode = createNode('vendor', msp.name,
+                `${msp.fte_equivalent} FTE eq.`, svcText || null
+            );
+            vendorsSection.appendChild(vendorNode);
+        });
+
+        root.appendChild(vendorsSection);
+    }
+
+    // Recalculate connector widths after DOM renders
+    requestAnimationFrame(() => {
+        root.querySelectorAll('.org-tree-children').forEach(container => {
+            const branches = Array.from(container.children);
+            if (branches.length > 1) {
+                const firstNode = branches[0].querySelector('.org-node');
+                const lastNode = branches[branches.length - 1].querySelector('.org-node');
+                if (firstNode && lastNode) {
+                    const firstRect = firstNode.getBoundingClientRect();
+                    const lastRect = lastNode.getBoundingClientRect();
+                    const halfWidth = Math.abs(lastRect.left + lastRect.width / 2 - firstRect.left - firstRect.width / 2) / 2;
+                    container.style.setProperty('--half-width', halfWidth + 'px');
                 }
-                lines.push(`    ${mspId} -.->|supports| ${targetDept}`);
             }
         });
-    }
-
-    // Styling
-    lines.push('');
-    lines.push('    style CEO fill:#f97316,color:#fff,font-size:18px');
-    deptIds.forEach((deptId, i) => {
-        lines.push(`    style ${deptId} fill:#3b82f6,color:#fff,font-size:16px`);
     });
-    // Style roles (Level 2)
-    roleIds.forEach((roleId) => {
-        lines.push(`    style ${roleId} fill:#e0f2fe,stroke:#0ea5e9,font-size:13px`);
-    });
-    // Style MSPs differently (purple for external)
-    mspData.forEach((msp, idx) => {
-        lines.push(`    style MSP${idx} fill:#8b5cf6,color:#fff,font-size:14px`);
-    });
-    if (mspData.length > 0) {
-        lines.push('    style VENDORS fill:#f3e8ff,stroke:#8b5cf6,stroke-width:2px');
-    }
-
-    const mermaidCode = lines.join('\n');
-
-    // Clear and re-render using modern mermaid API
-    chartDiv.innerHTML = '';
-    chartDiv.removeAttribute('data-processed');
-
-    // Configure mermaid with spacing based on detail level
-    const spacingConfig = {
-        '1': { node: 80, rank: 100 },   // Level 1: Departments only - spacious
-        '2': { node: 50, rank: 70 },    // Level 2: With roles - compact
-        '3': { node: 35, rank: 50 }     // Level 3: With individuals - very compact
-    };
-    const spacing = spacingConfig[level] || spacingConfig['2'];
-
-    // Use mermaid.render() for explicit rendering
-    const chartId = 'org-chart-' + Date.now();
-    mermaid.mermaidAPI.initialize({
-        startOnLoad: false,
-        theme: 'neutral',
-        flowchart: {
-            nodeSpacing: spacing.node,
-            rankSpacing: spacing.rank,
-            curve: 'basis',
-            padding: 15,
-            htmlLabels: true,
-            useMaxWidth: false
-        },
-        themeVariables: {
-            fontSize: '14px',
-            fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif'
-        }
-    });
-
-    try {
-        mermaid.mermaidAPI.render(chartId, mermaidCode).then(result => {
-            chartDiv.innerHTML = result.svg;
-        }).catch(err => {
-            console.error('Mermaid render error:', err);
-            // Fallback: show error message
-            chartDiv.innerHTML = '<div style="color: red; padding: 20px;">Error rendering chart. Check console for details.</div>';
-        });
-    } catch (e) {
-        // Fallback for older mermaid versions
-        console.log('Using fallback mermaid render');
-        chartDiv.innerHTML = mermaidCode;
-        mermaid.init(undefined, chartDiv);
-    }
-
-    // Reset zoom when chart updates
-    currentZoom = 1.0;
-    applyZoom();
 }
 </script>
 {% endblock %}

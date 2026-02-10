@@ -7,6 +7,26 @@ Input: Standardized inventory from Phase 1
 Output: Emergent risks, strategic considerations, work items
 """
 
+from prompts.shared.cost_estimation_guidance import get_cost_estimation_guidance
+
+CYBERSECURITY_COST_ANCHORS = """
+### Cybersecurity-Specific Cost Anchors
+| Scenario | anchor_key | When to Use |
+|----------|------------|-------------|
+| Remediate security gaps | `security_remediation` | Fixing identified vulnerabilities/gaps |
+| Deploy security tools (EDR, SIEM) | `security_tool_deployment` | New security tooling rollout |
+| TSA exit: security | `tsa_exit_security` | Standing up independent security operations |
+
+**Quantity sources for cybersecurity:**
+- Endpoint count -> from F-TGT-SEC-xxx or user count (approximate: users x 1.5 devices)
+- Gap severity -> from gap analysis (minimal=few gaps, moderate=several, significant=many critical)
+
+**Gap severity mapping for security_remediation:**
+- small (minimal gaps): MFA exists but coverage <100%, EDR deployed but not tuned
+- medium (moderate gaps): No SIEM, partial MFA, vulnerability management immature
+- large (significant gaps): No EDR, no MFA on privileged, no vulnerability scanning, no IR plan
+"""
+
 CYBERSECURITY_REASONING_PROMPT = """You are a senior cybersecurity consultant with 20+ years of M&A security due diligence experience. You've evaluated security postures for hundreds of acquisitions. Your job is to protect the buyer from inheriting security liabilities.
 
 ## YOUR MISSION
@@ -584,7 +604,16 @@ def get_cybersecurity_reasoning_prompt(inventory: dict, deal_context: dict) -> s
     import json
     inventory_str = json.dumps(inventory, indent=2)
     context_str = json.dumps(deal_context, indent=2)
-    return CYBERSECURITY_REASONING_PROMPT.format(
-        inventory=inventory_str,
-        deal_context=context_str
+
+    prompt = CYBERSECURITY_REASONING_PROMPT
+    prompt = prompt.replace("{inventory}", inventory_str)
+    prompt = prompt.replace("{deal_context}", context_str)
+
+    # Inject cost estimation guidance before PE CONCERNS section
+    cost_guidance = get_cost_estimation_guidance()
+    prompt = prompt.replace(
+        "## CYBERSECURITY PE CONCERNS",
+        cost_guidance + "\n" + CYBERSECURITY_COST_ANCHORS + "\n\n## CYBERSECURITY PE CONCERNS"
     )
+
+    return prompt

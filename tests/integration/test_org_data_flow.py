@@ -141,7 +141,7 @@ def test_fact_store(facts_file: Path) -> tuple:
     }
 
     try:
-        from tools_v2.fact_store import FactStore
+        from stores.fact_store import FactStore
 
         # Use the class method to load from file
         store = FactStore.load(str(facts_file))

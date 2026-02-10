@@ -15,7 +15,7 @@ from typing import Dict, List, Optional, Any, Tuple
 from enum import Enum
 import difflib
 
-from tools_v2.fact_store import FactStore, Fact, VerificationStatus
+from stores.fact_store import FactStore, Fact, VerificationStatus
 
 logger = logging.getLogger(__name__)
 

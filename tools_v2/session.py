@@ -35,7 +35,7 @@ from dataclasses import dataclass, field, asdict
 from enum import Enum
 import logging
 
-from tools_v2.fact_store import FactStore
+from stores.fact_store import FactStore
 from tools_v2.reasoning_tools import ReasoningStore
 from tools_v2.narrative_tools import NarrativeStore
 

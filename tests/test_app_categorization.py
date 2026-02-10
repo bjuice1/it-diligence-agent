@@ -72,18 +72,18 @@ class TestAppCategoryMappings:
 
     def test_categorize_known_app(self):
         """Known apps should return correct category."""
-        from stores.app_category_mappings import categorize_app
+        from stores.app_category_mappings import categorize_app_simple
 
-        category, mapping = categorize_app("Workday")
+        category, mapping = categorize_app_simple("Workday")
         assert category == "hcm"
         assert mapping is not None
         assert mapping.vendor == "Workday"
 
     def test_categorize_unknown_app(self):
         """Unknown apps should return 'unknown' category."""
-        from stores.app_category_mappings import categorize_app
+        from stores.app_category_mappings import categorize_app_simple
 
-        category, mapping = categorize_app("MyCustomApp")
+        category, mapping = categorize_app_simple("MyCustomApp")
         assert category == "unknown"
         assert mapping is None
 
@@ -391,7 +391,7 @@ class TestAppCategorizationIntegration:
 
     def test_full_categorization_flow(self):
         """Test complete flow: lookup -> categorize -> validate."""
-        from stores.app_category_mappings import lookup_app, categorize_app
+        from stores.app_category_mappings import lookup_app, categorize_app_simple
         from tools_v2.enrichment.inventory_reviewer import validate_category
 
         # Lookup known app
@@ -399,7 +399,7 @@ class TestAppCategorizationIntegration:
         assert mapping is not None
 
         # Get category
-        category, _ = categorize_app("Microsoft Teams")
+        category, _ = categorize_app_simple("Microsoft Teams")
         assert category == "collaboration"
 
         # Validate category

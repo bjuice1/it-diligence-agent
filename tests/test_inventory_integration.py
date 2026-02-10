@@ -45,7 +45,7 @@ class TestGetInventoryForDomain:
 
     def test_get_applications_domain(self):
         """Should get application and vendor inventory for applications domain."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
 
         # Add application
         store.add_item(
@@ -78,7 +78,7 @@ class TestGetInventoryForDomain:
 
     def test_get_infrastructure_domain(self):
         """Should get infrastructure inventory."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
 
         store.add_item(
             inventory_type="infrastructure",
@@ -93,7 +93,7 @@ class TestGetInventoryForDomain:
 
     def test_empty_domain(self):
         """Should handle empty inventory gracefully."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
 
         context = get_inventory_for_domain(store, "applications", "target")
 
@@ -106,7 +106,7 @@ class TestFormatInventoryForAgent:
 
     def test_format_includes_item_id(self):
         """Formatted text should include item IDs for citation."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
 
         item_id = store.add_item(
             inventory_type="application",
@@ -124,7 +124,7 @@ class TestFormatInventoryForAgent:
 
     def test_format_includes_enrichment(self):
         """Formatted text should include enrichment notes."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
 
         item_id = store.add_item(
             inventory_type="application",
@@ -146,7 +146,7 @@ class TestFormatInventoryForAgent:
 
     def test_format_flags_investigation(self):
         """Flagged items should be marked."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
 
         item_id = store.add_item(
             inventory_type="application",
@@ -173,8 +173,8 @@ class TestSyncInventoryToFacts:
 
     def test_sync_creates_facts(self):
         """Sync should create facts from inventory items."""
-        inventory = InventoryStore()
-        facts = FactStore()
+        inventory = InventoryStore(deal_id="test-deal")
+        facts = FactStore(deal_id="test-deal")
 
         inventory.add_item(
             inventory_type="application",
@@ -192,8 +192,8 @@ class TestSyncInventoryToFacts:
 
     def test_sync_includes_inventory_id_in_evidence(self):
         """Synced facts should reference inventory ID."""
-        inventory = InventoryStore()
-        facts = FactStore()
+        inventory = InventoryStore(deal_id="test-deal")
+        facts = FactStore(deal_id="test-deal")
 
         item_id = inventory.add_item(
             inventory_type="application",
@@ -217,8 +217,8 @@ class TestSyncInventoryToFacts:
 
     def test_sync_skips_duplicates(self):
         """Sync should skip items already in fact store."""
-        inventory = InventoryStore()
-        facts = FactStore()
+        inventory = InventoryStore(deal_id="test-deal")
+        facts = FactStore(deal_id="test-deal")
 
         inventory.add_item(
             inventory_type="application",
@@ -242,7 +242,7 @@ class TestLinkFindingToInventory:
 
     def test_link_by_item_id(self):
         """Should link finding that mentions item ID."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
 
         item_id = store.add_item(
             inventory_type="application",
@@ -263,7 +263,7 @@ class TestLinkFindingToInventory:
 
     def test_link_by_name(self):
         """Should link finding that mentions item name."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
 
         store.add_item(
             inventory_type="application",
@@ -283,7 +283,7 @@ class TestLinkFindingToInventory:
 
     def test_no_links_when_no_match(self):
         """Should not add links when no inventory matches."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
 
         store.add_item(
             inventory_type="application",
@@ -306,7 +306,7 @@ class TestGetInventorySummary:
 
     def test_summary_includes_counts(self):
         """Summary should include item counts by type."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
 
         for i in range(3):
             store.add_item(
@@ -330,7 +330,7 @@ class TestGetInventorySummary:
 
     def test_summary_highlights_high_cost(self):
         """Summary should highlight high-cost applications."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
 
         store.add_item(
             inventory_type="application",

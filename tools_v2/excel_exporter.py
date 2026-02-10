@@ -177,7 +177,8 @@ class ExcelExporter:
         granular_facts_store,
         validation_report,
         output_path: Path,
-        include_charts: bool = True
+        include_charts: bool = True,
+        work_items: list = None
     ) -> Path:
         """
         Create a complete Excel workbook with all data.
@@ -193,6 +194,7 @@ class ExcelExporter:
         - Organization: Granular facts for organization domain
         - Validation: Validation results from Pass 3
         - Gaps: Items needing attention
+        - Cost Buildup: Cost buildup transparency (if work items provided)
 
         Args:
             system_registry: SystemRegistry instance
@@ -200,6 +202,7 @@ class ExcelExporter:
             validation_report: ValidationReport instance
             output_path: Output file path
             include_charts: Whether to include charts
+            work_items: Optional list of WorkItem objects for cost buildup sheet
 
         Returns:
             Path to created file
@@ -218,6 +221,10 @@ class ExcelExporter:
         self._create_domain_sheets(wb, granular_facts_store)
         self._create_validation_sheet(wb, validation_report)
         self._create_gaps_sheet(wb, system_registry, validation_report)
+
+        # Add cost buildup transparency sheet if work items provided
+        if work_items:
+            self._write_cost_buildup_sheet(wb, work_items)
 
         # Save workbook
         wb.save(output_path)
@@ -495,6 +502,59 @@ class ExcelExporter:
 
         # Auto-fit columns
         self._autofit_columns(ws)
+
+    def _write_cost_buildup_sheet(self, wb, work_items):
+        """Write cost buildup transparency sheet."""
+        ws = wb.create_sheet("Cost Buildup")
+
+        headers = [
+            "Work Item ID", "Title", "Domain", "Phase",
+            "Cost Estimate (Range)", "Anchor Key", "Anchor Name",
+            "Method", "Quantity", "Unit", "Unit Cost Low", "Unit Cost High",
+            "Total Low", "Total High", "Confidence", "Source",
+            "Assumptions", "Source Facts",
+        ]
+
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            if HEADER_FILL:
+                cell.fill = HEADER_FILL
+            if HEADER_FONT:
+                cell.font = HEADER_FONT
+            if OPENPYXL_AVAILABLE:
+                cell.alignment = Alignment(horizontal='center')
+
+        row = 2
+        for wi in work_items:
+            ws.cell(row=row, column=1, value=getattr(wi, 'finding_id', ''))
+            ws.cell(row=row, column=2, value=getattr(wi, 'title', ''))
+            ws.cell(row=row, column=3, value=getattr(wi, 'domain', ''))
+            ws.cell(row=row, column=4, value=getattr(wi, 'phase', ''))
+            ws.cell(row=row, column=5, value=getattr(wi, 'cost_estimate', ''))
+
+            cb = getattr(wi, 'cost_buildup', None)
+            if cb is not None:
+                ws.cell(row=row, column=6, value=cb.anchor_key)
+                ws.cell(row=row, column=7, value=cb.anchor_name)
+                ws.cell(row=row, column=8, value=cb.estimation_method)
+                ws.cell(row=row, column=9, value=cb.quantity)
+                ws.cell(row=row, column=10, value=cb.unit_label)
+                ws.cell(row=row, column=11, value=cb.unit_cost_low)
+                ws.cell(row=row, column=12, value=cb.unit_cost_high)
+                ws.cell(row=row, column=13, value=cb.total_low)
+                ws.cell(row=row, column=14, value=cb.total_high)
+                ws.cell(row=row, column=15, value=cb.confidence)
+                ws.cell(row=row, column=16, value=cb.estimation_source)
+                ws.cell(row=row, column=17, value="; ".join(cb.assumptions) if cb.assumptions else "")
+                ws.cell(row=row, column=18, value=", ".join(cb.source_facts) if cb.source_facts else "")
+            else:
+                ws.cell(row=row, column=6, value="N/A (range only)")
+
+            row += 1
+
+        # Auto-fit and freeze
+        self._autofit_columns(ws)
+        ws.freeze_panes = 'A2'
 
     def _autofit_columns(self, ws, max_width: int = 50):
         """Auto-fit column widths based on content."""

@@ -246,7 +246,7 @@ def _render_load_options():
 def _load_analysis(timestamp: str):
     """Load a previous analysis."""
     try:
-        from tools_v2.fact_store import FactStore
+        from stores.fact_store import FactStore
         from tools_v2.reasoning_tools import ReasoningStore
 
         output_dir = Path("output")

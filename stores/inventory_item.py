@@ -56,6 +56,9 @@ class InventoryItem:
     # Deal isolation - REQUIRED for proper data separation
     deal_id: str = ""               # Deal this item belongs to - REQUIRED for new items
 
+    # FactStore cross-references (Spec 03: bidirectional linking)
+    source_fact_ids: List[str] = field(default_factory=list)  # F-TGT-APP-xxx IDs that reference this item
+
     # Enrichment (from Application Intelligence - Phase 3)
     # category: industry_standard, vertical_specific, niche, unknown, custom
     # note: Description of what this is
@@ -244,6 +247,9 @@ class InventoryItem:
         # Set defaults for optional fields
         if "deal_id" not in data:
             data["deal_id"] = ""  # Legacy items without deal_id
+        # Spec 03: bidirectional linking (backwards compatibility)
+        if "source_fact_ids" not in data:
+            data["source_fact_ids"] = []  # Legacy items without fact links
         if "enrichment" not in data:
             data["enrichment"] = {}
         if "status" not in data:

@@ -320,7 +320,7 @@ class AnalysisRunner:
 
         try:
             # Load facts
-            from tools_v2.fact_store import FactStore
+            from stores.fact_store import FactStore
             self.result.fact_store = FactStore.load(str(facts_file))
             self.result.facts_file = str(facts_file)
             self.result.fact_count = len(self.result.fact_store.facts)

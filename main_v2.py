@@ -58,7 +58,8 @@ from config_v2 import (
     PARALLEL_REASONING,
     estimate_cost
 )
-from tools_v2.fact_store import FactStore
+from stores.fact_store import FactStore
+from stores.inventory_store import InventoryStore
 from tools_v2.reasoning_tools import ReasoningStore
 from tools_v2.session import DDSession
 from tools_v2.coverage import CoverageAnalyzer
@@ -68,6 +69,12 @@ from tools_v2.html_report import generate_html_report
 from tools_v2.presentation import generate_presentation, generate_presentation_from_narratives
 from tools_v2.narrative_tools import NarrativeStore
 from tools_v2.excel_export import export_to_excel, OPENPYXL_AVAILABLE
+from tools_v2.inventory_integration import (
+    promote_facts_to_inventory,
+    reconcile_facts_and_inventory,
+    generate_inventory_audit,
+    save_inventory_audit,
+)
 from agents_v2.discovery import DISCOVERY_AGENTS
 from agents_v2.reasoning import REASONING_AGENTS
 from agents_v2.narrative import NARRATIVE_AGENTS, CostSynthesisAgent
@@ -143,7 +150,8 @@ def run_discovery(
     target_name: Optional[str] = None,
     industry: Optional[str] = None,
     document_name: str = "",
-    deal_id: Optional[str] = None
+    deal_id: Optional[str] = None,
+    inventory_store: Optional[InventoryStore] = None,
 ) -> FactStore:
     """
     Run discovery phase for a domain.
@@ -170,6 +178,11 @@ def run_discovery(
             deal_id = f"run-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
         fact_store = FactStore(deal_id=deal_id)
 
+    # Create InventoryStore if not provided
+    effective_deal_id = deal_id or fact_store.deal_id
+    if inventory_store is None:
+        inventory_store = InventoryStore(deal_id=effective_deal_id)
+
     print(f"\n{'='*60}")
     print("PHASE 1: DISCOVERY")
     print(f"Domain: {domain}")
@@ -191,7 +204,8 @@ def run_discovery(
         "model": DISCOVERY_MODEL,
         "max_tokens": DISCOVERY_MAX_TOKENS,
         "max_iterations": DISCOVERY_MAX_ITERATIONS,
-        "target_name": target_name
+        "target_name": target_name,
+        "inventory_store": inventory_store,
     }
 
     # For applications domain, pass industry for industry-aware discovery
@@ -214,7 +228,7 @@ def run_discovery(
     cost = estimate_cost(DISCOVERY_MODEL, metrics.input_tokens, metrics.output_tokens)
     print(f"  Estimated cost: ${cost:.4f}")
 
-    return fact_store
+    return fact_store, inventory_store
 
 
 def run_reasoning(
@@ -546,6 +560,7 @@ def run_discovery_for_domain(
     document_text: str,
     domain: str,
     shared_fact_store: FactStore,
+    shared_inventory_store: InventoryStore,
     target_name: Optional[str] = None,
     deal_id: Optional[str] = None
 ) -> Dict:
@@ -561,12 +576,15 @@ def run_discovery_for_domain(
     local_store = FactStore(deal_id=effective_deal_id)
 
     try:
-        result = run_discovery(
+        # Shared InventoryStore is thread-safe (add_item uses threading.Lock)
+        # No need for local copy; pass shared store directly
+        _fact_store_result, _inv_store_result = run_discovery(
             document_text=document_text,
             domain=domain,
             fact_store=local_store,
             target_name=target_name,
-            deal_id=effective_deal_id
+            deal_id=effective_deal_id,
+            inventory_store=shared_inventory_store,
         )
 
         # Merge into shared store (thread-safe)
@@ -577,8 +595,7 @@ def run_discovery_for_domain(
             "domain": domain,
             "status": "success",
             "facts": len(local_store.facts),
-            "gaps": len(local_store.gaps),
-            "metrics": result.get("metrics", {})
+            "gaps": len(local_store.gaps)
         }
 
     except Exception as e:
@@ -653,6 +670,7 @@ def run_parallel_discovery(
     print(f"{'='*60}")
 
     shared_fact_store = FactStore(deal_id=deal_id)
+    shared_inventory_store = InventoryStore(deal_id=deal_id)
     results = []
     completed_count = 0
 
@@ -663,6 +681,7 @@ def run_parallel_discovery(
                 document_text,
                 domain,
                 shared_fact_store,
+                shared_inventory_store,
                 target_name,
                 deal_id
             ): domain
@@ -714,7 +733,71 @@ def run_parallel_discovery(
     
     if failed:
         logger.warning(f"Discovery completed with {len(failed)} failed domain(s): {[r['domain'] for r in failed]}")
-    
+
+    # Save inventory store after all parallel discovery completes
+    shared_inventory_store.save()
+    logger.info(f"Saved {len(shared_inventory_store)} inventory items to {shared_inventory_store.storage_path}")
+
+    # Promote LLM-extracted facts to inventory items
+    for entity_val in ["target", "buyer"]:
+        promotion_stats = promote_facts_to_inventory(
+            fact_store=shared_fact_store,
+            inventory_store=shared_inventory_store,
+            entity=entity_val,
+        )
+        if promotion_stats["promoted"] > 0 or promotion_stats["matched"] > 0:
+            print(f"[PROMOTION] {entity_val}: {promotion_stats['promoted']} new items, "
+                  f"{promotion_stats['matched']} matched to existing")
+
+    # Re-save inventory store (now includes both deterministic + promoted items)
+    shared_inventory_store.save()
+
+    # Reconcile unlinked facts and inventory items
+    reconcile_stats = reconcile_facts_and_inventory(
+        fact_store=shared_fact_store,
+        inventory_store=shared_inventory_store,
+        entity="target",
+        similarity_threshold=0.8,
+    )
+    logger.info(
+        f"Reconciliation: {reconcile_stats['matched']} matched, "
+        f"{reconcile_stats['unmatched_facts']} unmatched facts, "
+        f"{reconcile_stats['unmatched_items']} unmatched items"
+    )
+
+    # Repeat for buyer entity if present
+    buyer_items = shared_inventory_store.get_items(entity="buyer")
+    if buyer_items:
+        buyer_stats = reconcile_facts_and_inventory(
+            fact_store=shared_fact_store,
+            inventory_store=shared_inventory_store,
+            entity="buyer",
+            similarity_threshold=0.8,
+        )
+        logger.info(f"Buyer reconciliation: {buyer_stats['matched']} matched")
+
+    # Re-save after reconciliation (links were updated)
+    shared_inventory_store.save()
+
+    # Generate and save audit report
+    audit_report = generate_inventory_audit(
+        inventory_store=shared_inventory_store,
+        fact_store=shared_fact_store,
+        deal_id=deal_id,
+    )
+    audit_path = save_inventory_audit(
+        audit_report,
+        deal_id=deal_id,
+    )
+    logger.info(
+        f"Inventory audit: {audit_report['overall_health']} — "
+        f"{audit_report['linking']['total_items']} items, "
+        f"{audit_report['linking']['item_link_rate']}% linked"
+    )
+    if audit_report["issues"]:
+        for issue in audit_report["issues"]:
+            logger.warning(f"Audit issue: {issue}")
+
     return shared_fact_store
 
 
@@ -1103,18 +1186,86 @@ Phases:
                             document_text=document_text,
                             domains=domains_to_analyze,
                             max_workers=MAX_PARALLEL_AGENTS,
-                            target_name=args.target_name
+                            target_name=args.target_name,
+                            deal_id=deal_id,
                         )
                         # Merge results into session store
                         # Note: run_parallel_discovery already merges into the shared store passed
+                        # InventoryStore is saved inside run_parallel_discovery
                     else:
+                        session_inventory_store = InventoryStore(deal_id=deal_id)
                         for domain in domains_to_analyze:
-                            run_discovery(
+                            _fs, _is = run_discovery(
                                 document_text=document_text,
                                 domain=domain,
                                 fact_store=fact_store,
-                                target_name=args.target_name
+                                target_name=args.target_name,
+                                deal_id=deal_id,
+                                inventory_store=session_inventory_store,
                             )
+                        # Save inventory store after all session discovery completes
+                        session_inventory_store.save()
+                        logger.info(f"Saved {len(session_inventory_store)} inventory items for session {deal_id}")
+
+                        # Promote LLM-extracted facts to inventory items
+                        for entity_val in ["target", "buyer"]:
+                            promotion_stats = promote_facts_to_inventory(
+                                fact_store=fact_store,
+                                inventory_store=session_inventory_store,
+                                entity=entity_val,
+                            )
+                            if promotion_stats["promoted"] > 0 or promotion_stats["matched"] > 0:
+                                print(f"[PROMOTION] {entity_val}: {promotion_stats['promoted']} new items, "
+                                      f"{promotion_stats['matched']} matched to existing")
+
+                        # Re-save inventory store (now includes promoted items)
+                        session_inventory_store.save()
+
+                        # Reconcile unlinked facts and inventory items
+                        reconcile_stats = reconcile_facts_and_inventory(
+                            fact_store=fact_store,
+                            inventory_store=session_inventory_store,
+                            entity="target",
+                            similarity_threshold=0.8,
+                        )
+                        logger.info(
+                            f"Reconciliation: {reconcile_stats['matched']} matched, "
+                            f"{reconcile_stats['unmatched_facts']} unmatched facts, "
+                            f"{reconcile_stats['unmatched_items']} unmatched items"
+                        )
+
+                        # Repeat for buyer entity if present
+                        buyer_items = session_inventory_store.get_items(entity="buyer")
+                        if buyer_items:
+                            buyer_stats = reconcile_facts_and_inventory(
+                                fact_store=fact_store,
+                                inventory_store=session_inventory_store,
+                                entity="buyer",
+                                similarity_threshold=0.8,
+                            )
+                            logger.info(f"Buyer reconciliation: {buyer_stats['matched']} matched")
+
+                        # Re-save after reconciliation (links were updated)
+                        session_inventory_store.save()
+
+                        # Generate and save audit report
+                        audit_report = generate_inventory_audit(
+                            inventory_store=session_inventory_store,
+                            fact_store=fact_store,
+                            deal_id=deal_id,
+                        )
+                        audit_path = save_inventory_audit(
+                            audit_report,
+                            deal_id=deal_id,
+                        )
+                        logger.info(
+                            f"Inventory audit: {audit_report['overall_health']} — "
+                            f"{audit_report['linking']['total_items']} items, "
+                            f"{audit_report['linking']['item_link_rate']}% linked"
+                        )
+                        if audit_report["issues"]:
+                            for issue in audit_report["issues"]:
+                                logger.warning(f"Audit issue: {issue}")
 
                     # Mark documents as processed
                     for doc_path in pending_docs:
@@ -1150,14 +1301,81 @@ Phases:
             else:
                 # Sequential discovery
                 fact_store = FactStore(deal_id=deal_id)
+                inventory_store = InventoryStore(deal_id=deal_id)
                 for domain in domains_to_analyze:
-                    run_discovery(
+                    _fs, _is = run_discovery(
                         document_text=document_text,
                         domain=domain,
                         fact_store=fact_store,
                         target_name=args.target_name,
-                        deal_id=deal_id
+                        deal_id=deal_id,
+                        inventory_store=inventory_store,
                     )
+
+                # Save inventory store after all discovery completes
+                inventory_store.save()
+                logger.info(f"Saved {len(inventory_store)} inventory items for deal {deal_id}")
+
+                # Promote LLM-extracted facts to inventory items
+                for entity_val in ["target", "buyer"]:
+                    promotion_stats = promote_facts_to_inventory(
+                        fact_store=fact_store,
+                        inventory_store=inventory_store,
+                        entity=entity_val,
+                    )
+                    if promotion_stats["promoted"] > 0 or promotion_stats["matched"] > 0:
+                        print(f"[PROMOTION] {entity_val}: {promotion_stats['promoted']} new items, "
+                              f"{promotion_stats['matched']} matched to existing")
+
+                # Re-save inventory store (now includes promoted items)
+                inventory_store.save()
+
+                # Reconcile unlinked facts and inventory items
+                reconcile_stats = reconcile_facts_and_inventory(
+                    fact_store=fact_store,
+                    inventory_store=inventory_store,
+                    entity="target",
+                    similarity_threshold=0.8,
+                )
+                logger.info(
+                    f"Reconciliation: {reconcile_stats['matched']} matched, "
+                    f"{reconcile_stats['unmatched_facts']} unmatched facts, "
+                    f"{reconcile_stats['unmatched_items']} unmatched items"
+                )
+
+                # Repeat for buyer entity if present
+                buyer_items = inventory_store.get_items(entity="buyer")
+                if buyer_items:
+                    buyer_stats = reconcile_facts_and_inventory(
+                        fact_store=fact_store,
+                        inventory_store=inventory_store,
+                        entity="buyer",
+                        similarity_threshold=0.8,
+                    )
+                    logger.info(f"Buyer reconciliation: {buyer_stats['matched']} matched")
+
+                # Re-save after reconciliation (links were updated)
+                inventory_store.save()
+
+                # Generate and save audit report
+                effective_deal_id = deal_id
+                audit_report = generate_inventory_audit(
+                    inventory_store=inventory_store,
+                    fact_store=fact_store,
+                    deal_id=effective_deal_id,
+                )
+                audit_path = save_inventory_audit(
+                    audit_report,
+                    deal_id=effective_deal_id,
+                )
+                logger.info(
+                    f"Inventory audit: {audit_report['overall_health']} — "
+                    f"{audit_report['linking']['total_items']} items, "
+                    f"{audit_report['linking']['item_link_rate']}% linked"
+                )
+                if audit_report["issues"]:
+                    for issue in audit_report["issues"]:
+                        logger.warning(f"Audit issue: {issue}")
 
         # Save facts
         if run_paths:

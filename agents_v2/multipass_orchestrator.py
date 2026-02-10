@@ -23,7 +23,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from tools_v2.system_registry import SystemRegistry, System
-from tools_v2.granular_facts_store import GranularFactsStore
+from stores.granular_facts_store import GranularFactsStore
 from tools_v2.validation_engine import ValidationEngine, ValidationReport
 from tools_v2.excel_exporter import export_to_excel, export_to_csv
 

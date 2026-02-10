@@ -229,10 +229,11 @@ def sync_inventory_to_facts(
     source_file: str = "inventory_import",
 ) -> Dict[str, int]:
     """
-    Sync inventory items to FactStore for citation tracking.
+    Bidirectional sync: create facts from inventory items AND link them.
 
     This allows reasoning agents to cite inventory items using
     the same mechanism they use for document-extracted facts.
+    Spec 03: Now creates bidirectional links (fact<->inventory).
 
     Args:
         inventory_store: Source inventory
@@ -246,6 +247,7 @@ def sync_inventory_to_facts(
     stats = {
         "synced": 0,
         "skipped": 0,
+        "linked": 0,
         "by_type": {},
     }
 
@@ -289,6 +291,19 @@ def sync_inventory_to_facts(
             )
             stats["synced"] += 1
 
+            # Spec 03: Bidirectional linking
+            if fact_id:
+                # Link fact -> inventory item
+                fact = fact_store.get_fact(fact_id)
+                if fact:
+                    fact.inventory_item_id = item.item_id
+
+                # Link inventory item -> fact
+                if fact_id not in item.source_fact_ids:
+                    item.source_fact_ids.append(fact_id)
+
+                stats["linked"] += 1
+
             # Track by type
             if item.inventory_type not in stats["by_type"]:
                 stats["by_type"][item.inventory_type] = 0
@@ -299,6 +314,302 @@ def sync_inventory_to_facts(
             stats["skipped"] += 1
 
     return stats
+
+
+def reconcile_facts_and_inventory(
+    fact_store: FactStore,
+    inventory_store: InventoryStore,
+    entity: str = "target",
+    similarity_threshold: float = 0.8,
+) -> Dict[str, int]:
+    """Match unlinked facts to inventory items by name similarity.
+
+    Extended to cover all domains -- not just applications.
+
+    For facts that were created by LLM extraction (no inventory_item_id)
+    and inventory items that were created by import (no source_fact_ids),
+    attempt to match them and create bidirectional links.
+
+    Args:
+        fact_store: FactStore with potentially unlinked facts
+        inventory_store: InventoryStore with potentially unlinked items
+        entity: Entity filter ("target" or "buyer")
+        similarity_threshold: Minimum similarity score (0.0-1.0) for matching
+
+    Returns:
+        Dict with keys: "matched", "unmatched_facts", "unmatched_items"
+    """
+    from difflib import SequenceMatcher
+
+    stats = {"matched": 0, "unmatched_facts": 0, "unmatched_items": 0}
+
+    # Domain -> inventory type mapping
+    domain_type_pairs = [
+        ("applications", "application"),
+        ("infrastructure", "infrastructure"),
+        ("organization", "organization"),
+    ]
+
+    for domain, inv_type in domain_type_pairs:
+        domain_facts = [
+            f for f in fact_store.get_entity_facts(entity, domain=domain)
+            if not getattr(f, 'inventory_item_id', None)
+        ]
+
+        domain_items = [
+            item for item in inventory_store.get_items(
+                inventory_type=inv_type, entity=entity
+            )
+            if not item.source_fact_ids
+        ]
+
+        matched_item_ids = set()
+        for fact in domain_facts:
+            fact_name = fact.item.lower().strip()
+            best_match = None
+            best_score = 0.0
+
+            for item in domain_items:
+                if item.item_id in matched_item_ids:
+                    continue
+
+                item_name = item.name.lower().strip()
+                score = SequenceMatcher(None, fact_name, item_name).ratio()
+
+                # Boost score if secondary field also matches
+                if inv_type == "application":
+                    fact_vendor = fact.details.get("vendor", "").lower()
+                    item_vendor = item.data.get("vendor", "").lower()
+                    if fact_vendor and item_vendor:
+                        vendor_score = SequenceMatcher(None, fact_vendor, item_vendor).ratio()
+                        score = (score * 0.7) + (vendor_score * 0.3)
+                elif inv_type == "infrastructure":
+                    fact_env = fact.details.get("environment", "").lower()
+                    item_env = item.data.get("environment", "").lower()
+                    if fact_env and item_env:
+                        env_score = SequenceMatcher(None, fact_env, item_env).ratio()
+                        score = (score * 0.7) + (env_score * 0.3)
+
+                if score > best_score:
+                    best_score = score
+                    best_match = item
+
+            if best_match and best_score >= similarity_threshold:
+                fact.inventory_item_id = best_match.item_id
+                if fact.fact_id not in best_match.source_fact_ids:
+                    best_match.source_fact_ids.append(fact.fact_id)
+                matched_item_ids.add(best_match.item_id)
+                stats["matched"] += 1
+            else:
+                stats["unmatched_facts"] += 1
+
+        stats["unmatched_items"] += len(domain_items) - len(matched_item_ids)
+
+    return stats
+
+
+def promote_facts_to_inventory(
+    fact_store: FactStore,
+    inventory_store: InventoryStore,
+    entity: str = "target",
+    similarity_threshold: float = 0.8,
+) -> Dict[str, Any]:
+    """Promote unlinked LLM-extracted facts to InventoryItems.
+
+    After discovery, some facts exist only in FactStore (extracted from
+    unstructured prose by LLM agents). This function:
+    1. Finds facts without inventory_item_id
+    2. Attempts to match against existing InventoryItems
+    3. Creates new InventoryItems for unmatched facts
+    4. Establishes bidirectional links in all cases
+
+    Args:
+        fact_store: FactStore with all discovery facts
+        inventory_store: InventoryStore (partially populated by deterministic parser)
+        entity: Entity filter ("target" or "buyer")
+        similarity_threshold: Minimum similarity for matching (0.0-1.0)
+
+    Returns:
+        Dict with promotion statistics:
+        - matched: Facts linked to existing InventoryItems
+        - promoted: New InventoryItems created from facts
+        - quarantined: Facts with insufficient data for promotion
+        - skipped: Facts already linked (had inventory_item_id)
+        - by_domain: Breakdown by domain
+    """
+    from difflib import SequenceMatcher
+
+    stats = {
+        "matched": 0,
+        "promoted": 0,
+        "quarantined": 0,
+        "skipped": 0,
+        "by_domain": {},
+    }
+
+    # Domain -> inventory_type mapping
+    domain_to_type = {
+        "applications": "application",
+        "infrastructure": "infrastructure",
+        "organization": "organization",
+    }
+
+    # Get all entity-scoped facts
+    entity_facts = fact_store.get_entity_facts(entity)
+
+    for fact in entity_facts:
+        domain = fact.domain
+
+        # Skip domains that don't map to inventory types
+        inv_type = domain_to_type.get(domain)
+        if not inv_type:
+            continue
+
+        # Skip facts that already have an inventory link
+        if fact.inventory_item_id:
+            stats["skipped"] += 1
+            continue
+
+        # Track by domain
+        if domain not in stats["by_domain"]:
+            stats["by_domain"][domain] = {"matched": 0, "promoted": 0, "quarantined": 0}
+
+        # Extract item name from fact
+        item_name = fact.item
+        if not item_name or len(item_name.strip()) < 2:
+            stats["quarantined"] += 1
+            stats["by_domain"][domain]["quarantined"] += 1
+            logger.debug(f"Quarantined fact {fact.fact_id}: no usable item name")
+            continue
+
+        # Try to match against existing inventory items
+        existing_items = inventory_store.get_items(
+            inventory_type=inv_type, entity=entity, status="active"
+        )
+
+        best_match = None
+        best_score = 0.0
+        fact_name = item_name.lower().strip()
+
+        for item in existing_items:
+            item_name_lower = item.name.lower().strip()
+            score = SequenceMatcher(None, fact_name, item_name_lower).ratio()
+
+            # Boost score if vendor also matches (applications only)
+            if inv_type == "application":
+                fact_vendor = (fact.details or {}).get("vendor", "").lower()
+                item_vendor = item.data.get("vendor", "").lower()
+                if fact_vendor and item_vendor:
+                    vendor_score = SequenceMatcher(None, fact_vendor, item_vendor).ratio()
+                    score = (score * 0.7) + (vendor_score * 0.3)
+
+            if score > best_score:
+                best_score = score
+                best_match = item
+
+        if best_match and best_score >= similarity_threshold:
+            # MATCH FOUND: Link fact to existing item
+            fact.inventory_item_id = best_match.item_id
+            if fact.fact_id not in best_match.source_fact_ids:
+                best_match.source_fact_ids.append(fact.fact_id)
+
+            stats["matched"] += 1
+            stats["by_domain"][domain]["matched"] += 1
+            logger.debug(
+                f"Matched fact {fact.fact_id} -> item {best_match.item_id} "
+                f"({best_score:.2f} similarity)"
+            )
+
+        else:
+            # NO MATCH: Create new InventoryItem from fact
+            inv_data = _build_inventory_data_from_fact(fact, inv_type)
+
+            try:
+                inv_item_id = inventory_store.add_item(
+                    inventory_type=inv_type,
+                    entity=entity,
+                    data=inv_data,
+                    source_file=fact.source_document or "",
+                    source_type="discovery",
+                    deal_id=fact_store.deal_id,
+                )
+
+                # Bidirectional linking
+                fact.inventory_item_id = inv_item_id
+                inv_item = inventory_store.get_item(inv_item_id)
+                if inv_item and fact.fact_id not in inv_item.source_fact_ids:
+                    inv_item.source_fact_ids.append(fact.fact_id)
+
+                stats["promoted"] += 1
+                stats["by_domain"][domain]["promoted"] += 1
+                logger.debug(f"Promoted fact {fact.fact_id} -> new item {inv_item_id}")
+
+            except Exception as e:
+                stats["quarantined"] += 1
+                stats["by_domain"][domain]["quarantined"] += 1
+                logger.warning(f"Failed to promote fact {fact.fact_id}: {e}")
+
+    logger.info(
+        f"Fact promotion complete [{entity}]: "
+        f"{stats['matched']} matched, {stats['promoted']} promoted, "
+        f"{stats['quarantined']} quarantined, {stats['skipped']} skipped"
+    )
+
+    return stats
+
+
+def _build_inventory_data_from_fact(fact, inv_type: str) -> Dict[str, Any]:
+    """Build InventoryItem data dict from a Fact's fields.
+
+    Maps fact.item and fact.details to the appropriate schema
+    fields for the inventory type.
+    """
+    details = fact.details or {}
+
+    if inv_type == "application":
+        data = {
+            "name": fact.item,
+            "vendor": details.get("vendor", ""),
+            "version": details.get("version", ""),
+            "hosting": details.get("deployment", "") or details.get("hosting", ""),
+            "users": details.get("user_count", "") or details.get("users", ""),
+            "cost": details.get("annual_cost", "") or details.get("cost", ""),
+            "criticality": details.get("criticality", ""),
+            "category": fact.category or "",
+            "source_category": details.get("source_category", ""),
+            "category_confidence": details.get("category_confidence", ""),
+            "category_inferred_from": details.get("category_inferred_from", ""),
+        }
+    elif inv_type == "infrastructure":
+        data = {
+            "name": fact.item,
+            "type": details.get("server_type", "") or details.get("type", ""),
+            "os": details.get("operating_system", "") or details.get("os", ""),
+            "environment": details.get("environment", ""),
+            "ip": details.get("ip_address", "") or details.get("ip", ""),
+            "location": details.get("location", "") or details.get("datacenter", ""),
+            "cpu": details.get("cpu", "") or details.get("cpu_cores", ""),
+            "memory": details.get("memory", ""),
+            "storage": details.get("storage", ""),
+            "role": details.get("role", "") or details.get("function", ""),
+        }
+    elif inv_type == "organization":
+        data = {
+            "role": details.get("role", fact.item),
+            "name": details.get("person_name", "") or details.get("name", ""),
+            "team": details.get("team", ""),
+            "department": details.get("department", "IT"),
+            "headcount": details.get("headcount", "") or details.get("total_headcount", ""),
+            "fte": details.get("fte", ""),
+            "location": details.get("location", ""),
+            "reports_to": details.get("reports_to", ""),
+            "responsibilities": details.get("responsibilities", ""),
+        }
+    else:
+        data = {"name": fact.item}
+
+    # Remove empty values
+    return {k: v for k, v in data.items() if v}
 
 
 def _get_category_for_item(item: InventoryItem) -> str:
@@ -444,3 +755,199 @@ def get_inventory_summary(
                 )
 
     return summary
+
+
+def _safe_pct(numerator: int, denominator: int) -> float:
+    """Calculate percentage safely."""
+    if denominator == 0:
+        return 0.0
+    return round((numerator / denominator) * 100, 1)
+
+
+def _now_iso() -> str:
+    """Current datetime as ISO string."""
+    from datetime import datetime
+    return datetime.now().isoformat()
+
+
+def generate_inventory_audit(
+    inventory_store: InventoryStore,
+    fact_store: FactStore,
+    deal_id: str = "",
+) -> Dict[str, Any]:
+    """Generate a comprehensive inventory audit report for a discovery run.
+
+    Checks:
+    1. Item counts by type and entity
+    2. Linking coverage (facts with inventory links, items with fact links)
+    3. Orphaned facts (no inventory item match)
+    4. Orphaned items (no fact links)
+    5. Duplicate detection (same name+entity, different IDs)
+    6. Entity distribution (target vs buyer)
+    7. Data completeness (missing required fields)
+
+    Args:
+        inventory_store: The InventoryStore to audit
+        fact_store: The FactStore to cross-reference
+        deal_id: Deal identifier for the report
+
+    Returns:
+        Dict containing the full audit report
+    """
+    report = {
+        "deal_id": deal_id,
+        "generated_at": _now_iso(),
+        "inventory_counts": {},
+        "fact_counts": {},
+        "linking": {},
+        "orphans": {},
+        "duplicates": [],
+        "data_quality": {},
+        "overall_health": "unknown",
+        "issues": [],
+    }
+
+    # 1. Inventory counts by type and entity
+    for entity in ["target", "buyer"]:
+        entity_counts = {}
+        for inv_type in ["application", "infrastructure", "organization", "vendor"]:
+            items = inventory_store.get_items(
+                inventory_type=inv_type, entity=entity, status="active"
+            )
+            entity_counts[inv_type] = len(items)
+        report["inventory_counts"][entity] = entity_counts
+
+    # 2. Fact counts by domain and entity
+    for entity in ["target", "buyer"]:
+        entity_facts = {}
+        for domain in ["applications", "infrastructure", "organization"]:
+            facts = fact_store.get_entity_facts(entity, domain=domain)
+            entity_facts[domain] = len(facts)
+        report["fact_counts"][entity] = entity_facts
+
+    # 3. Linking coverage
+    all_items = inventory_store.get_items(status="active")
+    linked_items = [i for i in all_items if i.source_fact_ids]
+    unlinked_items = [i for i in all_items if not i.source_fact_ids]
+
+    all_facts = fact_store.get_entity_facts("target")
+    linked_facts = [f for f in all_facts if hasattr(f, 'inventory_item_id') and f.inventory_item_id]
+    unlinked_facts = [f for f in all_facts if not (hasattr(f, 'inventory_item_id') and f.inventory_item_id)]
+
+    report["linking"] = {
+        "total_items": len(all_items),
+        "linked_items": len(linked_items),
+        "unlinked_items": len(unlinked_items),
+        "item_link_rate": _safe_pct(len(linked_items), len(all_items)),
+        "total_facts": len(all_facts),
+        "linked_facts": len(linked_facts),
+        "unlinked_facts": len(unlinked_facts),
+        "fact_link_rate": _safe_pct(len(linked_facts), len(all_facts)),
+    }
+
+    # 4. Orphaned items (no fact links and no enrichment -- possibly stale)
+    orphan_items = [
+        {"item_id": i.item_id, "name": i.name, "type": i.inventory_type, "entity": i.entity}
+        for i in unlinked_items
+        if not i.is_enriched
+    ]
+    report["orphans"] = {
+        "items": orphan_items[:20],  # Cap at 20 for readability
+        "item_count": len(orphan_items),
+        "fact_count": len(unlinked_facts),
+    }
+
+    # 5. Duplicate detection (same name+entity, different IDs)
+    seen = {}
+    for item in all_items:
+        key = (item.name.lower().strip(), item.entity, item.inventory_type)
+        if key in seen:
+            report["duplicates"].append({
+                "name": item.name,
+                "entity": item.entity,
+                "type": item.inventory_type,
+                "id_a": seen[key],
+                "id_b": item.item_id,
+            })
+        else:
+            seen[key] = item.item_id
+
+    # 6. Data quality -- check for missing required fields
+    quality_issues = []
+    for item in all_items:
+        missing = []
+        if not item.name or item.name == "Unknown":
+            missing.append("name")
+        if item.inventory_type == "application":
+            if not item.data.get("vendor"):
+                missing.append("vendor")
+        elif item.inventory_type == "infrastructure":
+            if not item.data.get("environment"):
+                missing.append("environment")
+        elif item.inventory_type == "organization":
+            if not item.data.get("role"):
+                missing.append("role")
+
+        if missing:
+            quality_issues.append({
+                "item_id": item.item_id,
+                "name": item.name,
+                "missing_fields": missing,
+            })
+
+    report["data_quality"] = {
+        "items_with_missing_fields": len(quality_issues),
+        "details": quality_issues[:20],  # Cap for readability
+    }
+
+    # 7. Overall health assessment
+    issues = []
+    if report["linking"]["item_link_rate"] < 50:
+        issues.append(f"Low item link rate: {report['linking']['item_link_rate']}%")
+    if len(report["duplicates"]) > 0:
+        issues.append(f"{len(report['duplicates'])} duplicate items detected")
+    if report["orphans"]["item_count"] > 10:
+        issues.append(f"{report['orphans']['item_count']} orphaned items (no fact links)")
+    if report["data_quality"]["items_with_missing_fields"] > 5:
+        issues.append(f"{report['data_quality']['items_with_missing_fields']} items missing required fields")
+
+    report["issues"] = issues
+    if not issues:
+        report["overall_health"] = "healthy"
+    elif len(issues) <= 2:
+        report["overall_health"] = "fair"
+    else:
+        report["overall_health"] = "needs_attention"
+
+    return report
+
+
+def save_inventory_audit(
+    report: Dict[str, Any],
+    deal_id: str = "",
+    output_dir: str = "",
+) -> str:
+    """Save inventory audit report to JSON file.
+
+    Args:
+        report: Audit report dict from generate_inventory_audit()
+        deal_id: Deal ID for path construction
+        output_dir: Override output directory (default: output/deals/{deal_id}/)
+
+    Returns:
+        Path to the saved report file
+    """
+    import json
+    from pathlib import Path
+
+    if not output_dir:
+        output_dir = f"output/deals/{deal_id}" if deal_id else "output"
+
+    path = Path(output_dir) / "inventory_audit.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(path, "w") as f:
+        json.dump(report, f, indent=2, default=str)
+
+    logger.info(f"Saved inventory audit to {path}")
+    return str(path)

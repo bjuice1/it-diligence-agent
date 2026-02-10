@@ -11,7 +11,7 @@ import uuid
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from tools_v2.fact_store import FactStore, Fact, Gap
+from stores.fact_store import FactStore, Fact, Gap
 from tools_v2.reasoning_tools import ReasoningStore
 
 

@@ -106,6 +106,14 @@ from .industry_application_considerations import (
     assess_industry_application_gaps,
     get_industry_prompt_summary,
 )
+from .cost_estimation_guidance import (
+    get_cost_estimation_guidance,
+    COST_ESTIMATION_GUIDANCE,
+    COST_BUILDUP_EXAMPLE_PER_USER,
+    COST_BUILDUP_EXAMPLE_PER_APP,
+    COST_BUILDUP_EXAMPLE_FIXED_BY_SIZE,
+    COST_BUILDUP_EXAMPLE_FIXED_BY_COMPLEXITY,
+)
 
 
 def get_all_shared_guidance() -> str:
@@ -224,4 +232,11 @@ __all__ = [
     'inject_industry_into_discovery_prompt',
     'assess_industry_application_gaps',
     'get_industry_prompt_summary',
+    # Cost Estimation Guidance (Spec 06)
+    'get_cost_estimation_guidance',
+    'COST_ESTIMATION_GUIDANCE',
+    'COST_BUILDUP_EXAMPLE_PER_USER',
+    'COST_BUILDUP_EXAMPLE_PER_APP',
+    'COST_BUILDUP_EXAMPLE_FIXED_BY_SIZE',
+    'COST_BUILDUP_EXAMPLE_FIXED_BY_COMPLEXITY',
 ]

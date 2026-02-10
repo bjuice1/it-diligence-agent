@@ -28,12 +28,14 @@ class FindingRepository(BaseRepository[Finding]):
         finding_type: str = None,
         domain: str = None,
         severity: str = None,
+        entity: Optional[str] = None,
         include_orphaned: bool = True
     ) -> List[Finding]:
         """
         Get findings for a deal with optional filters.
 
         Args:
+            entity: Filter by entity ("target" or "buyer"). None means all entities.
             include_orphaned: If True (default), includes findings with NULL
                 analysis_run_id when filtering by run_id (for legacy data).
         """
@@ -60,6 +62,9 @@ class FindingRepository(BaseRepository[Finding]):
 
         if severity:
             query = query.filter(Finding.severity == severity)
+
+        if entity:
+            query = query.filter(Finding.entity == entity)
 
         return query.order_by(Finding.id).all()
 

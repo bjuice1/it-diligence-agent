@@ -27,7 +27,7 @@ from tools_v2.parsers.schema_validator import validate_table, normalize_row
 
 from stores.inventory_store import InventoryStore
 from stores.inventory_item import MergeResult
-from stores.app_category_mappings import categorize_app, lookup_app
+from stores.app_category_mappings import categorize_app_simple, lookup_app
 from tools_v2.enrichment.inventory_reviewer import review_inventory, ReviewResult
 
 logger = logging.getLogger(__name__)
@@ -290,20 +290,45 @@ def _run_llm_discovery(
     api_key: str,
 ) -> int:
     """
-    Run LLM discovery on prose content.
+    Run LLM discovery on prose content using V2 agents.
 
     Returns number of facts extracted.
     """
-    # This would integrate with the existing discovery agents
-    # For now, return 0 - actual implementation would call the agents
-    logger.info(f"LLM discovery requested for {len(prose)} chars from {source_file}")
+    if not prose or len(prose.strip()) < 100:
+        logger.info(f"Skipping LLM discovery - prose too short ({len(prose)} chars)")
+        return 0
 
-    # TODO: Integrate with existing discovery agents
-    # from tools_v2.preprocessing_router import run_hybrid_discovery
-    # result = run_hybrid_discovery(prose, fact_store, source_file, entity, api_key)
-    # return result.get("llm_facts", 0)
+    logger.info(f"Running LLM discovery for {len(prose)} chars from {source_file}")
 
-    return 0
+    try:
+        from agents_v2.discovery import DISCOVERY_AGENTS
+
+        facts_before = len(fact_store.facts)
+
+        # Run discovery for applications domain (most common in file imports)
+        # Other domains can be added based on content detection
+        for domain in ['applications', 'infrastructure']:
+            if domain in DISCOVERY_AGENTS:
+                agent_class = DISCOVERY_AGENTS[domain]
+                agent = agent_class(
+                    api_key=api_key,
+                    fact_store=fact_store
+                )
+                agent.discover(
+                    document_text=prose,
+                    document_name=source_file,
+                    entity=entity,
+                    analysis_phase=f"{entity}_extraction"
+                )
+
+        facts_after = len(fact_store.facts)
+        facts_extracted = facts_after - facts_before
+        logger.info(f"LLM discovery extracted {facts_extracted} facts")
+        return facts_extracted
+
+    except Exception as e:
+        logger.warning(f"LLM discovery failed: {e}")
+        return 0
 
 
 def ingest_directory(

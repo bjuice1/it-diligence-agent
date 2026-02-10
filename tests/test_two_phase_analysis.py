@@ -12,14 +12,14 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from tools_v2.fact_store import FactStore
+from stores.fact_store import FactStore
 
 
 def test_entity_locking():
     """Test that entity facts can be locked and prevented from modification."""
     print("\n=== Test: Entity Locking ===")
 
-    store = FactStore()
+    store = FactStore(deal_id="test-deal")
 
     # Add some TARGET facts
     store.add_fact(
@@ -100,7 +100,7 @@ def test_snapshot_creation():
     """Test that snapshots provide read-only context."""
     print("\n=== Test: Snapshot Creation ===")
 
-    store = FactStore()
+    store = FactStore(deal_id="test-deal")
 
     # Add TARGET facts
     store.add_fact(
@@ -150,7 +150,7 @@ def test_integration_insights():
     """Test that integration insights can reference both entities."""
     print("\n=== Test: Integration Insights ===")
 
-    store = FactStore()
+    store = FactStore(deal_id="test-deal")
 
     # Add TARGET fact
     store.add_fact(
@@ -204,7 +204,7 @@ def test_phase_summary():
     """Test that phase summary correctly categorizes facts."""
     print("\n=== Test: Phase Summary ===")
 
-    store = FactStore()
+    store = FactStore(deal_id="test-deal")
 
     # Add facts from different phases
     store.add_fact(

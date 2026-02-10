@@ -6,16 +6,13 @@ AI-powered IT due diligence analysis for M&A transactions. Uses Claude to analyz
 
 ---
 
-> ⚠️ **Active Development: Version 2.3 Reliability Fixes**
+> **Version 2.4** - Codebase Cleanup Complete
 >
-> Currently implementing data integrity and reliability improvements:
-> - **Phase 1/6**: Deal isolation with `deal_id` scoping across all stores ✅
-> - **Phase 2+4**: Presentation reliability (dashboard fixes, Mermaid sanitization) ✅
-> - **Phase 5**: Document parsing (PUA removal, table-aware chunking, numeric normalization) ✅
-> - **Phase 3**: App ingestion & category mapping 🔜
-> - **Phase 6**: Cost estimation determinism 🔜
->
-> **81 new tests added.** See **[FIX_PLAN_2.3.md](FIX_PLAN_2.3.md)** for detailed progress.
+> - V1 code archived to `archive/v1_legacy/` (70 files)
+> - Store consolidation: canonical stores in `stores/` package
+> - Deterministic table parser wired into discovery pipeline
+> - Docker stack: Flask + PostgreSQL + Redis + Celery + MinIO
+> - **572 tests passing**
 
 ---
 
@@ -82,11 +79,14 @@ A **custom Python application** that calls the Claude API directly to perform IT
 ### Tech Stack
 ```
 anthropic       # Direct Claude API (model tiering: Haiku + Sonnet)
+flask           # Web application
+postgresql      # Persistent storage (SQLAlchemy ORM)
+redis           # Session cache + Celery broker
+celery          # Background task queue
 pymupdf         # PDF extraction
-sqlite3         # Persistence
 python-dotenv   # Config
 
-That's it. No frameworks. No vector databases. No RAG pipelines.
+No LangChain. No vector databases. No RAG pipelines.
 ```
 
 ---
@@ -106,7 +106,7 @@ That's it. No frameworks. No vector databases. No RAG pipelines.
 - **Interactive CLI** for reviewing and adjusting analysis results
 - **HTML Reports** with filtering by domain, severity, category, phase
 - **Investment Thesis Presentation** - slide-deck style HTML for PE buyers
-- **196 unit tests** passing
+- **572 unit tests** passing
 
 ### V2 Architecture
 
@@ -365,12 +365,6 @@ python main_v2.py data/input/ --all --interactive     # Run analysis then enter 
 python main_v2.py --interactive-only                   # Load existing results into interactive mode
 ```
 
-### V1 Pipeline (Legacy)
-
-```bash
-python main.py data/input/document.pdf
-```
-
 ### Output Location
 ```
 output/
@@ -392,79 +386,70 @@ output/
 
 ```
 it-diligence-agent/
-├── main_v2.py              # V2 entry point (6-phase pipeline)
-├── main.py                 # V1 entry point (legacy)
-├── config_v2.py            # V2 configuration (model tiering)
-├── config.py               # V1 configuration
+├── main_v2.py              # CLI entry point (6-phase pipeline)
+├── app.py                  # Streamlit UI entry point
+├── session_cli.py          # Session-based CLI for incremental analysis
+├── config_v2.py            # Configuration (model tiering, API keys)
 │
-├── agents_v2/              # V2 Agents
+├── agents_v2/              # V2 Discovery & Reasoning Agents
 │   ├── base_discovery_agent.py    # Discovery base (Haiku)
 │   ├── base_reasoning_agent.py    # Reasoning base (Sonnet)
-│   ├── discovery/
-│   │   ├── infrastructure_discovery.py
-│   │   ├── network_discovery.py
-│   │   ├── cybersecurity_discovery.py
-│   │   ├── applications_discovery.py
-│   │   ├── identity_access_discovery.py
-│   │   └── organization_discovery.py
-│   ├── reasoning/
-│   │   ├── infrastructure_reasoning.py
-│   │   ├── network_reasoning.py
-│   │   ├── cybersecurity_reasoning.py
-│   │   ├── applications_reasoning.py
-│   │   ├── identity_access_reasoning.py
-│   │   └── organization_reasoning.py
-│   └── narrative/          # NEW: Narrative agents for investment thesis
-│       ├── base_narrative_agent.py  # Base class for narrative agents
-│       ├── infrastructure_narrative.py
-│       ├── network_narrative.py
-│       ├── cybersecurity_narrative.py
-│       ├── applications_narrative.py
-│       ├── identity_narrative.py
-│       ├── organization_narrative.py
-│       └── cost_synthesis_agent.py  # Aggregates costs across domains
+│   ├── discovery/                 # 6 domain discovery agents
+│   ├── reasoning/                 # 6 domain reasoning agents
+│   └── narrative/                 # Narrative agents for investment thesis
 │
-├── tools_v2/               # V2 Tools
+├── stores/                 # Canonical Data Stores
 │   ├── fact_store.py       # FactStore (facts + gaps)
+│   ├── session_store.py    # SessionStore (user sessions)
+│   ├── document_store.py   # DocumentStore (parsed documents)
+│   ├── inventory_store.py  # InventoryStore (app/infra/org items)
+│   └── granular_facts_store.py   # GranularFactStore (multi-pass)
+│
+├── tools_v2/               # V2 Analysis Tools
 │   ├── discovery_tools.py  # create_inventory_entry, flag_gap
-│   ├── reasoning_tools.py  # identify_risk, create_work_item (with costs)
-│   ├── narrative_tools.py  # NarrativeStore, domain narrative tools
-│   ├── coverage.py         # Coverage checklists & scoring
-│   ├── vdr_generator.py    # VDR request generation
+│   ├── reasoning_tools.py  # identify_risk, create_work_item
+│   ├── deterministic_parser.py   # Markdown table extraction
+│   ├── presentation.py     # Investment thesis HTML generator
 │   ├── synthesis.py        # Cross-domain consistency
-│   ├── html_report.py      # HTML report generator with filtering
-│   └── presentation.py     # Investment thesis presentation generator
+│   ├── coverage.py         # Coverage checklists & scoring
+│   └── vdr_generator.py    # VDR request generation
 │
-├── interactive/            # Interactive Review Mode
-│   ├── session.py          # Session management, undo, modifications
-│   ├── cli.py              # REPL interface
-│   └── commands.py         # 16 commands (list, adjust, explain, etc.)
+├── web/                    # Flask Web Application
+│   ├── app.py              # Main Flask app with routes
+│   ├── database.py         # SQLAlchemy models (Deal, Fact, Document, etc.)
+│   ├── blueprints/         # Route modules
+│   │   ├── inventory.py    # Inventory views
+│   │   ├── pe_reports.py   # PE report generation
+│   │   └── ...
+│   ├── repositories/       # Data access layer
+│   ├── tasks/              # Celery background tasks
+│   │   └── analysis_tasks.py   # Background analysis
+│   └── templates/          # Jinja2 HTML templates
 │
-├── web/                    # Web Interface (Flask)
-│   ├── app.py              # Flask routes
-│   └── templates/          # HTML templates
+├── services/               # Business Logic Services
+│   ├── applications_bridge.py    # App inventory builder
+│   ├── benchmark_service.py      # Benchmark matching
+│   └── cost_engine/              # Cost estimation
 │
-├── agents/                 # V1 Agents (legacy)
-│   ├── base_agent.py
-│   └── [domain]_agent.py
+├── docker/                 # Docker Configuration
+│   ├── Dockerfile
+│   └── docker-compose.yml  # App + PostgreSQL + Redis + Celery + MinIO
 │
-├── prompts/                # System prompts
-│   ├── v2_*_discovery_prompt.py   # V2 discovery prompts
-│   ├── v2_*_reasoning_prompt.py   # V2 reasoning prompts
-│   └── *_prompt.py                # V1 prompts
+├── interactive/            # Interactive CLI Review Mode
+├── streamlit_app/          # Streamlit UI
+├── prompts/                # System prompts (discovery + reasoning)
+├── models/                 # Data models (Pydantic)
 │
-├── tests/
-│   ├── test_v2_tools.py    # V2 core tests
-│   └── test_interactive.py # Interactive mode tests (196 total)
+├── tests/                  # 572 tests
 │
-├── docs/
-│   ├── V2_SYSTEM_ARCHITECTURE_AND_OPTIMIZATIONS.md
-│   ├── SYSTEM_ARCHITECTURE.md
-│   └── COST_ESTIMATION_MODULE.md
+├── archive/                # Archived V1 Code (for reference)
+│   └── v1_legacy/
+│       ├── agents/         # V1 agents
+│       ├── tools/          # V1 tools
+│       ├── storage/        # V1 storage layer
+│       └── ...
 │
-└── data/
-    ├── input/              # Drop documents here
-    └── output/             # Analysis results
+└── docs/                   # Documentation
 ```
 
 ---
@@ -631,7 +616,7 @@ python main_v2.py data/input/ --all --interactive
 # Run all tests
 python -m pytest tests/ -v
 
-# Current status: 196 passed
+# Current status: 572 passed
 ```
 
 ---
@@ -703,4 +688,4 @@ Internal use only.
 
 ---
 
-*Last Updated: February 3, 2026 (V2.3 - Deal Isolation, Presentation Reliability, Document Parsing)*
+*Last Updated: February 6, 2026 (V2.4 - Codebase Cleanup, Store Consolidation, Docker Infrastructure)*

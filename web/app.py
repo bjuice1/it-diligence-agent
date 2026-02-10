@@ -2163,8 +2163,15 @@ def facts():
     domain_filter = request.args.get('domain', '')
     category_filter = request.args.get('category', '')
     # B1 FIX: Default to 'target' entity for proper buyer/target separation
-    entity_filter = request.args.get('entity', 'target')  # Default target, not empty
+    # BUT: When searching for specific fact ID, search across all entities
     search_query = request.args.get('q', '').lower()
+    if search_query:
+        # If searching (e.g., from fact link in risk drawer), ignore entity filter
+        entity_filter = request.args.get('entity', '')  # Allow all entities when searching
+    else:
+        # Normal browsing defaults to target
+        entity_filter = request.args.get('entity', 'target')
+
     page = request.args.get('page', 1, type=int)
     per_page = 50
 
@@ -2184,7 +2191,7 @@ def facts():
         # Use repository pagination with entity filtering (filtering done in SQL)
         paginated_facts, total = data.get_facts_paginated(
             domain=domain_filter or None,
-            entity=entity_filter or None,  # Filter by entity at SQL level
+            entity=entity_filter or None,  # Filter by entity at SQL level (None = all entities)
             status=None,
             search=search_query or None,
             page=page,

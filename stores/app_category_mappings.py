@@ -703,6 +703,55 @@ APP_MAPPINGS: Dict[str, AppMapping] = {
         description="Cloud-based healthcare services",
         aliases=["athena health"],
     ),
+    # Healthcare additions
+    "veradigm": AppMapping(
+        category="industry_vertical",
+        vendor="Veradigm (Allscripts)",
+        description="EHR, practice management, and health data analytics",
+        aliases=["veradigm ehr", "allscripts veradigm", "veradigm practice fusion"],
+        is_saas=True,
+        is_industry_standard=True,
+    ),
+    "nextgen healthcare": AppMapping(
+        category="industry_vertical",
+        vendor="NextGen Healthcare",
+        description="Ambulatory EHR and practice management",
+        aliases=["nextgen ehr", "nextgen pm", "nextgen healthcare ehr"],
+        is_saas=True,
+        is_industry_standard=True,
+    ),
+    "eclinicalworks": AppMapping(
+        category="industry_vertical",
+        vendor="eClinicalWorks",
+        description="Cloud-based EHR, practice management, and RCM",
+        aliases=["ecw", "eclinicalworks ehr", "eclinical"],
+        is_saas=True,
+        is_industry_standard=True,
+    ),
+    "netsmart": AppMapping(
+        category="industry_vertical",
+        vendor="Netsmart Technologies",
+        description="Behavioral health and human services EHR",
+        aliases=["netsmart ehr", "netsmart myavatar", "myavatar"],
+        is_saas=True,
+        is_industry_standard=True,
+    ),
+    "inovalon": AppMapping(
+        category="industry_vertical",
+        vendor="Inovalon",
+        description="Healthcare data analytics and quality measures",
+        aliases=["inovalon one", "inovalon analytics"],
+        is_saas=True,
+        is_industry_standard=False,
+    ),
+    "healthstream": AppMapping(
+        category="industry_vertical",
+        vendor="HealthStream",
+        description="Healthcare workforce management and credentialing",
+        aliases=["healthstream learning", "healthstream credentialing"],
+        is_saas=True,
+        is_industry_standard=True,
+    ),
 
     # -------------------------------------------------------------------------
     # Industry Vertical - Insurance
@@ -718,6 +767,79 @@ APP_MAPPINGS: Dict[str, AppMapping] = {
         vendor="Guidewire",
         description="P&C insurance platform",
         aliases=["guidewire insurancesuite"],
+    ),
+    # Policy Administration
+    "majesco": AppMapping(
+        category="industry_vertical",
+        vendor="Majesco",
+        description="Cloud-native P&C and L&A policy administration",
+        aliases=["majesco policy", "majesco l&a", "majesco p&c"],
+        is_saas=True,
+        is_industry_standard=True,
+    ),
+    "insurity": AppMapping(
+        category="industry_vertical",
+        vendor="Insurity",
+        description="P&C policy, billing, and claims platform",
+        aliases=["insurity policy", "insurity billing", "insurity claims"],
+        is_saas=True,
+        is_industry_standard=True,
+    ),
+    "socotra": AppMapping(
+        category="industry_vertical",
+        vendor="Socotra",
+        description="Cloud-native insurance core platform",
+        aliases=["socotra insurance", "socotra core"],
+        is_saas=True,
+        is_industry_standard=False,
+    ),
+    "earnix": AppMapping(
+        category="industry_vertical",
+        vendor="Earnix",
+        description="Insurance pricing and rating engine",
+        aliases=["earnix pricing", "earnix rating"],
+        is_saas=True,
+        is_industry_standard=True,
+    ),
+    "sapiens": AppMapping(
+        category="industry_vertical",
+        vendor="Sapiens International",
+        description="Insurance software for P&C, L&A, and reinsurance",
+        aliases=["sapiens insurance", "sapiens alis", "sapiens idit"],
+        is_saas=True,
+        is_industry_standard=True,
+    ),
+    "vertafore": AppMapping(
+        category="industry_vertical",
+        vendor="Vertafore",
+        description="Insurance distribution management (AMS360, Sircon)",
+        aliases=["vertafore ams360", "ams360", "vertafore sircon", "sircon", "vertafore agency platform"],
+        is_saas=True,
+        is_industry_standard=True,
+    ),
+    "applied systems": AppMapping(
+        category="industry_vertical",
+        vendor="Applied Systems",
+        description="Insurance agency management (Applied Epic, TAM)",
+        aliases=["applied epic", "applied tam", "applied systems epic", "applied rater"],
+        is_saas=True,
+        is_industry_standard=True,
+    ),
+    "britecore": AppMapping(
+        category="industry_vertical",
+        vendor="BriteCore",
+        description="Cloud-native P&C core platform for insurers",
+        aliases=["britecore insurance", "brite core"],
+        is_saas=True,
+        is_industry_standard=False,
+    ),
+    "snapsheet": AppMapping(
+        category="industry_vertical",
+        vendor="Snapsheet",
+        description="Virtual claims appraisal and management",
+        aliases=["snapsheet claims"],
+        is_saas=True,
+        is_industry_standard=False,
     ),
 
     # -------------------------------------------------------------------------
@@ -743,6 +865,55 @@ APP_MAPPINGS: Dict[str, AppMapping] = {
         description="Design and engineering software",
         aliases=["autocad", "revit", "fusion 360"],
     ),
+    # Manufacturing additions
+    "rockwell automation": AppMapping(
+        category="industry_vertical",
+        vendor="Rockwell Automation",
+        description="Industrial automation and MES (FactoryTalk)",
+        aliases=["factorytalk", "rockwell factorytalk", "rockwell mes", "allen-bradley"],
+        is_saas=False,
+        is_industry_standard=True,
+    ),
+    "aveva": AppMapping(
+        category="industry_vertical",
+        vendor="AVEVA (Schneider Electric)",
+        description="Industrial software for engineering and operations",
+        aliases=["aveva engineering", "aveva operations", "wonderware", "schneider electric aveva"],
+        is_saas=False,
+        is_industry_standard=True,
+    ),
+    "dassault systemes": AppMapping(
+        category="industry_vertical",
+        vendor="Dassault Systemes",
+        description="PLM, CAD/CAM (CATIA, ENOVIA, SOLIDWORKS)",
+        aliases=["catia", "enovia", "solidworks", "3dexperience", "delmia"],
+        is_saas=False,
+        is_industry_standard=True,
+    ),
+    "sap plant maintenance": AppMapping(
+        category="industry_vertical",
+        vendor="SAP",
+        description="Plant maintenance and asset management module",
+        aliases=["sap pm", "sap plant maintenance", "sap eam"],
+        is_saas=False,
+        is_industry_standard=True,
+    ),
+    "infor cloudsuite industrial": AppMapping(
+        category="industry_vertical",
+        vendor="Infor",
+        description="Manufacturing ERP for discrete and process manufacturing",
+        aliases=["infor csi", "cloudsuite industrial", "syteline", "infor syteline"],
+        is_saas=True,
+        is_industry_standard=True,
+    ),
+    "plex": AppMapping(
+        category="industry_vertical",
+        vendor="Rockwell Automation (Plex Systems)",
+        description="Cloud-native smart manufacturing platform",
+        aliases=["plex manufacturing", "plex systems", "plex erp"],
+        is_saas=True,
+        is_industry_standard=False,
+    ),
 
     # -------------------------------------------------------------------------
     # Industry Vertical - Retail
@@ -758,6 +929,39 @@ APP_MAPPINGS: Dict[str, AppMapping] = {
         vendor="Adobe",
         description="E-commerce platform",
         aliases=["adobe commerce"],
+    ),
+    # Retail additions
+    "oracle retail": AppMapping(
+        category="industry_vertical",
+        vendor="Oracle",
+        description="Retail merchandising, planning, and POS",
+        aliases=["oracle retail merchandising", "oracle retail pos", "oracle xstore"],
+        is_saas=False,
+        is_industry_standard=True,
+    ),
+    "manhattan associates": AppMapping(
+        category="industry_vertical",
+        vendor="Manhattan Associates",
+        description="Supply chain and warehouse management for retail",
+        aliases=["manhattan wms", "manhattan active", "manhattan warehouse"],
+        is_saas=True,
+        is_industry_standard=True,
+    ),
+    "blue yonder": AppMapping(
+        category="industry_vertical",
+        vendor="Blue Yonder (Panasonic)",
+        description="Supply chain planning and fulfillment",
+        aliases=["jda software", "blue yonder wms", "blue yonder planning", "jda"],
+        is_saas=True,
+        is_industry_standard=True,
+    ),
+    "lightspeed": AppMapping(
+        category="industry_vertical",
+        vendor="Lightspeed Commerce",
+        description="Cloud POS and ecommerce platform for retail/restaurant",
+        aliases=["lightspeed pos", "lightspeed retail", "lightspeed restaurant"],
+        is_saas=True,
+        is_industry_standard=False,
     ),
 }
 
@@ -856,22 +1060,45 @@ def lookup_app(name: str) -> Optional[AppMapping]:
     return None
 
 
-def categorize_app(name: str) -> Tuple[str, Optional[AppMapping]]:
-    """
-    Categorize an application.
-
-    Args:
-        name: Application name
+def categorize_app(name: str) -> Tuple[str, Optional[AppMapping], str, str]:
+    """Categorize an app and return (category, mapping, confidence, inferred_from).
 
     Returns:
-        Tuple of (category, mapping)
-        - category: IT DD category or "unknown"
-        - mapping: AppMapping if found, None otherwise
+        category: The category string
+        mapping: The AppMapping if found, None otherwise
+        confidence: "high", "medium", "low", or "none"
+        inferred_from: "mapping_exact", "mapping_alias", "mapping_partial", "keyword_inference", "default"
     """
-    mapping = lookup_app(name)
-    if mapping:
-        return (mapping.category, mapping)
-    return ("unknown", None)
+    normalized = normalize_app_name(name)
+
+    # Tier 1: Exact match (high confidence)
+    if normalized in APP_MAPPINGS:
+        m = APP_MAPPINGS[normalized]
+        return m.category, m, "high", "mapping_exact"
+
+    # Tier 2: Alias match (high confidence)
+    for app_key, m in APP_MAPPINGS.items():
+        for alias in m.aliases:
+            if normalize_app_name(alias) == normalized:
+                return m.category, m, "high", "mapping_alias"
+
+    # Tier 3: Partial match (medium confidence)
+    for app_key, m in APP_MAPPINGS.items():
+        if app_key in normalized or normalized in app_key:
+            return m.category, m, "medium", "mapping_partial"
+        for alias in m.aliases:
+            norm_alias = normalize_app_name(alias)
+            if norm_alias in normalized or normalized in norm_alias:
+                return m.category, m, "medium", "mapping_partial"
+
+    # Tier 4: No match (unknown)
+    return "unknown", None, "none", "default"
+
+
+def categorize_app_simple(name: str) -> Tuple[str, Optional[AppMapping]]:
+    """Backwards-compatible wrapper returning just (category, mapping)."""
+    category, mapping, _, _ = categorize_app(name)
+    return category, mapping
 
 
 def get_category_description(category: str) -> str:

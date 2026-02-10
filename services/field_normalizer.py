@@ -241,7 +241,9 @@ def _normalize_criticality(value) -> Optional[str]:
     """Normalize criticality to High/Medium/Low."""
     if not value:
         return None
-    clean = str(value).lower().strip()
+    # Strip file citation markers (e.g., FILECITETURN3FILE1L11-L16)
+    clean = re.sub(r'FILECITETURN\d+FILE\d+L\d+-L\d+', '', str(value))
+    clean = clean.lower().strip()
     mapping = {
         'high': 'High', 'critical': 'High', 'tier1': 'High', 'tier 1': 'High', '1': 'High',
         'medium': 'Medium', 'moderate': 'Medium', 'tier2': 'Medium', 'tier 2': 'Medium', '2': 'Medium',

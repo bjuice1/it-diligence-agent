@@ -471,8 +471,9 @@ body {
 class DashboardRenderer:
     """Renders ExecutiveDashboardData to HTML."""
 
-    def __init__(self, include_styles: bool = True):
+    def __init__(self, include_styles: bool = True, entity: str = "target"):
         self.include_styles = include_styles
+        self.entity = entity  # Phase 7 - Entity context
 
     def render(self, data: ExecutiveDashboardData) -> str:
         """
@@ -516,11 +517,38 @@ class DashboardRenderer:
 </html>"""
 
     def _render_header(self, data: ExecutiveDashboardData) -> str:
-        """Render dashboard header."""
+        """Render dashboard header with entity banner (Phase 7)."""
         grade_class = data.overall_grade.lower().replace(" ", "-")
+
+        # Entity banner (Phase 7 - Entity Separation)
+        entity_banner = ""
+        if self.entity == "target":
+            entity_banner = """
+            <div style="background: #007bff; color: white; padding: 8px 15px; border-radius: 4px;
+                        display: inline-block; font-weight: 600; font-size: 14px; margin-bottom: 15px;">
+                🎯 TARGET ENVIRONMENT
+            </div>
+            """
+        elif self.entity == "buyer":
+            entity_banner = """
+            <div style="background: #6f42c1; color: white; padding: 8px 15px; border-radius: 4px;
+                        display: inline-block; font-weight: 600; font-size: 14px; margin-bottom: 15px;">
+                🏢 BUYER REFERENCE
+            </div>
+            """
+
+        # Entity view links
+        entity_links = f"""
+        <div style="margin-bottom: 15px; font-size: 13px;">
+            <span style="color: #666;">View:</span>
+            <a href="?entity=target" style="margin-left: 10px; color: {'#007bff' if self.entity != 'target' else '#333'}; font-weight: {'normal' if self.entity != 'target' else 'bold'};">Target</a>
+            <a href="?entity=buyer" style="margin-left: 10px; color: {'#6f42c1' if self.entity != 'buyer' else '#333'}; font-weight: {'normal' if self.entity != 'buyer' else 'bold'};">Buyer</a>
+        </div>
+        """
 
         return f"""
         <div class="header">
+            {entity_banner}
             <div class="grade-indicator grade-{grade_class}">
                 Overall: {data.overall_grade}
             </div>
@@ -528,6 +556,7 @@ class DashboardRenderer:
             <div class="subtitle">
                 IT Due Diligence Dashboard | Analysis Date: {data.analysis_date}
             </div>
+            {entity_links}
             <div class="overall-assessment">
                 {data.overall_assessment or 'No overall assessment available.'}
             </div>
@@ -767,7 +796,8 @@ class DashboardRenderer:
 
 def render_dashboard(
     data: ExecutiveDashboardData,
-    include_styles: bool = True
+    include_styles: bool = True,
+    entity: str = "target"
 ) -> str:
     """
     Render executive dashboard to HTML.
@@ -775,9 +805,10 @@ def render_dashboard(
     Args:
         data: Dashboard data
         include_styles: Whether to include CSS
+        entity: Entity being displayed ("target" or "buyer")
 
     Returns:
         Complete HTML document
     """
-    renderer = DashboardRenderer(include_styles=include_styles)
+    renderer = DashboardRenderer(include_styles=include_styles, entity=entity)
     return renderer.render(data)

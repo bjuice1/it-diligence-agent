@@ -19,7 +19,7 @@ import logging
 from time import time
 from dataclasses import dataclass
 
-from tools_v2.fact_store import FactStore
+from stores.fact_store import FactStore
 from tools_v2.reasoning_tools import ReasoningStore, COST_RANGE_VALUES
 from tools_v2.narrative_tools import (
     NARRATIVE_TOOLS,

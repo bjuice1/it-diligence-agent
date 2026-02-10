@@ -336,7 +336,7 @@ class TierClassifier:
     def _is_verified(self, fact) -> bool:
         """Check if a fact is verified."""
         if hasattr(fact, 'verification_status'):
-            from tools_v2.fact_store import VerificationStatus
+            from stores.fact_store import VerificationStatus
             return fact.verification_status == VerificationStatus.CONFIRMED
         return getattr(fact, 'verified', False)
 

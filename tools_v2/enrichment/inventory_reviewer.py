@@ -20,7 +20,7 @@ from stores.inventory_store import InventoryStore
 from stores.inventory_item import InventoryItem
 from stores.app_category_mappings import (
     lookup_app,
-    categorize_app,
+    categorize_app_simple,
     CATEGORY_DEFINITIONS,
     get_category_description,
 )
@@ -492,7 +492,7 @@ def suggest_category(app_name: str) -> Optional[str]:
     Returns:
         Suggested category or None if unknown
     """
-    category, mapping = categorize_app(app_name)
+    category, mapping = categorize_app_simple(app_name)
     if category != "unknown":
         return category
     return None

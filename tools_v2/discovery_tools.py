@@ -16,7 +16,7 @@ import logging
 import json
 
 if TYPE_CHECKING:
-    from tools_v2.fact_store import FactStore
+    from stores.fact_store import FactStore
 
 # Import config values
 try:
@@ -275,6 +275,9 @@ DISCOVERY_TOOLS = [
 
         Good gaps are specific: "No DR RTO/RPO defined" not "DR info incomplete".
 
+        CRITICAL: You MUST specify the entity field to indicate whether this gap
+        is about the TARGET company (being acquired) or the BUYER.
+
         Returns a unique gap ID (e.g., G-INFRA-001).""",
         "input_schema": {
             "type": "object",
@@ -296,9 +299,14 @@ DISCOVERY_TOOLS = [
                     "type": "string",
                     "enum": GAP_IMPORTANCE,
                     "description": "critical=deal-breaking, high=significant risk, medium=notable gap, low=nice to have"
+                },
+                "entity": {
+                    "type": "string",
+                    "enum": ["target", "buyer"],
+                    "description": "REQUIRED: 'target' for acquisition target company, 'buyer' for acquiring company. Must be explicitly specified."
                 }
             },
-            "required": ["domain", "category", "description", "importance"]
+            "required": ["domain", "category", "description", "importance", "entity"]
         }
     },
     {
@@ -505,7 +513,16 @@ def _execute_create_inventory_entry(
         domain = input_data.get("domain")
         category = input_data.get("category")
         item = input_data.get("item")
-        entity = input_data.get("entity", "target")  # Default to target if not specified
+        entity = input_data.get("entity")
+        if entity is None:
+            logger.warning(f"REJECTED create_inventory_entry: entity not specified for '{input_data.get('item', 'unknown')}'")
+            return {
+                "status": "error",
+                "reason": "missing_entity",
+                "message": "Entity is REQUIRED for create_inventory_entry. Must be 'target' or 'buyer'. "
+                           "Check the document source — target_profile docs → entity='target', "
+                           "buyer_profile docs → entity='buyer'. Do not omit this field."
+            }
         status = input_data.get("status", "documented")
         evidence = input_data.get("evidence", {})
         details = input_data.get("details", {})
@@ -653,7 +670,20 @@ def _execute_flag_gap(
         category = input_data.get("category")
         description = input_data.get("description")
         importance = input_data.get("importance", "medium")
-        entity = input_data.get("entity", "target")  # Extract entity for two-phase support
+
+        # Entity is REQUIRED - no silent default to "target"
+        entity = input_data.get("entity")
+        if entity is None:
+            return {
+                "status": "error",
+                "message": "Entity is required for flag_gap. Must be 'target' or 'buyer'. "
+                           "Do not omit this field — explicitly specify which entity this gap belongs to."
+            }
+        if entity not in ("target", "buyer"):
+            return {
+                "status": "error",
+                "message": f"Invalid entity '{entity}'. Must be 'target' or 'buyer'."
+            }
 
         if not all([domain, category, description]):
             return {

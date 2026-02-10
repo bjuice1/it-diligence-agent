@@ -24,7 +24,7 @@ def run_analysis():
     """Run the two-phase analysis with test files."""
     from web.analysis_runner import run_analysis
     from web.task_manager import AnalysisTask, TaskStatus
-    from tools_v2.document_store import DocumentStore
+    from stores.document_store import DocumentStore
 
     # Test file paths
     target_file = "/Users/JB/Desktop/IT DD Test 2/9.5/it-diligence-agent/data/input/Target Company Profile_ National Mutual.pdf"

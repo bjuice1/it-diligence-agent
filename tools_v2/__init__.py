@@ -18,7 +18,7 @@ Main Entry Points:
 - create_analysis_session(): Create refinement session for iterative analysis
 """
 
-from tools_v2.fact_store import FactStore, Fact, Gap
+from stores.fact_store import FactStore, Fact, Gap
 from tools_v2.discovery_tools import DISCOVERY_TOOLS, execute_discovery_tool
 from tools_v2.reasoning_tools import (
     REASONING_TOOLS,

@@ -12,7 +12,7 @@ Produces structured request packs for follow-up with the target company.
 from dataclasses import dataclass, field
 from typing import Dict, List, Any, Optional
 from datetime import datetime
-from tools_v2.fact_store import FactStore
+from stores.fact_store import FactStore
 from tools_v2.coverage import CoverageAnalyzer, COVERAGE_CHECKLISTS
 from tools_v2.reasoning_tools import ReasoningStore
 

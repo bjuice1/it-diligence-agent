@@ -68,7 +68,7 @@ class InventoryStore:
 
         # Load existing data if path provided and file exists
         if storage_path and storage_path.exists():
-            self.load(storage_path)
+            self.load_from_file(storage_path)
 
     # =========================================================================
     # CRUD Operations
@@ -419,7 +419,7 @@ class InventoryStore:
         status: str = "active"
     ) -> int:
         """Count items matching criteria."""
-        return len(self.get_items(inventory_type, entity, status))
+        return len(self.get_items(inventory_type=inventory_type, entity=entity, status=status))
 
     def sum_costs(
         self,
@@ -428,7 +428,7 @@ class InventoryStore:
     ) -> float:
         """Sum costs of matching active items."""
         total = 0.0
-        for item in self.get_items(inventory_type, entity, "active"):
+        for item in self.get_items(inventory_type=inventory_type, entity=entity, status="active"):
             cost = item.cost
             if cost is not None:
                 total += cost
@@ -581,7 +581,8 @@ class InventoryStore:
         # Get deal_id from argument, or from file data
         effective_deal_id = deal_id or data.get("deal_id", "")
 
-        store = cls(deal_id=effective_deal_id)
+        # Pass storage_path=None to prevent __init__ from trying to auto-load (avoids recursion)
+        store = cls(deal_id=effective_deal_id, storage_path=None)
 
         items_data = data.get("items", {})
         for item_id, item_dict in items_data.items():
@@ -614,7 +615,8 @@ class InventoryStore:
         """Create InventoryStore from dict."""
         # Get deal_id from data if not provided
         effective_deal_id = deal_id or data.get("deal_id", "")
-        store = cls(deal_id=effective_deal_id)
+        # Pass storage_path=None to prevent auto-load recursion
+        store = cls(deal_id=effective_deal_id, storage_path=None)
         items_data = data.get("items", {})
         for item_id, item_dict in items_data.items():
             item = InventoryItem.from_dict(item_dict)

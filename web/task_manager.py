@@ -398,7 +398,7 @@ class AnalysisTaskManager:
                 should_save_to_db = True
 
             for key in ["current_document", "documents_processed", "total_documents",
-                       "facts_extracted", "risks_identified", "work_items_created"]:
+                       "facts_extracted", "risks_identified", "work_items_created", "phase_display"]:
                 if key in progress_update:
                     setattr(task.progress, key, progress_update[key])
 

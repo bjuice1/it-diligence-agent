@@ -115,6 +115,7 @@ class Fact:
     is_integration_insight: bool = False       # True if this fact describes cross-entity integration considerations
     source_document: str = "" # Filename of source document (for incremental updates)
     deal_id: str = ""         # Deal this fact belongs to - REQUIRED for proper isolation
+    inventory_item_id: str = ""  # Cross-reference to I-APP-xxx, I-INFRA-xxx in InventoryStore
     created_at: str = field(default_factory=lambda: _generate_timestamp())
     updated_at: str = ""      # Set when fact is modified
     # Verification fields - for human-in-the-loop validation
@@ -252,6 +253,9 @@ class Fact:
         # Deal isolation (backwards compatibility)
         if 'deal_id' not in data:
             data['deal_id'] = ""  # Legacy facts without deal_id
+        # Inventory linking (backwards compatibility - Spec 03)
+        if 'inventory_item_id' not in data:
+            data['inventory_item_id'] = ""  # Legacy facts without inventory link
 
         return cls(**data)
 
@@ -1736,9 +1740,18 @@ class FactStore:
             store._fact_index[fact.fact_id] = fact  # Build index
 
             # Update counters to continue from loaded IDs (robust parsing)
+            # Supports both legacy F-DOMAIN-SEQ and new F-ENTITY-DOMAIN-SEQ formats
             try:
                 parts = fact.fact_id.split("-")
-                if len(parts) >= 3:
+                if len(parts) == 4:
+                    # New format: F-TGT-INFRA-001 -> counter_key="TGT_INFRA", seq=1
+                    counter_key = f"{parts[1]}_{parts[2]}"
+                    seq = int(parts[3])
+                    store._fact_counters[counter_key] = max(
+                        store._fact_counters.get(counter_key, 0), seq
+                    )
+                elif len(parts) == 3:
+                    # Legacy format: F-INFRA-001 -> counter_key="INFRA", seq=1
                     prefix = parts[1]
                     seq = int(parts[2])
                     store._fact_counters[prefix] = max(
@@ -1757,7 +1770,15 @@ class FactStore:
 
             try:
                 parts = gap.gap_id.split("-")
-                if len(parts) >= 3:
+                if len(parts) == 4:
+                    # New format: G-TGT-INFRA-001 -> counter_key="TGT_INFRA", seq=1
+                    counter_key = f"{parts[1]}_{parts[2]}"
+                    seq = int(parts[3])
+                    store._gap_counters[counter_key] = max(
+                        store._gap_counters.get(counter_key, 0), seq
+                    )
+                elif len(parts) == 3:
+                    # Legacy format: G-INFRA-001
                     prefix = parts[1]
                     seq = int(parts[2])
                     store._gap_counters[prefix] = max(
@@ -1776,7 +1797,13 @@ class FactStore:
 
             try:
                 parts = question.question_id.split("-")
-                if len(parts) >= 3:
+                if len(parts) == 4:
+                    counter_key = f"{parts[1]}_{parts[2]}"
+                    seq = int(parts[3])
+                    store._question_counters[counter_key] = max(
+                        store._question_counters.get(counter_key, 0), seq
+                    )
+                elif len(parts) == 3:
                     prefix = parts[1]
                     seq = int(parts[2])
                     store._question_counters[prefix] = max(

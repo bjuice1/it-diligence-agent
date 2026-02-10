@@ -20,7 +20,7 @@ import logging
 from time import time
 from dataclasses import dataclass
 
-from tools_v2.fact_store import FactStore
+from stores.fact_store import FactStore
 from tools_v2.reasoning_tools import (
     REASONING_TOOLS,
     execute_reasoning_tool,

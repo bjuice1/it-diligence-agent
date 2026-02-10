@@ -7,6 +7,27 @@ Input: Standardized inventory from Phase 1
 Output: Emergent risks, strategic considerations, work items
 """
 
+from prompts.shared.cost_estimation_guidance import get_cost_estimation_guidance
+
+IDENTITY_COST_ANCHORS = """
+### Identity & Access-Specific Cost Anchors
+| Scenario | anchor_key | When to Use |
+|----------|------------|-------------|
+| AD/Azure AD separation | `identity_separation` | New directory + user migration |
+| Change management for identity | `change_management` | User communication, training for new identity |
+| TSA exit: identity | `tsa_exit_identity` | Standing up independent identity services |
+| TSA exit: email | `tsa_exit_email` | Migrating to independent email platform |
+
+**Quantity sources for identity:**
+- User count -> from F-TGT-IAM-xxx details.users or AD user count
+- Size tier -> small (<1,000 users), medium (1,000-5,000), large (>5,000)
+
+**Identity separation sizing:**
+- small: Single domain, <1,000 users, few service accounts, no multi-forest
+- medium: Single forest, 1,000-5,000 users, moderate service accounts, some app integrations
+- large: Multi-forest, >5,000 users, many service accounts, complex app/SAML integrations
+"""
+
 IDENTITY_ACCESS_REASONING_PROMPT = """You are a senior identity and access management consultant with 20+ years of M&A integration experience. You've evaluated and integrated IAM systems for hundreds of acquisitions. Day 1 is critical for identity - without access, no one can work.
 
 ## YOUR MISSION
@@ -570,7 +591,16 @@ def get_identity_access_reasoning_prompt(inventory: dict, deal_context: dict) ->
     import json
     inventory_str = json.dumps(inventory, indent=2)
     context_str = json.dumps(deal_context, indent=2)
-    return IDENTITY_ACCESS_REASONING_PROMPT.format(
-        inventory=inventory_str,
-        deal_context=context_str
+
+    prompt = IDENTITY_ACCESS_REASONING_PROMPT
+    prompt = prompt.replace("{inventory}", inventory_str)
+    prompt = prompt.replace("{deal_context}", context_str)
+
+    # Inject cost estimation guidance before PE CONCERNS section
+    cost_guidance = get_cost_estimation_guidance()
+    prompt = prompt.replace(
+        "## IDENTITY & ACCESS PE CONCERNS",
+        cost_guidance + "\n" + IDENTITY_COST_ANCHORS + "\n\n## IDENTITY & ACCESS PE CONCERNS"
     )
+
+    return prompt

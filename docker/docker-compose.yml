@@ -50,6 +50,13 @@ services:
       - ../pipeline:/app/pipeline
       - ../services:/app/services
       - ../config_v2.py:/app/config_v2.py
+      - ../agents_v2:/app/agents_v2
+      - ../interactive:/app/interactive
+      - ../prompts:/app/prompts
+      - ../ingestion:/app/ingestion
+      - ../parsers:/app/parsers
+      - ../config:/app/config
+      - ../models:/app/models
       # Mount data directories for persistence
       - ../data:/app/data
       - ../output:/app/output
@@ -88,9 +95,23 @@ services:
       - S3_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
       - S3_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
     volumes:
+      # Mount source code for hot reload (same as app)
+      - ../web:/app/web
+      - ../stores:/app/stores
+      - ../tools_v2:/app/tools_v2
+      - ../services:/app/services
+      - ../config_v2.py:/app/config_v2.py
+      - ../agents_v2:/app/agents_v2
+      - ../interactive:/app/interactive
+      - ../prompts:/app/prompts
+      - ../ingestion:/app/ingestion
+      - ../parsers:/app/parsers
+      - ../config:/app/config
+      - ../models:/app/models
+      # Data directories
       - ../data:/app/data
       - ../output:/app/output
-      - ../uploads:/app/uploads  # Phase D: User document uploads
+      - ../uploads:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy

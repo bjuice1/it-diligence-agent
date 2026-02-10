@@ -112,7 +112,7 @@ class TestInventoryIntegration:
 
     def test_get_flagged_items(self):
         """Should retrieve items marked for investigation."""
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
 
         # Add some items
         store.add_item(
@@ -268,7 +268,7 @@ class TestReviewWithMockLLM:
         mock_client.messages.create.return_value = mock_response
 
         # Setup store
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
         store.add_item(
             inventory_type="application",
             data={"name": "SAP ERP", "vendor": "SAP"},

@@ -11,7 +11,7 @@ from typing import Dict, List, Optional, Any
 from pathlib import Path
 import json
 
-from tools_v2.fact_store import FactStore
+from stores.fact_store import FactStore
 from tools_v2.reasoning_tools import ReasoningStore
 
 

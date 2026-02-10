@@ -7,6 +7,25 @@ Input: Standardized inventory from Phase 1
 Output: Emergent risks, strategic considerations, work items
 """
 
+from prompts.shared.cost_estimation_guidance import get_cost_estimation_guidance
+
+INFRASTRUCTURE_COST_ANCHORS = """
+### Infrastructure-Specific Cost Anchors
+Use these anchor_keys for infrastructure work items:
+
+| Scenario | anchor_key | When to Use |
+|----------|------------|-------------|
+| Data center exit/migration | `dc_migration` | Moving workloads out of a physical DC |
+| Cloud lift-and-shift | `cloud_migration` | Moving apps to IaaS/PaaS |
+| Storage migration | `storage_migration` | SAN/NAS data migration (use TB from facts) |
+| TSA exit: infrastructure | `tsa_exit_infrastructure` | Standing up independent infra post-carveout |
+
+**Quantity sources for infrastructure:**
+- Server count -> from F-TGT-INFRA-xxx facts
+- Storage TB -> from F-TGT-INFRA-xxx details.storage
+- Data center count -> from F-TGT-INFRA-xxx details.location (unique count)
+"""
+
 INFRASTRUCTURE_REASONING_PROMPT = """You are a senior IT M&A infrastructure specialist with 20+ years of due diligence experience. You've seen hundreds of deals and know what matters.
 
 ## YOUR MISSION
@@ -632,7 +651,15 @@ def get_infrastructure_reasoning_prompt(inventory: dict, deal_context: dict) -> 
     inventory_str = json.dumps(inventory, indent=2)
     context_str = json.dumps(deal_context, indent=2)
 
-    return INFRASTRUCTURE_REASONING_PROMPT.format(
-        inventory=inventory_str,
-        deal_context=context_str
+    prompt = INFRASTRUCTURE_REASONING_PROMPT
+    prompt = prompt.replace("{inventory}", inventory_str)
+    prompt = prompt.replace("{deal_context}", context_str)
+
+    # Inject cost estimation guidance before PE CONCERNS section
+    cost_guidance = get_cost_estimation_guidance()
+    prompt = prompt.replace(
+        "## INFRASTRUCTURE PE CONCERNS",
+        cost_guidance + "\n" + INFRASTRUCTURE_COST_ANCHORS + "\n\n## INFRASTRUCTURE PE CONCERNS"
     )
+
+    return prompt

@@ -324,7 +324,7 @@ class TestFileRouter:
             f.flush()
             file_path = Path(f.name)
 
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
         result = ingest_file(file_path, store, entity="target")
 
         # Cleanup
@@ -347,7 +347,7 @@ class TestFileRouter:
             f.flush()
             file_path = Path(f.name)
 
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
         result = ingest_file(file_path, store, entity="target")
 
         file_path.unlink()
@@ -393,7 +393,7 @@ Please review and confirm the accuracy of this inventory.
         with tempfile.NamedTemporaryFile(suffix='.xyz', delete=False) as f:
             file_path = Path(f.name)
 
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
         result = ingest_file(file_path, store)
 
         file_path.unlink()
@@ -412,7 +412,7 @@ Please review and confirm the accuracy of this inventory.
             f.flush()
             file_path = Path(f.name)
 
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
         result = ingest_file(file_path, store)
 
         file_path.unlink()
@@ -455,7 +455,7 @@ These systems support the core business operations.
             f.flush()
             file_path = Path(f.name)
 
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
         result = ingest_file(file_path, store, entity="target")
 
         file_path.unlink()
@@ -488,7 +488,7 @@ These systems support the core business operations.
             f.flush()
             file_path = Path(f.name)
 
-        store = InventoryStore()
+        store = InventoryStore(deal_id="test-deal")
 
         # First import
         result1 = ingest_file(file_path, store, entity="target")

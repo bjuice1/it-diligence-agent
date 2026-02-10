@@ -7,6 +7,28 @@ Input: Standardized inventory from Phase 1
 Output: Emergent risks, strategic considerations, work items
 """
 
+from prompts.shared.cost_estimation_guidance import get_cost_estimation_guidance
+
+ORGANIZATION_COST_ANCHORS = """
+### Organization-Specific Cost Anchors
+| Scenario | anchor_key | When to Use |
+|----------|------------|-------------|
+| PMO overhead | `pmo_overhead` | Program management for integration (% of total) |
+| Change management | `change_management` | User communication, training, adoption |
+| TSA exit: service desk | `tsa_exit_service_desk` | Standing up independent helpdesk |
+| TSA exit: ERP support | `tsa_exit_erp_support` | Building ERP support team |
+
+**Quantity sources for organization:**
+- User count -> from organizational facts (headcount, FTE count)
+- PMO -> quantity=1, percentage method (10-15% of total project cost)
+
+**TSA exit sizing:**
+- Service desk size tier based on user count:
+  - small: <500 users
+  - medium: 500-2,000 users
+  - large: >2,000 users
+"""
+
 ORGANIZATION_REASONING_PROMPT = """You are a senior IT organizational consultant with 20+ years of M&A integration experience. You've assessed and integrated IT organizations for hundreds of acquisitions. People are the hardest part of integration - technology is easier to fix than talent gaps.
 
 ## YOUR MISSION
@@ -558,7 +580,16 @@ def get_organization_reasoning_prompt(inventory: dict, deal_context: dict) -> st
     import json
     inventory_str = json.dumps(inventory, indent=2)
     context_str = json.dumps(deal_context, indent=2)
-    return ORGANIZATION_REASONING_PROMPT.format(
-        inventory=inventory_str,
-        deal_context=context_str
+
+    prompt = ORGANIZATION_REASONING_PROMPT
+    prompt = prompt.replace("{inventory}", inventory_str)
+    prompt = prompt.replace("{deal_context}", context_str)
+
+    # Inject cost estimation guidance before PE Concerns section
+    cost_guidance = get_cost_estimation_guidance()
+    prompt = prompt.replace(
+        "### Organization PE Concerns",
+        cost_guidance + "\n" + ORGANIZATION_COST_ANCHORS + "\n\n### Organization PE Concerns"
     )
+
+    return prompt

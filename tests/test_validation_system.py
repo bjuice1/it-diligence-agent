@@ -47,7 +47,7 @@ from tools_v2.evidence_verifier import (
     VerificationResult,
     verify_quote_exists,
 )
-from tools_v2.fact_store import FactStore
+from stores.fact_store import FactStore
 
 
 # =============================================================================
@@ -646,7 +646,7 @@ class TestValidationIntegration:
     def test_evidence_to_validation_flow(self):
         """Test evidence verification creates appropriate flags."""
         # Create fact store with facts
-        fact_store = FactStore()
+        fact_store = FactStore(deal_id="test-deal")
         fact_store.add_fact(
             domain="infrastructure",
             category="compute",
@@ -665,19 +665,19 @@ class TestValidationIntegration:
 
         # Create validation state based on results
         validation_store = ValidationStore(session_id="test-session")
-        result = results["F-INFRA-001"]
+        result = results["F-TGT-INFRA-001"]
 
         state = FactValidationState(
-            fact_id="F-INFRA-001",
+            fact_id="F-TGT-INFRA-001",
             evidence_verified=result.status == "verified",
             evidence_match_score=result.match_score,
             ai_confidence=result.match_score
         )
 
-        validation_store.update_validation_state("F-INFRA-001", state)
+        validation_store.update_validation_state("F-TGT-INFRA-001", state)
 
         # Check result
-        final_state = validation_store.get_validation_state("F-INFRA-001")
+        final_state = validation_store.get_validation_state("F-TGT-INFRA-001")
         assert final_state.evidence_verified is True
         assert final_state.evidence_match_score >= 0.85
 
@@ -838,7 +838,7 @@ class TestEndToEnd:
     def test_extract_validate_review_confirm_flow(self):
         """Test: Upload -> Extract -> Validate -> Review -> Confirm."""
         # Step 1: Extract facts
-        fact_store = FactStore()
+        fact_store = FactStore(deal_id="test-deal")
         fact_id = fact_store.add_fact(
             domain="infrastructure",
             category="compute",
@@ -894,7 +894,7 @@ class TestEndToEnd:
     def test_review_correct_ripple_new_flag_flow(self):
         """Test: Review -> Correct -> Ripple -> New flag."""
         # Setup: Create facts
-        fact_store = FactStore()
+        fact_store = FactStore(deal_id="test-deal")
         fact_id = fact_store.add_fact(
             domain="organization",
             category="central_it",

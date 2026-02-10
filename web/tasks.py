@@ -139,7 +139,7 @@ def _analyze_domain(
     try:
         # Import the existing analysis runner
         from web.analysis_runner import run_analysis_simple
-        from web.session_store import session_store
+        from stores.session_store import session_store
 
         # For now, return placeholder counts
         # The actual integration would:

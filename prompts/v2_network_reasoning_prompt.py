@@ -7,6 +7,26 @@ Input: Standardized inventory from Phase 1
 Output: Emergent risks, strategic considerations, work items
 """
 
+from prompts.shared.cost_estimation_guidance import get_cost_estimation_guidance
+
+NETWORK_COST_ANCHORS = """
+### Network-Specific Cost Anchors
+| Scenario | anchor_key | When to Use |
+|----------|------------|-------------|
+| Network separation from parent | `network_separation` | Carveout: disentangling shared network |
+| WAN/SD-WAN per site | `wan_setup` | New connectivity per office/site |
+| TSA exit: network | `tsa_exit_network` | Standing up independent network services |
+
+**Quantity sources for network:**
+- Site/office count -> from F-TGT-NET-xxx or F-TGT-INFRA-xxx location facts
+- Complexity -> from topology description (flat=complex, segmented=moderate, documented=simple)
+
+**Complexity mapping for network_separation:**
+- simple: Segmented network, documented topology, clear boundaries
+- moderate: Some shared VLANs, partial documentation
+- large/complex: Flat network, no documentation, shared with parent
+"""
+
 NETWORK_REASONING_PROMPT = """You are a senior network architect with 20+ years of M&A network integration experience. You've designed and migrated networks for hundreds of acquisitions. Connectivity is your domain - without network, nothing works.
 
 ## YOUR MISSION
@@ -595,7 +615,16 @@ def get_network_reasoning_prompt(inventory: dict, deal_context: dict) -> str:
     import json
     inventory_str = json.dumps(inventory, indent=2)
     context_str = json.dumps(deal_context, indent=2)
-    return NETWORK_REASONING_PROMPT.format(
-        inventory=inventory_str,
-        deal_context=context_str
+
+    prompt = NETWORK_REASONING_PROMPT
+    prompt = prompt.replace("{inventory}", inventory_str)
+    prompt = prompt.replace("{deal_context}", context_str)
+
+    # Inject cost estimation guidance before PE CONCERNS section
+    cost_guidance = get_cost_estimation_guidance()
+    prompt = prompt.replace(
+        "## NETWORK PE CONCERNS",
+        cost_guidance + "\n" + NETWORK_COST_ANCHORS + "\n\n## NETWORK PE CONCERNS"
     )
+
+    return prompt

@@ -50,7 +50,7 @@ class FactService:
     @staticmethod
     def _get_all_json(domain: str = None, entity: str = None) -> List[Dict]:
         """Get facts from current session (JSON-based)."""
-        from web.session_store import session_store, get_or_create_session_id
+        from stores.session_store import session_store, get_or_create_session_id
         from flask import session as flask_session
 
         session_id = flask_session.get('session_id')
@@ -82,7 +82,7 @@ class FactService:
             fact = query.first()
             return fact.to_dict() if fact else None
         else:
-            from web.session_store import session_store
+            from stores.session_store import session_store
             from flask import session as flask_session
 
             session_id = flask_session.get('session_id')
@@ -156,7 +156,7 @@ class FindingService:
     @staticmethod
     def _get_all_json(finding_type: str = None, domain: str = None) -> List[Dict]:
         """Get findings from current session (JSON-based)."""
-        from web.session_store import session_store
+        from stores.session_store import session_store
         from flask import session as flask_session
 
         session_id = flask_session.get('session_id')
@@ -227,7 +227,7 @@ class FindingService:
             return finding.to_dict() if finding else None
         else:
             # Search in session
-            from web.session_store import session_store
+            from stores.session_store import session_store
             from flask import session as flask_session
 
             session_id = flask_session.get('session_id')

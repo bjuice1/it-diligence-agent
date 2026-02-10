@@ -584,6 +584,180 @@ def cost_center():
     )
 
 
+@costs_bp.route('/summary')
+@costs_bp.route('/summary/<deal_id>')
+def cost_summary_page(deal_id: str = None):
+    """Cost summary page with scenario-based estimates."""
+    from flask import session as flask_session
+    from services.cost_engine import get_effective_drivers, calculate_deal_costs
+    from web.database import Fact
+    from stores.fact_store import FactStore
+
+    # Get deal ID from URL or session
+    if not deal_id:
+        deal_id = flask_session.get('current_deal_id')
+
+    if not deal_id:
+        return render_template('costs/summary.html',
+            summary=None,
+            deal_id='',
+            error='No deal selected'
+        )
+
+    try:
+        # Load facts directly from database (bypasses analysis run requirement)
+        db_facts = Fact.query.filter_by(deal_id=deal_id).all()
+
+        if not db_facts:
+            return render_template('costs/summary.html',
+                summary=None,
+                deal_id=deal_id,
+                error=f'No facts found for deal {deal_id}'
+            )
+
+        # Build a FactStore from DB facts
+        fact_store = FactStore(deal_id=deal_id)
+        for f in db_facts:
+            fact_store.add_fact(
+                domain=f.domain,
+                category=f.category or '',
+                item=f.item,
+                details=f.details or {},
+                status=f.status or 'documented',
+                evidence=f.evidence or {},
+                entity=f.entity or 'target',
+                source_document=f.source_document or '',
+            )
+
+        # Get effective drivers
+        driver_result = get_effective_drivers(deal_id, fact_store)
+        drivers = driver_result.drivers
+
+        # Calculate deal costs
+        summary = calculate_deal_costs(deal_id, drivers)
+
+        return render_template('costs/summary.html',
+            summary=summary,
+            deal_id=deal_id,
+        )
+
+    except Exception as e:
+        logger.error(f"Error loading cost summary: {e}")
+        import traceback
+        traceback.print_exc()
+        return render_template('costs/summary.html',
+            summary=None,
+            deal_id=deal_id,
+            error=str(e)
+        )
+
+
+@costs_bp.route('/drivers')
+@costs_bp.route('/drivers/<deal_id>')
+def drivers_page(deal_id: str = None):
+    """Driver view/edit page."""
+    from flask import session as flask_session
+    from web.database import DriverOverride, Fact
+    from services.cost_engine import get_effective_drivers
+    from stores.fact_store import FactStore
+
+    # Get deal ID from URL or session
+    if not deal_id:
+        deal_id = flask_session.get('current_deal_id')
+
+    if not deal_id:
+        return render_template('costs/drivers.html',
+            drivers=[],
+            summary={'total_extracted': 0, 'total_assumed': 0, 'total_overridden': 0},
+            shared_with_parent=[],
+            deal_id='',
+            error='No deal selected'
+        )
+
+    try:
+        # Load facts directly from database (bypasses analysis run requirement)
+        db_facts = Fact.query.filter_by(deal_id=deal_id).all()
+
+        # Build a FactStore from DB facts
+        fact_store = FactStore(deal_id=deal_id)
+        for f in db_facts:
+            fact_store.add_fact(
+                domain=f.domain,
+                category=f.category or '',
+                item=f.item,
+                details=f.details or {},
+                status=f.status or 'documented',
+                evidence=f.evidence or {},
+                entity=f.entity or 'target',
+                source_document=f.source_document or '',
+            )
+
+        # Get effective drivers
+        result = get_effective_drivers(deal_id, fact_store)
+        drivers = result.drivers
+
+        # Build drivers list for template
+        drivers_list = []
+        for field_name in drivers.__dataclass_fields__:
+            if field_name in ('sources', 'shared_with_parent'):
+                continue
+
+            value = getattr(drivers, field_name)
+            source_info = drivers.sources.get(field_name)
+
+            # Handle enum values
+            if hasattr(value, 'value'):
+                display_value = value.value
+            else:
+                display_value = value
+
+            # Check for override
+            override = DriverOverride.query.filter_by(
+                deal_id=deal_id,
+                driver_name=field_name,
+                active=True
+            ).first()
+
+            drivers_list.append({
+                'name': field_name,
+                'value': display_value,
+                'source_type': source_info.extraction_method if source_info else 'not_found',
+                'source_fact_id': source_info.fact_id if source_info else None,
+                'confidence': source_info.confidence.value if source_info else 'unknown',
+                'is_overridden': override is not None,
+                'extracted_value': override.extracted_value if override else display_value,
+                'override_reason': override.reason if override else None,
+            })
+
+        # Count summary
+        total_overridden = sum(1 for d in drivers_list if d['is_overridden'])
+        total_assumed = sum(1 for d in drivers_list
+                          if d['confidence'] == 'low' and d['value'] is not None)
+
+        return render_template('costs/drivers.html',
+            drivers=drivers_list,
+            summary={
+                'total_extracted': result.drivers_extracted,
+                'total_assumed': result.drivers_assumed,
+                'total_overridden': total_overridden,
+            },
+            shared_with_parent=drivers.shared_with_parent,
+            deal_id=deal_id,
+        )
+
+    except Exception as e:
+        logger.error(f"Error loading drivers page: {e}")
+        import traceback
+        traceback.print_exc()
+        return render_template('costs/drivers.html',
+            drivers=[],
+            summary={'total_extracted': 0, 'total_assumed': 0, 'total_overridden': 0},
+            shared_with_parent=[],
+            deal_id=deal_id,
+            error=str(e)
+        )
+
+
 @costs_bp.route('/api/summary')
 def api_summary():
     """API endpoint for cost summary."""
@@ -607,3 +781,352 @@ def api_summary():
         },
         'insights_count': len(data.insights),
     })
+
+
+# =============================================================================
+# DRIVER API ENDPOINTS
+# =============================================================================
+
+@costs_bp.route('/api/drivers/<deal_id>')
+def api_get_drivers(deal_id: str):
+    """Get extracted drivers for a deal with any overrides applied.
+
+    Returns the effective driver values (extracted + overrides merged).
+    """
+    from web.database import db, DriverOverride
+    from services.cost_engine import get_effective_drivers
+    from web.deal_data import get_deal_data
+    from web.context import load_deal_context
+
+    try:
+        # Load deal context and get fact store
+        load_deal_context(deal_id)
+        data = get_deal_data()
+
+        # Get fact store from deal data
+        fact_store = data.fact_store if hasattr(data, 'fact_store') else None
+
+        # Get effective drivers (extracted + overrides)
+        result = get_effective_drivers(deal_id, fact_store)
+
+        # Format response
+        drivers_list = []
+        drivers = result.drivers
+
+        # Convert dataclass to dict with source info
+        for field_name in drivers.__dataclass_fields__:
+            if field_name in ('sources', 'shared_with_parent'):
+                continue
+
+            value = getattr(drivers, field_name)
+            source_info = drivers.sources.get(field_name)
+
+            # Check for override
+            override = DriverOverride.query.filter_by(
+                deal_id=deal_id,
+                driver_name=field_name,
+                active=True
+            ).first()
+
+            drivers_list.append({
+                'name': field_name,
+                'value': value,
+                'source_type': source_info.extraction_method if source_info else 'not_found',
+                'source_fact_id': source_info.fact_id if source_info else None,
+                'confidence': source_info.confidence.value if source_info else 'unknown',
+                'is_overridden': override is not None,
+                'extracted_value': override.extracted_value if override else value,
+                'override_reason': override.reason if override else None,
+            })
+
+        # Add shared_with_parent as special entry
+        drivers_list.append({
+            'name': 'shared_with_parent',
+            'value': drivers.shared_with_parent,
+            'source_type': 'derived',
+            'source_fact_id': None,
+            'confidence': 'medium',
+            'is_overridden': False,
+            'extracted_value': drivers.shared_with_parent,
+            'override_reason': None,
+        })
+
+        return jsonify({
+            'success': True,
+            'deal_id': deal_id,
+            'drivers': drivers_list,
+            'summary': {
+                'total_extracted': result.extracted_count,
+                'total_assumed': result.assumed_count,
+                'total_overridden': sum(1 for d in drivers_list if d['is_overridden']),
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting drivers for deal {deal_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@costs_bp.route('/api/drivers/<deal_id>/override', methods=['POST'])
+def api_override_driver(deal_id: str):
+    """Create or update a driver override.
+
+    Request body:
+    {
+        "driver_name": "total_users",
+        "override_value": 1200,
+        "reason": "Confirmed with management - 850 was old number"
+    }
+    """
+    from flask_login import current_user
+    from web.database import db, DriverOverride
+
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
+
+        driver_name = data.get('driver_name')
+        override_value = data.get('override_value')
+        reason = data.get('reason', '')
+        extracted_value = data.get('extracted_value')  # Optional - what was extracted
+
+        if not driver_name:
+            return jsonify({'success': False, 'error': 'driver_name is required'}), 400
+
+        if override_value is None:
+            return jsonify({'success': False, 'error': 'override_value is required'}), 400
+
+        # Check if override already exists (upsert)
+        existing = DriverOverride.query.filter_by(
+            deal_id=deal_id,
+            driver_name=driver_name
+        ).first()
+
+        if existing:
+            # Update existing override
+            existing.override_value = override_value
+            existing.reason = reason
+            existing.active = True
+            if extracted_value is not None:
+                existing.extracted_value = extracted_value
+            override = existing
+        else:
+            # Create new override
+            override = DriverOverride(
+                deal_id=deal_id,
+                driver_name=driver_name,
+                extracted_value=extracted_value,
+                override_value=override_value,
+                reason=reason,
+                created_by=current_user.id if current_user and current_user.is_authenticated else None
+            )
+            db.session.add(override)
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'override': override.to_dict()
+        })
+
+    except Exception as e:
+        logger.error(f"Error creating driver override: {e}")
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@costs_bp.route('/api/drivers/<deal_id>/override/<driver_name>', methods=['DELETE'])
+def api_delete_driver_override(deal_id: str, driver_name: str):
+    """Delete (deactivate) a driver override, reverting to extracted value."""
+    from web.database import db, DriverOverride
+
+    try:
+        override = DriverOverride.query.filter_by(
+            deal_id=deal_id,
+            driver_name=driver_name,
+            active=True
+        ).first()
+
+        if not override:
+            return jsonify({
+                'success': False,
+                'error': f'No active override found for driver {driver_name}'
+            }), 404
+
+        # Soft delete - mark as inactive
+        override.active = False
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': f'Override for {driver_name} removed'
+        })
+
+    except Exception as e:
+        logger.error(f"Error deleting driver override: {e}")
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@costs_bp.route('/api/drivers/<deal_id>/export')
+def api_export_drivers_csv(deal_id: str):
+    """Export drivers to CSV for deal model import."""
+    import csv
+    import io
+    from flask import Response
+    from services.cost_engine import get_effective_drivers
+    from web.deal_data import get_deal_data
+    from web.context import load_deal_context
+    from web.database import DriverOverride
+
+    try:
+        # Load deal context
+        load_deal_context(deal_id)
+        data = get_deal_data()
+        fact_store = data.fact_store if hasattr(data, 'fact_store') else None
+
+        # Get effective drivers
+        result = get_effective_drivers(deal_id, fact_store)
+        drivers = result.drivers
+
+        # Build CSV
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['driver', 'value', 'source_type', 'source_id', 'confidence', 'overridden'])
+
+        for field_name in drivers.__dataclass_fields__:
+            if field_name in ('sources', 'shared_with_parent'):
+                continue
+
+            value = getattr(drivers, field_name)
+            source_info = drivers.sources.get(field_name)
+
+            # Check for override
+            override = DriverOverride.query.filter_by(
+                deal_id=deal_id,
+                driver_name=field_name,
+                active=True
+            ).first()
+
+            writer.writerow([
+                field_name,
+                value if value is not None else '',
+                source_info.extraction_method if source_info else 'not_found',
+                source_info.fact_id if source_info else '',
+                source_info.confidence.value if source_info else 'unknown',
+                'true' if override else 'false'
+            ])
+
+        # Add shared_with_parent
+        writer.writerow([
+            'shared_with_parent',
+            ','.join(drivers.shared_with_parent) if drivers.shared_with_parent else '',
+            'derived',
+            '',
+            'medium',
+            'false'
+        ])
+
+        output.seek(0)
+        return Response(
+            output.getvalue(),
+            mimetype='text/csv',
+            headers={'Content-Disposition': f'attachment; filename=drivers_{deal_id}.csv'}
+        )
+
+    except Exception as e:
+        logger.error(f"Error exporting drivers CSV: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@costs_bp.route('/api/export/<deal_id>/costs')
+def api_export_costs_csv(deal_id: str):
+    """Export deal costs to CSV for deal model import."""
+    from flask import Response
+    from services.cost_engine import (
+        get_effective_drivers,
+        calculate_deal_costs,
+        generate_deal_costs_csv,
+    )
+    from web.deal_data import get_deal_data
+    from web.context import load_deal_context
+
+    try:
+        # Load deal context
+        load_deal_context(deal_id)
+        data = get_deal_data()
+        fact_store = data.fact_store if hasattr(data, 'fact_store') else None
+
+        # Get drivers and calculate costs
+        driver_result = get_effective_drivers(deal_id, fact_store)
+        summary = calculate_deal_costs(deal_id, driver_result.drivers)
+
+        # Generate CSV
+        csv_content = generate_deal_costs_csv(summary)
+
+        return Response(
+            csv_content,
+            mimetype='text/csv',
+            headers={'Content-Disposition': f'attachment; filename=deal_costs_{deal_id}.csv'}
+        )
+
+    except Exception as e:
+        logger.error(f"Error exporting costs CSV: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@costs_bp.route('/api/export/<deal_id>/assumptions')
+def api_export_assumptions_csv(deal_id: str):
+    """Export assumptions to CSV."""
+    from flask import Response
+    from services.cost_engine import (
+        get_effective_drivers,
+        calculate_deal_costs,
+        generate_assumptions_csv,
+    )
+    from web.deal_data import get_deal_data
+    from web.context import load_deal_context
+
+    try:
+        # Load deal context
+        load_deal_context(deal_id)
+        data = get_deal_data()
+        fact_store = data.fact_store if hasattr(data, 'fact_store') else None
+
+        # Get drivers and calculate costs
+        driver_result = get_effective_drivers(deal_id, fact_store)
+        summary = calculate_deal_costs(deal_id, driver_result.drivers)
+
+        # Generate CSV
+        csv_content = generate_assumptions_csv(summary, driver_result)
+
+        return Response(
+            csv_content,
+            mimetype='text/csv',
+            headers={'Content-Disposition': f'attachment; filename=assumptions_{deal_id}.csv'}
+        )
+
+    except Exception as e:
+        logger.error(f"Error exporting assumptions CSV: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500

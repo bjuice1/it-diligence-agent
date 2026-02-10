@@ -555,6 +555,131 @@ def wrap_db_facts_and_gaps(db_facts: List, db_gaps: List = None) -> FactStoreAda
     return FactStoreAdapter(facts=wrapped_facts, gaps=db_gaps or [])
 
 
+class DBFindingWrapper:
+    """
+    Wrapper that ensures DB Finding model attributes match what PE generators expect.
+
+    Key differences bridged:
+    - DB uses .id, generators expect .finding_id
+    - DB lacks .target_action, generators use it for "so what" fallback
+    - Provides safe defaults for optional fields
+    """
+
+    def __init__(self, db_finding):
+        self._finding = db_finding
+
+    @property
+    def id(self):
+        return self._finding.id
+
+    @property
+    def finding_id(self):
+        """Generators access .finding_id, DB uses .id"""
+        return self._finding.id
+
+    @property
+    def domain(self):
+        return self._finding.domain or ''
+
+    @property
+    def title(self):
+        return self._finding.title or ''
+
+    @property
+    def description(self):
+        return self._finding.description or ''
+
+    @property
+    def severity(self):
+        return self._finding.severity or 'medium'
+
+    @property
+    def priority(self):
+        return self._finding.priority or 'medium'
+
+    @property
+    def phase(self):
+        return self._finding.phase or 'Day_100'
+
+    @property
+    def owner_type(self):
+        return self._finding.owner_type or 'target'
+
+    @property
+    def cost_estimate(self):
+        return self._finding.cost_estimate or ''
+
+    @property
+    def mna_implication(self):
+        return self._finding.mna_implication or ''
+
+    @property
+    def mna_lens(self):
+        return self._finding.mna_lens or ''
+
+    @property
+    def target_action(self):
+        """Not a DB column — return empty string as safe fallback."""
+        return getattr(self._finding, 'target_action', '') or ''
+
+    @property
+    def based_on_facts(self):
+        return self._finding.based_on_facts or []
+
+    @property
+    def triggered_by_risks(self):
+        return self._finding.triggered_by_risks or []
+
+    @property
+    def confidence(self):
+        return self._finding.confidence or 'medium'
+
+    @property
+    def reasoning(self):
+        return self._finding.reasoning or ''
+
+    @property
+    def mitigation(self):
+        return self._finding.mitigation or ''
+
+    @property
+    def category(self):
+        return getattr(self._finding, 'category', '') or ''
+
+    @property
+    def integration_dependent(self):
+        return getattr(self._finding, 'integration_dependent', False)
+
+    @property
+    def timeline(self):
+        return getattr(self._finding, 'timeline', None)
+
+    @property
+    def lens(self):
+        return getattr(self._finding, 'lens', '') or ''
+
+    @property
+    def implication(self):
+        return getattr(self._finding, 'implication', '') or ''
+
+    @property
+    def finding_type(self):
+        return self._finding.finding_type or ''
+
+    @property
+    def dependencies(self):
+        return getattr(self._finding, 'dependencies', []) or []
+
+    def __getattr__(self, name):
+        # Fallback: delegate to underlying finding
+        return getattr(self._finding, name)
+
+
+def wrap_db_findings(db_findings: List) -> List:
+    """Wrap DB Finding objects for compatibility with PE generators."""
+    return [DBFindingWrapper(f) for f in db_findings]
+
+
 class ReasoningStoreAdapter:
     """
     Adapter that makes DB findings compatible with existing service functions
@@ -605,11 +730,13 @@ def create_store_adapters_from_deal_data(data: 'DealData', entity: str = None):
     strategic = data.get_strategic_considerations()
 
     fact_adapter = wrap_db_facts_and_gaps(facts, gaps)
+
+    # Wrap findings so DB Finding models have .finding_id, .target_action, etc.
     reasoning_adapter = ReasoningStoreAdapter(
-        risks=risks,
-        work_items=work_items,
-        recommendations=recommendations,
-        strategic_considerations=strategic
+        risks=wrap_db_findings(risks),
+        work_items=wrap_db_findings(work_items),
+        recommendations=wrap_db_findings(recommendations),
+        strategic_considerations=wrap_db_findings(strategic)
     )
 
     return fact_adapter, reasoning_adapter

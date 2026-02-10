@@ -471,14 +471,16 @@ tr:hover td {
 class DomainReportRenderer:
     """Renders DomainReportData to HTML."""
 
-    def __init__(self, include_styles: bool = True):
+    def __init__(self, include_styles: bool = True, entity: str = "target"):
         """
         Initialize renderer.
 
         Args:
             include_styles: Whether to include CSS in output
+            entity: Entity being displayed ("target" or "buyer") - Phase 7
         """
         self.include_styles = include_styles
+        self.entity = entity
 
     def render(self, data: DomainReportData, target_name: str = "Target Company") -> str:
         """
@@ -524,13 +526,31 @@ class DomainReportRenderer:
 </html>"""
 
     def _render_header(self, data: DomainReportData, target_name: str) -> str:
-        """Render report header."""
+        """Render report header with entity banner (Phase 7)."""
         display_name = data.domain_display_name or DOMAIN_DISPLAY_NAMES.get(data.domain, data.domain)
         grade = data.benchmark_assessment.overall_grade
         grade_class = grade.lower().replace(" ", "-")
 
+        # Entity banner (Phase 7 - Entity Separation)
+        entity_banner = ""
+        if self.entity == "target":
+            entity_banner = """
+            <div style="background: #007bff; color: white; padding: 6px 12px; border-radius: 4px;
+                        display: inline-block; font-weight: 600; font-size: 13px; margin-bottom: 10px;">
+                🎯 TARGET ENVIRONMENT
+            </div>
+            """
+        elif self.entity == "buyer":
+            entity_banner = """
+            <div style="background: #6f42c1; color: white; padding: 6px 12px; border-radius: 4px;
+                        display: inline-block; font-weight: 600; font-size: 13px; margin-bottom: 10px;">
+                🏢 BUYER REFERENCE
+            </div>
+            """
+
         return f"""
         <div class="report-header">
+            {entity_banner}
             <h1>
                 {display_name}
                 <span class="grade-badge grade-{grade_class}">{grade}</span>
@@ -854,7 +874,8 @@ class DomainReportRenderer:
 def render_domain_report(
     data: DomainReportData,
     target_name: str = "Target Company",
-    include_styles: bool = True
+    include_styles: bool = True,
+    entity: str = "target"
 ) -> str:
     """
     Render a domain report to HTML.
@@ -863,9 +884,10 @@ def render_domain_report(
         data: Domain report data
         target_name: Name of target company
         include_styles: Whether to include CSS
+        entity: Entity being displayed ("target" or "buyer") - Phase 7
 
     Returns:
         Complete HTML document
     """
-    renderer = DomainReportRenderer(include_styles=include_styles)
+    renderer = DomainReportRenderer(include_styles=include_styles, entity=entity)
     return renderer.render(data, target_name)
