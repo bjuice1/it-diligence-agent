@@ -961,6 +961,11 @@ def process_upload():
     target_authority = int(request.form.get('target_authority', 1))
     buyer_authority = int(request.form.get('buyer_authority', 1))
 
+    # STRUCTURAL FIX: Get current user once for all document uploads
+    from web.context import get_current_user
+    current_user = get_current_user()
+    uploader_id = current_user.id if current_user else None
+
     # MEMORY FIX: Validate total upload size before processing
     target_files = request.files.getlist('target_documents')
     buyer_files = request.files.getlist('buyer_documents')
@@ -997,7 +1002,7 @@ def process_upload():
                         entity="target",
                         deal_id=current_deal_id,
                         authority_level=target_authority,
-                        uploaded_by="web_upload"
+                        uploaded_by=uploader_id
                     )
                     target_doc_ids.append(doc.doc_id)
                     target_saved.append(doc.raw_file_path)
@@ -1016,11 +1021,12 @@ def process_upload():
                                 file_size=doc.file_size_bytes,
                                 mime_type=doc.mime_type,
                                 authority_level=target_authority,
-                                uploaded_by="web_upload"
+                                uploaded_by=uploader_id
                             )
                             logger.info(f"A2: Saved target document to DB: {safe_filename}")
                         except Exception as db_err:
                             logger.warning(f"A2: Failed to save document to DB: {db_err}")
+                            db.session.rollback()  # STRUCTURAL FIX: Rollback on failure
                 except Exception as e:
                     logger.error(f"DocumentStore error for {safe_filename}: {e}")
                     # Fallback to legacy path
@@ -1051,7 +1057,7 @@ def process_upload():
                         entity="buyer",
                         deal_id=current_deal_id,
                         authority_level=buyer_authority,
-                        uploaded_by="web_upload"
+                        uploaded_by=uploader_id
                     )
                     buyer_doc_ids.append(doc.doc_id)
                     buyer_saved.append(doc.raw_file_path)
@@ -1070,11 +1076,12 @@ def process_upload():
                                 file_size=doc.file_size_bytes,
                                 mime_type=doc.mime_type,
                                 authority_level=buyer_authority,
-                                uploaded_by="web_upload"
+                                uploaded_by=uploader_id
                             )
                             logger.info(f"A2: Saved buyer document to DB: {safe_filename}")
                         except Exception as db_err:
                             logger.warning(f"A2: Failed to save document to DB: {db_err}")
+                            db.session.rollback()  # STRUCTURAL FIX: Rollback on failure
                 except Exception as e:
                     logger.error(f"DocumentStore error for {safe_filename}: {e}")
                     file.seek(0)
