@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}Admin - Database Cleanup{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>🗑️ Database Cleanup</h1>
+    <p>Manage deals and free up database space</p>
+</div>
+
+{% if deals %}
+<div class="card mb-4">
+    <div class="card-header" style="background: #fff3cd; border-bottom: 1px solid #ffc107;">
+        <strong>⚠️ Warning:</strong> Deleting deals cannot be undone. All associated facts, findings, and analysis runs will be permanently deleted.
+    </div>
+</div>
+
+<div class="mb-4" style="display: flex; justify-content: flex-end; gap: 10px;">
+    <form method="POST" action="{{ url_for('admin_delete_all_deals') }}" onsubmit="return confirm('⚠️ DELETE EVERYTHING?\n\nThis will delete ALL {{ deals|length }} deals and ALL associated data.\n\nThis cannot be undone!\n\nType DELETE to confirm:') && prompt('Type DELETE to confirm') === 'DELETE'">
+        <button type="submit" class="btn btn-danger">
+            🗑️ Delete All {{ deals|length }} Deals
+        </button>
+    </form>
+</div>
+
+<div class="table-container">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Deal Name</th>
+                <th>Created</th>
+                <th style="text-align: right;">Documents</th>
+                <th style="text-align: right;">Facts</th>
+                <th style="text-align: right;">Findings</th>
+                <th style="text-align: right;">Runs</th>
+                <th style="text-align: center;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for deal in deals %}
+            <tr>
+                <td><strong>{{ deal.name }}</strong><br><small class="text-muted">{{ deal.id }}</small></td>
+                <td>{{ deal.created_at.strftime('%Y-%m-%d %H:%M') if deal.created_at else 'Unknown' }}</td>
+                <td style="text-align: right;">{{ deal.docs }}</td>
+                <td style="text-align: right;">{{ deal.facts }}</td>
+                <td style="text-align: right;">{{ deal.findings }}</td>
+                <td style="text-align: right;">{{ deal.runs }}</td>
+                <td style="text-align: center;">
+                    <form method="POST" action="{{ url_for('admin_delete_deal', deal_id=deal.id) }}" style="display: inline;" onsubmit="return confirm('Delete deal \'{{ deal.name }}\'?\n\nThis will delete:\n- {{ deal.docs }} documents\n- {{ deal.facts }} facts\n- {{ deal.findings }} findings\n- {{ deal.runs }} analysis runs\n\nThis cannot be undone!')">
+                        <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="mt-4">
+    <div class="card">
+        <div class="card-body">
+            <h3>📊 Database Summary</h3>
+            <ul>
+                <li><strong>Total Deals:</strong> {{ deals|length }}</li>
+                <li><strong>Total Documents:</strong> {{ deals|sum(attribute='docs') }}</li>
+                <li><strong>Total Facts:</strong> {{ deals|sum(attribute='facts') }}</li>
+                <li><strong>Total Findings:</strong> {{ deals|sum(attribute='findings') }}</li>
+                <li><strong>Total Analysis Runs:</strong> {{ deals|sum(attribute='runs') }}</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+{% else %}
+<div class="empty-state">
+    <div class="empty-state-icon">✅</div>
+    <div class="empty-state-title">Database is Clean</div>
+    <div class="empty-state-text">No deals found in the database.</div>
+</div>
+{% endif %}
+
+<div class="mt-4">
+    <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">← Back to Dashboard</a>
+</div>
+{% endblock %}

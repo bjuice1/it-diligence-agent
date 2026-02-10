@@ -7820,6 +7820,83 @@ def runs_page():
         return render_template('error.html', error=str(e))
 
 
+@app.route('/admin/cleanup')
+@auth_optional
+def admin_cleanup():
+    """Admin page to view and delete old deals."""
+    from web.database import Deal, Fact, Finding, AnalysisRun, Document
+
+    deals = Deal.query.order_by(Deal.created_at.desc()).all()
+
+    deals_data = []
+    for deal in deals:
+        facts_count = Fact.query.filter_by(deal_id=deal.id, deleted_at=None).count()
+        findings_count = Finding.query.filter_by(deal_id=deal.id, deleted_at=None).count()
+        runs_count = AnalysisRun.query.filter_by(deal_id=deal.id).count()
+        docs_count = Document.query.filter_by(deal_id=deal.id).count()
+
+        deals_data.append({
+            'id': deal.id,
+            'name': deal.name,
+            'created_at': deal.created_at,
+            'facts': facts_count,
+            'findings': findings_count,
+            'runs': runs_count,
+            'docs': docs_count
+        })
+
+    return render_template('admin/cleanup.html', deals=deals_data)
+
+
+@app.route('/admin/cleanup/delete/<deal_id>', methods=['POST'])
+@auth_optional
+def admin_delete_deal(deal_id):
+    """Delete a specific deal."""
+    from web.database import Deal
+
+    deal = Deal.query.get(deal_id)
+    if not deal:
+        flash(f'Deal {deal_id} not found', 'error')
+        return redirect(url_for('admin_cleanup'))
+
+    try:
+        deal_name = deal.name
+        db.session.delete(deal)
+        db.session.commit()
+        flash(f'✅ Deleted deal "{deal_name}" and all associated data', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'❌ Error deleting deal: {e}', 'error')
+
+    return redirect(url_for('admin_cleanup'))
+
+
+@app.route('/admin/cleanup/delete-all', methods=['POST'])
+@auth_optional
+def admin_delete_all_deals():
+    """Delete ALL deals."""
+    from web.database import Deal
+
+    deals = Deal.query.all()
+    count = len(deals)
+
+    try:
+        for deal in deals:
+            db.session.delete(deal)
+        db.session.commit()
+        flash(f'✅ Deleted {count} deals and all associated data', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'❌ Error during cleanup: {e}', 'error')
+
+    return redirect(url_for('admin_cleanup'))
+
+
+# Register CLI commands for database management
+from web.cleanup_old_deals import register_commands
+register_commands(app)
+
+
 if __name__ == '__main__':
     print("\n" + "="*60)
     print("  IT Due Diligence Agent - Web Interface")
