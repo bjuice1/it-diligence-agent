@@ -885,6 +885,32 @@ def health_check():
     return jsonify(health_status), 200
 
 
+# =============================================================================
+# MEMORY MANAGEMENT: Document Size Validation
+# =============================================================================
+
+def calculate_upload_size_mb(file_list):
+    """
+    Calculate total size of uploaded files in MB.
+
+    MEMORY FIX: Prevents OOM crashes by rejecting oversized uploads.
+    Railway free tier has 512MB RAM limit; large document uploads
+    cause memory exhaustion when loaded into analysis pipeline.
+
+    Args:
+        file_list: List of FileStorage objects from request.files.getlist()
+
+    Returns:
+        float: Total size in megabytes
+    """
+    total_bytes = 0
+    for file in file_list:
+        file.seek(0, 2)  # Seek to end
+        total_bytes += file.tell()
+        file.seek(0)  # Reset to start
+    return total_bytes / (1024 * 1024)  # Convert to MB
+
+
 @app.route('/upload')
 @auth_optional
 def upload_documents():
@@ -935,8 +961,25 @@ def process_upload():
     target_authority = int(request.form.get('target_authority', 1))
     buyer_authority = int(request.form.get('buyer_authority', 1))
 
-    # Process TARGET documents
+    # MEMORY FIX: Validate total upload size before processing
     target_files = request.files.getlist('target_documents')
+    buyer_files = request.files.getlist('buyer_documents')
+
+    # Calculate total size
+    total_size_mb = calculate_upload_size_mb(target_files + buyer_files)
+    MAX_UPLOAD_SIZE_MB = int(os.environ.get('MAX_UPLOAD_SIZE_MB', '30'))
+
+    if total_size_mb > MAX_UPLOAD_SIZE_MB:
+        flash(
+            f'⚠️ Total upload size ({total_size_mb:.1f}MB) exceeds limit ({MAX_UPLOAD_SIZE_MB}MB). '
+            f'Please reduce document count or file sizes. '
+            f'Large uploads cause memory issues on Railway free tier. '
+            f'Contact support about infrastructure upgrades if needed.',
+            'error'
+        )
+        return redirect(url_for('upload_documents'))
+
+    # Process TARGET documents
     target_saved = []
     target_doc_ids = []
 
@@ -991,8 +1034,7 @@ def process_upload():
                 file.save(str(filepath))
                 target_saved.append(str(filepath))
 
-    # Process BUYER documents
-    buyer_files = request.files.getlist('buyer_documents')
+    # Process BUYER documents (already retrieved above for size validation)
     buyer_saved = []
     buyer_doc_ids = []
 

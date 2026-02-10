@@ -227,13 +227,15 @@ PARALLEL_DISCOVERY = True          # Run discovery agents in parallel
 PARALLEL_REASONING = True          # Run reasoning agents in parallel
 
 # Parallelization limits (for rate limiting)
-MAX_PARALLEL_AGENTS = 3  # Max agents to run simultaneously
+# MEMORY FIX: Reduced from 3 to 1 to prevent Railway OOM crashes
+# Each agent loads full document corpus; 3 agents = 3x memory usage
+MAX_PARALLEL_AGENTS = 1  # Max agents to run simultaneously (set to 1 for low-memory environments)
 
 # API Rate Limiting
 # Anthropic rate limits: ~50 requests/minute for most tiers
 # Using semaphore to limit concurrent API calls across all agents
 API_RATE_LIMIT_PER_MINUTE = 40  # Conservative limit (leave buffer)
-API_RATE_LIMIT_SEMAPHORE_SIZE = 3  # Max concurrent API calls (matches MAX_PARALLEL_AGENTS)
+API_RATE_LIMIT_SEMAPHORE_SIZE = 1  # Max concurrent API calls (matches MAX_PARALLEL_AGENTS)
 
 # API Retry Configuration
 API_MAX_RETRIES = 3  # Maximum retry attempts for API calls

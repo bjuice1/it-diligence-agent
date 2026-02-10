@@ -10,12 +10,13 @@ import multiprocessing
 # Bind to port from environment or default to 8080
 bind = f"0.0.0.0:{os.environ.get('PORT', '8080')}"
 
-# Workers - use 2 for Railway starter, scale up as needed
-# Rule of thumb: 2-4 x CPU cores for I/O bound apps
-workers = int(os.environ.get('GUNICORN_WORKERS', '2'))
+# Workers - MEMORY FIX: reduced from 2 to 1 to lower baseline memory footprint
+# Analysis pipeline is memory-intensive, not I/O bound
+workers = int(os.environ.get('GUNICORN_WORKERS', '1'))
 
-# Threads per worker - good for I/O bound operations (API calls, file I/O)
-threads = int(os.environ.get('GUNICORN_THREADS', '4'))
+# Threads per worker - MEMORY FIX: reduced from 4 to 2
+# Each thread can handle concurrent requests; fewer threads = lower memory usage
+threads = int(os.environ.get('GUNICORN_THREADS', '2'))
 
 # Worker class - sync is fine for Flask, use gevent for async
 worker_class = 'sync'

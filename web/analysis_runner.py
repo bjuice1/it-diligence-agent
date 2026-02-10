@@ -295,6 +295,20 @@ class IncrementalPersistence:
             'findings': len(self._written_finding_ids),
         }
 
+    def cleanup(self):
+        """
+        Explicitly clear tracking sets to free memory.
+
+        MEMORY FIX: Called after analysis completes to release memory
+        held by fact/finding ID sets (can be 1000s of strings).
+        """
+        self._written_fact_ids.clear()
+        self._written_gap_ids.clear()
+        self._written_finding_ids.clear()
+        import gc
+        gc.collect()
+        logger.debug(f"IncrementalPersistence cleanup: cleared tracking sets and forced GC")
+
 
 def create_analysis_run(app, deal_id: str, task_id: str = None) -> Optional[str]:
     """
@@ -579,6 +593,29 @@ def check_pipeline_availability() -> Dict[str, Any]:
     return status
 
 
+def log_memory_usage(stage: str):
+    """
+    Log current memory usage for debugging.
+
+    MEMORY FIX: Helps diagnose memory consumption patterns.
+    Uses psutil if available, silent fail if not.
+
+    Args:
+        stage: Description of current stage (e.g., "Analysis start", "After reasoning")
+    """
+    try:
+        import psutil
+        import os
+        process = psutil.Process(os.getpid())
+        mem_mb = process.memory_info().rss / (1024 * 1024)
+        logger.info(f"[MEMORY] {stage}: {mem_mb:.1f}MB")
+    except ImportError:
+        # psutil not installed - silent fail
+        pass
+    except Exception as e:
+        logger.debug(f"Memory logging failed at {stage}: {e}")
+
+
 def _separate_documents_by_entity(documents: List[Dict], deal_context: Dict) -> tuple:
     """
     Separate parsed documents into TARGET and BUYER lists.
@@ -715,6 +752,9 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable, app=None) -> D
         "documents_processed": 0,
     })
 
+    # MEMORY FIX: Log baseline memory usage
+    log_memory_usage("Analysis start")
+
     # Check for API key
     if not ANTHROPIC_API_KEY:
         if incremental:
@@ -822,6 +862,9 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable, app=None) -> D
     progress_callback({"phase": AnalysisPhase.TARGET_ANALYSIS_COMPLETE})
     target_fact_count = session.fact_store.lock_entity_facts("target")
     logger.info(f"Phase 1 complete: Locked {target_fact_count} TARGET facts")
+
+    # MEMORY FIX: Log memory after document loading phase
+    log_memory_usage("After document loading and target discovery")
 
     # Create snapshot of TARGET facts for Phase 2 context
     target_snapshot = session.fact_store.create_snapshot("target")
@@ -989,6 +1032,12 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable, app=None) -> D
                             "work_items_created": work_items_count,
                         })
                         logger.info(f"Reasoning complete: {domain} ({len(completed_domains)}/{len(domains_to_analyze)})")
+
+                        # MEMORY FIX: Force garbage collection after each domain completes
+                        import gc
+                        gc.collect()
+                        logger.debug(f"Garbage collected after {domain} reasoning")
+                        log_memory_usage(f"After {domain} reasoning")
                 except Exception as e:
                     logger.error(f"Reasoning failed for {domain}: {e}")
     else:
@@ -1007,6 +1056,11 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable, app=None) -> D
                 if incremental:
                     incremental.persist_new_findings(session.reasoning_store)
                     incremental.update_progress(75.0, f"Reasoning {domain} complete")
+
+                # MEMORY FIX: Force garbage collection after each domain (sequential mode)
+                import gc
+                gc.collect()
+                logger.debug(f"Garbage collected after {domain} reasoning (sequential)")
 
                 progress_callback({
                     "risks_identified": len(session.reasoning_store.risks),
@@ -1053,6 +1107,9 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable, app=None) -> D
             incremental.complete('completed')
             stats = incremental.get_stats()
             logger.info(f"Incremental persistence complete: {stats['facts']} facts, {stats['findings']} findings, {stats['gaps']} gaps")
+
+            # MEMORY FIX: Clean up tracking sets
+            incremental.cleanup()
         except Exception as e:
             logger.error(f"Failed to complete analysis run: {e}")
     elif deal_id:
