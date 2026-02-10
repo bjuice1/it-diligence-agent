@@ -236,6 +236,9 @@ class AnalysisTaskManager:
             except Exception:
                 self._use_celery = False
 
+        # On startup, recover any tasks that were running when server crashed
+        self._recover_crashed_tasks()
+
     def create_task(
         self,
         file_paths: List[str],
@@ -660,6 +663,47 @@ class AnalysisTaskManager:
                 task.to_dict() for task in self._tasks.values()
                 if task.status in [TaskStatus.PENDING, TaskStatus.RUNNING]
             ]
+
+    def _recover_crashed_tasks(self):
+        """
+        On startup, find tasks that were running when server crashed.
+
+        Marks them as failed so users see a clear error instead of hanging.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        try:
+            from web.database import db, AnalysisRun
+            from web.app import app
+
+            with app.app_context():
+                # Find runs that were 'running' or 'pending' when we restarted
+                crashed_runs = AnalysisRun.query.filter(
+                    AnalysisRun.status.in_(['running', 'pending'])
+                ).all()
+
+                if crashed_runs:
+                    logger.warning(f"🔄 Found {len(crashed_runs)} tasks interrupted by server restart")
+
+                    for run in crashed_runs:
+                        # Mark as failed with clear error message
+                        run.status = 'failed'
+                        run.error_message = 'Server restarted during analysis. Please start a new analysis.'
+                        run.completed_at = datetime.utcnow()
+
+                        if run.started_at:
+                            run.duration_seconds = (run.completed_at - run.started_at).total_seconds()
+
+                        logger.info(f"   ❌ Marked task {run.task_id} as failed (was at {run.progress}% - {run.current_step})")
+
+                    db.session.commit()
+                    logger.warning(f"✅ Recovered {len(crashed_runs)} crashed tasks")
+
+        except Exception as e:
+            logger.error(f"Error recovering crashed tasks: {e}")
+            # Don't fail startup if recovery fails
+            pass
 
 
 # Global instance
