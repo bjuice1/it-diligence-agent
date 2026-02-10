@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, Callable, List
 from datetime import datetime
 from dataclasses import asdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Add parent directory for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -200,6 +201,7 @@ class IncrementalPersistence:
                 finding_data = {
                     'finding_id': finding_id,
                     'finding_type': 'strategic_consideration',
+                    'entity': getattr(sc, 'entity', 'target'),
                     'domain': getattr(sc, 'domain', 'general'),
                     'title': getattr(sc, 'title', ''),
                     'description': getattr(sc, 'description', ''),
@@ -225,6 +227,7 @@ class IncrementalPersistence:
                 finding_data = {
                     'finding_id': finding_id,
                     'finding_type': 'recommendation',
+                    'entity': getattr(rec, 'entity', 'target'),
                     'domain': getattr(rec, 'domain', 'general'),
                     'title': getattr(rec, 'title', ''),
                     'description': getattr(rec, 'description', ''),
@@ -262,7 +265,7 @@ class IncrementalPersistence:
             )
 
     def complete(self, status: str = 'completed', error_message: str = ''):
-        """Mark analysis run as complete."""
+        """Mark analysis run as complete and generate diff."""
         writer = self._get_writer()
         with writer.session_scope() as db_session:
             writer.complete_analysis_run(
@@ -273,6 +276,16 @@ class IncrementalPersistence:
                 facts_created=len(self._written_fact_ids),
                 findings_created=len(self._written_finding_ids)
             )
+
+        # Generate run diff (Phase 1a: What Changed)
+        if status == 'completed':
+            try:
+                from services.run_diff_service import generate_run_diff
+                diff = generate_run_diff(self.deal_id, self.run_id)
+                if diff:
+                    logger.info(f"Run diff generated: +{diff.facts_created} facts, +{diff.risks_created} risks")
+            except Exception as e:
+                logger.warning(f"Failed to generate run diff (non-fatal): {e}")
 
     def get_stats(self) -> Dict[str, int]:
         """Get counts of what's been persisted."""
@@ -390,11 +403,20 @@ def persist_to_database(session, deal_id: str, timestamp: str) -> Dict[str, int]
     for risk in session.reasoning_store.risks:
         # Risk dataclass has 'finding_id' attribute
         finding_id = getattr(risk, 'finding_id', None) or f"R-{uuid4().hex[:8].upper()}"
+
+        # Serialize cost_buildup if present (same pattern as work_items)
+        cost_buildup_json = None
+        cost_buildup = getattr(risk, 'cost_buildup', None)
+        if cost_buildup and hasattr(cost_buildup, 'to_dict'):
+            cost_buildup_json = cost_buildup.to_dict()
+
         db_finding = Finding(
             id=finding_id,
             deal_id=deal_id,
             analysis_run_id=analysis_run_id,
             finding_type='risk',
+            entity=getattr(risk, 'entity', 'target'),
+            risk_scope=getattr(risk, 'risk_scope', ''),
             domain=getattr(risk, 'domain', 'general'),
             title=getattr(risk, 'title', ''),
             description=getattr(risk, 'description', ''),
@@ -407,6 +429,7 @@ def persist_to_database(session, deal_id: str, timestamp: str) -> Dict[str, int]
             reasoning=getattr(risk, 'reasoning', ''),
             mna_lens=getattr(risk, 'mna_lens', ''),
             mna_implication=getattr(risk, 'mna_implication', ''),
+            cost_buildup_json=cost_buildup_json,
             based_on_facts=getattr(risk, 'based_on_facts', []),
             extra_data={
                 'full_risk': risk.to_dict() if hasattr(risk, 'to_dict') else str(risk),
@@ -420,11 +443,19 @@ def persist_to_database(session, deal_id: str, timestamp: str) -> Dict[str, int]
     for wi in session.reasoning_store.work_items:
         # WorkItem dataclass has 'finding_id' attribute
         finding_id = getattr(wi, 'finding_id', None) or f"WI-{uuid4().hex[:8].upper()}"
+        # Serialize cost_buildup if present
+        cost_buildup_json = None
+        cost_buildup = getattr(wi, 'cost_buildup', None)
+        if cost_buildup and hasattr(cost_buildup, 'to_dict'):
+            cost_buildup_json = cost_buildup.to_dict()
+
         db_finding = Finding(
             id=finding_id,
             deal_id=deal_id,
             analysis_run_id=analysis_run_id,
             finding_type='work_item',
+            entity=getattr(wi, 'entity', 'target'),
+            risk_scope=getattr(wi, 'risk_scope', '') if hasattr(wi, 'risk_scope') else '',
             domain=getattr(wi, 'domain', 'general'),
             title=getattr(wi, 'title', ''),
             description=getattr(wi, 'description', ''),
@@ -432,6 +463,7 @@ def persist_to_database(session, deal_id: str, timestamp: str) -> Dict[str, int]
             phase=getattr(wi, 'phase', None),
             owner_type=getattr(wi, 'owner_type', 'shared'),  # WorkItem uses 'owner_type' not 'owner'
             cost_estimate=getattr(wi, 'cost_estimate', ''),
+            cost_buildup_json=cost_buildup_json,
             confidence=getattr(wi, 'confidence', 'medium'),
             reasoning=getattr(wi, 'reasoning', ''),
             mna_lens=getattr(wi, 'mna_lens', ''),
@@ -473,6 +505,24 @@ def persist_to_database(session, deal_id: str, timestamp: str) -> Dict[str, int]
 
     logger.info(f"Database persistence complete: run={analysis_run_id}, facts={result['facts_count']}, findings={result['findings_count']}, gaps={result['gaps_count']}")
 
+    # Generate run diff (Phase 1a: What Changed)
+    try:
+        from services.run_diff_service import generate_run_diff
+        diff = generate_run_diff(deal_id, analysis_run_id)
+        if diff:
+            logger.info(f"Run diff generated: +{diff.facts_created} facts, +{diff.risks_created} risks")
+    except Exception as e:
+        logger.warning(f"Failed to generate run diff (non-fatal): {e}")
+
+    # Generate fact reasoning (Phase 1b: Why This Matters)
+    try:
+        from services.fact_reasoning_service import generate_reasoning_for_run
+        facts_list = list(session.fact_store.facts)
+        reasoning_stats = generate_reasoning_for_run(facts_list, analysis_run_id, deal_id)
+        logger.info(f"Fact reasoning generated: {reasoning_stats['reasoning_generated']}/{reasoning_stats['high_signal']} high-signal facts")
+    except Exception as e:
+        logger.warning(f"Failed to generate fact reasoning (non-fatal): {e}")
+
     return result
 
 
@@ -500,7 +550,7 @@ def check_pipeline_availability() -> Dict[str, Any]:
 
     # Check fact store
     try:
-        from tools_v2.fact_store import FactStore
+        from stores.fact_store import FactStore
         status['fact_store'] = True
     except Exception as e:
         status['errors'].append(f'FactStore: {e}')
@@ -886,30 +936,84 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable, app=None) -> D
         session.overlaps_by_domain = {}
 
     # =========================================================================
-    # PHASE 4: REASONING
+    # PHASE 4: REASONING (PARALLEL)
     # =========================================================================
     progress_callback({"phase": AnalysisPhase.REASONING})
 
-    for domain in domains_to_analyze:
-        if task._cancelled:
-            if incremental:
-                incremental.complete('cancelled')
-            return {}
+    # Run reasoning for all domains in parallel (max 3 concurrent)
+    from config_v2 import PARALLEL_REASONING, MAX_PARALLEL_AGENTS
+    import threading
 
+    reasoning_lock = threading.Lock()  # Protect shared session state
+    completed_domains = []
+
+    def run_domain_reasoning(domain):
+        """Run reasoning for a single domain, return results."""
+        if task._cancelled:
+            return domain, None, None
         try:
             run_reasoning_for_domain(domain, session)
-
-            # INCREMENTAL WRITE: Persist findings immediately after each domain
-            if incremental:
-                incremental.persist_new_findings(session.reasoning_store)
-                incremental.update_progress(75.0, f"Reasoning {domain} complete")
-
-            progress_callback({
-                "risks_identified": len(session.reasoning_store.risks),
-                "work_items_created": len(session.reasoning_store.work_items),
-            })
+            # Return counts for progress update
+            with reasoning_lock:
+                risks_count = len(session.reasoning_store.risks)
+                work_items_count = len(session.reasoning_store.work_items)
+            return domain, risks_count, work_items_count
         except Exception as e:
             logger.error(f"Error in {domain} reasoning: {e}")
+            return domain, None, str(e)
+
+    if PARALLEL_REASONING and len(domains_to_analyze) > 1:
+        # Parallel execution
+        logger.info(f"Running PARALLEL reasoning for {len(domains_to_analyze)} domains (max {MAX_PARALLEL_AGENTS} concurrent)")
+        with ThreadPoolExecutor(max_workers=MAX_PARALLEL_AGENTS) as executor:
+            futures = {executor.submit(run_domain_reasoning, d): d for d in domains_to_analyze}
+
+            for future in as_completed(futures):
+                domain = futures[future]
+                try:
+                    result_domain, risks_count, work_items_count = future.result(timeout=600)  # 10 min timeout
+                    completed_domains.append(result_domain)
+
+                    if risks_count is not None:
+                        # INCREMENTAL WRITE: Persist findings after each domain
+                        if incremental:
+                            with reasoning_lock:
+                                incremental.persist_new_findings(session.reasoning_store)
+                            incremental.update_progress(75.0, f"Reasoning {domain} complete ({len(completed_domains)}/{len(domains_to_analyze)})")
+
+                        # Update progress with phase info for UI display
+                        progress_callback({
+                            "phase": AnalysisPhase.REASONING,
+                            "phase_display": f"Identifying Risks... ({len(completed_domains)}/{len(domains_to_analyze)} domains)",
+                            "risks_identified": risks_count,
+                            "work_items_created": work_items_count,
+                        })
+                        logger.info(f"Reasoning complete: {domain} ({len(completed_domains)}/{len(domains_to_analyze)})")
+                except Exception as e:
+                    logger.error(f"Reasoning failed for {domain}: {e}")
+    else:
+        # Sequential execution (fallback or single domain)
+        for domain in domains_to_analyze:
+            if task._cancelled:
+                if incremental:
+                    incremental.complete('cancelled')
+                return {}
+
+            try:
+                run_reasoning_for_domain(domain, session)
+                completed_domains.append(domain)
+
+                # INCREMENTAL WRITE: Persist findings immediately after each domain
+                if incremental:
+                    incremental.persist_new_findings(session.reasoning_store)
+                    incremental.update_progress(75.0, f"Reasoning {domain} complete")
+
+                progress_callback({
+                    "risks_identified": len(session.reasoning_store.risks),
+                    "work_items_created": len(session.reasoning_store.work_items),
+                })
+            except Exception as e:
+                logger.error(f"Error in {domain} reasoning: {e}")
 
     # Phase 4: Synthesis
     progress_callback({"phase": AnalysisPhase.SYNTHESIS})
@@ -967,12 +1071,17 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable, app=None) -> D
         logger.warning("No deal_id in context - skipping database persistence")
 
     # Save open questions separately
+    # A3 FIX: Include deal_id in filename for proper isolation
     if open_questions:
         import json
-        questions_file = OUTPUT_DIR / f"open_questions_{timestamp}.json"
+        if deal_id:
+            questions_file = OUTPUT_DIR / f"open_questions_{deal_id}_{timestamp}.json"
+        else:
+            questions_file = OUTPUT_DIR / f"open_questions_{timestamp}.json"
         with open(questions_file, 'w') as f:
             json.dump(open_questions, f, indent=2)
         saved_files['open_questions'] = questions_file
+        logger.info(f"A3: Saved questions to {questions_file.name}")
 
     # Get the actual saved file paths from the saved_files dict
     facts_file = saved_files.get('facts')
@@ -1041,7 +1150,7 @@ def run_discovery_for_domain(
     Returns:
         Tuple of (facts, gaps) extracted in this run
     """
-    from tools_v2.fact_store import FactStore
+    from stores.fact_store import FactStore
     from config_v2 import ANTHROPIC_API_KEY
 
     # Import the appropriate discovery agent
