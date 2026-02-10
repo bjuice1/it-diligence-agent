@@ -962,9 +962,8 @@ def process_upload():
     buyer_authority = int(request.form.get('buyer_authority', 1))
 
     # STRUCTURAL FIX: Get current user once for all document uploads
-    from web.context import get_current_user
-    current_user = get_current_user()
-    uploader_id = current_user.id if current_user else None
+    # current_user is already imported from flask_login at top of file
+    uploader_id = current_user.id if current_user.is_authenticated else None
 
     # MEMORY FIX: Validate total upload size before processing
     target_files = request.files.getlist('target_documents')
@@ -1136,11 +1135,10 @@ def process_upload():
             logger.info(f"Using existing deal: {deal_id} ({active_deal.name})")
         else:
             # Create new deal from upload form data
-            user = get_current_user()
             deal_name = f"{target_name} Analysis" if target_name else "New Analysis"
 
             new_deal, error = deal_service.create_deal(
-                user_id=user.id if user else None,
+                user_id=current_user.id if current_user.is_authenticated else None,
                 name=deal_name,
                 target_name=target_name or "Unknown Target",
                 buyer_name=buyer_name or None,
@@ -1154,7 +1152,7 @@ def process_upload():
                 logger.info(f"Created new deal: {deal_id} ({new_deal.name})")
             else:
                 logger.error(f"Failed to create deal: {error}")
-                logger.error(f"  user_id={user.id if user else None}")
+                logger.error(f"  user_id={current_user.id if current_user.is_authenticated else None}")
                 logger.error(f"  deal_name={deal_name}")
                 logger.error(f"  target_name={target_name}")
     except Exception as e:
