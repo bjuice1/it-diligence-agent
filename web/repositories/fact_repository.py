@@ -148,26 +148,13 @@ class FactRepository(BaseRepository[Fact]):
         if entity:
             query = query.filter(Fact.entity == entity)
 
-        # Check if PostgreSQL (has full-text search)
-        bind = db.session.get_bind()
-        if 'postgresql' in str(bind.dialect.name):
-            # Use PostgreSQL full-text search
-            # Also include exact fact_id matching for precision
-            search_query = func.plainto_tsquery('english', search_term)
-            query = query.filter(
-                or_(
-                    Fact.fact_id.ilike(f'%{search_term}%'),  # Exact fact ID match
-                    text("to_tsvector('english', item || ' ' || COALESCE(source_quote, '')) @@ plainto_tsquery('english', :term)")
-                )
-            ).params(term=search_term)
-        else:
-            # Fallback to LIKE for SQLite
-            search_filter = or_(
-                Fact.fact_id.ilike(f'%{search_term}%'),
-                Fact.item.ilike(f'%{search_term}%'),
-                Fact.source_quote.ilike(f'%{search_term}%')
-            )
-            query = query.filter(search_filter)
+        # Always search fact_id first (works for both PostgreSQL and SQLite)
+        search_filter = or_(
+            Fact.fact_id.ilike(f'%{search_term}%'),
+            Fact.item.ilike(f'%{search_term}%'),
+            Fact.source_quote.ilike(f'%{search_term}%')
+        )
+        query = query.filter(search_filter)
 
         return query.limit(limit).all()
 
