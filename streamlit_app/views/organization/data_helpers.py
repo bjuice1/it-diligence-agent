@@ -16,7 +16,7 @@ from services.organization_bridge import build_organization_from_facts
 from models.organization_stores import OrganizationDataStore
 
 
-def get_organization_data_store(fact_store: Any) -> Tuple[Optional[OrganizationDataStore], str]:
+def get_organization_data_store(fact_store: Any, entity: str = "target") -> Tuple[Optional[OrganizationDataStore], str]:
     """
     Get OrganizationDataStore from fact_store via the organization bridge.
 
@@ -25,6 +25,7 @@ def get_organization_data_store(fact_store: Any) -> Tuple[Optional[OrganizationD
 
     Args:
         fact_store: FactStore containing organization domain facts
+        entity: "target" or "buyer" (default: "target")
 
     Returns:
         Tuple of (OrganizationDataStore, status) where status is:
@@ -44,8 +45,13 @@ def get_organization_data_store(fact_store: Any) -> Tuple[Optional[OrganizationD
         return None, "no_org_facts"
 
     # Call the bridge to build OrganizationDataStore with StaffMember objects
+    # P1 FIX #6: Pass entity explicitly to prevent silent misattribution
     try:
-        store, status = build_organization_from_facts(fact_store)
+        store, status = build_organization_from_facts(
+            fact_store,
+            entity=entity,
+            deal_id=getattr(fact_store, 'deal_id', '')
+        )
         return store, status
     except Exception as e:
         return None, f"error: {str(e)}"

@@ -175,6 +175,10 @@ def build_organization_from_facts(
             hierarchy_presence = None
             assumptions_enabled = False  # Disable assumptions if detection fails
 
+    # Track if assumptions were merged (P1 FIX #4: for rollback on staff creation failure)
+    assumptions_merged_successfully = False
+    assumptions_backup_for_staff_rollback = None
+
     # STEP 2 & 3: Generate and merge assumptions if needed (P0 FIX #5, #6: isolation + atomicity)
     if assumptions_enabled and hierarchy_presence:
         from services.org_hierarchy_detector import HierarchyPresenceStatus
@@ -225,6 +229,10 @@ def build_organization_from_facts(
                             # Refresh org_facts to include assumptions
                             org_facts = [f for f in fact_store.facts
                                        if f.domain == "organization" and f.entity == entity]
+
+                            # Mark assumptions as successfully merged (P1 FIX #4)
+                            assumptions_merged_successfully = True
+                            assumptions_backup_for_staff_rollback = old_assumptions_backup
 
                             if LOG_ASSUMPTION_GENERATION:
                                 logger.info(f"Generated and merged {len(assumptions)} assumptions for {entity}")
@@ -286,47 +294,71 @@ def build_organization_from_facts(
                 logger.info(f"Found authoritative IT headcount from fact {fact.item}: {authoritative_headcount}")
                 break
 
-    # Build staff members from facts
+    # Build staff members from facts (P1 FIX #4: with rollback protection)
+    # If staff creation fails after assumptions were merged, rollback the assumptions
     staff_members = []
 
-    # Process leadership
-    for fact in leadership_facts:
-        members = _create_staff_from_leadership_fact(fact, deal_id=deal_id)
-        staff_members.extend(members)
+    try:
+        # Process leadership
+        for fact in leadership_facts:
+            members = _create_staff_from_leadership_fact(fact, deal_id=deal_id)
+            staff_members.extend(members)
 
-    # Process central IT teams
-    for fact in central_it_facts:
-        members = _create_staff_from_team_fact(fact, RoleCategory.INFRASTRUCTURE, deal_id=deal_id)
-        staff_members.extend(members)
+        # Process central IT teams
+        for fact in central_it_facts:
+            members = _create_staff_from_team_fact(fact, RoleCategory.INFRASTRUCTURE, deal_id=deal_id)
+            staff_members.extend(members)
 
-    # Process app teams
-    for fact in app_team_facts:
-        members = _create_staff_from_team_fact(fact, RoleCategory.APPLICATIONS, deal_id=deal_id)
-        staff_members.extend(members)
+        # Process app teams
+        for fact in app_team_facts:
+            members = _create_staff_from_team_fact(fact, RoleCategory.APPLICATIONS, deal_id=deal_id)
+            staff_members.extend(members)
 
-    # Process embedded IT
-    for fact in embedded_facts:
-        members = _create_staff_from_team_fact(fact, RoleCategory.OTHER, deal_id=deal_id)
-        staff_members.extend(members)
+        # Process embedded IT
+        for fact in embedded_facts:
+            members = _create_staff_from_team_fact(fact, RoleCategory.OTHER, deal_id=deal_id)
+            staff_members.extend(members)
 
-    # Process roles (from Role & Compensation Breakdown table)
-    for fact in roles_facts:
-        members = _create_staff_from_role_fact(fact, deal_id=deal_id)
-        staff_members.extend(members)
+        # Process roles (from Role & Compensation Breakdown table)
+        for fact in roles_facts:
+            members = _create_staff_from_role_fact(fact, deal_id=deal_id)
+            staff_members.extend(members)
 
-    # Process key individuals
-    for fact in key_individual_facts:
-        member = _create_staff_from_key_individual_fact(fact, deal_id=deal_id)
-        if member:
-            # Check if already added, update if so
-            existing = next((s for s in staff_members if s.name == member.name), None)
-            if existing:
-                existing.is_key_person = True
-                existing.key_person_reason = member.key_person_reason
-            else:
-                staff_members.append(member)
+        # Process key individuals
+        for fact in key_individual_facts:
+            member = _create_staff_from_key_individual_fact(fact, deal_id=deal_id)
+            if member:
+                # Check if already added, update if so
+                existing = next((s for s in staff_members if s.name == member.name), None)
+                if existing:
+                    existing.is_key_person = True
+                    existing.key_person_reason = member.key_person_reason
+                else:
+                    staff_members.append(member)
 
-    store.staff_members = staff_members
+        store.staff_members = staff_members
+
+    except Exception as e:
+        # P1 FIX #4: Rollback assumptions if staff creation failed
+        logger.error(f"Staff member creation failed for {entity}, rolling back assumptions: {e}")
+
+        if assumptions_merged_successfully and assumptions_backup_for_staff_rollback is not None:
+            with _fact_store_modification_lock:
+                # Remove assumptions that were just merged
+                fact_store.facts = [
+                    f for f in fact_store.facts
+                    if not (f.domain == "organization" and
+                            f.entity == entity and
+                            (f.details or {}).get('data_source') == 'assumed')
+                ]
+
+                # Restore old assumptions (if any existed)
+                fact_store.facts.extend(assumptions_backup_for_staff_rollback)
+
+                logger.info(f"Rolled back assumptions for {entity} due to staff creation failure")
+
+        # Re-raise the exception
+        raise
 
     # Set authoritative headcount from IT Budget fact if found
     if authoritative_headcount is not None:
@@ -970,7 +1002,8 @@ def build_organization_result(
     fact_store: FactStore,
     reasoning_store: Any = None,
     target_name: str = "Target",
-    deal_id: str = ""
+    deal_id: str = "",
+    entity: str = "target"
 ) -> Tuple[OrganizationAnalysisResult, str]:
     """
     Build a complete OrganizationAnalysisResult from facts.
@@ -980,6 +1013,7 @@ def build_organization_result(
         reasoning_store: Optional reasoning store for additional findings
         target_name: Name of the target company
         deal_id: Deal ID for data isolation
+        entity: "target" or "buyer" (default: "target")
 
     Returns:
         Tuple of (OrganizationAnalysisResult, status) where status is:
@@ -990,7 +1024,13 @@ def build_organization_result(
     from models.organization_stores import StaffingComparisonResult
     from datetime import datetime
 
-    store, status = build_organization_from_facts(fact_store, target_name, deal_id=deal_id)
+    # P1 FIX #6: Pass entity explicitly to prevent silent misattribution
+    store, status = build_organization_from_facts(
+        fact_store,
+        target_name=target_name,
+        deal_id=deal_id,
+        entity=entity
+    )
 
     # Calculate summaries
     msp_summary = _build_msp_summary(store.msp_relationships)
@@ -1099,6 +1139,12 @@ def _remove_old_assumptions_from_fact_store(
     # Replace contents in-place (preserves list object identity)
     fact_store.facts[:] = facts_to_keep
 
+    # P1 FIX #5: Clear assumed fact index for this entity (index maintenance)
+    if hasattr(fact_store, '_assumed_fact_keys_by_entity'):
+        if entity in fact_store._assumed_fact_keys_by_entity:
+            fact_store._assumed_fact_keys_by_entity[entity].clear()
+            logger.debug(f"Cleared assumed fact index for {entity}")
+
     removed_count = original_count - len(fact_store.facts)
 
     if removed_count > 0:
@@ -1131,17 +1177,12 @@ def _merge_assumptions_into_fact_store(
         deal_id: Deal ID for fact tagging
         entity: "target" or "buyer"
     """
-    # IDEMPOTENCY CHECK: Find existing assumptions for this entity
-    existing_assumption_keys = set()
-    for fact in fact_store.facts:
-        if (fact.domain == "organization" and
-            fact.entity == entity and
-            (fact.details or {}).get('data_source') == 'assumed'):
-            # Create unique key from item + category
-            key = f"{fact.category}:{fact.item}"
-            existing_assumption_keys.add(key)
+    # IDEMPOTENCY CHECK: Query index for O(1) lookup (P1 FIX #5: O(N) → O(1))
+    # Before: Linear scan through all facts (O(N) where N = total facts)
+    # After: Direct index lookup (O(1) where K = assumed facts for entity)
+    existing_assumption_keys = fact_store.get_assumed_fact_keys(entity)
 
-    logger.debug(f"Found {len(existing_assumption_keys)} existing assumptions for {entity}")
+    logger.debug(f"Found {len(existing_assumption_keys)} existing assumptions for {entity} (via index)")
 
     # Filter out assumptions that already exist
     new_assumptions = []

@@ -80,12 +80,16 @@ def render_staffing_view(
         _render_recommendations_tab(store, reasoning_store)
 
 
-def _get_staffing_data(fact_store: Any) -> Tuple[Optional[OrganizationDataStore], str]:
+def _get_staffing_data(fact_store: Any, entity: str = "target") -> Tuple[Optional[OrganizationDataStore], str]:
     """
     Get staffing data from organization bridge.
 
     This calls build_organization_from_facts to get StaffMember objects
     with individual names, compensation, and hierarchy data.
+
+    Args:
+        fact_store: FactStore containing organization facts
+        entity: "target" or "buyer" (default: "target")
 
     Returns:
         Tuple of (OrganizationDataStore, status_string)
@@ -94,7 +98,12 @@ def _get_staffing_data(fact_store: Any) -> Tuple[Optional[OrganizationDataStore]
         return None, "no_facts"
 
     try:
-        return build_organization_from_facts(fact_store)
+        # P1 FIX #6: Pass entity explicitly to prevent silent misattribution
+        return build_organization_from_facts(
+            fact_store,
+            entity=entity,
+            deal_id=getattr(fact_store, 'deal_id', '')
+        )
     except Exception as e:
         st.error(f"Error loading staffing data: {e}")
         return None, f"error: {str(e)}"

@@ -90,20 +90,28 @@ SAMPLE_ORG_STRUCTURE = {
 }
 
 
-def extract_org_from_facts(fact_store: FactStore) -> Dict[str, Any]:
+def extract_org_from_facts(fact_store: FactStore, entity: str = "target") -> Dict[str, Any]:
     """
     Extract organizational structure from facts via organization bridge.
 
     This now calls build_organization_from_facts to get StaffMember objects
     with individual names, compensation, and hierarchy data, then converts
     to the format expected by the render functions.
+
+    Args:
+        fact_store: FactStore containing organization facts
+        entity: "target" or "buyer" (default: "target")
     """
     if not fact_store:
         return {}
 
-    # Call organization bridge to get StaffMember data
+    # Call organization bridge to get StaffMember data (P1 FIX #6: explicit entity)
     try:
-        store, status = build_organization_from_facts(fact_store)
+        store, status = build_organization_from_facts(
+            fact_store,
+            entity=entity,
+            deal_id=getattr(fact_store, 'deal_id', '')
+        )
         if not store or not store.staff_members:
             return {}
         return _convert_store_to_org_structure(store)

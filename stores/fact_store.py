@@ -521,6 +521,11 @@ class FactStore:
         self._gap_index: Dict[str, Gap] = {}
         self._question_index: Dict[str, OpenQuestion] = {}  # Point 82
 
+        # Performance: Index for assumed facts (P1 FIX #5: O(N) → O(1) idempotency check)
+        # Maps entity → set of category:item keys for assumed facts
+        # Example: {"target": {"leadership:CIO", "leadership:VP"}, "buyer": {...}}
+        self._assumed_fact_keys_by_entity: Dict[str, set] = {}
+
         # Warn if no deal_id provided
         if not deal_id:
             logger.warning("FactStore created without deal_id - data isolation may be compromised")
@@ -623,6 +628,15 @@ class FactStore:
 
             self.facts.append(fact)
             self._fact_index[fact_id] = fact  # Update index
+
+            # P1 FIX #5: Update assumed facts index for O(1) idempotency checks
+            if fact.domain == "organization" and (fact.details or {}).get('data_source') == 'assumed':
+                if entity not in self._assumed_fact_keys_by_entity:
+                    self._assumed_fact_keys_by_entity[entity] = set()
+                key = f"{fact.category}:{fact.item}"
+                self._assumed_fact_keys_by_entity[entity].add(key)
+                logger.debug(f"Indexed assumed fact key: {entity}/{key}")
+
             review_flag = " [NEEDS REVIEW]" if fact.needs_review else ""
             logger.debug(f"Added fact {fact_id}: {item} (confidence: {fact.confidence_score:.2f}){review_flag}")
 
@@ -776,6 +790,23 @@ class FactStore:
         """Get a specific gap by ID (O(1) lookup using index)."""
         with self._lock:
             return self._gap_index.get(gap_id)
+
+    def get_assumed_fact_keys(self, entity: str) -> set:
+        """
+        Get set of category:item keys for assumed facts for an entity (O(1) lookup).
+
+        P1 FIX #5: Enables O(1) idempotency check in assumption merge instead of
+        O(N) scan through all facts.
+
+        Args:
+            entity: "target" or "buyer"
+
+        Returns:
+            Set of "category:item" keys for assumed facts, e.g. {"leadership:CIO", "leadership:VP"}
+            Empty set if no assumed facts exist for this entity.
+        """
+        with self._lock:
+            return self._assumed_fact_keys_by_entity.get(entity, set()).copy()
 
     def get_domain_facts(self, domain: str) -> Dict[str, Any]:
         """

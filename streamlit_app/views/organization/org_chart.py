@@ -82,13 +82,24 @@ def render_org_chart(
         )
 
 
-def _get_org_data_store(fact_store: Any) -> tuple:
-    """Get OrganizationDataStore from facts via organization bridge."""
+def _get_org_data_store(fact_store: Any, entity: str = "target") -> tuple:
+    """
+    Get OrganizationDataStore from facts via organization bridge.
+
+    Args:
+        fact_store: FactStore containing organization facts
+        entity: "target" or "buyer" (default: "target")
+    """
     if not fact_store or not hasattr(fact_store, 'facts') or not fact_store.facts:
         return None, "no_facts"
 
     try:
-        return build_organization_from_facts(fact_store)
+        # P1 FIX #6: Pass entity explicitly to prevent silent misattribution
+        return build_organization_from_facts(
+            fact_store,
+            entity=entity,
+            deal_id=getattr(fact_store, 'deal_id', '')
+        )
     except Exception as e:
         st.error(f"Error loading org data: {e}")
         return None, f"error: {str(e)}"
