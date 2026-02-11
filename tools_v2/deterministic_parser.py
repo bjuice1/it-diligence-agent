@@ -429,6 +429,18 @@ def _app_table_to_facts(
         from stores.app_category_mappings import categorize_app
         category, mapping, confidence, inferred_from = categorize_app(item_name)
 
+        # SPEC: Extract canonical vendor from AppMapping if available (vendor normalization)
+        # This prevents fingerprint collisions from inconsistent vendor data in source PDFs
+        canonical_vendor = details.get("vendor", "")
+        if mapping and confidence in ("high", "medium"):
+            # Use canonical vendor from AppMapping for known apps
+            canonical_vendor = mapping.vendor
+            if canonical_vendor != details.get("vendor", ""):
+                logger.debug(f"Normalized vendor for '{item_name}': '{details.get('vendor', '')}' → '{canonical_vendor}'")
+        elif not canonical_vendor:
+            # Log apps with missing vendor for manual review
+            logger.warning(f"Application '{item_name}' has no vendor in table and no mapping")
+
         # If no mapping found, try keyword-based inference from category_detail
         cat_detail = details.get("category_detail", "").lower()
         if category == "unknown" and cat_detail:
@@ -477,6 +489,10 @@ def _app_table_to_facts(
             "source_section": "Application Inventory Table"
         }
 
+        # Log vendor normalization for monitoring
+        if mapping and canonical_vendor != details.get("vendor", ""):
+            logger.info(f"Vendor normalized: {item_name} | Table: '{details.get('vendor', 'N/A')}' → Canonical: '{canonical_vendor}'")
+
         # Add to FactStore
         try:
             fact_id = fact_store.add_fact(
@@ -498,7 +514,7 @@ def _app_table_to_facts(
                 try:
                     inv_data = {
                         "name": item_name,
-                        "vendor": details.get("vendor", ""),
+                        "vendor": canonical_vendor,  # Use normalized vendor (not raw from table)
                         "version": details.get("version", ""),
                         "hosting": details.get("deployment", ""),
                         "users": details.get("user_count", ""),

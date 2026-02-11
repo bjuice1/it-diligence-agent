@@ -43,6 +43,11 @@ def generate_inventory_id(
     Including deal_id ensures items with same content in different deals
     get different IDs (proper isolation).
 
+    NOTE: Empty/null optional fields are normalized to "unspecified" to
+    ensure deterministic hashing. This prevents fingerprint collisions
+    when optional fields (vendor, environment, team, contract_type) are
+    missing or inconsistent across source documents.
+
     Args:
         inventory_type: One of: application, infrastructure, organization, vendor
         data: Item data dict containing at least the id_fields for the type
@@ -71,7 +76,8 @@ def generate_inventory_id(
     for field in id_fields:
         value = data.get(field, "")
         # Normalize: lowercase, strip whitespace
-        normalized = str(value).lower().strip() if value else ""
+        # Use sentinel value for empty optional fields to ensure stable hashing
+        normalized = str(value).lower().strip() if value else "unspecified"
         parts.append(normalized)
 
     # Create hash
