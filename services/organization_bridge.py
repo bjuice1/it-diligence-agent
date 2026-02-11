@@ -53,24 +53,53 @@ DEFAULT_SALARIES = {
 }
 
 
-def build_organization_from_facts(fact_store: FactStore, target_name: str = "Target", deal_id: str = "") -> Tuple[OrganizationDataStore, str]:
+def build_organization_from_facts(
+    fact_store: FactStore,
+    target_name: str = "Target",
+    deal_id: str = "",
+    entity: str = "target",
+    company_profile: Optional[Dict[str, Any]] = None,
+    enable_assumptions: Optional[bool] = None
+) -> Tuple[OrganizationDataStore, str]:
     """
-    Build an OrganizationDataStore from organization-domain facts.
+    Build an OrganizationDataStore from organization-domain facts with adaptive extraction.
+
+    Enhanced for spec 11: Detects hierarchy presence and generates assumptions
+    when organizational structure data is missing or incomplete.
 
     Args:
         fact_store: The fact store containing organization facts
         target_name: Name of the target company
         deal_id: Deal ID for data isolation (passed to created objects)
+        entity: "target" or "buyer" (which entity to analyze)
+        company_profile: Optional company context (industry, headcount) for assumptions
+        enable_assumptions: Override ENABLE_ORG_ASSUMPTIONS config flag
 
     Returns:
         Tuple of (OrganizationDataStore, status) where status is:
-        - "success": Org data was found and built
+        - "success": Org data was found and built (observed only or FULL hierarchy)
+        - "success_with_assumptions": Observed + assumed data merged
+        - "success_fallback": Error in assumptions, fell back to observed only
         - "no_org_facts": Analysis ran but no org facts found
         - "no_facts": No facts at all in the store
+        - "error": Unrecoverable error
     """
+    from config_v2 import ENABLE_ORG_ASSUMPTIONS, ENABLE_BUYER_ORG_ASSUMPTIONS
+    from config_v2 import LOG_ASSUMPTION_GENERATION, LOG_HIERARCHY_DETECTION
+
     # Try to get deal_id from fact_store if not provided
     if not deal_id and hasattr(fact_store, 'deal_id') and fact_store.deal_id:
         deal_id = fact_store.deal_id
+
+    # Determine if assumptions are enabled
+    assumptions_enabled = (
+        enable_assumptions if enable_assumptions is not None
+        else ENABLE_ORG_ASSUMPTIONS
+    )
+
+    # Check entity-specific flag for buyer assumptions
+    if entity == "buyer" and not ENABLE_BUYER_ORG_ASSUMPTIONS:
+        assumptions_enabled = False
 
     store = OrganizationDataStore()
 
@@ -80,12 +109,110 @@ def build_organization_from_facts(fact_store: FactStore, target_name: str = "Tar
         logger.warning("No facts at all in fact store")
         return store, "no_facts"
 
-    # Get organization domain facts
-    org_facts = [f for f in fact_store.facts if f.domain == "organization"]
+    # Get ALL organization domain facts first (before filtering by entity)
+    all_org_facts = [f for f in fact_store.facts if f.domain == "organization"]
+
+    # CRITICAL (P0 FIX #4): Validate entity field on facts
+    facts_missing_entity = [
+        f.item for f in all_org_facts
+        if not hasattr(f, 'entity') or f.entity is None or f.entity == ""
+    ]
+
+    if facts_missing_entity:
+        logger.error(
+            f"Found {len(facts_missing_entity)} org facts with missing entity field. "
+            f"This indicates an upstream bug. Facts: {facts_missing_entity[:5]}"
+        )
+        # Fail fast (recommended for data integrity)
+        raise ValueError(
+            f"Entity validation failed: {len(facts_missing_entity)} org facts "
+            f"have missing entity field. Cannot proceed with adaptive extraction."
+        )
+
+    # Now filter by entity (safe because we validated above)
+    org_facts = [f for f in all_org_facts if f.entity == entity]
 
     if not org_facts:
-        logger.warning(f"No organization facts found in fact store (has {total_facts} facts in other domains)")
+        logger.warning(f"No organization facts found for entity: {entity} "
+                      f"(has {len(all_org_facts)} org facts for other entities)")
         return store, "no_org_facts"
+
+    # STEP 1: Detect hierarchy presence (spec 08) if assumptions enabled
+    hierarchy_presence = None
+    if assumptions_enabled:
+        try:
+            from services.org_hierarchy_detector import detect_hierarchy_presence, HierarchyPresenceStatus
+
+            hierarchy_presence = detect_hierarchy_presence(fact_store, entity=entity)
+
+            if LOG_HIERARCHY_DETECTION:
+                logger.info(
+                    f"Hierarchy detection for {entity}: {hierarchy_presence.status.value} "
+                    f"(confidence: {hierarchy_presence.confidence:.2f}, "
+                    f"roles: {hierarchy_presence.total_role_count}, "
+                    f"reports_to: {hierarchy_presence.roles_with_reports_to})"
+                )
+        except Exception as e:
+            logger.warning(f"Hierarchy detection failed for {entity}, skipping assumptions: {e}")
+            hierarchy_presence = None
+            assumptions_enabled = False  # Disable assumptions if detection fails
+
+    # STEP 2 & 3: Generate and merge assumptions if needed (P0 FIX #5, #6: isolation + atomicity)
+    if assumptions_enabled and hierarchy_presence:
+        from services.org_hierarchy_detector import HierarchyPresenceStatus
+
+        if hierarchy_presence.status in [HierarchyPresenceStatus.PARTIAL, HierarchyPresenceStatus.MISSING]:
+            try:
+                from services.org_assumption_engine import generate_org_assumptions
+
+                # Generate assumptions
+                assumptions = generate_org_assumptions(
+                    fact_store=fact_store,
+                    hierarchy_presence=hierarchy_presence,
+                    entity=entity,
+                    company_profile=company_profile
+                )
+
+                if assumptions:
+                    # P0 FIX #6: Backup for atomicity
+                    old_assumptions_backup = [
+                        f for f in fact_store.facts
+                        if (f.domain == "organization" and
+                            f.entity == entity and
+                            (f.details or {}).get('data_source') == 'assumed')
+                    ]
+
+                    try:
+                        # P0 FIX #3: Remove old assumptions (entity-scoped)
+                        _remove_old_assumptions_from_fact_store(
+                            fact_store=fact_store,
+                            entity=entity
+                        )
+
+                        # P0 FIX #2: Merge with idempotency protection
+                        _merge_assumptions_into_fact_store(
+                            fact_store=fact_store,
+                            assumptions=assumptions,
+                            deal_id=deal_id,
+                            entity=entity
+                        )
+
+                        # Refresh org_facts to include assumptions
+                        org_facts = [f for f in fact_store.facts
+                                   if f.domain == "organization" and f.entity == entity]
+
+                        if LOG_ASSUMPTION_GENERATION:
+                            logger.info(f"Generated and merged {len(assumptions)} assumptions for {entity}")
+
+                    except Exception as e:
+                        # P0 FIX #6: ROLLBACK on failure
+                        logger.error(f"Assumption merge failed for {entity}, rolling back: {e}")
+                        fact_store.facts.extend(old_assumptions_backup)
+                        raise  # Re-raise to trigger fallback
+
+            except Exception as e:
+                logger.error(f"Assumption generation failed for {entity}, continuing with observed data only: {e}")
+                # Continue with observed data only (graceful degradation)
 
     # Process facts by category
     leadership_facts = [f for f in org_facts if f.category == "leadership"]
@@ -181,10 +308,26 @@ def build_organization_from_facts(fact_store: FactStore, target_name: str = "Tar
     # Calculate totals using the store's internal method
     store._update_counts()
 
-    logger.info(f"Built organization store with {len(staff_members)} staff, {len(msp_relationships)} MSPs")
-    logger.info(f"  FTEs: {store.total_internal_fte}, Contractors: {store.total_contractor}, Total Comp: ${store.total_compensation:,.0f}")
+    # Determine final status based on whether assumptions were used
+    # Check FactStore for assumed facts (since staff member data_source is not yet implemented)
+    assumed_facts = [f for f in fact_store.facts
+                    if f.domain == "organization"
+                    and f.entity == entity
+                    and (f.details or {}).get('data_source') == 'assumed']
 
-    return store, "success"
+    if assumed_facts:
+        status = "success_with_assumptions"
+        logger.info(f"Built organization store with {len(staff_members)} staff "
+                   f"(includes {len(assumed_facts)} assumed facts), "
+                   f"{len(msp_relationships)} MSPs")
+    else:
+        status = "success"
+        logger.info(f"Built organization store with {len(staff_members)} staff, {len(msp_relationships)} MSPs")
+
+    logger.info(f"  FTEs: {store.total_internal_fte}, Contractors: {store.total_contractor}, "
+               f"Total Comp: ${store.total_compensation:,.0f}")
+
+    return store, status
 
 
 def build_organization_from_inventory_store(
@@ -870,3 +1013,112 @@ def _build_cost_summary(store: OrganizationDataStore) -> TotalITCostSummary:
     summary.calculate_totals()
 
     return summary
+
+
+# =============================================================================
+# ADAPTIVE ORGANIZATION EXTRACTION (Spec 11)
+# =============================================================================
+# Helper functions for assumption-based organization extraction when
+# hierarchy data is partial or missing.
+
+def _remove_old_assumptions_from_fact_store(
+    fact_store: FactStore,
+    entity: str
+) -> int:
+    """
+    Remove old assumptions for an entity from FactStore.
+
+    CRITICAL (P0 FIX #3): Prevents stale assumptions from polluting
+    inventory when source data is updated or assumptions re-generated.
+
+    Args:
+        fact_store: FactStore to clean
+        entity: "target" or "buyer"
+
+    Returns:
+        Number of assumptions removed
+    """
+    original_count = len(fact_store.facts)
+
+    # Filter out assumed facts for this entity
+    fact_store.facts = [
+        f for f in fact_store.facts
+        if not (f.domain == "organization" and
+                f.entity == entity and
+                (f.details or {}).get('data_source') == 'assumed')
+    ]
+
+    removed_count = original_count - len(fact_store.facts)
+
+    if removed_count > 0:
+        logger.info(f"Removed {removed_count} old assumptions for {entity} (cleanup)")
+
+    return removed_count
+
+
+def _merge_assumptions_into_fact_store(
+    fact_store: FactStore,
+    assumptions: List,  # List[OrganizationAssumption]
+    deal_id: str,
+    entity: str
+) -> None:
+    """
+    Merge synthetic assumptions into FactStore as Fact objects.
+
+    CRITICAL (P0 FIX #2): Includes idempotency protection to prevent
+    duplicate assumptions if bridge is called multiple times.
+
+    This allows downstream extraction logic to treat assumptions
+    the same as observed facts (unified processing).
+
+    Args:
+        fact_store: FactStore to merge into
+        assumptions: List of OrganizationAssumption objects
+        deal_id: Deal ID for fact tagging
+        entity: "target" or "buyer"
+    """
+    # IDEMPOTENCY CHECK: Find existing assumptions for this entity
+    existing_assumption_keys = set()
+    for fact in fact_store.facts:
+        if (fact.domain == "organization" and
+            fact.entity == entity and
+            (fact.details or {}).get('data_source') == 'assumed'):
+            # Create unique key from item + category
+            key = f"{fact.category}:{fact.item}"
+            existing_assumption_keys.add(key)
+
+    logger.debug(f"Found {len(existing_assumption_keys)} existing assumptions for {entity}")
+
+    # Filter out assumptions that already exist
+    new_assumptions = []
+    duplicate_count = 0
+
+    for assumption in assumptions:
+        key = f"{assumption.category}:{assumption.item}"
+        if key in existing_assumption_keys:
+            duplicate_count += 1
+            logger.debug(f"Skipping duplicate assumption: {assumption.item}")
+        else:
+            new_assumptions.append(assumption)
+
+    if duplicate_count > 0:
+        logger.info(f"Skipped {duplicate_count} duplicate assumptions (idempotency protection)")
+
+    # Merge only new assumptions
+    for assumption in new_assumptions:
+        # Convert assumption to fact dict
+        fact_dict = assumption.to_fact(deal_id)
+
+        # Add to fact store using add_fact method
+        fact_store.add_fact(
+            domain=fact_dict['domain'],
+            category=fact_dict['category'],
+            item=fact_dict['item'],
+            details=fact_dict['details'],
+            status=fact_dict['status'],
+            evidence=fact_dict['evidence'],
+            entity=fact_dict['entity']
+        )
+
+    logger.info(f"Merged {len(new_assumptions)} new assumptions into FactStore "
+                f"(skipped {duplicate_count} duplicates)")
