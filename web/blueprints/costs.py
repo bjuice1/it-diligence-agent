@@ -131,8 +131,11 @@ class CostCenterData:
 # DATA GATHERING
 # =============================================================================
 
-def _gather_headcount_costs() -> CostCategory:
+def _gather_headcount_costs(entity: str = "target") -> CostCategory:
     """Gather headcount costs from organization analysis.
+
+    Args:
+        entity: Entity filter ("target", "buyer", or "all")
 
     Phase 2+: Database-first implementation using DealData.
     """
@@ -156,7 +159,18 @@ def _gather_headcount_costs() -> CostCategory:
         data = get_deal_data()
 
         # Get organization facts from database
-        org_facts = data.get_organization()
+        org_facts_all = data.get_organization()
+
+        # Filter by entity
+        if entity == "all":
+            org_facts = org_facts_all
+        else:
+            org_facts = [
+                fact for fact in org_facts_all
+                if getattr(fact, 'entity', None) == entity
+            ]
+
+        logger.info(f"Gathering headcount costs for entity={entity}: {len(org_facts)} org facts")
 
         # Group by role category
         role_costs = {}
@@ -305,8 +319,11 @@ def _gather_infrastructure_costs(entity: str = "target") -> CostCategory:
     return category
 
 
-def _gather_one_time_costs() -> OneTimeCosts:
+def _gather_one_time_costs(entity: str = "target") -> OneTimeCosts:
     """Gather one-time integration costs from work items and cost engine.
+
+    Args:
+        entity: Entity filter ("target", "buyer", or "all")
 
     Phase 2+: Database-first implementation using DealData.
     """
@@ -338,7 +355,19 @@ def _gather_one_time_costs() -> OneTimeCosts:
         data = get_deal_data()
 
         # Get work items from database
-        work_items = data.get_work_items()
+        work_items_all = data.get_work_items()
+
+        # Filter by entity
+        if entity == "all":
+            work_items = work_items_all
+        else:
+            # Work items have entity field directly
+            work_items = [
+                wi for wi in work_items_all
+                if getattr(wi, 'entity', None) == entity
+            ]
+
+        logger.info(f"Gathering one-time costs for entity={entity}: {len(work_items)} work items")
 
         # Group work items by phase
         phase_costs = {}
@@ -428,7 +457,13 @@ def _gather_one_time_costs() -> OneTimeCosts:
 
 
 def _identify_synergies() -> List[SynergyOpportunity]:
-    """Identify cost synergy opportunities from inventory analysis."""
+    """Identify cost synergy opportunities from buyer vs target inventory.
+
+    Synergies are found by:
+    1. Cross-matching buyer and target apps by category
+    2. Identifying duplicate platforms
+    3. Calculating consolidation savings
+    """
     synergies = []
 
     try:
@@ -436,38 +471,88 @@ def _identify_synergies() -> List[SynergyOpportunity]:
         inv_store = get_inventory_store()
 
         if len(inv_store) > 0:
-            apps = inv_store.get_items(inventory_type="application", entity="target", status="active")
+            # Fetch buyer and target apps separately
+            buyer_apps = inv_store.get_items(inventory_type="application", entity="buyer", status="active")
+            target_apps = inv_store.get_items(inventory_type="application", entity="target", status="active")
 
-            # Find duplicate platforms
-            categories = {}
-            for app in apps:
+            logger.info(f"Synergy matching: {len(buyer_apps)} buyer apps vs {len(target_apps)} target apps")
+
+            # Group apps by category for both entities
+            buyer_by_category = {}
+            for app in buyer_apps:
                 cat = app.data.get('category', 'Other')
-                if cat not in categories:
-                    categories[cat] = []
-                categories[cat].append(app)
+                if cat not in buyer_by_category:
+                    buyer_by_category[cat] = []
+                buyer_by_category[cat].append(app)
 
-            # Look for consolidation opportunities
-            for cat, app_list in categories.items():
-                if len(app_list) >= 2:
-                    # Check if multiple apps in same category with significant cost
-                    total_cost = sum(app.cost or 0 for app in app_list)
-                    if total_cost > 200000:  # Significant spend
-                        # Estimate savings (typically 30-50% of lower-cost platform)
-                        costs = sorted([app.cost or 0 for app in app_list])
-                        potential_savings = costs[0] * 0.3  # Conservative: 30% of smaller platform
+            target_by_category = {}
+            for app in target_apps:
+                cat = app.data.get('category', 'Other')
+                if cat not in target_by_category:
+                    target_by_category[cat] = []
+                target_by_category[cat].append(app)
 
-                        synergies.append(SynergyOpportunity(
-                            name=f"{cat} Platform Consolidation",
-                            category="consolidation",
-                            annual_savings_low=potential_savings * 0.8,
-                            annual_savings_high=potential_savings * 1.5,
-                            cost_to_achieve_low=potential_savings * 0.5,
-                            cost_to_achieve_high=potential_savings * 2,
-                            timeframe="12-18 months",
-                            confidence="medium",
-                            notes=f"Consolidate {len(app_list)} platforms in {cat}",
-                            affected_items=[app.name for app in app_list]
-                        ))
+            # Find category overlaps (both buyer and target have apps in this category)
+            overlapping_categories = set(buyer_by_category.keys()) & set(target_by_category.keys())
+
+            logger.info(f"Found {len(overlapping_categories)} overlapping categories for synergy analysis")
+
+            # Calculate consolidation synergies for each overlapping category
+            for category in overlapping_categories:
+                buyer_apps_in_cat = buyer_by_category[category]
+                target_apps_in_cat = target_by_category[category]
+
+                # Calculate total cost in this category
+                buyer_cost = sum(app.cost or 0 for app in buyer_apps_in_cat)
+                target_cost = sum(app.cost or 0 for app in target_apps_in_cat)
+                total_cost = buyer_cost + target_cost
+
+                # Skip if combined cost is too low (no meaningful synergy)
+                if total_cost < 100_000:
+                    continue
+
+                # Consolidation synergy calculation
+                # Assumption: Consolidating to one platform saves smaller contract + renegotiation discount
+                smaller_cost = min(buyer_cost, target_cost)
+                larger_cost = max(buyer_cost, target_cost)
+
+                # Savings model:
+                # - Eliminate smaller contract entirely (100% of smaller)
+                # - Renegotiate larger contract with volume discount (10-30% of larger)
+                savings_low = smaller_cost + (larger_cost * 0.10)  # Conservative: 10% volume discount
+                savings_high = smaller_cost + (larger_cost * 0.30)  # Optimistic: 30% volume discount
+
+                # Cost to achieve (migration labor, data conversion, etc.)
+                # Estimate based on complexity of migration
+                # Simple rule: 50-200% of smaller contract cost
+                cost_to_achieve_low = smaller_cost * 0.5
+                cost_to_achieve_high = smaller_cost * 2.0
+
+                # Timeframe (based on category)
+                # Critical systems (ERP, CRM) take longer
+                critical_categories = ['crm', 'erp', 'finance', 'hr', 'hris']
+                if category.lower() in critical_categories:
+                    timeframe = "12-18 months"
+                    confidence = "medium"
+                else:
+                    timeframe = "6-12 months"
+                    confidence = "high"
+
+                # Create synergy opportunity
+                synergies.append(SynergyOpportunity(
+                    name=f"{category.title()} Platform Consolidation",
+                    category="consolidation",
+                    annual_savings_low=round(savings_low, -3),  # Round to nearest $1K
+                    annual_savings_high=round(savings_high, -3),
+                    cost_to_achieve_low=round(cost_to_achieve_low, -3),
+                    cost_to_achieve_high=round(cost_to_achieve_high, -3),
+                    timeframe=timeframe,
+                    confidence=confidence,
+                    notes=f"Consolidate {len(buyer_apps_in_cat)} buyer + {len(target_apps_in_cat)} target apps in {category}",
+                    affected_items=[app.name for app in (buyer_apps_in_cat + target_apps_in_cat)]
+                ))
+
+            logger.info(f"Identified {len(synergies)} consolidation synergies")
 
     except Exception as e:
         logger.warning(f"Could not identify synergies: {e}")
@@ -533,6 +618,85 @@ def _generate_insights(run_rate: RunRateCosts, one_time: OneTimeCosts, synergies
     return insights
 
 
+def _quality_level(value: float, thresholds: List[float]) -> str:
+    """Determine quality level based on value and thresholds.
+
+    Args:
+        value: Numeric value (cost, count, etc.)
+        thresholds: [low_threshold, medium_threshold, high_threshold]
+
+    Returns:
+        Quality level string
+    """
+    if value == 0:
+        return "none"
+    elif value < thresholds[0]:
+        return "low"
+    elif value < thresholds[1]:
+        return "medium"
+    elif value < thresholds[2]:
+        return "high"
+    else:
+        return "very_high"
+
+
+def _assess_data_quality_per_entity(
+    run_rate: RunRateCosts,
+    one_time: OneTimeCosts,
+    entity: str
+) -> Dict[str, Any]:
+    """Assess data quality per entity.
+
+    Args:
+        run_rate: RunRateCosts object
+        one_time: OneTimeCosts object
+        entity: Entity filter ("target", "buyer", or "all")
+
+    Returns:
+        Dict with quality scores per domain and entity
+    """
+
+    quality = {}
+
+    # Headcount quality
+    headcount_total = run_rate.headcount.total if run_rate.headcount else 0
+    quality["headcount"] = {
+        "overall": _quality_level(headcount_total, thresholds=[100_000, 500_000, 1_000_000]),
+        "note": f"${headcount_total:,.0f} in headcount costs"
+    }
+
+    # Applications quality
+    apps_total = run_rate.applications.total if run_rate.applications else 0
+    apps_count = len(run_rate.applications.items) if run_rate.applications else 0
+    quality["applications"] = {
+        "overall": _quality_level(apps_total, thresholds=[50_000, 500_000, 2_000_000]),
+        "note": f"{apps_count} applications, ${apps_total:,.0f}"
+    }
+
+    # Infrastructure quality
+    infra_total = run_rate.infrastructure.total if run_rate.infrastructure else 0
+    infra_count = len(run_rate.infrastructure.items) if run_rate.infrastructure else 0
+    quality["infrastructure"] = {
+        "overall": _quality_level(infra_total, thresholds=[10_000, 100_000, 500_000]),
+        "note": f"{infra_count} infrastructure items, ${infra_total:,.0f}"
+    }
+
+    # One-time costs quality
+    one_time_mid = one_time.total_mid if one_time else 0
+    quality["one_time"] = {
+        "overall": _quality_level(one_time_mid, thresholds=[100_000, 500_000, 2_000_000]),
+        "note": f"${one_time_mid:,.0f} in integration costs"
+    }
+
+    # Entity filter status
+    if entity == "all":
+        quality["entity_filter"] = "Not applicable (showing all entities)"
+    else:
+        quality["entity_filter"] = f"Filtered to {entity} entity"
+
+    return quality
+
+
 def build_cost_center_data(entity: str = "target") -> CostCenterData:
     """Build complete cost center data from all sources.
 
@@ -542,7 +706,7 @@ def build_cost_center_data(entity: str = "target") -> CostCenterData:
 
     # Gather run-rate costs
     run_rate = RunRateCosts(
-        headcount=_gather_headcount_costs(),
+        headcount=_gather_headcount_costs(entity=entity),
         applications=_gather_application_costs(entity=entity),
         infrastructure=_gather_infrastructure_costs(entity=entity),
         vendors_msp=CostCategory(name="vendors_msp", display_name="Vendors & MSP", icon="🤝")
@@ -550,7 +714,7 @@ def build_cost_center_data(entity: str = "target") -> CostCenterData:
     run_rate.calculate_total()
 
     # Gather one-time costs
-    one_time = _gather_one_time_costs()
+    one_time = _gather_one_time_costs(entity=entity)
 
     # Identify synergies
     synergies = _identify_synergies()
@@ -558,13 +722,8 @@ def build_cost_center_data(entity: str = "target") -> CostCenterData:
     # Generate insights
     insights = _generate_insights(run_rate, one_time, synergies)
 
-    # Assess data quality
-    data_quality = {
-        "headcount": "medium" if run_rate.headcount.total > 0 else "none",
-        "applications": "high" if run_rate.applications.total > 0 else "none",
-        "infrastructure": "low" if run_rate.infrastructure.total > 0 else "none",
-        "one_time": "medium" if one_time.total_mid > 0 else "none",
-    }
+    # Assess data quality (entity-aware)
+    data_quality = _assess_data_quality_per_entity(run_rate, one_time, entity)
 
     return CostCenterData(
         run_rate=run_rate,

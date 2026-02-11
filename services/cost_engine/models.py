@@ -150,6 +150,9 @@ class CostEstimate:
     display_name: str
     tower: str
 
+    # Entity dimension
+    entity: str = "target"
+
     # One-time costs by scenario
     one_time_upside: float = 0.0
     one_time_base: float = 0.0
@@ -181,6 +184,7 @@ class CostEstimate:
             'work_item_type': self.work_item_type,
             'display_name': self.display_name,
             'tower': self.tower,
+            'entity': self.entity,
             'one_time': {
                 'upside': self.one_time_upside,
                 'base': self.one_time_base,

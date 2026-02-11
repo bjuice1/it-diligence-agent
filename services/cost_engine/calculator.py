@@ -214,6 +214,7 @@ def calculate_cost(
         work_item_type=model.work_item_type.value,
         display_name=model.display_name,
         tower=model.tower,
+        entity=drivers.entity,  # Propagate entity from drivers
         one_time_upside=round(one_time_upside, -3),  # Round to nearest $1000
         one_time_base=round(one_time_base, -3),
         one_time_stress=round(one_time_stress, -3),
@@ -267,6 +268,9 @@ class DealCostSummary:
     """Aggregated cost summary for a deal."""
     deal_id: str
 
+    # Entity dimension
+    entity: str = "target"
+
     # Totals by scenario
     total_one_time_upside: float = 0.0
     total_one_time_base: float = 0.0
@@ -290,6 +294,7 @@ class DealCostSummary:
     def to_dict(self) -> Dict:
         return {
             'deal_id': self.deal_id,
+            'entity': self.entity,
             'totals': {
                 'one_time': {
                     'upside': self.total_one_time_upside,
@@ -317,14 +322,14 @@ def calculate_deal_costs(
 
     Args:
         deal_id: The deal ID
-        drivers: Deal drivers
+        drivers: Deal drivers (entity is read from drivers.entity)
         work_item_types: Optional list of work item types to include
                         (if None, calculates all that have required drivers)
 
     Returns:
-        DealCostSummary with all costs aggregated
+        DealCostSummary with all costs aggregated (entity-aware)
     """
-    summary = DealCostSummary(deal_id=deal_id)
+    summary = DealCostSummary(deal_id=deal_id, entity=drivers.entity)
 
     # Determine which work items to calculate
     if work_item_types:
@@ -382,7 +387,7 @@ def calculate_deal_costs(
     summary.drivers_assumed = drivers.get_assumed_drivers()
 
     logger.info(
-        f"Deal {deal_id} costs: "
+        f"Deal {deal_id} costs for entity={drivers.entity}: "
         f"${summary.total_one_time_base:,.0f} base, "
         f"${summary.total_annual_licenses:,.0f}/yr licenses, "
         f"{len(summary.estimates)} work items"

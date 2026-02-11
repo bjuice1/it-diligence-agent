@@ -70,7 +70,14 @@ class DealDrivers:
     - Inferred from related facts (medium confidence)
     - Assumed as default (low confidence)
     - Overridden by analyst (override confidence)
+
+    Entity dimension enables separate calculations for buyer vs target.
     """
+
+    # ==========================================================================
+    # ENTITY DIMENSION
+    # ==========================================================================
+    entity: str = "target"  # "target", "buyer", or "all"
 
     # ==========================================================================
     # SCALE DRIVERS
@@ -176,6 +183,12 @@ class DealDrivers:
             if source.confidence == DriverConfidence.LOW:
                 assumed.append(driver_name)
         return assumed
+
+    def __post_init__(self):
+        """Validate entity field."""
+        allowed_entities = ["target", "buyer", "all"]
+        if self.entity not in allowed_entities:
+            raise ValueError(f"entity must be one of {allowed_entities}, got: {self.entity}")
 
 
 @dataclass
@@ -431,18 +444,35 @@ def _detect_parent_ownership(fact) -> bool:
     return False
 
 
-def extract_drivers_from_facts(facts: List[Any], deal_id: str = None) -> DriverExtractionResult:
+def extract_drivers_from_facts(facts: List[Any], deal_id: str = None, entity: str = "target") -> DriverExtractionResult:
     """
     Extract quantitative drivers from a list of facts.
 
     Args:
         facts: List of Fact objects (from FactStore or database)
         deal_id: Optional deal ID for logging
+        entity: Entity filter ("target", "buyer", or "all")
 
     Returns:
-        DriverExtractionResult with drivers, sources, and metadata
+        DriverExtractionResult with entity-filtered drivers
     """
-    drivers = DealDrivers()
+    # Validate entity
+    if entity not in ["target", "buyer", "all"]:
+        raise ValueError(f"Invalid entity: {entity}")
+
+    # Filter facts by entity
+    if entity == "all":
+        filtered_facts = facts
+    else:
+        # Get facts matching this entity only
+        filtered_facts = [
+            f for f in facts
+            if getattr(f, 'entity', None) == entity
+        ]
+
+    logger.info(f"Extracting drivers for entity={entity}: {len(filtered_facts)} facts (from {len(facts)} total)")
+
+    drivers = DealDrivers(entity=entity)
     conflicts = []
     warnings = []
 
@@ -457,7 +487,7 @@ def extract_drivers_from_facts(facts: List[Any], deal_id: str = None) -> DriverE
     # Track parent-owned services
     parent_owned_services = []
 
-    for fact in facts:
+    for fact in filtered_facts:
         fact_id = getattr(fact, 'fact_id', None) or getattr(fact, 'id', 'unknown')
         details = fact.details or {}
         item = fact.item or ''
@@ -686,7 +716,7 @@ def extract_drivers_from_facts(facts: List[Any], deal_id: str = None) -> DriverE
 
     return DriverExtractionResult(
         drivers=drivers,
-        facts_scanned=len(facts),
+        facts_scanned=len(filtered_facts),
         drivers_extracted=drivers_extracted,
         drivers_assumed=drivers_assumed,
         conflicts=conflicts,
@@ -694,7 +724,7 @@ def extract_drivers_from_facts(facts: List[Any], deal_id: str = None) -> DriverE
     )
 
 
-def get_effective_drivers(deal_id: str, fact_store=None, db_session=None) -> DriverExtractionResult:
+def get_effective_drivers(deal_id: str, fact_store=None, db_session=None, entity: str = "target") -> DriverExtractionResult:
     """
     Get effective drivers for a deal: extracted values merged with any overrides.
 
@@ -702,9 +732,10 @@ def get_effective_drivers(deal_id: str, fact_store=None, db_session=None) -> Dri
         deal_id: The deal ID
         fact_store: Optional FactStore (if not provided, loads from DB)
         db_session: Optional database session
+        entity: Entity filter ("target", "buyer", or "all")
 
     Returns:
-        DriverExtractionResult with drivers (overrides applied) and metadata
+        DriverExtractionResult with entity-filtered drivers (overrides applied)
     """
     # Extract from facts
     if fact_store is not None:
@@ -721,7 +752,7 @@ def get_effective_drivers(deal_id: str, fact_store=None, db_session=None) -> Dri
             logger.warning(f"Could not load facts from DB: {e}")
             facts = []
 
-    result = extract_drivers_from_facts(facts, deal_id)
+    result = extract_drivers_from_facts(facts, deal_id, entity=entity)
     drivers = result.drivers
     overrides_applied = 0
 
