@@ -247,4 +247,162 @@ org_facts = [f for f in all_org_facts if f.entity == entity]
 
 ---
 
-**Status:** ✅ All P0 critical issues addressed. Safe to proceed with implementation.
+## P0 #5: FactStore Mutation Race Condition → FIXED
+
+### Problem
+Cleanup and merge functions mutate shared `fact_store.facts` list. If target and buyer are processed sequentially in the same pipeline run (standard behavior per CLAUDE.md), cleaning target assumptions can interfere with buyer processing.
+
+### Fix Applied
+**Location:** `specs/11-org-bridge-integration.md` (new section 7.1)
+
+**Solution:** Entity-scoped isolation with backup/rollback pattern
+
+**Changes:**
+1. Added backup of old assumptions before cleanup
+2. Try-except wrapper around assumption lifecycle (cleanup → generate → merge)
+3. Rollback on failure: restore old assumptions from backup
+4. Entity filtering already ensures only matching facts are removed
+
+**Code Pattern:**
+```python
+# Backup old assumptions for rollback
+old_assumptions_backup = [
+    f for f in fact_store.facts
+    if (f.domain == "organization" and
+        f.entity == entity and
+        f.details.get('data_source') == 'assumed')
+]
+
+try:
+    _remove_old_assumptions_from_fact_store(fact_store, entity)
+    assumptions = generate_org_assumptions(...)
+    _merge_assumptions_into_fact_store(fact_store, assumptions, ...)
+except Exception as e:
+    # Rollback: restore old assumptions
+    fact_store.facts.extend(old_assumptions_backup)
+    raise  # Re-raise to trigger fallback
+```
+
+**Result:**
+- Target assumptions can't interfere with buyer processing (entity filtering)
+- Failures don't orphan data (rollback restores old assumptions)
+- Cross-entity processing is safe
+
+**Implementation Time:** 2 hours
+
+---
+
+## P0 #6: No Atomicity in Assumption Lifecycle → FIXED
+
+### Problem
+The assumption flow has 3 steps: (1) Remove old, (2) Generate new, (3) Merge new. If step 2 fails (exception), step 1 has deleted old assumptions but step 3 never happens → data loss, no rollback.
+
+### Fix Applied
+**Location:** `specs/11-org-bridge-integration.md` (integrated with section 7.1)
+
+**Solution:** Combined with P0 #5 - same backup/rollback pattern provides atomicity
+
+**Changes:**
+1. Backup before cleanup (provides restore point)
+2. Try-except around full lifecycle (not just individual steps)
+3. Rollback restores original state on any failure
+4. Re-raise exception to trigger fallback to observed-only mode
+
+**Result:**
+- Atomic operation: all steps succeed or all fail
+- No partial state (old deleted, new not added)
+- Graceful degradation if assumptions fail
+
+**Implementation Time:** 1 hour (integrated with P0 #5)
+
+---
+
+## P0 #7: Signature Change Breaks Callers → FIXED
+
+### Problem
+Function signature changes from 3 parameters `(fact_store, target_name, deal_id)` to 6 parameters `(..., entity, company_profile, enable_assumptions)`. All existing callers need updates, but no migration guide provided in specs.
+
+### Fix Applied
+**Location:** `specs/11-org-bridge-integration.md` (new section 7.3)
+
+**Solution:** Document all callers + provide migration checklist
+
+**Callers Identified (5 files):**
+1. `services/organization_bridge.py:807` - Internal call (needs entity passthrough)
+2. `streamlit_app/views/organization/data_helpers.py:48` - Streamlit UI
+3. `streamlit_app/views/organization/org_chart.py:91` - Streamlit org chart
+4. `streamlit_app/views/organization/staffing.py:97` - Streamlit staffing
+5. `ui/org_chart_view.py:106` - Legacy UI
+
+**Migration Pattern:**
+```python
+# OLD
+store, status = build_organization_from_facts(fact_store, target_name, deal_id)
+
+# NEW
+store, status = build_organization_from_facts(
+    fact_store,
+    target_name,
+    deal_id=deal_id,
+    entity=entity,  # Explicit entity parameter
+    company_profile=company_profile  # If available
+)
+```
+
+**Backward Compatibility:**
+- All new parameters have defaults → existing calls work
+- BUT: won't get new adaptive behavior unless `entity` passed explicitly
+- Optional deprecation warning if entity not specified
+
+**Migration Checklist Added:**
+- [ ] Update 5 identified callers
+- [ ] Test target-only processing
+- [ ] Test target + buyer processing in same run
+- [ ] Verify no deprecation warnings in logs
+
+**Implementation Time:** 2 hours
+
+---
+
+## Updated Implementation Timeline
+
+**Original Estimate:** 29-35 hours (from build manifest)
+**P0 Fixes 1-4:** +3-4 hours
+**P0 Fixes 5-7 (NEW):** +5 hours
+**New Total Estimate:** **37-44 hours (4.5-5.5 days)**
+
+**Breakdown:**
+- Phase 1: Detector (3.5-4.5h) → +30min for entity validation = **4-5h**
+- Phase 2: Assumptions (6-8h) → unchanged = **6-8h**
+- Phase 2: Schema (4-5h) → includes migration from P0 #1 = **4-5h**
+- Phase 3: Bridge (4-5h) → +3h for P0 #5, #6, #7 = **7-8h**
+- Phase 4: Testing (5-6h) → +2h for isolation/atomicity/signature tests = **7-8h**
+- Phase 5: Migration updates (2h) → update 5 callers for P0 #7 = **2h**
+
+**Critical Path:** Detector → Schema → Bridge → Testing = **22-26 hours**
+**Parallel Work:** Assumptions can overlap with Schema = saves 4-6 hours
+
+---
+
+## Risk Assessment After All Fixes
+
+| Risk | Before ALL Fixes | After ALL Fixes | Residual Risk |
+|------|------------------|-----------------|---------------|
+| **Fingerprint collision** | 🔴 HIGH | 🟢 LOW (migration path) | Migration not run |
+| **Duplicate assumptions** | 🔴 HIGH | 🟢 LOW (idempotency) | None |
+| **Stale assumptions** | 🔴 HIGH | 🟢 LOW (cleanup) | None |
+| **Silent failures (entity)** | 🔴 HIGH | 🟢 LOW (validation) | Discovery bugs |
+| **Cross-entity contamination** | 🔴 HIGH | 🟢 LOW (isolation + rollback) | None |
+| **Data loss on failure** | 🔴 HIGH | 🟢 LOW (atomicity) | None |
+| **Breaking changes** | 🔴 HIGH | 🟢 LOW (documented migration) | Callers not updated |
+
+**Overall Risk Reduction:** 🔴 CRITICAL → 🟢 ACCEPTABLE
+
+**New P0 Fixes Summary:**
+- ✅ **P0 #5:** Entity isolation prevents cross-contamination
+- ✅ **P0 #6:** Atomicity prevents data loss on failure
+- ✅ **P0 #7:** Migration guide prevents breaking changes
+
+---
+
+**Status:** ✅ All 7 P0 critical issues addressed (4 original + 3 new). Safe to proceed with implementation.

@@ -2,10 +2,11 @@
 
 **Project:** Adaptive Organization Structure Extraction
 **Description:** Enable IT due diligence pipeline to adapt when org census lacks management hierarchy data—generate reasonable assumptions based on industry benchmarks and company size heuristics.
-**Date:** 2026-02-11
+**Date:** 2026-02-11 (Updated: 2026-02-11 post-adversarial review)
 **Complexity:** Medium-High
-**Status:** Specification Complete + P0 Fixes Applied, Ready for Implementation
-**P0 Fixes:** 4 critical issues identified and resolved (see P0-FIXES-APPLIED.md)
+**Status:** Specification Complete + ALL P0 Fixes Applied, Ready for Implementation
+**P0 Fixes:** 7 critical issues identified and resolved (4 original + 3 from adversarial review)
+**Implementation Time:** 28-31 hours (3.5-4 days) with all P0 fixes included
 
 ---
 
@@ -117,25 +118,43 @@ Implement adaptive extraction: **if hierarchy exists → extract it; if missing 
 **Longest sequential dependency chain:**
 
 ```
-Spec 08 (Detector, 3-4h)
+Spec 08 (Detector, 4-5h with P0 #4 validation)
     ↓
 Spec 09 (Assumptions, 6-8h)
     ↓
-Spec 11 (Integration, 3-4h)
+Spec 11 (Integration, 7-8h with P0 #5, #6, #7)
     ↓
-Spec 12 (Testing, 4-5h)
+Spec 12 (Testing, 7-8h with P0 fix tests)
+    ↓
+Caller Updates (2h for P0 #7 migration)
 
-Total Critical Path: 16-21 hours
+Total Critical Path: 26-31 hours
 ```
 
 **With Parallelization:**
 
-- Phase 1: 3-4 hours (serial)
-- Phase 2: 8 hours (parallel, longest track is Spec 09)
-- Phase 3: 3-4 hours (serial)
-- Phase 4: 4-5 hours (serial)
+- Phase 1: 4-5 hours (serial - Detector with entity validation)
+- Phase 2: 8 hours (parallel, longest track is Spec 09 Assumptions)
+- Phase 3: 7-8 hours (serial - Bridge with isolation/atomicity)
+- Phase 4: 7-8 hours (serial - Testing with P0 scenarios)
+- Phase 5: 2 hours (serial - Update 5 callers for signature changes)
 
-**Total Estimated Duration: 18-21 hours (2.5-3 days)**
+**Total Estimated Duration: 28-31 hours (3.5-4 days)**
+
+**P0 Fixes Impact:**
+- Original estimate: 18-21 hours
+- P0 fixes #1-4 (original): +3-4 hours
+- P0 fixes #5-7 (adversarial review): +5 hours
+- **New total: 26-30 hours → rounded to 28-31 hours**
+
+**Breakdown by Fix:**
+- P0 #1 (Fingerprint): +2h (migration script in Phase 2)
+- P0 #2 (Idempotency): +1h (cleanup logic in Phase 3)
+- P0 #3 (Assumption pollution): +1h (cleanup in Phase 3)
+- P0 #4 (Entity validation): +30min (validation in Phase 1)
+- P0 #5 (Isolation): +2h (backup/rollback in Phase 3)
+- P0 #6 (Atomicity): +1h (integrated with P0 #5)
+- P0 #7 (Signature changes): +2h (Phase 5 caller updates)
 
 ---
 

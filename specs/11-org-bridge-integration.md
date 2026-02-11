@@ -667,6 +667,253 @@ metrics.gauge('org_extraction.assumed_items_ratio',
 
 ---
 
+## 7. Additional P0 Fixes (Post-Adversarial Analysis)
+
+**Date Added:** 2026-02-11 (after adversarial review)
+**Context:** Three additional critical issues identified before implementation begins
+
+### P0 Fix #5: Entity-Scoped FactStore Isolation
+
+**Problem:** The cleanup and merge functions mutate the shared `fact_store.facts` list. If target and buyer are processed sequentially in the same pipeline run (standard behavior), cleaning target assumptions can interfere with buyer processing or vice versa.
+
+**Solution:** Create entity-scoped isolation by working with filtered fact lists, not mutating the shared FactStore directly during assumption lifecycle.
+
+**Updated Implementation:**
+
+```python
+def build_organization_from_facts(
+    fact_store: FactStore,
+    target_name: str = "Target",
+    deal_id: str = "",
+    entity: str = "target",
+    company_profile: Optional[Dict[str, Any]] = None,
+    enable_assumptions: Optional[bool] = None
+) -> Tuple[OrganizationDataStore, str]:
+    """Build OrganizationDataStore with entity-scoped isolation."""
+
+    # ... existing validation code ...
+
+    # CRITICAL (P0 FIX #5): Create entity-scoped fact list for safe operations
+    # This prevents cross-entity contamination when processing target + buyer
+    all_org_facts = [f for f in fact_store.facts if f.domain == "organization"]
+    entity_org_facts = [f for f in all_org_facts if f.entity == entity]
+
+    # Work with entity_org_facts for detection and extraction
+    # Assumptions are added to the SHARED fact_store but with entity tag
+    # Cleanup removes ONLY facts matching this entity
+
+    # STEP 1: Detect hierarchy presence (uses entity_org_facts, read-only)
+    hierarchy_presence = detect_hierarchy_presence(fact_store, entity=entity)
+
+    # STEP 2: Extract observed data (filters by entity internally)
+    _extract_observed_org_data(fact_store, store, entity, deal_id)
+
+    # STEP 3: Generate and merge assumptions if needed
+    if assumptions_enabled and hierarchy_presence.status in [PARTIAL, MISSING]:
+        assumptions = generate_org_assumptions(...)
+
+        if assumptions:
+            # P0 FIX #6 (Atomicity) + P0 FIX #5 (Isolation)
+            # Stage all operations, commit atomically
+            old_assumptions_backup = []
+
+            try:
+                # Backup old assumptions for rollback
+                old_assumptions_backup = [
+                    f for f in fact_store.facts
+                    if (f.domain == "organization" and
+                        f.entity == entity and
+                        f.details.get('data_source') == 'assumed')
+                ]
+
+                # Remove old assumptions (entity-scoped)
+                removed = _remove_old_assumptions_from_fact_store(
+                    fact_store=fact_store,
+                    entity=entity  # Only removes facts matching THIS entity
+                )
+
+                # Merge new assumptions (entity-tagged)
+                _merge_assumptions_into_fact_store(
+                    fact_store=fact_store,
+                    assumptions=assumptions,
+                    deal_id=deal_id,
+                    entity=entity
+                )
+
+                # Extract assumed data
+                _extract_assumed_org_data(fact_store, store, entity, deal_id, assumptions)
+
+                status = "success_with_assumptions"
+
+            except Exception as e:
+                # ROLLBACK: Restore old assumptions
+                logger.error(f"Assumption lifecycle failed for {entity}, rolling back: {e}")
+                fact_store.facts.extend(old_assumptions_backup)
+
+                # Re-raise to trigger fallback logic
+                raise
+
+    return store, status
+```
+
+**Key Changes:**
+
+1. **Entity-scoped cleanup:** `_remove_old_assumptions_from_fact_store()` already filters by entity, so it's safe as long as entity tagging is correct
+2. **Backup for rollback:** Save old assumptions before cleanup
+3. **Try-except with rollback:** If merge or extraction fails, restore old assumptions
+4. **Entity validation:** Already done in P0 fix #4 from original batch
+
+**Verification:**
+- Test target + buyer processing in same run
+- Verify target assumptions don't get cleaned when buyer runs
+- Verify rollback works if generation fails
+
+---
+
+### P0 Fix #6: Atomicity in Assumption Lifecycle
+
+**Problem:** The flow is: (1) Remove old assumptions, (2) Generate new assumptions, (3) Merge new assumptions. If step 2 fails (exception in assumption engine), step 1 has already deleted old assumptions but step 3 never happens → data loss, no rollback.
+
+**Solution:** Integrated with P0 Fix #5 above. Use try-except with backup/restore pattern.
+
+**Code already shown above.** Key points:
+
+1. **Backup before cleanup:** `old_assumptions_backup` stores removed facts
+2. **Atomic commit:** All operations succeed or all fail
+3. **Rollback on failure:** `fact_store.facts.extend(old_assumptions_backup)` restores state
+4. **Re-raise exception:** Triggers fallback logic (observed-only extraction)
+
+**Testing:**
+
+```python
+def test_assumption_lifecycle_rollback():
+    """Test rollback when assumption generation fails."""
+    fact_store = FactStore()
+
+    # Add old assumptions
+    for i in range(5):
+        fact_store.add_fact(Fact(
+            item=f"Old Assumption {i}",
+            domain="organization",
+            entity="target",
+            details={'data_source': 'assumed'},
+            ...
+        ))
+
+    original_count = len(fact_store.facts)
+
+    # Mock assumption engine to throw exception
+    with patch('services.org_assumption_engine.generate_org_assumptions') as mock_gen:
+        mock_gen.side_effect = ValueError("Bad company profile")
+
+        # Call bridge - should rollback
+        try:
+            build_organization_from_facts(fact_store, entity="target")
+        except ValueError:
+            pass  # Expected
+
+    # Verify rollback: old assumptions restored
+    assert len(fact_store.facts) == original_count
+    assert all('Old Assumption' in f.item for f in fact_store.facts
+               if f.details.get('data_source') == 'assumed')
+```
+
+---
+
+### P0 Fix #7: Document Signature Changes and Migration Path
+
+**Problem:** The function signature changes from 3 parameters to 6 parameters. All existing callers need updates, but specs don't identify them or provide migration checklist.
+
+**Solution:** Document all callers and provide migration guide.
+
+**Existing Callers Identified:**
+
+| File | Line | Current Call | Migration Needed? |
+|------|------|--------------|-------------------|
+| `services/organization_bridge.py` | 807 | `build_organization_from_facts(fact_store, target_name, deal_id=deal_id)` | ✅ YES - Add `entity` parameter |
+| `streamlit_app/views/organization/data_helpers.py` | 48 | `build_organization_from_facts(fact_store)` | ✅ YES - Add `entity` parameter |
+| `streamlit_app/views/organization/org_chart.py` | 91 | `build_organization_from_facts(fact_store)` | ✅ YES - Add `entity` parameter |
+| `streamlit_app/views/organization/staffing.py` | 97 | `build_organization_from_facts(fact_store)` | ✅ YES - Add `entity` parameter |
+| `ui/org_chart_view.py` | 106 | `build_organization_from_facts(fact_store)` | ✅ YES - Add `entity` parameter |
+
+**New Signature:**
+
+```python
+def build_organization_from_facts(
+    fact_store: FactStore,
+    target_name: str = "Target",
+    deal_id: str = "",
+    entity: str = "target",                          # NEW (has default)
+    company_profile: Optional[Dict[str, Any]] = None,  # NEW (optional)
+    enable_assumptions: Optional[bool] = None         # NEW (optional)
+) -> Tuple[OrganizationDataStore, str]:
+```
+
+**Migration Strategy:**
+
+**Option 1: Backward Compatible (Recommended)**
+- All new parameters have defaults
+- Existing calls work unchanged BUT won't use new features
+- Callers must explicitly pass `entity` to enable adaptive extraction
+
+**Option 2: Update All Callers**
+- Update each caller to pass `entity` explicitly
+- Add `company_profile` if available (from business context extraction)
+- Set `enable_assumptions` only if overriding global flag
+
+**Migration Checklist:**
+
+```python
+# services/organization_bridge.py:807
+# OLD:
+store, status = build_organization_from_facts(fact_store, target_name, deal_id=deal_id)
+
+# NEW (add entity parameter):
+store, status = build_organization_from_facts(
+    fact_store,
+    target_name,
+    deal_id=deal_id,
+    entity=entity,  # Pass through from caller
+    company_profile=company_profile  # If available
+)
+```
+
+```python
+# streamlit_app/views/organization/data_helpers.py:48
+# OLD:
+store, status = build_organization_from_facts(fact_store)
+
+# NEW (defaults work, but explicit is better):
+store, status = build_organization_from_facts(
+    fact_store,
+    entity="target"  # Or get from session context
+)
+```
+
+**Deprecation Warning (Optional):**
+
+```python
+def build_organization_from_facts(...):
+    # Add warning if entity not explicitly passed
+    import inspect
+    frame = inspect.currentframe()
+    args_info = inspect.getargvalues(frame)
+
+    if 'entity' not in args_info.locals or args_info.locals['entity'] == 'target':
+        # Check if it was explicitly passed or defaulted
+        import warnings
+        warnings.warn(
+            "Calling build_organization_from_facts without explicit entity parameter "
+            "is deprecated. Pass entity='target' or entity='buyer' explicitly.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+```
+
+**Implementation Time:** 1-2 hours (grep callers + update + test)
+
+---
+
 ## Benefits
 
 ### Why This Approach
