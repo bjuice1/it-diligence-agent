@@ -206,12 +206,14 @@ These are **NOT blockers** for shipping, but should be addressed within 2 weeks:
 - [x] P0 #2: Database migration created
 - [x] Database model updated (Fact.cost_status)
 - [x] db_writer updated to persist cost_status
-- [x] Tests created and passing (20/20)
-- [ ] Run migration on development database
+- [x] Tests created and passing (20/20 P0 tests + 3/3 migration tests)
+- [x] **CRITICAL FIX:** Migration made SQLite-compatible (both PostgreSQL and SQLite work)
+- [x] Migration idempotency checks added
+- [x] Full test suite verified (23/23 passing)
+- [ ] Run migration on development database (SQLite)
+- [ ] Run migration on staging database (PostgreSQL)
 - [ ] Run pipeline test to verify LLM discovery path works
 - [ ] Verify cost_quality metrics show by_status breakdown
-- [ ] Deploy to staging
-- [ ] Run migration on staging database
 - [ ] Smoke test: Create new deal, verify cost_status populated
 - [ ] Deploy to production
 - [ ] Monitor for migration issues (check logs for constraint violations)
