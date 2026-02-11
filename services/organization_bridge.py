@@ -8,6 +8,8 @@ OrganizationDataStore format for the web interface.
 import re
 import uuid
 import logging
+import copy
+import threading
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 
@@ -24,6 +26,12 @@ from models.organization_stores import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Thread safety for FactStore modifications (P0 Fix: Concurrency)
+# This lock protects assumption merge/rollback operations to prevent
+# race conditions when multiple threads call build_organization_from_facts()
+# concurrently with the same FactStore instance.
+_fact_store_modification_lock = threading.RLock()
 
 
 def gen_id(prefix: str) -> str:
@@ -67,6 +75,12 @@ def build_organization_from_facts(
     Enhanced for spec 11: Detects hierarchy presence and generates assumptions
     when organizational structure data is missing or incomplete.
 
+    THREAD SAFETY: This function modifies fact_store.facts in-place when assumptions
+    are enabled. Concurrent calls with the same FactStore instance are protected by
+    an internal lock, but this may cause performance bottlenecks. For best performance,
+    use separate FactStore instances per request/thread, or disable assumptions in
+    multi-threaded environments.
+
     Args:
         fact_store: The fact store containing organization facts
         target_name: Name of the target company
@@ -109,21 +123,25 @@ def build_organization_from_facts(
         logger.warning("No facts at all in fact store")
         return store, "no_facts"
 
-    # Get ALL organization domain facts first (before filtering by entity)
-    all_org_facts = [f for f in fact_store.facts if f.domain == "organization"]
+    # CRITICAL (P0 FIX #4): Validate entity field on facts during extraction (fail-fast)
+    # Extract org facts AND validate entity in single pass for performance
+    all_org_facts = []
+    facts_missing_entity = []
 
-    # CRITICAL (P0 FIX #4): Validate entity field on facts
-    facts_missing_entity = [
-        f.item for f in all_org_facts
-        if not hasattr(f, 'entity') or f.entity is None or f.entity == ""
-    ]
+    for fact in fact_store.facts:
+        if fact.domain == "organization":
+            # Validate entity immediately (fail-fast optimization)
+            if not hasattr(fact, 'entity') or fact.entity is None or fact.entity == "":
+                facts_missing_entity.append(fact.item)
+            else:
+                all_org_facts.append(fact)
 
+    # Fail fast if any facts have missing entity
     if facts_missing_entity:
         logger.error(
             f"Found {len(facts_missing_entity)} org facts with missing entity field. "
             f"This indicates an upstream bug. Facts: {facts_missing_entity[:5]}"
         )
-        # Fail fast (recommended for data integrity)
         raise ValueError(
             f"Entity validation failed: {len(facts_missing_entity)} org facts "
             f"have missing entity field. Cannot proceed with adaptive extraction."
@@ -174,41 +192,66 @@ def build_organization_from_facts(
                 )
 
                 if assumptions:
-                    # P0 FIX #6: Backup for atomicity
-                    old_assumptions_backup = [
-                        f for f in fact_store.facts
-                        if (f.domain == "organization" and
-                            f.entity == entity and
-                            (f.details or {}).get('data_source') == 'assumed')
-                    ]
+                    # P0 FIX #6: Backup for atomicity with thread safety
+                    # Use deep copy to ensure backup is independent of fact_store.facts mutations
+                    # Use lock to prevent concurrent modifications from corrupting state
+                    with _fact_store_modification_lock:
+                        # Deep copy the facts list to create independent backup
+                        old_assumptions_backup = copy.deepcopy([
+                            f for f in fact_store.facts
+                            if (f.domain == "organization" and
+                                f.entity == entity and
+                                (f.details or {}).get('data_source') == 'assumed')
+                        ])
 
-                    try:
-                        # P0 FIX #3: Remove old assumptions (entity-scoped)
-                        _remove_old_assumptions_from_fact_store(
-                            fact_store=fact_store,
-                            entity=entity
-                        )
+                        # Track the original facts list reference to detect tampering
+                        original_facts_id = id(fact_store.facts)
 
-                        # P0 FIX #2: Merge with idempotency protection
-                        _merge_assumptions_into_fact_store(
-                            fact_store=fact_store,
-                            assumptions=assumptions,
-                            deal_id=deal_id,
-                            entity=entity
-                        )
+                        try:
+                            # P0 FIX #3: Remove old assumptions (entity-scoped)
+                            _remove_old_assumptions_from_fact_store(
+                                fact_store=fact_store,
+                                entity=entity
+                            )
 
-                        # Refresh org_facts to include assumptions
-                        org_facts = [f for f in fact_store.facts
-                                   if f.domain == "organization" and f.entity == entity]
+                            # P0 FIX #2: Merge with idempotency protection
+                            _merge_assumptions_into_fact_store(
+                                fact_store=fact_store,
+                                assumptions=assumptions,
+                                deal_id=deal_id,
+                                entity=entity
+                            )
 
-                        if LOG_ASSUMPTION_GENERATION:
-                            logger.info(f"Generated and merged {len(assumptions)} assumptions for {entity}")
+                            # Refresh org_facts to include assumptions
+                            org_facts = [f for f in fact_store.facts
+                                       if f.domain == "organization" and f.entity == entity]
 
-                    except Exception as e:
-                        # P0 FIX #6: ROLLBACK on failure
-                        logger.error(f"Assumption merge failed for {entity}, rolling back: {e}")
-                        fact_store.facts.extend(old_assumptions_backup)
-                        raise  # Re-raise to trigger fallback
+                            if LOG_ASSUMPTION_GENERATION:
+                                logger.info(f"Generated and merged {len(assumptions)} assumptions for {entity}")
+
+                        except Exception as e:
+                            # P0 FIX #6: ROLLBACK on failure (thread-safe)
+                            logger.error(f"Assumption merge failed for {entity}, rolling back: {e}")
+
+                            # Verify facts list wasn't replaced (safety check)
+                            if id(fact_store.facts) != original_facts_id:
+                                logger.warning(
+                                    f"FactStore.facts was replaced during merge "
+                                    f"(id changed from {original_facts_id} to {id(fact_store.facts)}). "
+                                    f"Rollback may be incomplete."
+                                )
+
+                            # Remove failed merge attempts
+                            fact_store.facts = [
+                                f for f in fact_store.facts
+                                if not (f.domain == "organization" and
+                                        f.entity == entity and
+                                        (f.details or {}).get('data_source') == 'assumed')
+                            ]
+
+                            # Restore backup
+                            fact_store.facts.extend(old_assumptions_backup)
+                            raise  # Re-raise to trigger fallback
 
             except Exception as e:
                 logger.error(f"Assumption generation failed for {entity}, continuing with observed data only: {e}")
@@ -1031,6 +1074,10 @@ def _remove_old_assumptions_from_fact_store(
     CRITICAL (P0 FIX #3): Prevents stale assumptions from polluting
     inventory when source data is updated or assumptions re-generated.
 
+    Thread Safety: This function must be called within _fact_store_modification_lock
+    to prevent concurrent modifications. Uses in-place list modification to
+    preserve backup references.
+
     Args:
         fact_store: FactStore to clean
         entity: "target" or "buyer"
@@ -1040,13 +1087,17 @@ def _remove_old_assumptions_from_fact_store(
     """
     original_count = len(fact_store.facts)
 
-    # Filter out assumed facts for this entity
-    fact_store.facts = [
+    # In-place removal to preserve list identity (thread-safe with lock)
+    # Using list comprehension + slice assignment instead of reassignment
+    facts_to_keep = [
         f for f in fact_store.facts
         if not (f.domain == "organization" and
                 f.entity == entity and
                 (f.details or {}).get('data_source') == 'assumed')
     ]
+
+    # Replace contents in-place (preserves list object identity)
+    fact_store.facts[:] = facts_to_keep
 
     removed_count = original_count - len(fact_store.facts)
 
@@ -1067,6 +1118,9 @@ def _merge_assumptions_into_fact_store(
 
     CRITICAL (P0 FIX #2): Includes idempotency protection to prevent
     duplicate assumptions if bridge is called multiple times.
+
+    Thread Safety: This function must be called within _fact_store_modification_lock
+    to prevent concurrent modifications from corrupting the idempotency check.
 
     This allows downstream extraction logic to treat assumptions
     the same as observed facts (unified processing).
