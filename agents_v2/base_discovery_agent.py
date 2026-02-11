@@ -240,8 +240,10 @@ class BaseDiscoveryAgent(ABC):
                 # MONITORING: Track InventoryStore population for deduplication verification
                 if self.inventory_store:
                     inv_count = len(self.inventory_store)
+                    print(f"[INVENTORY] InventoryStore has {inv_count} items after parsing (entity={entity})")
                     self.logger.info(f"[INVENTORY] InventoryStore now has {inv_count} items after deterministic parse (entity={entity})")
                 else:
+                    print(f"[INVENTORY] WARNING: No InventoryStore attached - items not being deduplicated!")
                     self.logger.warning(f"[INVENTORY] No InventoryStore attached - items not being deduplicated")
 
             # Use remaining prose for LLM (tables already handled)

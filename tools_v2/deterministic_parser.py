@@ -491,6 +491,7 @@ def _app_table_to_facts(
 
         # Log vendor normalization for monitoring
         if mapping and canonical_vendor != details.get("vendor", ""):
+            print(f"[VENDOR FIX] Normalized '{item_name}': '{details.get('vendor', 'N/A')}' → '{canonical_vendor}'")
             logger.info(f"Vendor normalized: {item_name} | Table: '{details.get('vendor', 'N/A')}' → Canonical: '{canonical_vendor}'")
 
         # Add to FactStore
@@ -536,6 +537,7 @@ def _app_table_to_facts(
                         source_type="discovery",
                         deal_id=fact_store.deal_id,
                     )
+                    print(f"[INVENTORY] Added app '{item_name}' as {inv_item_id} (vendor: {canonical_vendor}, entity: {entity})")
 
                     # Bidirectional linking
                     if inv_item_id:

@@ -768,6 +768,7 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable, app=None) -> D
     from stores.inventory_store import InventoryStore
     inventory_store = InventoryStore(deal_id=deal_id)
     session._inventory_store = inventory_store  # Attach to session for pipeline access
+    print(f"[INVENTORY] Created InventoryStore for deal {deal_id}, storage_path: {inventory_store.storage_path}")
 
     # Add deal context - properly populate the dict for reasoning agents
     session.deal_context = {
@@ -1108,12 +1109,16 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable, app=None) -> D
     # Save InventoryStore to deal-specific JSON file for deduplication
     if hasattr(session, '_inventory_store') and session._inventory_store:
         try:
+            print(f"[INVENTORY] Attempting to save {len(session._inventory_store)} items to {session._inventory_store.storage_path}")
             session._inventory_store.save()
             item_count = len(session._inventory_store)
+            print(f"[INVENTORY] ✅ Save successful: {item_count} items")
             logger.info(f"✅ [INVENTORY] Saved {item_count} inventory items to {session._inventory_store.storage_path}")
             saved_files['inventory'] = session._inventory_store.storage_path
         except Exception as e:
             # CRITICAL MONITORING: InventoryStore save failure means deduplication won't work
+            print(f"[INVENTORY] ❌ SAVE FAILED: {e}")
+            print(f"[INVENTORY] Path attempted: {session._inventory_store.storage_path if session._inventory_store else 'N/A'}")
             logger.error(f"❌ [INVENTORY] Failed to save InventoryStore for deal {deal_id}: {e}")
             logger.error(f"[INVENTORY] Path attempted: {session._inventory_store.storage_path if session._inventory_store else 'N/A'}")
             import traceback

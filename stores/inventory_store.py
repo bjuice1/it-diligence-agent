@@ -526,6 +526,7 @@ class InventoryStore:
         with open(save_path, 'w') as f:
             json.dump(data, f, indent=2)
 
+        print(f"[INVENTORY] ✅ Saved {len(self._items)} items to {save_path} (deal: {self.deal_id})")
         logger.info(f"Saved {len(self._items)} inventory items to {save_path} (deal: {self.deal_id})")
 
     def load_from_file(self, path: Path) -> None:
