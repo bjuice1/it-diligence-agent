@@ -33,6 +33,9 @@ except ImportError:
     ENABLE_DUPLICATE_DETECTION = True
     ENABLE_FACT_VALIDATION = False
 
+# Import shared cost status utility
+from utils.cost_status_inference import infer_cost_status, normalize_numeric
+
 logger = logging.getLogger(__name__)
 
 # =============================================================================
@@ -622,6 +625,43 @@ def _execute_create_inventory_entry(
                     "fact_id": duplicate["fact_id"],
                     "message": f"Similar fact already exists: {duplicate['fact_id']} - {duplicate['item']}"
                 }
+
+        # =================================================================
+        # COST STATUS INFERENCE (for applications domain)
+        # =================================================================
+        if domain == "applications" and isinstance(details, dict):
+            # Check for cost-related fields in details
+            cost_fields = ['cost', 'annual_cost', 'license_cost', 'annual_license_cost']
+            cost_value = None
+            original_cost_value = None
+
+            for field in cost_fields:
+                if field in details:
+                    original_cost_value = details[field]
+                    # Normalize the cost value
+                    cost_value = normalize_numeric(str(original_cost_value)) if original_cost_value else None
+                    break
+
+            # If cost information exists, infer status
+            if original_cost_value is not None:
+                vendor_name = details.get('vendor') or details.get('provider') or details.get('supplier')
+                cost_status, cost_note = infer_cost_status(
+                    cost_value=cost_value,
+                    vendor_name=vendor_name,
+                    original_value=str(original_cost_value)
+                )
+                details['cost_status'] = cost_status
+                if cost_note:
+                    details['cost_quality_note'] = cost_note
+
+                # Store normalized cost if available
+                if cost_value is not None:
+                    details['cost'] = cost_value
+
+                logger.debug(f"Application '{item}': cost_status='{cost_status}' (cost={original_cost_value})")
+        # =================================================================
+        # END COST STATUS INFERENCE
+        # =================================================================
 
         # Add fact to store (with needs_review flag if applicable)
         fact_id = fact_store.add_fact(

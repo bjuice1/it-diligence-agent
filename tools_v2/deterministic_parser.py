@@ -18,6 +18,10 @@ from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass, field
 import logging
 
+# Import shared cost status utility
+from utils.cost_status_inference import infer_cost_status
+from utils.cost_status_inference import normalize_numeric  # For test verification
+
 logger = logging.getLogger(__name__)
 
 
@@ -434,24 +438,19 @@ def _app_table_to_facts(
 
                 # Special handling for annual_cost to track data quality
                 if std_field == 'annual_cost':
-                    if normalized is None:
-                        # N/A, TBD, etc. — mark as unknown cost
-                        details['cost_status'] = 'unknown'
-                        details['cost_quality_note'] = f'Cost not specified in source (original value: "{value}")'
-                        # Don't store the cost field itself
-                    elif normalized == '0' or (normalized and float(normalized) == 0):
-                        # Explicit $0 — check if internal
-                        vendor = details.get('vendor', '').lower()
-                        if 'internal' in vendor or 'in-house' in vendor or 'custom' in vendor:
-                            details['cost_status'] = 'internal_no_cost'
-                            details['cost_quality_note'] = 'Internally developed (no licensing cost)'
-                        else:
-                            details['cost_status'] = 'known'
-                            details['cost_quality_note'] = 'Free or open source'
-                        details[std_field] = normalized
-                    else:
-                        # Numeric cost value
-                        details['cost_status'] = 'known'
+                    # Use shared utility for consistent cost_status inference
+                    vendor_name = details.get('vendor', '')
+                    cost_status, cost_note = infer_cost_status(
+                        cost_value=normalized,
+                        vendor_name=vendor_name,
+                        original_value=value
+                    )
+                    details['cost_status'] = cost_status
+                    if cost_note:  # Only store note if non-empty
+                        details['cost_quality_note'] = cost_note
+
+                    # Store the normalized cost if it's not None
+                    if normalized is not None:
                         details[std_field] = normalized
                 else:
                     # Non-cost numeric fields (user_count, license_count)
@@ -556,16 +555,16 @@ def _app_table_to_facts(
                         "hosting": details.get("deployment", ""),
                         "users": details.get("user_count", ""),
                         "cost": details.get("annual_cost", ""),
-                        "cost_status": details.get("cost_status", ""),
-                        "cost_quality_note": details.get("cost_quality_note", ""),
+                        "cost_status": details.get("cost_status"),  # Don't default to "" - use None
+                        "cost_quality_note": details.get("cost_quality_note"),  # Don't default to "" - use None
                         "criticality": details.get("criticality", ""),
                         "category": category,
                         "source_category": details.get("source_category", ""),
                         "category_confidence": details.get("category_confidence", ""),
                         "category_inferred_from": details.get("category_inferred_from", ""),
                     }
-                    # Remove empty values
-                    inv_data = {k: v for k, v in inv_data.items() if v}
+                    # Remove empty values, but preserve None for cost_status/note (explicit absence)
+                    inv_data = {k: v for k, v in inv_data.items() if v is not None and v != ""}
 
                     inv_item_id = inventory_store.add_item(
                         inventory_type="application",

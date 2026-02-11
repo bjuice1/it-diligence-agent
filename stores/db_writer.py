@@ -241,6 +241,7 @@ class IncrementalDBWriter:
                 'item': fact_data.get('item', ''),
                 'status': fact_data.get('status', 'documented'),
                 'details': fact_data.get('details', {}),
+                'cost_status': fact_data.get('details', {}).get('cost_status'),  # Extract from details for dedicated column
                 'evidence': fact_data.get('evidence', {}),
                 'source_document': fact_data.get('source_document', ''),
                 'source_page_numbers': fact_data.get('source_page_numbers', []),
@@ -312,6 +313,7 @@ class IncrementalDBWriter:
                     'item': fact_data.get('item', ''),
                     'status': fact_data.get('status', 'documented'),
                     'details': fact_data.get('details', {}),
+                    'cost_status': fact_data.get('details', {}).get('cost_status'),  # Extract from details for dedicated column
                     'evidence': fact_data.get('evidence', {}),
                     'source_document': fact_data.get('source_document', ''),
                     'source_page_numbers': fact_data.get('source_page_numbers', []),

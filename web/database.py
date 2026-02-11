@@ -701,6 +701,9 @@ class Fact(SoftDeleteMixin, db.Model):
     status = Column(String(50), default='documented')  # documented, partial, gap
     details = Column(JSON, default=dict)  # Flexible key-value pairs
 
+    # Cost Quality Tracking (for applications domain)
+    cost_status = Column(String(20), nullable=True)  # known, unknown, internal_no_cost, estimated
+
     # Evidence / Provenance
     evidence = Column(JSON, default=dict)  # exact_quote, source_section
     source_document = Column(Text, default='')  # Filename(s) - can be long for multi-doc facts
@@ -761,6 +764,7 @@ class Fact(SoftDeleteMixin, db.Model):
             'item': self.item,
             'status': self.status,
             'details': self.details,
+            'cost_status': self.cost_status,  # Cost quality tracking
             'evidence': self.evidence,
             'source_document': self.source_document,
             'source_page_numbers': self.source_page_numbers,
