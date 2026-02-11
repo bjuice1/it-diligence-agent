@@ -187,12 +187,27 @@ def build_organization_from_facts(
             try:
                 from services.org_assumption_engine import generate_org_assumptions
 
+                # P2 FIX #8: Validate company_profile structure before passing to assumption engine
+                validated_profile = company_profile
+                if company_profile is not None:
+                    if not isinstance(company_profile, dict):
+                        logger.warning(
+                            f"Invalid company_profile type: {type(company_profile).__name__}. "
+                            f"Expected dict, using defaults instead."
+                        )
+                        validated_profile = None
+                    elif 'industry' not in company_profile and 'headcount' not in company_profile:
+                        logger.info(
+                            f"company_profile missing 'industry' and 'headcount' keys for {entity}. "
+                            f"Assumption engine will use defaults."
+                        )
+
                 # Generate assumptions
                 assumptions = generate_org_assumptions(
                     fact_store=fact_store,
                     hierarchy_presence=hierarchy_presence,
                     entity=entity,
-                    company_profile=company_profile
+                    company_profile=validated_profile
                 )
 
                 if assumptions:
@@ -261,9 +276,15 @@ def build_organization_from_facts(
                             fact_store.facts.extend(old_assumptions_backup)
                             raise  # Re-raise to trigger fallback
 
-            except Exception as e:
-                logger.error(f"Assumption generation failed for {entity}, continuing with observed data only: {e}")
+            except (ValueError, KeyError, AttributeError, TypeError) as e:
+                # P2 FIX #7: Catch only expected/recoverable errors
+                logger.error(f"Assumption generation failed for {entity} (recoverable), continuing with observed data only: {e}")
                 # Continue with observed data only (graceful degradation)
+            except Exception as e:
+                # P2 FIX #7: Re-raise unexpected errors instead of swallowing them
+                logger.exception(f"Unexpected error in assumption generation for {entity}: {e}")
+                logger.error(f"This is a programming error, not a recoverable failure. Please investigate.")
+                raise  # Re-raise to fail fast on unexpected errors
 
     # Process facts by category
     leadership_facts = [f for f in org_facts if f.category == "leadership"]
@@ -383,17 +404,13 @@ def build_organization_from_facts(
     # Calculate totals using the store's internal method
     store._update_counts()
 
-    # Determine final status based on whether assumptions were used
-    # Check FactStore for assumed facts (since staff member data_source is not yet implemented)
-    assumed_facts = [f for f in fact_store.facts
-                    if f.domain == "organization"
-                    and f.entity == entity
-                    and (f.details or {}).get('data_source') == 'assumed']
-
-    if assumed_facts:
+    # P2 FIX #9: Determine final status using explicit tracking (not FactStore inference)
+    # We tracked assumptions_merged_successfully during the merge phase (line 234)
+    # This is more reliable than scanning FactStore after the fact
+    if assumptions_merged_successfully:
         status = "success_with_assumptions"
         logger.info(f"Built organization store with {len(staff_members)} staff "
-                   f"(includes {len(assumed_facts)} assumed facts), "
+                   f"(includes assumptions), "
                    f"{len(msp_relationships)} MSPs")
     else:
         status = "success"
