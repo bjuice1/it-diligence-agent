@@ -73,8 +73,15 @@ INVENTORY_SCHEMAS: Dict[str, Dict[str, Any]] = {
             "reports_to",       # reporting line
             "responsibilities", # key responsibilities
             "notes",
+
+            # NEW FIELDS (spec 10): Data provenance tracking
+            "data_source",      # "observed" | "assumed" | "hybrid"
+            "confidence_score", # 0.0-1.0 (confidence in this data)
+            "assumption_basis", # Rationale for assumed data (e.g., "industry_benchmark:tech")
+            "observed_fields",  # List of field names with observed data (for hybrid)
+            "assumed_fields",   # List of field names with assumed data (for hybrid)
         ],
-        "id_fields": ["role", "team"],
+        "id_fields": ["role", "team", "entity", "data_source"],  # Updated for spec 10
     },
     "vendor": {
         "required": ["vendor_name"],
