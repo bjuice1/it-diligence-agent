@@ -14,7 +14,7 @@
 | **Core platform components** | 8 (microservices) |
 | **Business applications** | 18 (SaaS subscriptions) |
 | **Development tools** | 12 (DevOps, monitoring, testing) |
-| **Annual app cost** | **$2,847,500** |
+| **Annual app cost** | **$2,331,500** |
 | **Hosting model** | 100% Cloud (AWS + SaaS) |
 
 ---
@@ -23,13 +23,17 @@
 
 | Category | Count | Annual Cost |
 |---|---:|---:|
-| Core SaaS Platform | 8 | $0 (internal development) |
-| CRM & Sales | 3 | $428,000 |
-| Finance & ERP | 4 | $380,000 |
-| HR & Collaboration | 5 | $312,000 |
-| Development & DevOps | 12 | $890,000 |
-| Security & Compliance | 4 | $520,000 |
-| Data & Analytics | 2 | $317,500 |
+| Infrastructure | 9 | $150,000 (8 internal + Datadog) |
+| CRM | 3 | $428,000 |
+| ERP | 1 | $180,000 |
+| Finance | 4 | $200,000 |
+| HCM | 2 | $144,000 |
+| Collaboration | 3 | $168,000 |
+| DevOps | 9 | $170,000 |
+| Productivity | 3 | $36,000 |
+| Security | 5 | $598,000 |
+| Database | 1 | $285,000 |
+| BI/Analytics | 1 | $32,500 |
 
 ---
 
@@ -44,59 +48,60 @@
 - **Users:** Active user count or deployment scope
 - **Annual Cost:** Annual licensing/subscription cost
 - **Criticality:** CRITICAL, HIGH, MEDIUM, LOW
+- **Entity:** Target or Buyer
 - **Contract End:** Contract expiration date (YYYY-MM format)
 - **Notes:** Integration dependencies, gaps, risks
 
 ---
 
-| Application | Vendor | Category | Version | Hosting | Users | Annual Cost | Criticality | Contract End | Notes |
-|---|---|---|---|---|---:|---:|---|---|---|
+| Application | Vendor | Category | Version | Hosting | Users | Annual Cost | Criticality | Entity | Contract End | Notes |
+|---|---|---|---|---|---:|---:|---|---|---|---|
 | **CORE SAAS PLATFORM COMPONENTS** |
-| API Gateway Service | Internal | Core Platform | v3.2 | AWS (EKS) | N/A | $0 | CRITICAL | N/A | Kong API Gateway; customer-facing |
-| Authentication Service | Internal | Core Platform | v2.8 | AWS (EKS) | N/A | $0 | CRITICAL | N/A | Auth0 integration; multi-tenant |
-| Customer Data Service | Internal | Core Platform | v4.1 | AWS (EKS) | N/A | $0 | CRITICAL | N/A | PostgreSQL backend; PII storage |
-| Messaging Service | Internal | Core Platform | v2.5 | AWS (EKS) | N/A | $0 | CRITICAL | N/A | SQS + SNS; event-driven arch |
-| Analytics Engine | Internal | Core Platform | v1.9 | AWS (EKS) | N/A | $0 | HIGH | N/A | Customer usage analytics |
-| Workflow Orchestration | Internal | Core Platform | v3.0 | AWS (EKS) | N/A | $0 | HIGH | N/A | Temporal.io based |
-| Notification Service | Internal | Core Platform | v2.2 | AWS (Lambda) | N/A | $0 | MEDIUM | N/A | Email/SMS/push notifications |
-| Billing & Metering | Internal | Core Platform | v1.7 | AWS (EKS) | N/A | $0 | HIGH | N/A | Usage-based billing; integrates Stripe |
+| API Gateway Service | Internal | infrastructure | v3.2 | AWS (EKS) | — | $0 | CRITICAL | target | — | Kong API Gateway; customer-facing |
+| Authentication Service | Internal | infrastructure | v2.8 | AWS (EKS) | — | $0 | CRITICAL | target | — | Auth0 integration; multi-tenant |
+| Customer Data Service | Internal | infrastructure | v4.1 | AWS (EKS) | — | $0 | CRITICAL | target | — | PostgreSQL backend; PII storage |
+| Messaging Service | Internal | infrastructure | v2.5 | AWS (EKS) | — | $0 | CRITICAL | target | — | SQS + SNS; event-driven arch |
+| Analytics Engine | Internal | infrastructure | v1.9 | AWS (EKS) | — | $0 | HIGH | target | — | Customer usage analytics |
+| Workflow Orchestration | Internal | infrastructure | v3.0 | AWS (EKS) | — | $0 | HIGH | target | — | Temporal.io based |
+| Notification Service | Internal | infrastructure | v2.2 | AWS (Lambda) | — | $0 | MEDIUM | target | — | Email/SMS/push notifications |
+| Billing & Metering | Internal | infrastructure | v1.7 | AWS (EKS) | — | $0 | HIGH | target | — | Usage-based billing; integrates Stripe |
 | **CRM & SALES** |
-| Salesforce Sales Cloud | Salesforce | CRM | Enterprise | SaaS | 87 | $245,000 | HIGH | 2025-10 | Primary CRM; custom objects |
-| Outreach.io | Outreach | Sales Engagement | Evergreen | SaaS | 42 | $126,000 | MEDIUM | 2025-06 | Sales automation |
-| Gong | Gong | Sales Intelligence | Evergreen | SaaS | 35 | $57,000 | LOW | 2025-12 | Call recording & analysis |
+| Salesforce Sales Cloud | Salesforce | crm | Enterprise | SaaS | 87 | $245,000 | HIGH | target | 2025-10 | Primary CRM; custom objects |
+| Outreach.io | Outreach | crm | Evergreen | SaaS | 42 | $126,000 | MEDIUM | target |2025-06 | Sales automation |
+| Gong | Gong | crm | Evergreen | SaaS | 35 | $57,000 | LOW | target |2025-12 | Call recording & analysis |
 | **FINANCE & ERP** |
-| NetSuite | Oracle | ERP | 2024.1 | SaaS | 28 | $180,000 | CRITICAL | 2026-03 | Financial system of record |
-| Stripe | Stripe | Payment Processing | API | SaaS | N/A | $0 | CRITICAL | Evergreen | Revenue processing; usage-based fees |
-| Bill.com | Bill.com | AP Automation | Evergreen | SaaS | 12 | $24,000 | MEDIUM | 2025-08 | AP workflow |
-| Expensify | Expensify | Expense Management | Evergreen | SaaS | 412 | $18,000 | LOW | 2025-04 | Employee expenses |
-| Adaptive Insights | Workday | FP&A | 2024 | SaaS | 8 | $158,000 | HIGH | 2025-11 | Financial planning |
+| NetSuite | Oracle | erp | 2024.1 | SaaS | 28 | $180,000 | CRITICAL | target |2026-03 | Financial system of record |
+| Stripe | Stripe | finance | API | SaaS | — | $0 | CRITICAL | target |Evergreen | Revenue processing; usage-based fees |
+| Bill.com | Bill.com | finance | Evergreen | SaaS | 12 | $24,000 | MEDIUM | target |2025-08 | AP workflow |
+| Expensify | Expensify | finance | Evergreen | SaaS | 412 | $18,000 | LOW | target |2025-04 | Employee expenses |
+| Adaptive Insights | Workday | finance | 2024 | SaaS | 8 | $158,000 | HIGH | target |2025-11 | Financial planning |
 | **HR & COLLABORATION** |
-| BambooHR | BambooHR | HRIS | Evergreen | SaaS | 412 | $48,000 | HIGH | 2025-07 | HR system of record |
-| Rippling | Rippling | Payroll & Benefits | Evergreen | SaaS | 412 | $96,000 | HIGH | 2026-01 | Payroll processing |
-| Google Workspace | Google | Collaboration | Enterprise | SaaS | 412 | $82,000 | CRITICAL | 2025-09 | Email, docs, drive |
-| Slack | Slack | Team Communication | Enterprise Grid | SaaS | 412 | $72,000 | HIGH | 2025-05 | Primary communication |
-| Zoom | Zoom | Video Conferencing | Business | SaaS | 412 | $14,000 | MEDIUM | 2025-03 | Video meetings |
+| BambooHR | BambooHR | hcm | Evergreen | SaaS | 412 | $48,000 | HIGH | target |2025-07 | HR system of record |
+| Rippling | Rippling | hcm | Evergreen | SaaS | 412 | $96,000 | HIGH | target |2026-01 | Payroll processing |
+| Google Workspace | Google | collaboration | Enterprise | SaaS | 412 | $82,000 | CRITICAL | target |2025-09 | Email, docs, drive |
+| Slack | Slack | collaboration | Enterprise Grid | SaaS | 412 | $72,000 | HIGH | target |2025-05 | Primary communication |
+| Zoom | Zoom | collaboration | Business | SaaS | 412 | $14,000 | MEDIUM | target |2025-03 | Video meetings |
 | **DEVELOPMENT & DEVOPS** |
-| GitHub Enterprise | GitHub | Code Repository | Enterprise Cloud | SaaS | 92 | $156,000 | CRITICAL | 2026-02 | Source code + CI/CD |
-| Datadog | Datadog | Observability | Enterprise | SaaS | 67 | $312,000 | CRITICAL | 2025-03 | APM, logs, metrics |
-| PagerDuty | PagerDuty | Incident Management | Enterprise | SaaS | 45 | $64,000 | HIGH | 2025-05 | On-call & alerting |
-| Terraform Cloud | HashiCorp | IaC Platform | Team | SaaS | 18 | $48,000 | HIGH | 2025-08 | Infrastructure as code |
-| ArgoCD | Argo Project | GitOps | v2.9 | AWS (EKS) | N/A | $0 | HIGH | N/A | Kubernetes deployments |
-| Snyk | Snyk | Code Security | Enterprise | SaaS | 92 | $78,000 | MEDIUM | 2025-06 | Dependency scanning |
-| Postman | Postman | API Testing | Enterprise | SaaS | 65 | $42,000 | MEDIUM | 2025-10 | API development |
-| Jira Software | Atlassian | Project Management | Premium | SaaS | 124 | $98,000 | HIGH | 2025-04 | Agile project mgmt |
-| Confluence | Atlassian | Documentation | Premium | SaaS | 124 | $52,000 | MEDIUM | 2025-04 | Wiki & knowledge base |
-| Figma | Figma | Design | Professional | SaaS | 12 | $18,000 | LOW | 2025-07 | Product design |
-| LaunchDarkly | LaunchDarkly | Feature Flags | Enterprise | SaaS | 92 | $64,000 | MEDIUM | 2025-09 | Feature management |
-| Sentry | Sentry | Error Tracking | Business | SaaS | 92 | $18,000 | MEDIUM | 2025-11 | Application errors |
+| GitHub Enterprise | GitHub | devops | Enterprise Cloud | SaaS | 92 | $23,000 | CRITICAL | target |2026-02 | Source code + CI/CD |
+| Datadog | Datadog | infrastructure | Enterprise | SaaS | 67 | $150,000 | CRITICAL | target |2025-03 | APM, logs, metrics |
+| PagerDuty | PagerDuty | devops | Enterprise | SaaS | 45 | $18,000 | HIGH | target |2025-05 | On-call & alerting |
+| Terraform Cloud | HashiCorp | devops | Team | SaaS | 18 | $48,000 | HIGH | target |2025-08 | Infrastructure as code |
+| ArgoCD | Argo Project | devops | v2.9 | AWS (EKS) | — | $0 | HIGH | target |— | Kubernetes deployments |
+| Snyk | Snyk | security | Enterprise | SaaS | 92 | $78,000 | MEDIUM | target |2025-06 | Dependency scanning |
+| Postman | Postman | devops | Enterprise | SaaS | 65 | $18,000 | MEDIUM | target |2025-10 | API development |
+| Jira Software | Atlassian | productivity | Premium | SaaS | 124 | $12,000 | HIGH | target |2025-04 | Agile project mgmt |
+| Confluence | Atlassian | productivity | Premium | SaaS | 124 | $6,000 | MEDIUM | target |2025-04 | Wiki & knowledge base |
+| Figma | Figma | productivity | Professional | SaaS | 12 | $18,000 | LOW | target |2025-07 | Product design |
+| LaunchDarkly | LaunchDarkly | devops | Enterprise | SaaS | 92 | $45,000 | MEDIUM | target |2025-09 | Feature management |
+| Sentry | Sentry | devops | Business | SaaS | 92 | $18,000 | MEDIUM | target |2025-11 | Application errors |
 | **SECURITY & COMPLIANCE** |
-| Okta | Okta | Identity & SSO | Workforce Identity | SaaS | 412 | $98,000 | CRITICAL | 2025-06 | Primary IdP |
-| CrowdStrike Falcon | CrowdStrike | Endpoint Security | Evergreen | SaaS | 412 | $87,000 | CRITICAL | 2025-11 | EDR platform |
-| Wiz | Wiz | Cloud Security | Enterprise | SaaS | 15 | $125,000 | HIGH | 2025-02 | CSPM + CWPP; contract ending soon |
-| Vanta | Vanta | Compliance Automation | Business | SaaS | 8 | $210,000 | HIGH | 2025-08 | SOC 2 compliance mgmt |
+| Okta | Okta | security | Workforce Identity | SaaS | 412 | $98,000 | CRITICAL | target |2025-06 | Primary IdP |
+| CrowdStrike Falcon | CrowdStrike | security | Evergreen | SaaS | 412 | $87,000 | CRITICAL | target |2025-11 | EDR platform |
+| Wiz | Wiz | security | Enterprise | SaaS | 15 | $125,000 | HIGH | target |2025-02 | CSPM + CWPP; contract ending soon |
+| Vanta | Vanta | security | Business | SaaS | 8 | $210,000 | HIGH | target |2025-08 | SOC 2 compliance mgmt |
 | **DATA & ANALYTICS** |
-| Snowflake | Snowflake | Data Warehouse | Enterprise | SaaS | 24 | $285,000 | HIGH | 2026-01 | Analytics data warehouse |
-| Looker | Google | BI Platform | Enterprise | SaaS | 48 | $32,500 | MEDIUM | 2025-09 | Business intelligence |
+| Snowflake | Snowflake | database | Enterprise | SaaS | 24 | $285,000 | HIGH | target |2026-01 | Analytics data warehouse |
+| Looker | Google | bi_analytics | Enterprise | SaaS | 48 | $32,500 | MEDIUM | target |2025-09 | Business intelligence |
 
 ---
 
@@ -109,7 +114,7 @@
 | Zoom | **Contract expiring soon** | Contract ends 2025-03 (3 months) | Low impact (can switch to Google Meet) |
 | Expensify | **Contract expiring soon** | Contract ends 2025-04 (4 months) | Low impact (manual AP workaround available) |
 | Salesforce | **High cost** | $245K/year for 87 users | Potential overlap with buyer CRM |
-| Datadog | **High cost** | $312K/year; cost per host increasing | Potential consolidation with buyer monitoring |
+| Datadog | **High cost** | $150K/year; cost per host increasing | Potential consolidation with buyer monitoring |
 | Snowflake | **High cost** | $285K/year; storage costs growing | Data warehouse optimization opportunity |
 
 ---
@@ -192,7 +197,7 @@
 | Fact | Value | Matches Document 1? |
 |---|---:|---|
 | Total applications | 38 | ✅ Yes |
-| Annual app cost | $2,847,500 | ✅ Yes |
+| Annual app cost | $2,331,500 | ✅ Yes |
 | Core platform components | 8 | ✅ Yes |
 | Business applications | 18 | ✅ Yes |
 | Development tools | 12 | ✅ Yes |

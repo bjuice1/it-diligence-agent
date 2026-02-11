@@ -201,7 +201,7 @@ def _gather_headcount_costs() -> CostCategory:
     return category
 
 
-def _gather_application_costs() -> CostCategory:
+def _gather_application_costs(entity: str = "target") -> CostCategory:
     """Gather application costs from inventory."""
     category = CostCategory(
         name="applications",
@@ -214,7 +214,10 @@ def _gather_application_costs() -> CostCategory:
         inv_store = get_inventory_store()
 
         if len(inv_store) > 0:
-            apps = inv_store.get_items(inventory_type="application", entity="target", status="active")
+            if entity == "all":
+                apps = inv_store.get_items(inventory_type="application", status="active")
+            else:
+                apps = inv_store.get_items(inventory_type="application", entity=entity, status="active")
 
             # Group by criticality
             by_criticality = {'critical': [], 'high': [], 'medium': [], 'low': [], 'other': []}
@@ -266,7 +269,7 @@ def _gather_application_costs() -> CostCategory:
     return category
 
 
-def _gather_infrastructure_costs() -> CostCategory:
+def _gather_infrastructure_costs(entity: str = "target") -> CostCategory:
     """Gather infrastructure costs from inventory."""
     category = CostCategory(
         name="infrastructure",
@@ -279,7 +282,10 @@ def _gather_infrastructure_costs() -> CostCategory:
         inv_store = get_inventory_store()
 
         if len(inv_store) > 0:
-            infra = inv_store.get_items(inventory_type="infrastructure", entity="target", status="active")
+            if entity == "all":
+                infra = inv_store.get_items(inventory_type="infrastructure", status="active")
+            else:
+                infra = inv_store.get_items(inventory_type="infrastructure", entity=entity, status="active")
 
             for item in infra:
                 category.items.append(CostLineItem(
@@ -527,14 +533,18 @@ def _generate_insights(run_rate: RunRateCosts, one_time: OneTimeCosts, synergies
     return insights
 
 
-def build_cost_center_data() -> CostCenterData:
-    """Build complete cost center data from all sources."""
+def build_cost_center_data(entity: str = "target") -> CostCenterData:
+    """Build complete cost center data from all sources.
+
+    Args:
+        entity: Entity filter ("target", "buyer", or "all")
+    """
 
     # Gather run-rate costs
     run_rate = RunRateCosts(
         headcount=_gather_headcount_costs(),
-        applications=_gather_application_costs(),
-        infrastructure=_gather_infrastructure_costs(),
+        applications=_gather_application_costs(entity=entity),
+        infrastructure=_gather_infrastructure_costs(entity=entity),
         vendors_msp=CostCategory(name="vendors_msp", display_name="Vendors & MSP", icon="🤝")
     )
     run_rate.calculate_total()
@@ -572,7 +582,12 @@ def build_cost_center_data() -> CostCenterData:
 @costs_bp.route('/')
 def cost_center():
     """Main cost center view."""
-    data = build_cost_center_data()
+    # Support entity filtering via query parameter
+    entity = request.args.get('entity', 'target')
+    if entity not in ('target', 'buyer', 'all'):
+        entity = 'target'
+
+    data = build_cost_center_data(entity=entity)
 
     return render_template('costs/center.html',
         data=data,
@@ -580,7 +595,8 @@ def cost_center():
         one_time=data.one_time,
         synergies=data.synergies,
         insights=data.insights,
-        data_quality=data.data_quality
+        data_quality=data.data_quality,
+        current_entity=entity
     )
 
 
@@ -761,9 +777,15 @@ def drivers_page(deal_id: str = None):
 @costs_bp.route('/api/summary')
 def api_summary():
     """API endpoint for cost summary."""
-    data = build_cost_center_data()
+    # Support entity filtering via query parameter
+    entity = request.args.get('entity', 'target')
+    if entity not in ('target', 'buyer', 'all'):
+        entity = 'target'
+
+    data = build_cost_center_data(entity=entity)
 
     return jsonify({
+        'entity': entity,
         'run_rate': {
             'total': data.run_rate.total,
             'headcount': data.run_rate.headcount.total if data.run_rate.headcount else 0,

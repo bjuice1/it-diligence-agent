@@ -350,12 +350,13 @@ def _map_category_from_inventory(category_str: str) -> AppCategory:
         return AppCategory.OTHER
 
 
-def build_applications_from_inventory_store(inventory_store) -> Tuple[ApplicationsInventory, str]:
+def build_applications_from_inventory_store(inventory_store, entity: str = "target") -> Tuple[ApplicationsInventory, str]:
     """
     Build an ApplicationsInventory from InventoryStore data.
 
     Args:
         inventory_store: The InventoryStore containing application items
+        entity: Entity filter ("target", "buyer", or "all")
 
     Returns:
         Tuple of (ApplicationsInventory, status) where status is:
@@ -370,7 +371,10 @@ def build_applications_from_inventory_store(inventory_store) -> Tuple[Applicatio
         return inventory, "no_data"
 
     # Get application items from inventory store
-    app_items = inventory_store.get_items(inventory_type="application", entity="target", status="active")
+    if entity == "all":
+        app_items = inventory_store.get_items(inventory_type="application", status="active")
+    else:
+        app_items = inventory_store.get_items(inventory_type="application", entity=entity, status="active")
 
     if not app_items:
         logger.warning("No application items found in inventory store")

@@ -67,11 +67,11 @@
     <!-- Entity Filter -->
     <div class="entity-filter" id="entity-filter">
         <span class="filter-label">Show:</span>
-        <button class="entity-btn active" data-entity="all">All</button>
-        <button class="entity-btn entity-target" data-entity="target">
+        <button class="entity-btn{% if current_entity == 'all' %} active{% endif %}" data-entity="all">All</button>
+        <button class="entity-btn entity-target{% if current_entity == 'target' %} active{% endif %}" data-entity="target">
             <span class="entity-icon">🎯</span> TARGET
         </button>
-        <button class="entity-btn entity-buyer" data-entity="buyer">
+        <button class="entity-btn entity-buyer{% if current_entity == 'buyer' %} active{% endif %}" data-entity="buyer">
             <span class="entity-icon">🏢</span> BUYER
         </button>
     </div>
@@ -504,23 +504,13 @@ tr.entity-hidden {
 let narrativeLoaded = false;
 const domain = 'applications';
 
-// Entity Filter Functionality
-let currentEntityFilter = 'all';
-
+// Entity Filter Functionality - Click handlers to reload with new entity
 document.querySelectorAll('.entity-filter .entity-btn').forEach(btn => {
     btn.addEventListener('click', function() {
         const entity = this.dataset.entity;
-        currentEntityFilter = entity;
-
-        // Update active button
-        document.querySelectorAll('.entity-filter .entity-btn').forEach(b => b.classList.remove('active'));
-        this.classList.add('active');
-
-        // Filter table rows
-        filterByEntity(entity);
-
-        // Update summary stats
-        updateEntitySummary(entity);
+        const url = new URL(window.location);
+        url.searchParams.set('entity', entity);
+        window.location.href = url.toString();
     });
 });
 

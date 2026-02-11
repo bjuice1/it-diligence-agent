@@ -3535,9 +3535,9 @@ def applications_overview():
 
     current_deal_id = flask_session.get('current_deal_id')
 
-    # Buyer entity support: allow ?entity=buyer or ?entity=target (default)
+    # Entity support: allow ?entity=buyer or ?entity=target or ?entity=all
     requested_entity = request.args.get('entity', 'target')
-    if requested_entity not in ('target', 'buyer'):
+    if requested_entity not in ('target', 'buyer', 'all'):
         requested_entity = 'target'
 
     # PRIMARY: InventoryStore (deduplicated, entity-scoped) — Spec 04
@@ -3548,12 +3548,15 @@ def applications_overview():
         if len(inv_store) > 0:
             # Check all apps vs entity-scoped apps
             all_apps = inv_store.get_items(inventory_type="application", status="active")
-            entity_apps = inv_store.get_items(inventory_type="application", entity=requested_entity, status="active")
+            if requested_entity == 'all':
+                entity_apps = all_apps
+            else:
+                entity_apps = inv_store.get_items(inventory_type="application", entity=requested_entity, status="active")
             debug_info['inventory_apps_all'] = len(all_apps) if all_apps else 0
             debug_info['inventory_apps_target'] = len(entity_apps) if entity_apps else 0
 
             if entity_apps:
-                inventory, status = build_applications_from_inventory_store(inv_store)
+                inventory, status = build_applications_from_inventory_store(inv_store, entity=requested_entity)
                 data_source = "inventory"
                 debug_info['data_source'] = data_source
                 logger.info(f"Applications (InventoryStore primary): {len(entity_apps)} {requested_entity} apps, debug={debug_info}")
@@ -3561,7 +3564,8 @@ def applications_overview():
                                       inventory=inventory,
                                       status=status,
                                       data_source=data_source,
-                                      debug_info=debug_info)
+                                      debug_info=debug_info,
+                                      current_entity=requested_entity)
     except Exception as e:
         logger.warning(f"Could not load from InventoryStore: {e}")
 
@@ -3591,7 +3595,8 @@ def applications_overview():
                                       inventory=inventory,
                                       status=status,
                                       data_source=data_source,
-                                      debug_info=debug_info)
+                                      debug_info=debug_info,
+                                      current_entity=requested_entity)
         except Exception as e:
             logger.warning(f"Could not load from database: {e}")
 
@@ -3607,7 +3612,8 @@ def applications_overview():
                           inventory=inventory,
                           status=status,
                           data_source=data_source,
-                          debug_info=debug_info)
+                          debug_info=debug_info,
+                          current_entity=requested_entity)
 
 
 @app.route('/applications/<category>')
@@ -3671,9 +3677,9 @@ def infrastructure_overview():
 
     current_deal_id = flask_session.get('current_deal_id')
 
-    # Buyer entity support: allow ?entity=buyer or ?entity=target (default)
+    # Entity support: allow ?entity=buyer or ?entity=target or ?entity=all
     requested_entity = request.args.get('entity', 'target')
-    if requested_entity not in ('target', 'buyer'):
+    if requested_entity not in ('target', 'buyer', 'all'):
         requested_entity = 'target'
 
     # PRIMARY: InventoryStore (deduplicated, entity-scoped) — Spec 04
@@ -3681,7 +3687,10 @@ def infrastructure_overview():
         from web.blueprints.inventory import get_inventory_store
         inv_store = get_inventory_store()
         if len(inv_store) > 0:
-            infra_items = inv_store.get_items(inventory_type="infrastructure", entity=requested_entity, status="active")
+            if requested_entity == 'all':
+                infra_items = inv_store.get_items(inventory_type="infrastructure", status="active")
+            else:
+                infra_items = inv_store.get_items(inventory_type="infrastructure", entity=requested_entity, status="active")
             if infra_items:
                 inventory, status = build_infrastructure_from_inventory_store(inv_store)
                 data_source = "inventory"

@@ -48,7 +48,7 @@ class ParserResult:
 APP_INVENTORY_HEADERS = {
     "application", "app", "app name", "application name", "system", "software", "platform",
     "vendor", "category", "version", "hosting", "deployment", "users",
-    "user count", "annual cost", "cost", "criticality", "critical"
+    "user count", "annual cost", "cost", "criticality", "critical", "entity"
 }
 
 # Column headers that indicate infrastructure inventory
@@ -431,9 +431,33 @@ def _app_table_to_facts(
             # Normalize numeric fields (cost, user counts)
             if std_field in ('user_count', 'annual_cost', 'license_count'):
                 normalized = _normalize_numeric(value)
-                if normalized is None:
-                    continue  # Skip null-equivalent values
-                details[std_field] = normalized
+
+                # Special handling for annual_cost to track data quality
+                if std_field == 'annual_cost':
+                    if normalized is None:
+                        # N/A, TBD, etc. — mark as unknown cost
+                        details['cost_status'] = 'unknown'
+                        details['cost_quality_note'] = f'Cost not specified in source (original value: "{value}")'
+                        # Don't store the cost field itself
+                    elif normalized == '0' or (normalized and float(normalized) == 0):
+                        # Explicit $0 — check if internal
+                        vendor = details.get('vendor', '').lower()
+                        if 'internal' in vendor or 'in-house' in vendor or 'custom' in vendor:
+                            details['cost_status'] = 'internal_no_cost'
+                            details['cost_quality_note'] = 'Internally developed (no licensing cost)'
+                        else:
+                            details['cost_status'] = 'known'
+                            details['cost_quality_note'] = 'Free or open source'
+                        details[std_field] = normalized
+                    else:
+                        # Numeric cost value
+                        details['cost_status'] = 'known'
+                        details[std_field] = normalized
+                else:
+                    # Non-cost numeric fields (user_count, license_count)
+                    if normalized is None:
+                        continue  # Skip null-equivalent values
+                    details[std_field] = normalized
             else:
                 details[std_field] = value
 
@@ -532,6 +556,8 @@ def _app_table_to_facts(
                         "hosting": details.get("deployment", ""),
                         "users": details.get("user_count", ""),
                         "cost": details.get("annual_cost", ""),
+                        "cost_status": details.get("cost_status", ""),
+                        "cost_quality_note": details.get("cost_quality_note", ""),
                         "criticality": details.get("criticality", ""),
                         "category": category,
                         "source_category": details.get("source_category", ""),
