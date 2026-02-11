@@ -73,6 +73,7 @@ INVENTORY_SCHEMAS: Dict[str, Dict[str, Any]] = {
             "reports_to",       # reporting line
             "responsibilities", # key responsibilities
             "notes",
+            "entity",           # target or buyer (used in id_fields for multi-tenant)
 
             # NEW FIELDS (spec 10): Data provenance tracking
             "data_source",      # "observed" | "assumed" | "hybrid"
