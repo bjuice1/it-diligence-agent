@@ -444,6 +444,56 @@ class InventoryStore:
                 total += cost
         return total
 
+    def get_cost_quality(
+        self,
+        inventory_type: Optional[str] = None,
+        entity: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Get cost data quality metrics.
+
+        Returns dict with:
+        - total_items: Total number of items
+        - items_with_cost: Items that have numeric cost values
+        - items_without_cost: Items with missing/N/A costs
+        - data_quality_pct: Percentage of items with cost data
+        - by_status: Breakdown by cost_status (known, unknown, internal_no_cost, estimated)
+        - items_needing_discovery: List of items with unknown cost status
+        """
+        items = self.get_items(inventory_type=inventory_type, entity=entity, status="active")
+        total = len(items)
+
+        with_cost = 0
+        without_cost = 0
+        by_status = defaultdict(int)
+        needing_discovery = []
+
+        for item in items:
+            cost_status = item.data.get('cost_status', 'unknown')
+            by_status[cost_status] += 1
+
+            if item.cost is not None:
+                with_cost += 1
+            else:
+                without_cost += 1
+                if cost_status == 'unknown':
+                    needing_discovery.append({
+                        'name': item.name,
+                        'vendor': item.data.get('vendor', 'N/A'),
+                        'item_id': item.item_id
+                    })
+
+        quality_pct = (with_cost / total * 100) if total > 0 else 0.0
+
+        return {
+            'total_items': total,
+            'items_with_cost': with_cost,
+            'items_without_cost': without_cost,
+            'data_quality_pct': round(quality_pct, 1),
+            'by_status': dict(by_status),
+            'items_needing_discovery': needing_discovery,
+        }
+
     def get_summary(self) -> Dict[str, Any]:
         """
         Get summary statistics.
@@ -495,6 +545,9 @@ class InventoryStore:
 
         # Convert defaultdict to regular dict
         summary["enrichment_breakdown"] = dict(summary["enrichment_breakdown"])
+
+        # Add cost quality metrics
+        summary["cost_quality"] = self.get_cost_quality()
 
         return summary
 
@@ -575,6 +628,26 @@ class InventoryStore:
             for item_id, item_dict in items_data.items():
                 try:
                     item = InventoryItem.from_dict(item_dict)
+
+                    # Migration: Add default cost_status for old items without it
+                    if item.inventory_type == 'application':
+                        if 'cost_status' not in item.data:
+                            # Old item — infer status based on cost value
+                            if item.cost is None:
+                                item.data['cost_status'] = 'unknown'
+                                logger.debug(f"Migrated {item_id}: cost=None → cost_status='unknown'")
+                            elif item.cost == 0:
+                                vendor = item.data.get('vendor', '').lower()
+                                if 'internal' in vendor or 'in-house' in vendor:
+                                    item.data['cost_status'] = 'internal_no_cost'
+                                    logger.debug(f"Migrated {item_id}: cost=$0, vendor=Internal → cost_status='internal_no_cost'")
+                                else:
+                                    item.data['cost_status'] = 'known'
+                                    logger.debug(f"Migrated {item_id}: cost=$0 → cost_status='known'")
+                            else:
+                                item.data['cost_status'] = 'known'
+                                logger.debug(f"Migrated {item_id}: cost=${item.cost} → cost_status='known'")
+
                     self._items[item_id] = item
                 except Exception as e:
                     logger.error(f"Failed to load item {item_id}: {e}")
@@ -610,6 +683,22 @@ class InventoryStore:
         for item_id, item_dict in items_data.items():
             try:
                 item = InventoryItem.from_dict(item_dict)
+
+                # Migration: Add default cost_status for old items without it
+                if item.inventory_type == 'application':
+                    if 'cost_status' not in item.data:
+                        # Old item — infer status based on cost value
+                        if item.cost is None:
+                            item.data['cost_status'] = 'unknown'
+                        elif item.cost == 0:
+                            vendor = item.data.get('vendor', '').lower()
+                            if 'internal' in vendor or 'in-house' in vendor:
+                                item.data['cost_status'] = 'internal_no_cost'
+                            else:
+                                item.data['cost_status'] = 'known'
+                        else:
+                            item.data['cost_status'] = 'known'
+
                 store._items[item_id] = item
             except Exception as e:
                 logger.error(f"Failed to load item {item_id}: {e}")

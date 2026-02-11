@@ -31,6 +31,8 @@ INVENTORY_SCHEMAS: Dict[str, Dict[str, Any]] = {
             "hosting",          # on-prem, cloud, hybrid, saas
             "users",            # user count or description
             "cost",             # annual cost
+            "cost_status",      # known | unknown | internal_no_cost | estimated
+            "cost_quality_note", # free-form note explaining cost status
             "criticality",      # critical, high, medium, low
             "category",         # erp, crm, custom, etc.
             "contract_end",     # contract end date

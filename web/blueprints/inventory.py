@@ -121,12 +121,16 @@ def inventory_home():
     enriched = [i for i in store.get_items(entity="target") if i.is_enriched]
     total_count = len(store) if len(store) > 0 else (len(apps) + len(infra) + len(org) + len(vendors))
 
+    # Get cost quality metrics
+    cost_quality = store.get_cost_quality(inventory_type="application", entity="target")
+
     return render_template('inventory/home.html',
         apps=apps,
         infra=infra,
         org=org,
         vendors=vendors,
         total_cost=total_cost,
+        cost_quality=cost_quality,
         flagged_count=len(flagged),
         enriched_count=len(enriched),
         total_count=total_count,
@@ -247,6 +251,9 @@ def api_summary():
     apps = store.get_items(inventory_type="application", entity="target", status="active")
     infra = store.get_items(inventory_type="infrastructure", entity="target", status="active")
 
+    # Get cost quality metrics
+    cost_quality = store.get_cost_quality(inventory_type="application", entity="target")
+
     return jsonify({
         'total': len(store),
         'by_type': {
@@ -256,6 +263,7 @@ def api_summary():
             'vendor': len(store.get_items(inventory_type="vendor")),
         },
         'total_cost': sum(app.cost or 0 for app in apps),
+        'cost_quality': cost_quality,
         'flagged': len([i for i in store.get_items() if i.needs_investigation]),
         'enriched': len([i for i in store.get_items() if i.is_enriched]),
     })
