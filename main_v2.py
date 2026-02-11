@@ -1400,8 +1400,26 @@ Phases:
 
             # Run discovery (parallel or sequential)
             if use_parallel and len(domains_to_analyze) > 1:
-                # Note: parallel mode currently doesn't support entity separation
-                # Fall back to combined text for now
+                # Check if both buyer and target documents exist
+                has_both_entities = docs_by_entity['buyer'] is not None and docs_by_entity['target'] is not None
+
+                if has_both_entities:
+                    # ERROR: Parallel mode doesn't support entity separation yet
+                    print("\n" + "="*60)
+                    print("ERROR: Parallel mode doesn't support buyer/target separation")
+                    print("="*60)
+                    print("\nDetected both buyer and target documents, but --parallel mode")
+                    print("cannot currently process them separately. This would cause all")
+                    print("buyer applications to be incorrectly tagged as target.")
+                    print("\nOptions:")
+                    print("  1. Remove --parallel flag to use sequential mode (recommended)")
+                    print("  2. Process buyer and target documents separately")
+                    print("  3. Wait for parallel entity separation feature")
+                    print("\nAborting to prevent data corruption.")
+                    print("="*60)
+                    sys.exit(1)
+
+                # Safe to use parallel mode (only one entity)
                 document_text = load_documents(args.input_path)
                 fact_store = run_parallel_discovery(
                     document_text=document_text,
