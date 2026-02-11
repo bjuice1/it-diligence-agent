@@ -73,6 +73,10 @@ ORG_INVENTORY_HEADERS = {
     "location", "office", "site",
     "responsibilities", "scope", "focus area",
     "name", "lead", "leader", "director", "vp",
+    # Org-specific cost/staffing columns (avoid generic "cost"/"vendor" to prevent app table conflicts)
+    "personnel cost", "total personnel cost",
+    "outsourced", "outsourced %", "outsourced percentage",
+    "notes", "comments",
 }
 
 # Minimum columns required to consider something a valid inventory table
@@ -303,11 +307,19 @@ def detect_table_type(table: ParsedTable) -> str:
         "organization_inventory": org_score,
     }
 
-    # Find highest scoring type with minimum threshold of 3
+    # DISAMBIGUATION: If table has "vendor" column, it's likely contract/app, not org
+    # (Handles vendor tables with generic "function" + "headcount" that score for org)
+    if "vendor" in headers_lower and org_score > 0:
+        # Boost contract score and zero out org score to prefer vendor interpretation
+        scores["contract_inventory"] += 2  # Boost contract
+        scores["organization_inventory"] = 0  # Zero org
+
+    # Find highest scoring type with minimum threshold of 2
+    # Lowered from 3 to handle smaller org tables (e.g., 5 columns with 2-3 matches)
     best_type = max(scores, key=scores.get)
     best_score = scores[best_type]
 
-    if best_score >= 3:
+    if best_score >= 2:
         return best_type
 
     return "unknown"
@@ -863,13 +875,20 @@ def _org_table_to_facts(
 
         # Determine category based on content
         category = "central_it"  # Default
-        item_lower = item_name.lower()
-        if any(kw in item_lower for kw in ["leader", "cio", "cto", "vp", "director", "head of"]):
-            category = "leadership"
-        elif any(kw in item_lower for kw in ["outsourc", "msp", "managed service", "contractor"]):
-            category = "outsourcing"
-        elif any(kw in item_lower for kw in ["embed", "shadow", "business"]):
-            category = "embedded_it"
+
+        # If this table has a "team" column, treat all rows as teams (central_it)
+        # Don't apply keyword-based categorization which is meant for role tables
+        has_team_column = any(h in table.headers for h in ["team", "team name", "department", "group", "function"])
+
+        if not has_team_column:
+            # Only apply keyword categorization for non-team tables (e.g., role tables)
+            item_lower = item_name.lower()
+            if any(kw in item_lower for kw in ["leader", "cio", "cto", "vp", "director", "head of"]):
+                category = "leadership"
+            elif any(kw in item_lower for kw in ["outsourc", "msp", "managed service", "contractor"]):
+                category = "outsourcing"
+            elif any(kw in item_lower for kw in ["embed", "shadow", "business"]):
+                category = "embedded_it"
 
         evidence = {
             "exact_quote": f"{item_name} | HC: {details.get('headcount', 'N/A')} | FTE: {details.get('fte', 'N/A')}",

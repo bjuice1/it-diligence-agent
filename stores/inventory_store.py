@@ -66,8 +66,18 @@ class InventoryStore:
 
         self.storage_path = storage_path
 
-        # Load existing data if path provided and file exists
-        if storage_path and storage_path.exists():
+        # Try loading from database first (if enabled and deal_id provided)
+        import os
+        use_db = os.environ.get('USE_DATABASE', 'false').lower() == 'true'
+        if use_db and deal_id:
+            try:
+                self.load_from_db()
+                logger.debug(f"Loaded inventory from database for deal {deal_id}")
+            except Exception as e:
+                logger.debug(f"Could not load from database: {e}, will try file")
+
+        # Fallback: Load from file if no items loaded from database
+        if len(self._items) == 0 and storage_path and storage_path.exists():
             self.load_from_file(storage_path)
 
     # =========================================================================
@@ -492,42 +502,53 @@ class InventoryStore:
     # Persistence
     # =========================================================================
 
-    def save(self, path: Optional[Path] = None) -> None:
+    def save(self, path: Optional[Path] = None, app=None) -> None:
         """
-        Save store to JSON file.
+        Save store to database (if enabled) and/or JSON file.
 
         Args:
-            path: Path to save to. Uses storage_path if not provided.
+            path: Path to save JSON file to. Uses storage_path if not provided.
+            app: Flask app instance for database context (optional)
         """
+        import os
         from datetime import datetime
 
+        use_db = os.environ.get('USE_DATABASE', 'false').lower() == 'true'
+
+        # Save to database if enabled
+        if use_db and self.deal_id:
+            try:
+                self.save_to_db(app=app)
+            except Exception as e:
+                logger.error(f"Database save failed: {e}, falling back to file save")
+                # Continue to file save as fallback
+
+        # Also save to JSON file (for backward compatibility and debugging)
         save_path = path or self.storage_path
-        if not save_path:
-            raise ValueError("No save path provided and no storage_path set")
+        if save_path:
+            save_path = Path(save_path)
 
-        save_path = Path(save_path)
+            with self._lock:
+                data = {
+                    "schema_version": "2.0",  # Updated for deal_id support
+                    "deal_id": self.deal_id or "",
+                    "created_at": datetime.now().isoformat(),
+                    "item_count": len(self._items),
+                    "items": {
+                        item_id: item.to_dict()
+                        for item_id, item in self._items.items()
+                    },
+                    "summary": self.get_summary(),
+                }
 
-        with self._lock:
-            data = {
-                "schema_version": "2.0",  # Updated for deal_id support
-                "deal_id": self.deal_id or "",
-                "created_at": datetime.now().isoformat(),
-                "item_count": len(self._items),
-                "items": {
-                    item_id: item.to_dict()
-                    for item_id, item in self._items.items()
-                },
-                "summary": self.get_summary(),
-            }
+            # Ensure directory exists
+            save_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Ensure directory exists
-        save_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(save_path, 'w') as f:
+                json.dump(data, f, indent=2)
 
-        with open(save_path, 'w') as f:
-            json.dump(data, f, indent=2)
-
-        print(f"[INVENTORY] ✅ Saved {len(self._items)} items to {save_path} (deal: {self.deal_id})")
-        logger.info(f"Saved {len(self._items)} inventory items to {save_path} (deal: {self.deal_id})")
+            print(f"[INVENTORY] ✅ Saved {len(self._items)} items to {save_path} (deal: {self.deal_id})")
+            logger.info(f"Saved {len(self._items)} inventory items to {save_path} (deal: {self.deal_id})")
 
     def load_from_file(self, path: Path) -> None:
         """
@@ -765,6 +786,164 @@ class InventoryStore:
             item_id for item_id, item in self._items.items()
             if item.status == status
         ]
+
+    # =========================================================================
+    # DATABASE PERSISTENCE (PostgreSQL)
+    # =========================================================================
+
+    def save_to_db(self, app=None) -> None:
+        """
+        Save all items to PostgreSQL database.
+
+        Args:
+            app: Flask app instance (for application context)
+        """
+        import os
+
+        # Check if database is enabled
+        use_db = os.environ.get('USE_DATABASE', 'false').lower() == 'true'
+        if not use_db:
+            logger.debug("Database not enabled, skipping database save")
+            return
+
+        if not self.deal_id:
+            logger.warning("No deal_id set, cannot save to database")
+            return
+
+        try:
+            # Import here to avoid circular dependencies
+            from web.database import db, InventoryItem as DBInventoryItem
+
+            # Get or create app context
+            if app:
+                with app.app_context():
+                    self._save_items_to_db(db, DBInventoryItem)
+            else:
+                # Try to get current app context
+                from flask import current_app
+                self._save_items_to_db(db, DBInventoryItem)
+
+            print(f"[INVENTORY] ✅ Saved {len(self._items)} items to database (deal: {self.deal_id})")
+            logger.info(f"Saved {len(self._items)} inventory items to database for deal {self.deal_id}")
+
+        except Exception as e:
+            logger.error(f"Failed to save inventory to database: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
+            raise
+
+    def _save_items_to_db(self, db, DBInventoryItem) -> None:
+        """Internal method to save items within database context."""
+        with self._lock:
+            for item_id, item in self._items.items():
+                # Check if item exists
+                db_item = DBInventoryItem.query.filter_by(item_id=item_id).first()
+
+                if db_item:
+                    # Update existing item
+                    db_item.name = item.name
+                    db_item.status = item.status
+                    db_item.data = item.data
+                    db_item.source_fact_ids = item.source_fact_ids
+                    db_item.source_files = [item.source_file] if item.source_file else []
+                    db_item.source_type = item.source_type
+                    db_item.is_enriched = item.is_enriched
+                    db_item.needs_investigation = item.needs_investigation
+                    db_item.investigation_reason = item.investigation_reason
+                else:
+                    # Create new item
+                    db_item = DBInventoryItem(
+                        item_id=item_id,
+                        deal_id=self.deal_id,
+                        inventory_type=item.inventory_type,
+                        entity=item.entity,
+                        name=item.name,
+                        status=item.status,
+                        data=item.data,
+                        source_fact_ids=item.source_fact_ids,
+                        source_files=[item.source_file] if item.source_file else [],
+                        source_type=item.source_type,
+                        is_enriched=item.is_enriched,
+                        needs_investigation=item.needs_investigation,
+                        investigation_reason=item.investigation_reason,
+                    )
+                    db.session.add(db_item)
+
+            db.session.commit()
+
+    def load_from_db(self, app=None) -> None:
+        """
+        Load items from PostgreSQL database.
+
+        Args:
+            app: Flask app instance (for application context)
+        """
+        import os
+
+        # Check if database is enabled
+        use_db = os.environ.get('USE_DATABASE', 'false').lower() == 'true'
+        if not use_db:
+            logger.debug("Database not enabled, skipping database load")
+            return
+
+        if not self.deal_id:
+            logger.warning("No deal_id set, cannot load from database")
+            return
+
+        try:
+            # Import here to avoid circular dependencies
+            from web.database import db, InventoryItem as DBInventoryItem
+
+            # Get or create app context
+            if app:
+                with app.app_context():
+                    self._load_items_from_db(DBInventoryItem)
+            else:
+                # Try to get current app context
+                from flask import current_app
+                self._load_items_from_db(DBInventoryItem)
+
+            logger.info(f"Loaded {len(self._items)} inventory items from database for deal {self.deal_id}")
+
+        except Exception as e:
+            logger.error(f"Failed to load inventory from database: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
+            # Don't raise - allow fallback to file-based loading
+
+    def _load_items_from_db(self, DBInventoryItem) -> None:
+        """Internal method to load items within database context."""
+        with self._lock:
+            self._items.clear()
+
+            # Query all inventory items for this deal
+            db_items = DBInventoryItem.query.filter_by(
+                deal_id=self.deal_id,
+                deleted_at=None  # Only load non-deleted items
+            ).all()
+
+            for db_item in db_items:
+                try:
+                    # Convert database model to InventoryItem dataclass
+                    item = InventoryItem(
+                        item_id=db_item.item_id,
+                        inventory_type=db_item.inventory_type,
+                        entity=db_item.entity,
+                        deal_id=db_item.deal_id,
+                        status=db_item.status,
+                        name=db_item.name,
+                        data=db_item.data or {},
+                        source_fact_ids=db_item.source_fact_ids or [],
+                        source_file=db_item.source_files[0] if db_item.source_files else "",
+                        source_type=db_item.source_type,
+                        is_enriched=db_item.is_enriched,
+                        enrichment_date=db_item.enrichment_date,
+                        needs_investigation=db_item.needs_investigation,
+                        investigation_reason=db_item.investigation_reason,
+                    )
+                    self._items[db_item.item_id] = item
+                except Exception as e:
+                    logger.error(f"Failed to convert database item {db_item.item_id}: {e}")
 
     def __len__(self) -> int:
         """Number of active items."""

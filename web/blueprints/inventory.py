@@ -104,8 +104,6 @@ def clear_inventory_store_for_deal(deal_id: str = None):
 def inventory_home():
     """Show inventory overview."""
     from flask import session
-    from web.database import db, Fact
-    from stores.inventory_store import InventoryItem
 
     store = get_inventory_store()
 
@@ -114,67 +112,8 @@ def inventory_home():
     org = store.get_items(inventory_type="organization", entity="target", status="active")
     vendors = store.get_items(inventory_type="vendor", entity="target", status="active")
 
-    # If InventoryStore is empty, also check database Facts
-    current_deal_id = session.get('current_deal_id')
-    if len(store) == 0 and current_deal_id:
-        logger.info(f"InventoryStore empty, loading from database for deal {current_deal_id}")
-
-        # Query application facts from database
-        db_app_facts = Fact.query.filter_by(deal_id=current_deal_id, domain='applications').all()
-        for i, fact in enumerate(db_app_facts):
-            details = fact.details or {}
-            apps.append(InventoryItem(
-                item_id=f"DB-APP-{i:04d}",
-                inventory_type="application",
-                entity="target",
-                deal_id=current_deal_id,
-                status="active",
-                data={
-                    'name': fact.item,
-                    'vendor': details.get('vendor') or details.get('provider', ''),
-                    'category': fact.category or details.get('category', ''),
-                    'version': details.get('version', ''),
-                    'criticality': details.get('criticality') or details.get('business_criticality', ''),
-                    'deployment': details.get('deployment') or details.get('hosting', ''),
-                    'user_count': details.get('user_count') or details.get('users', 0),
-                    'cost': details.get('annual_cost') or details.get('cost', 0),
-                },
-            ))
-
-        # Query infrastructure facts
-        db_infra_facts = Fact.query.filter_by(deal_id=current_deal_id, domain='infrastructure').all()
-        for i, fact in enumerate(db_infra_facts):
-            details = fact.details or {}
-            infra.append(InventoryItem(
-                item_id=f"DB-INF-{i:04d}",
-                inventory_type="infrastructure",
-                entity="target",
-                deal_id=current_deal_id,
-                status="active",
-                data={
-                    'name': fact.item,
-                    'type': fact.category or details.get('type', ''),
-                    'os': details.get('os', ''),
-                    'environment': details.get('environment', ''),
-                },
-            ))
-
-        # Query organization facts
-        db_org_facts = Fact.query.filter_by(deal_id=current_deal_id, domain='organization').all()
-        for i, fact in enumerate(db_org_facts):
-            details = fact.details or {}
-            org_data = {'name': fact.item}
-            org_data.update(details)
-            org.append(InventoryItem(
-                item_id=f"DB-ORG-{i:04d}",
-                inventory_type="organization",
-                entity="target",
-                deal_id=current_deal_id,
-                status="active",
-                data=org_data,
-            ))
-
-        logger.info(f"Loaded from DB: {len(apps)} apps, {len(infra)} infra, {len(org)} org")
+    # InventoryStore now loads from database automatically in __init__
+    # No need for Facts fallback - duplicates are handled by content-hashed IDs
 
     # Calculate stats
     total_cost = sum(app.cost or 0 for app in apps)

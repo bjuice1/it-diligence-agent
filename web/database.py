@@ -550,6 +550,7 @@ class Deal(SoftDeleteMixin, AuditMixin, db.Model):
     snapshots = relationship('DealSnapshot', back_populates='deal', lazy='dynamic', cascade='all, delete-orphan')
     pending_changes = relationship('PendingChange', back_populates='deal', lazy='dynamic', cascade='all, delete-orphan')
     report_overrides = relationship('ReportOverride', back_populates='deal', lazy='dynamic', cascade='all, delete-orphan')
+    inventory_items = relationship('InventoryItem', back_populates='deal', lazy='dynamic', cascade='all, delete-orphan')
 
     # Indexes
     __table_args__ = (
@@ -1053,6 +1054,83 @@ class FactFindingLink(db.Model):
         Index('idx_fact_finding_finding', 'finding_id'),
         db.UniqueConstraint('fact_id', 'finding_id', name='uq_fact_finding'),
     )
+
+
+# =============================================================================
+# INVENTORY ITEM MODEL (Deduplicated structured inventory)
+# =============================================================================
+
+class InventoryItem(SoftDeleteMixin, db.Model):
+    """Deduplicated inventory items from discovery analysis.
+
+    Uses content-hashed IDs for stable deduplication across re-imports.
+    Replaces JSON file-based InventoryStore with database persistence.
+    """
+    __tablename__ = 'inventory_items'
+
+    # Primary key - content-hashed ID (e.g., I-APP-a3f291)
+    item_id = Column(String(50), primary_key=True)
+
+    # Scoping
+    deal_id = Column(String(36), ForeignKey('deals.id', ondelete='CASCADE'), nullable=False)
+    inventory_type = Column(String(50), nullable=False)  # application, infrastructure, organization, vendor
+    entity = Column(String(20), nullable=False, default='target')  # target or buyer
+
+    # Core fields
+    name = Column(Text, nullable=False)  # Item name (app name, server name, etc.)
+    status = Column(String(20), default='active')  # active, removed, merged
+
+    # All other attributes stored as JSONB (vendor, version, category, etc.)
+    data = Column(JSON, default=dict, nullable=False)
+
+    # Provenance - links back to Facts that created this inventory item
+    source_fact_ids = Column(JSON, default=list)  # Array of fact IDs
+    source_files = Column(JSON, default=list)  # Source document filenames
+    source_type = Column(String(50), default='discovery')  # discovery, import, manual
+
+    # Enrichment tracking
+    is_enriched = Column(Boolean, default=False)
+    enrichment_date = Column(DateTime, nullable=True)
+    needs_investigation = Column(Boolean, default=False)
+    investigation_reason = Column(Text, default='')
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    deal = relationship('Deal', back_populates='inventory_items')
+
+    # Indexes for fast queries
+    __table_args__ = (
+        Index('idx_inventory_deal_type', 'deal_id', 'inventory_type'),
+        Index('idx_inventory_deal_entity', 'deal_id', 'entity'),
+        Index('idx_inventory_deal_status', 'deal_id', 'status'),
+        Index('idx_inventory_type_entity', 'inventory_type', 'entity'),
+        Index('idx_inventory_deleted', 'deleted_at'),
+    )
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary matching InventoryItem dataclass format."""
+        return {
+            'item_id': self.item_id,
+            'deal_id': self.deal_id,
+            'inventory_type': self.inventory_type,
+            'entity': self.entity,
+            'name': self.name,
+            'status': self.status,
+            'data': self.data or {},
+            'source_fact_ids': self.source_fact_ids or [],
+            'source_files': self.source_files or [],
+            'source_type': self.source_type,
+            'is_enriched': self.is_enriched,
+            'enrichment_date': self.enrichment_date.isoformat() if self.enrichment_date else None,
+            'needs_investigation': self.needs_investigation,
+            'investigation_reason': self.investigation_reason,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'is_deleted': self.is_deleted,
+        }
 
 
 # =============================================================================
