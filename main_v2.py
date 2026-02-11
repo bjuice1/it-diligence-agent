@@ -110,6 +110,61 @@ def setup_logging(verbose: bool = False):
     return logging.getLogger('main_v2')
 
 
+def load_documents_by_entity(input_path: Path) -> dict:
+    """
+    Load documents separated by entity (buyer vs target).
+
+    Returns:
+        dict with keys 'buyer' and 'target', each containing combined document text
+        or None if no documents of that entity exist.
+    """
+    result = {'buyer': None, 'target': None}
+
+    if not input_path.is_dir():
+        # Single file - use original load logic
+        text = load_documents(input_path)
+        # Detect entity from content or filename
+        entity = detect_entity_from_document(text, str(input_path.name) if input_path.is_file() else "")
+        result[entity] = text
+        return result
+
+    # Directory - separate files by entity
+    txt_files = list(input_path.glob('*.txt')) + list(input_path.glob('*.md'))
+    buyer_parts = []
+    target_parts = []
+
+    for txt_file in sorted(txt_files):
+        # Detect entity from filename first (fast path)
+        filename_lower = txt_file.name.lower()
+        if filename_lower.startswith('buyer_') or 'buyer' in filename_lower.split('_')[0].lower():
+            entity = 'buyer'
+        elif filename_lower.startswith('target_') or 'target' in filename_lower.split('_')[0].lower():
+            entity = 'target'
+        else:
+            # Fallback: read content and detect
+            with open(txt_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            entity = detect_entity_from_document(content, txt_file.name)
+            # Re-open to read again for appending
+            with open(txt_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+        # Read file if not already loaded
+        if entity == 'buyer' or entity == 'target':
+            with open(txt_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            parts = buyer_parts if entity == 'buyer' else target_parts
+            parts.append(f"\n\n# {txt_file.name}\n\n")
+            parts.append(content)
+
+    if buyer_parts:
+        result['buyer'] = "".join(buyer_parts)
+    if target_parts:
+        result['target'] = "".join(target_parts)
+
+    return result
+
+
 def load_documents(input_path: Path) -> str:
     """Load and combine documents from input path."""
     if input_path.is_file():
@@ -141,6 +196,49 @@ def load_documents(input_path: Path) -> str:
         raise ValueError(f"No supported documents found in: {input_path}")
     else:
         raise ValueError(f"Invalid input path: {input_path}")
+
+
+def detect_entity_from_document(document_text: str, document_name: str = "") -> str:
+    """
+    Auto-detect entity (buyer vs target) from document content and filename.
+
+    Detection strategy:
+    1. Check for explicit **Entity:** markers in document header (first 1000 chars)
+    2. Check filename prefix (Buyer_* vs Target_*)
+    3. Default to "target" if inconclusive
+
+    Args:
+        document_text: Full document text
+        document_name: Source filename
+
+    Returns:
+        "buyer" or "target"
+    """
+    import re
+
+    # Strategy 1: Look for explicit entity markers in document header
+    header = document_text[:1000] if document_text else ""
+
+    # Match patterns like: **Entity:** BUYER or **Entity:** TARGET
+    entity_marker = re.search(r'\*\*Entity:\*\*\s*(BUYER|TARGET|buyer|target)', header, re.IGNORECASE)
+    if entity_marker:
+        detected = entity_marker.group(1).lower()
+        if detected in ('buyer', 'target'):
+            logger.info(f"Entity detected from document marker: {detected}")
+            return detected
+
+    # Strategy 2: Check filename prefix
+    filename_lower = document_name.lower()
+    if filename_lower.startswith('buyer_') or 'buyer' in filename_lower.split('_')[0]:
+        logger.info(f"Entity detected from filename prefix: buyer (filename: {document_name})")
+        return "buyer"
+    elif filename_lower.startswith('target_') or 'target' in filename_lower.split('_')[0]:
+        logger.info(f"Entity detected from filename prefix: target (filename: {document_name})")
+        return "target"
+
+    # Strategy 3: Default to target
+    logger.warning(f"No entity marker found in document or filename '{document_name}', defaulting to 'target'")
+    return "target"
 
 
 def run_discovery(
@@ -215,8 +313,12 @@ def run_discovery(
 
     agent = agent_class(**agent_kwargs)
 
-    # Run discovery with document name for traceability
-    result = agent.discover(document_text, document_name=document_name)
+    # Auto-detect entity from document content and filename
+    detected_entity = detect_entity_from_document(document_text, document_name)
+    print(f"Entity: {detected_entity}")
+
+    # Run discovery with document name and detected entity for traceability
+    result = agent.discover(document_text, document_name=document_name, entity=detected_entity)
 
     # Print summary
     print("\nDiscovery Summary:")
@@ -1286,11 +1388,21 @@ Phases:
         else:
             # Standard workflow (no session)
             print(f"\nLoading documents from: {args.input_path}")
-            document_text = load_documents(args.input_path)
-            print(f"Loaded {len(document_text):,} characters")
+
+            # Load documents separated by entity (buyer vs target)
+            docs_by_entity = load_documents_by_entity(args.input_path)
+            total_chars = sum(len(text) for text in [docs_by_entity['buyer'], docs_by_entity['target']] if text)
+            print(f"Loaded {total_chars:,} characters")
+            if docs_by_entity['target']:
+                print(f"  Target: {len(docs_by_entity['target']):,} characters")
+            if docs_by_entity['buyer']:
+                print(f"  Buyer: {len(docs_by_entity['buyer']):,} characters")
 
             # Run discovery (parallel or sequential)
             if use_parallel and len(domains_to_analyze) > 1:
+                # Note: parallel mode currently doesn't support entity separation
+                # Fall back to combined text for now
+                document_text = load_documents(args.input_path)
                 fact_store = run_parallel_discovery(
                     document_text=document_text,
                     domains=domains_to_analyze,
@@ -1299,18 +1411,39 @@ Phases:
                     deal_id=deal_id
                 )
             else:
-                # Sequential discovery
+                # Sequential discovery - process each entity separately
                 fact_store = FactStore(deal_id=deal_id)
                 inventory_store = InventoryStore(deal_id=deal_id)
-                for domain in domains_to_analyze:
-                    _fs, _is = run_discovery(
-                        document_text=document_text,
-                        domain=domain,
-                        fact_store=fact_store,
-                        target_name=args.target_name,
-                        deal_id=deal_id,
-                        inventory_store=inventory_store,
-                    )
+
+                # Process target documents first
+                if docs_by_entity['target']:
+                    print("\n" + "="*60)
+                    print("PROCESSING TARGET DOCUMENTS")
+                    print("="*60)
+                    for domain in domains_to_analyze:
+                        _fs, _is = run_discovery(
+                            document_text=docs_by_entity['target'],
+                            domain=domain,
+                            fact_store=fact_store,
+                            target_name=args.target_name,
+                            deal_id=deal_id,
+                            inventory_store=inventory_store,
+                        )
+
+                # Process buyer documents second
+                if docs_by_entity['buyer']:
+                    print("\n" + "="*60)
+                    print("PROCESSING BUYER DOCUMENTS")
+                    print("="*60)
+                    for domain in domains_to_analyze:
+                        _fs, _is = run_discovery(
+                            document_text=docs_by_entity['buyer'],
+                            domain=domain,
+                            fact_store=fact_store,
+                            target_name=args.buyer_name or "Buyer",
+                            deal_id=deal_id,
+                            inventory_store=inventory_store,
+                        )
 
                 # Save inventory store after all discovery completes
                 inventory_store.save()

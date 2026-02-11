@@ -3535,6 +3535,16 @@ def applications_overview():
 
     current_deal_id = flask_session.get('current_deal_id')
 
+    # DEMO FALLBACK: If no deal in session, use the most recent deal for testing
+    if not current_deal_id:
+        from web.database import Deal
+        latest_deal = Deal.query.order_by(Deal.created_at.desc()).first()
+        if latest_deal:
+            current_deal_id = latest_deal.id
+            flask_session['current_deal_id'] = current_deal_id
+            flask_session.modified = True
+            logger.info(f"Auto-selected most recent deal for testing: {current_deal_id}")
+
     # Entity support: allow ?entity=buyer or ?entity=target or ?entity=all
     requested_entity = request.args.get('entity', 'target')
     if requested_entity not in ('target', 'buyer', 'all'):
