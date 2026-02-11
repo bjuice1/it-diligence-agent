@@ -46,6 +46,12 @@
                 <td style="text-align: right;">{{ deal.findings }}</td>
                 <td style="text-align: right;">{{ deal.runs }}</td>
                 <td style="text-align: center;">
+                    <form method="POST" action="{{ url_for('admin_deduplicate_apps', deal_id=deal.id) }}" style="display: inline; margin-right: 5px;" onsubmit="return confirm('Deduplicate applications for \'{{ deal.name }}\'?\n\nThis will:\n- Find duplicate applications by name+entity\n- Merge fact links from duplicates\n- Delete duplicate entries\n\nA backup will be created before changes.')">
+                        <button type="submit" class="btn btn-sm btn-warning">🔧 Deduplicate Apps</button>
+                    </form>
+                    <form method="POST" action="{{ url_for('admin_deduplicate_apps', deal_id=deal.id) }}?dry_run=true" style="display: inline; margin-right: 5px;">
+                        <button type="submit" class="btn btn-sm btn-info">🔍 Dry Run</button>
+                    </form>
                     <form method="POST" action="{{ url_for('admin_delete_deal', deal_id=deal.id) }}" style="display: inline;" onsubmit="return confirm('Delete deal \'{{ deal.name }}\'?\n\nThis will delete:\n- {{ deal.docs }} documents\n- {{ deal.facts }} facts\n- {{ deal.findings }} findings\n- {{ deal.runs }} analysis runs\n\nThis cannot be undone!')">
                         <button type="submit" class="btn btn-sm btn-danger">Delete</button>
                     </form>

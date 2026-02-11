@@ -7960,6 +7960,136 @@ def admin_delete_all_deals():
     return redirect(url_for('admin_cleanup'))
 
 
+@app.route('/admin/deduplicate/<deal_id>', methods=['POST'])
+@auth_optional
+def admin_deduplicate_apps(deal_id):
+    """Emergency deduplication of application inventory for a deal."""
+    dry_run = request.args.get('dry_run', 'false').lower() == 'true'
+
+    logger.info(f"=" * 80)
+    logger.info(f"EMERGENCY APPLICATION DEDUPLICATION")
+    logger.info(f"Deal ID: {deal_id}, Dry Run: {dry_run}")
+    logger.info(f"=" * 80)
+
+    try:
+        from stores.inventory_store import InventoryStore
+        from collections import defaultdict
+
+        store = InventoryStore(deal_id=deal_id)
+
+        # Get all application items
+        app_items_before = store.get_items(inventory_type="application", status="active")
+        total_apps_before = len(app_items_before)
+
+        # Calculate total users before
+        total_users_before = 0
+        for item in app_items_before:
+            user_count = item.data.get('users', 0)
+            if isinstance(user_count, str):
+                import re
+                match = re.search(r'(\d+)', user_count.replace(',', ''))
+                if match:
+                    user_count = int(match.group(1))
+                else:
+                    user_count = 0
+            total_users_before += int(user_count or 0)
+
+        logger.info(f"BEFORE: {total_apps_before} apps, {total_users_before:,} users")
+
+        # Find duplicates by normalized (name, entity)
+        duplicates_map = defaultdict(list)
+        for item in app_items_before:
+            # Normalize name
+            name = item.name.lower().strip()
+            name = name.replace(' inc.', '').replace(' llc', '').replace(' corp', '')
+            name = name.replace('.com', '').replace('.io', '')
+            key = (name, item.entity)
+            duplicates_map[key].append(item)
+
+        # Filter to only duplicates
+        duplicates_map = {k: v for k, v in duplicates_map.items() if len(v) > 1}
+
+        if not duplicates_map:
+            flash('✅ No duplicate applications found!', 'success')
+            return redirect(url_for('admin_cleanup'))
+
+        duplicates_count = len(duplicates_map)
+        items_to_delete = sum(len(v) - 1 for v in duplicates_map.values())
+
+        logger.info(f"Found {duplicates_count} apps with duplicates ({items_to_delete} items to delete)")
+
+        if dry_run:
+            # Just report what would be done
+            details = []
+            for (name, entity), items in sorted(duplicates_map.items()):
+                details.append(f"{name} ({entity}): {len(items)} copies")
+
+            flash(f'🔍 DRY RUN: Found {duplicates_count} applications with duplicates. Would delete {items_to_delete} duplicate items.', 'info')
+            for detail in details[:10]:  # Show first 10
+                flash(f'  • {detail}', 'info')
+            if len(details) > 10:
+                flash(f'  ... and {len(details) - 10} more', 'info')
+        else:
+            # Actually deduplicate
+            deleted_count = 0
+            merged_facts = 0
+
+            for (name, entity), items in duplicates_map.items():
+                # Sort by item_id for deterministic ordering
+                items = sorted(items, key=lambda x: x.item_id)
+                canonical = items[0]
+                duplicates = items[1:]
+
+                for dup in duplicates:
+                    # Merge fact links into canonical
+                    for fact_id in dup.source_fact_ids:
+                        if fact_id not in canonical.source_fact_ids:
+                            canonical.source_fact_ids.append(fact_id)
+                            merged_facts += 1
+
+                    # Delete duplicate
+                    store.remove_item(dup.item_id)
+                    deleted_count += 1
+                    logger.info(f"Deleted: {dup.item_id} ({dup.name})")
+
+            # Save changes
+            store.save()
+
+            # Calculate impact
+            app_items_after = store.get_items(inventory_type="application", status="active")
+            total_apps_after = len(app_items_after)
+
+            total_users_after = 0
+            for item in app_items_after:
+                user_count = item.data.get('users', 0)
+                if isinstance(user_count, str):
+                    import re
+                    match = re.search(r'(\d+)', user_count.replace(',', ''))
+                    if match:
+                        user_count = int(match.group(1))
+                    else:
+                        user_count = 0
+                total_users_after += int(user_count or 0)
+
+            user_reduction = total_users_before - total_users_after
+            app_reduction = total_apps_before - total_apps_after
+
+            logger.info(f"AFTER: {total_apps_after} apps, {total_users_after:,} users")
+            logger.info(f"REDUCTION: {app_reduction} apps, {user_reduction:,} users")
+
+            flash(f'✅ Deduplication complete!', 'success')
+            flash(f'📊 Deleted {deleted_count} duplicate applications', 'success')
+            flash(f'📎 Merged {merged_facts} fact links', 'info')
+            flash(f'📉 User count reduced by {user_reduction:,} ({user_reduction/total_users_before*100:.1f}%)', 'info')
+            flash(f'📉 App count: {total_apps_before} → {total_apps_after} ({app_reduction} removed)', 'info')
+
+    except Exception as e:
+        logger.error(f"Deduplication failed: {e}", exc_info=True)
+        flash(f'❌ Deduplication failed: {e}', 'error')
+
+    return redirect(url_for('admin_cleanup'))
+
+
 # Register CLI commands for database management
 from web.cleanup_old_deals import register_commands
 register_commands(app)
