@@ -227,7 +227,7 @@ PARALLEL_DISCOVERY = True          # Run discovery agents in parallel
 PARALLEL_REASONING = True          # Run reasoning agents in parallel
 
 # Organization Assumption Feature Flags (spec 11 - adaptive org extraction)
-ENABLE_ORG_ASSUMPTIONS = os.getenv('ENABLE_ORG_ASSUMPTIONS', 'true').lower() == 'true'  # Master switch for adaptive extraction
+ENABLE_ORG_ASSUMPTIONS = os.getenv('ENABLE_ORG_ASSUMPTIONS', 'false').lower() == 'true'  # Master switch for adaptive extraction - DISABLED for production/demo
 ENABLE_BUYER_ORG_ASSUMPTIONS = os.getenv('ENABLE_BUYER_ORG_ASSUMPTIONS', 'false').lower() == 'false'  # Generate assumptions for buyer entity too?
 LOG_ASSUMPTION_GENERATION = True    # Log assumptions at INFO level
 LOG_HIERARCHY_DETECTION = True      # Log detection results at INFO level
