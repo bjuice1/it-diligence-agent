@@ -66,6 +66,14 @@ class InventoryItem:
     # flag: None, investigate, confirm, critical
     enrichment: Dict[str, Any] = field(default_factory=dict)
 
+    # Enrichment Status (Doc 05: UI Enrichment Status)
+    is_enriched: bool = False                   # Has enrichment been applied
+    enrichment_confidence: str = 'none'         # none | low | medium | high
+    enrichment_method: str = 'none'             # none | deterministic | llm | manual
+    extraction_quality: float = 0.0             # 0.0-1.0 from parser (Doc 02)
+    needs_investigation: bool = False           # Flagged for manual review
+    entity_validated: bool = False              # Entity explicitly validated vs inferred
+
     # Status
     status: str = "active"          # active, removed, deprecated, planned
     removal_reason: str = ""        # If removed, why
@@ -309,3 +317,81 @@ class MergeResult:
             f"{self.unchanged} unchanged, {self.flagged_removed} removed, "
             f"{self.skipped} skipped, {len(self.errors)} errors"
         )
+
+
+# =============================================================================
+# DATA QUALITY HELPERS (Doc 05: UI Enrichment Status)
+# =============================================================================
+
+def calculate_data_quality_score(item: InventoryItem) -> float:
+    """
+    Calculate overall data quality score (0.0-1.0).
+
+    Factors:
+    - Extraction quality (from parser)
+    - Enrichment confidence
+    - Field completeness
+    - Entity validation
+
+    Args:
+        item: InventoryItem to evaluate
+
+    Returns:
+        Quality score 0.0-1.0 (higher is better)
+    """
+    # Extraction quality (0.0-1.0) from parser
+    extraction_score = item.extraction_quality
+
+    # Enrichment confidence
+    enrichment_scores = {
+        'none': 0.0,
+        'low': 0.5,
+        'medium': 0.75,
+        'high': 1.0
+    }
+    enrichment_score = enrichment_scores.get(item.enrichment_confidence, 0.0)
+
+    # Field completeness (% of expected fields filled)
+    # For applications: name, category, vendor, users
+    if item.inventory_type == 'application':
+        expected_fields = ['name', 'category', 'vendor', 'users']
+    elif item.inventory_type == 'infrastructure':
+        expected_fields = ['name', 'type', 'os', 'environment']
+    elif item.inventory_type == 'organization':
+        expected_fields = ['role', 'department', 'headcount']
+    else:  # vendor
+        expected_fields = ['vendor_name', 'contract_type']
+
+    filled = sum(1 for f in expected_fields if item.data.get(f))
+    completeness_score = filled / len(expected_fields) if expected_fields else 0.0
+
+    # Entity validation (explicit vs inferred)
+    entity_score = 1.0 if item.entity_validated else 0.7
+
+    # Weighted average
+    quality = (
+        extraction_score * 0.3 +
+        enrichment_score * 0.4 +
+        completeness_score * 0.2 +
+        entity_score * 0.1
+    )
+
+    return quality
+
+
+def quality_class(quality_score: float) -> str:
+    """
+    Get CSS class name for quality score.
+
+    Args:
+        quality_score: Quality score 0.0-1.0
+
+    Returns:
+        'high' | 'medium' | 'low'
+    """
+    if quality_score >= 0.8:
+        return 'high'
+    elif quality_score >= 0.5:
+        return 'medium'
+    else:
+        return 'low'
