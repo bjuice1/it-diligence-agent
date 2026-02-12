@@ -92,23 +92,24 @@ def demo_stable_ids():
     name2 = "Salesforce CRM"  # Suffix removed
     name3 = "SALESFORCE"      # Case normalized
 
+    # API: generate(name_normalized, vendor, entity, domain_prefix)
     id1 = FingerprintGenerator.generate(
-        normalized_name=NormalizationRules.normalize_name(name1, "application"),
-        original_name=name1,
-        entity=Entity.TARGET,
-        domain_prefix="APP"
+        NormalizationRules.normalize_name(name1, "application"),
+        "Salesforce",  # vendor
+        Entity.TARGET,
+        "APP"
     )
     id2 = FingerprintGenerator.generate(
-        normalized_name=NormalizationRules.normalize_name(name2, "application"),
-        original_name=name2,
-        entity=Entity.TARGET,
-        domain_prefix="APP"
+        NormalizationRules.normalize_name(name2, "application"),
+        "Salesforce",  # vendor
+        Entity.TARGET,
+        "APP"
     )
     id3 = FingerprintGenerator.generate(
-        normalized_name=NormalizationRules.normalize_name(name3, "application"),
-        original_name=name3,
-        entity=Entity.TARGET,
-        domain_prefix="APP"
+        NormalizationRules.normalize_name(name3, "application"),
+        "Salesforce",  # vendor
+        Entity.TARGET,
+        "APP"
     )
 
     print(f"\n'{name1}' → {id1}")
@@ -118,10 +119,10 @@ def demo_stable_ids():
 
     # Different entity = different ID
     id_buyer = FingerprintGenerator.generate(
-        normalized_name=NormalizationRules.normalize_name(name1, "application"),
-        original_name=name1,
-        entity=Entity.BUYER,
-        domain_prefix="APP"
+        NormalizationRules.normalize_name(name1, "application"),
+        "Salesforce",  # vendor
+        Entity.BUYER,
+        "APP"
     )
 
     print(f"\nBuyer '{name1}' → {id_buyer}")
@@ -248,8 +249,8 @@ def demo_extraction_coordinator():
 
     # Stats
     print(f"\n📊 Extraction stats:")
-    print(f"   Total items extracted from {doc_id}: {coordinator.get_extracted_count(doc_id)}")
     print(f"   By application domain: {coordinator.get_extracted_count(doc_id, 'application')}")
+    print(f"   (Prevents infrastructure from re-extracting 'Salesforce')")
 
 
 def demo_p02_fix():
