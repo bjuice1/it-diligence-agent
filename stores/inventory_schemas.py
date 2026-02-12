@@ -42,6 +42,15 @@ INVENTORY_SCHEMAS: Dict[str, Dict[str, Any]] = {
             "source_category",        # raw category string from source document
             "category_confidence",    # high, medium, low, none
             "category_inferred_from", # mapping_exact, mapping_alias, mapping_partial, keyword_inference, default
+
+            # NEW FIELDS (applications-enhancement spec): Cost model drivers
+            "complexity",             # simple, medium, complex, critical (for cost modeling)
+            "deployment_type",        # saas, on_prem, hybrid, custom (for cost modeling)
+            "hosted_by_parent",       # boolean - if true, parent company hosts (TSA costs in carveouts)
+            "api_integrations",       # integer - count of API integrations (for integration cost)
+            "sso_required",           # boolean - requires SSO integration (for integration cost)
+            "data_volume_gb",         # integer - data volume in GB (for data migration cost)
+            "custom_interfaces",      # integer - count of custom interfaces/integrations (for integration cost)
         ],
         "id_fields": ["name", "vendor"],  # Used for content-hashing
     },
@@ -125,6 +134,23 @@ ENRICHMENT_FLAGS = [
     "investigate",  # Needs investigation
     "confirm",      # Needs confirmation from target
     "critical",     # Critical system, verify details
+]
+
+# Application complexity levels (for cost modeling)
+APPLICATION_COMPLEXITY_LEVELS = [
+    "simple",       # Basic tools, low risk (e.g., chat, collaboration)
+    "medium",       # Standard applications (default)
+    "complex",      # Integrated systems, custom platforms
+    "critical",     # ERP, core business systems
+]
+
+# Application deployment types (for cost modeling)
+APPLICATION_DEPLOYMENT_TYPES = [
+    "saas",         # SaaS - subscription transfer, config migration
+    "on_prem",      # On-premise - hardware migration, network reconfiguration
+    "hybrid",       # Mix of cloud and on-premise components
+    "custom",       # Custom-built, self-hosted
+    "cloud_iaas",   # Cloud-hosted but not SaaS (IaaS/PaaS)
 ]
 
 # Valid status values for inventory items

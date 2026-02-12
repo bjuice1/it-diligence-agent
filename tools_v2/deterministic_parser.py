@@ -25,6 +25,93 @@ from utils.cost_status_inference import normalize_numeric  # For test verificati
 logger = logging.getLogger(__name__)
 
 
+# =============================================================================
+# ENTITY EXTRACTION (Doc 01: Entity Propagation Hardening)
+# =============================================================================
+
+class EntityValidationError(Exception):
+    """Raised when entity cannot be determined from document."""
+
+    def __init__(self, message: str, suggestions: List[str] = None):
+        self.message = message
+        self.suggestions = suggestions or [
+            "Add section header with 'Target' or 'Buyer' keyword",
+            "Add 'Entity' column to table with 'Target'/'Buyer' values",
+            "Rename file to include 'target' or 'buyer' keyword",
+            "Manually tag document entity in UI before analysis"
+        ]
+
+    def __str__(self):
+        msg = self.message + "\n\nSuggestions:\n"
+        for i, suggestion in enumerate(self.suggestions, 1):
+            msg += f"  {i}. {suggestion}\n"
+        return msg
+
+
+class EntityAmbiguityError(EntityValidationError):
+    """Raised when conflicting entity signals are found."""
+    pass
+
+
+def extract_document_entity(
+    section_text: str,
+    headers: List[str],
+    filename: str = None,
+    metadata: Dict = None
+) -> Optional[str]:
+    """
+    Extract entity from document context using heuristics.
+
+    Args:
+        section_text: Section header or surrounding text
+        headers: Table column headers
+        filename: Source filename (optional)
+        metadata: Document metadata (optional)
+
+    Returns:
+        "target" | "buyer" | "per_row" | None
+
+    Raises:
+        EntityAmbiguityError: If conflicting signals found
+    """
+    signals = []
+
+    # Check section headers
+    if re.search(r'\b(target|seller|divestiture)\b', section_text, re.I):
+        signals.append(("section_header", "target", "high"))
+    if re.search(r'\b(buyer|acquirer|parent|acquiring)\b', section_text, re.I):
+        signals.append(("section_header", "buyer", "high"))
+
+    # Check table headers for entity column
+    entity_col = next((h for h in headers if h.lower() in ['entity', 'company', 'organization']), None)
+    if entity_col:
+        # Entity is per-row, not document-level
+        return "per_row"  # Special case: mixed table
+
+    # Check filename
+    if filename:
+        if re.search(r'\btarget\b', filename, re.I):
+            signals.append(("filename", "target", "low"))
+        if re.search(r'\bbuyer\b', filename, re.I):
+            signals.append(("filename", "buyer", "low"))
+
+    # Resolve signals
+    high_conf_signals = [s for s in signals if s[2] == "high"]
+
+    if len(high_conf_signals) == 0:
+        return None  # Ambiguous, need user input
+
+    if len(high_conf_signals) == 1:
+        return high_conf_signals[0][1]
+
+    # Multiple high-confidence signals - check consistency
+    entities = {s[1] for s in high_conf_signals}
+    if len(entities) > 1:
+        raise EntityAmbiguityError(f"Conflicting entity signals: {signals}")
+
+    return high_conf_signals[0][1]
+
+
 @dataclass
 class ParsedTable:
     """Represents a parsed markdown table"""
@@ -33,6 +120,7 @@ class ParsedTable:
     table_type: Optional[str] = None  # "application_inventory", "infrastructure", etc.
     source_section: str = ""
     raw_text: str = ""
+    entity: Optional[str] = None  # "target" or "buyer" - extracted from document context
 
 
 @dataclass
@@ -377,6 +465,27 @@ def _app_table_to_facts(
 ) -> int:
     """Convert application inventory table to facts (and optionally inventory items)."""
     facts_created = 0
+
+    # ENTITY VALIDATION (Doc 01: Entity Propagation Hardening)
+    # Use table.entity if available, otherwise use parameter
+    table_entity = table.entity if table.entity and table.entity != "per_row" else entity
+
+    # Validate entity is set and valid
+    if not table_entity or table_entity.strip() == "":
+        raise EntityValidationError(
+            f"Application table from {source_document} has no entity. "
+            f"Cannot infer entity from context. "
+            f"Document must include entity indicator (section header, filename, or Entity column)."
+        )
+
+    if table_entity not in ['target', 'buyer']:
+        raise EntityValidationError(
+            f"Invalid entity '{table_entity}' in table from {source_document}. "
+            f"Expected: 'target' or 'buyer'"
+        )
+
+    # Use validated entity for all items in this table
+    entity = table_entity
 
     # Map common header variations to standard fields
     header_mapping = {
@@ -1012,6 +1121,28 @@ def preprocess_document(
     """
     result = ParserResult()
 
+    # ENTITY EXTRACTION (Doc 01: Entity Propagation Hardening)
+    # Try to extract entity from document context
+    extracted_entity = extract_document_entity(
+        section_text=document_text[:2000],  # Use first 2000 chars for section header detection
+        headers=[],  # Will be filled per-table later
+        filename=source_document,
+        metadata=None
+    )
+
+    # Use extracted entity if found, otherwise use parameter default
+    if extracted_entity and extracted_entity != "per_row":
+        if entity != "target" and extracted_entity != entity:
+            logger.warning(
+                f"Entity mismatch: extracted '{extracted_entity}' from document, "
+                f"but parameter specified '{entity}'. Using extracted value."
+            )
+        entity = extracted_entity
+        logger.info(f"Extracted entity from document: {entity}")
+    elif extracted_entity is None:
+        logger.info(f"No entity extracted from document, using parameter default: {entity}")
+    # If extracted_entity == "per_row", it will be handled per-table
+
     # Extract all markdown tables
     table_tuples = extract_markdown_tables(document_text)
 
@@ -1027,6 +1158,21 @@ def preprocess_document(
         if parsed is None:
             result.errors.append(f"Failed to parse table at position {start_pos}")
             continue
+
+        # Check if table has entity column (per-row entity)
+        table_entity_check = extract_document_entity(
+            section_text="",
+            headers=parsed.headers,
+            filename=None
+        )
+
+        if table_entity_check == "per_row":
+            # Table has entity column - entity will be per-row
+            parsed.entity = "per_row"
+            logger.info("Table has Entity column - will split by entity per row")
+        else:
+            # Use document-level entity
+            parsed.entity = entity
 
         # Detect type
         table_type = detect_table_type(parsed)
