@@ -1138,3 +1138,54 @@ def get_all_known_apps() -> List[str]:
     for mapping in APP_MAPPINGS.values():
         apps.extend(mapping.aliases)
     return sorted(set(apps))
+
+
+# =============================================================================
+# CATEGORY COST MULTIPLIERS (Doc 03: Application Cost Model)
+# =============================================================================
+
+# Category-based cost multipliers for application migration
+# Higher multipliers = more complex/risky migration
+CATEGORY_COST_MULTIPLIERS = {
+    # High complexity, high business impact
+    'erp': 2.5,                     # Enterprise Resource Planning
+    'financial': 2.0,               # Financial systems (GL, AP/AR, etc.)
+    'supply_chain': 2.2,            # Supply chain management
+    'manufacturing': 2.0,           # Manufacturing execution systems
+    'crm': 1.8,                     # Customer Relationship Management
+
+    # Medium complexity
+    'hcm': 1.5,                     # Human Capital Management / HR
+    'hr': 1.5,                      # Human Resources (alias for hcm)
+    'business_intelligence': 1.5,  # BI / reporting systems
+    'bi_analytics': 1.5,            # Analytics platforms
+    'data_analytics': 1.5,          # Data analytics
+    'custom': 2.0,                  # Custom-built (no vendor support)
+    'industry_vertical': 1.8,       # Industry-specific software
+    'infrastructure': 1.2,          # Infrastructure tools
+    'database': 1.3,                # Database systems
+    'devops': 1.2,                  # DevOps tooling
+
+    # Lower complexity, often SaaS
+    'collaboration': 0.8,           # Slack, Teams, email
+    'communication': 0.7,           # Chat, video conferencing
+    'productivity': 0.6,            # Office tools, document management
+    'file_sharing': 0.5,            # Dropbox, Box, Google Drive
+    'security': 1.0,                # Security tools (varies widely)
+
+    # Default
+    'unknown': 1.0
+}
+
+
+def get_category_cost_multiplier(category: str) -> float:
+    """
+    Get cost multiplier for application category.
+
+    Args:
+        category: Application category
+
+    Returns:
+        Cost multiplier (0.5-2.5x)
+    """
+    return CATEGORY_COST_MULTIPLIERS.get(category.lower(), 1.0)

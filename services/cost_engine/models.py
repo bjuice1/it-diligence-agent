@@ -49,6 +49,7 @@ class WorkItemType(Enum):
     ERP_STANDALONE = "erp_standalone"
     DC_HOSTING_EXIT = "dc_hosting_exit"
     PMO_TRANSITION = "pmo_transition"
+    APPLICATION_MIGRATION = "application_migration"  # Doc 03: Per-app migration cost model
 
 
 # =============================================================================
@@ -503,6 +504,56 @@ COST_MODELS[WorkItemType.PMO_TRANSITION] = CostModel(
         "12-month program duration",
     ],
     required_drivers=["sites", "total_users"],
+)
+
+# -----------------------------------------------------------------------------
+# Model 9: Application Migration (Doc 03: Multi-Tier Cost Model)
+# -----------------------------------------------------------------------------
+COST_MODELS[WorkItemType.APPLICATION_MIGRATION] = CostModel(
+    work_item_type=WorkItemType.APPLICATION_MIGRATION,
+    display_name="Application Migration & Integration",
+    tower="Applications",
+
+    # Base cost per application
+    base_services_cost=20_000,  # Base migration effort per app
+
+    # NOTE: This model uses multipliers, not per-unit costs
+    # Cost is calculated per-application based on:
+    # - Complexity tier (simple 0.5x, medium 1.0x, complex 2.0x, critical 3.0x)
+    # - Category (ERP 2.5x, CRM 1.8x, collaboration 0.8x, etc.)
+    # - Deployment type (SaaS 0.3x, on-prem 1.5x, custom 2.0x)
+    # - Deal type (acquisition 1.0x, carveout 1.8x, divestiture 2.2x)
+    # + Integration costs (APIs, SSO, data migration, custom interfaces)
+    # + TSA costs (carveouts only, for parent-hosted apps)
+
+    # Complexity multipliers (applied to base cost)
+    complexity_multipliers={
+        "low": 0.5,    # Simple SaaS tools (chat, collaboration)
+        "medium": 1.0, # Standard business applications
+        "high": 2.0,   # Integrated systems, custom platforms
+    },
+
+    # No per-unit costs - cost is per-application calculated from inventory
+    # using the APPLICATION_MIGRATION_COST_CALCULATOR in calculator.py
+
+    licenses=[],  # Application-specific licenses calculated separately
+
+    typical_months=6,  # 6-month average migration timeline
+    source="spec:applications-enhancement/03-application-cost-model.md",
+    notes=(
+        "Multi-tier cost model with complexity, category, and deployment multipliers. "
+        "Cost calculated per-application from InventoryStore. "
+        "See services/cost_engine/application_costs.py for detailed logic."
+    ),
+    assumptions=[
+        "Base cost $20K per application",
+        "Complexity tiers: simple 0.5x, medium 1.0x, complex 2.0x, critical 3.0x",
+        "Category multipliers: ERP 2.5x, CRM 1.8x, collaboration 0.8x, etc.",
+        "Deployment multipliers: SaaS 0.3x, on-prem 1.5x, custom 2.0x",
+        "Integration costs: $2K per API, $5K for SSO, $10K per 100GB data",
+        "TSA costs: $500-$5K/month for carveouts with parent-hosted apps",
+    ],
+    required_drivers=["applications"],  # Count from inventory
 )
 
 
