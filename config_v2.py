@@ -385,6 +385,19 @@ EXPORT_HTML = True
 
 
 # =============================================================================
+# FEATURE FLAGS
+# =============================================================================
+
+# Deal Type Awareness - Enable deal-specific analysis branching
+# Controls whether synergy engine, cost engine, and reasoning agents branch
+# logic based on deal_type (acquisition, carveout, divestiture)
+#
+# Set to 'false' to rollback to pre-migration behavior (always consolidation)
+# Set to 'true' to enable deal type awareness
+DEAL_TYPE_AWARENESS_ENABLED = os.getenv('DEAL_TYPE_AWARENESS', 'true').lower() == 'true'
+
+
+# =============================================================================
 # ENVIRONMENT VALIDATION
 # =============================================================================
 

@@ -511,7 +511,12 @@ class Deal(SoftDeleteMixin, AuditMixin, db.Model):
     name = Column(String(255), nullable=False, default='')  # User-friendly deal name
     target_name = Column(String(255), nullable=False)
     buyer_name = Column(String(255), default='')
-    deal_type = Column(String(50), default='acquisition')  # acquisition, carveout, merger
+    deal_type = Column(
+        String(50),
+        nullable=False,  # NOT NULL constraint
+        default='acquisition',  # Keep default for backward compatibility
+        # NOTE: After migration period, consider removing default to force explicit selection
+    )
     industry = Column(String(100), default='')
     sub_industry = Column(String(100), default='')  # More specific industry
     deal_value = Column(String(50), default='')  # Range like "$50M-100M"
@@ -552,11 +557,16 @@ class Deal(SoftDeleteMixin, AuditMixin, db.Model):
     report_overrides = relationship('ReportOverride', back_populates='deal', lazy='dynamic', cascade='all, delete-orphan')
     inventory_items = relationship('InventoryItem', back_populates='deal', lazy='dynamic', cascade='all, delete-orphan')
 
-    # Indexes
+    # Indexes and constraints
     __table_args__ = (
         Index('idx_deals_tenant_status', 'tenant_id', 'status'),
         Index('idx_deals_owner', 'owner_id'),
         Index('idx_deals_deleted', 'deleted_at'),
+        # CHECK constraint for valid deal types
+        db.CheckConstraint(
+            "deal_type IN ('acquisition', 'carveout', 'divestiture')",
+            name='valid_deal_type'
+        ),
     )
 
     def to_dict(self) -> Dict[str, Any]:

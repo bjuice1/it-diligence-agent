@@ -616,8 +616,10 @@ Review the inventory. Think about what it means for THIS specific deal. Produce 
 def get_applications_reasoning_prompt(inventory: dict, deal_context: dict) -> str:
     """
     Generate the reasoning prompt with inventory and deal context injected.
+    Includes deal-type-specific conditioning for M&A lens guidance.
     """
     import json
+    from prompts.shared.deal_type_conditioning import get_deal_type_conditioning
 
     inventory_str = json.dumps(inventory, indent=2)
     context_str = json.dumps(deal_context, indent=2)
@@ -625,6 +627,11 @@ def get_applications_reasoning_prompt(inventory: dict, deal_context: dict) -> st
     prompt = APPLICATIONS_REASONING_PROMPT
     prompt = prompt.replace("{inventory}", inventory_str)
     prompt = prompt.replace("{deal_context}", context_str)
+
+    # NEW: Inject deal-type conditioning at top of prompt
+    deal_type = deal_context.get('deal_type', 'acquisition')
+    conditioning = get_deal_type_conditioning(deal_type)
+    prompt = conditioning + "\n\n" + prompt
 
     # Inject cost estimation guidance before PE CONCERNS section
     cost_guidance = get_cost_estimation_guidance()

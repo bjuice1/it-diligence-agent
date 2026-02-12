@@ -27,15 +27,35 @@
     </div>
     <div class="summary-divider"></div>
     <div class="summary-section">
-        <div class="summary-label">Synergy Potential</div>
-        <div class="summary-value synergy-value">
-            {% set total_synergy = synergies|map(attribute='annual_savings_high')|sum %}
-            {% if total_synergy > 0 %}
-            ${{ "{:,.0f}".format(total_synergy) }}/yr
-            {% else %}
-            <span class="text-muted">Analyzing...</span>
-            {% endif %}
-        </div>
+        {# Check if we have synergies or separation costs #}
+        {% if synergies and synergies[0].annual_savings_low is defined %}
+            {# SynergyOpportunity - show potential savings #}
+            <div class="summary-label">Synergy Potential</div>
+            <div class="summary-value synergy-value">
+                {% set total_synergy = synergies|map(attribute='annual_savings_high')|sum %}
+                {% if total_synergy > 0 %}
+                ${{ "{:,.0f}".format(total_synergy) }}/yr
+                {% else %}
+                <span class="text-muted">Analyzing...</span>
+                {% endif %}
+            </div>
+        {% elif synergies and synergies[0].setup_cost_low is defined %}
+            {# SeparationCost - show total separation cost #}
+            <div class="summary-label">Separation Costs</div>
+            <div class="summary-value" style="color: #fbbf24;">
+                {% set total_separation = synergies|map(attribute='total_cost_high')|sum %}
+                {% if total_separation > 0 %}
+                ${{ "{:,.0f}".format(total_separation) }}
+                {% else %}
+                <span class="text-muted">Analyzing...</span>
+                {% endif %}
+            </div>
+        {% else %}
+            <div class="summary-label">Synergy Potential</div>
+            <div class="summary-value synergy-value">
+                <span class="text-muted">Analyzing...</span>
+            </div>
+        {% endif %}
     </div>
 </div>
 
@@ -283,34 +303,77 @@
                     <h4>{{ synergy.name }}</h4>
                 </div>
                 <div class="synergy-metrics">
-                    <div class="metric">
-                        <span class="metric-label">Annual Savings</span>
-                        <span class="metric-value positive">${{ "{:,.0f}".format(synergy.annual_savings_low) }} - ${{ "{:,.0f}".format(synergy.annual_savings_high) }}</span>
-                    </div>
-                    <div class="metric">
-                        <span class="metric-label">Cost to Achieve</span>
-                        <span class="metric-value negative">${{ "{:,.0f}".format(synergy.cost_to_achieve_low) }} - ${{ "{:,.0f}".format(synergy.cost_to_achieve_high) }}</span>
-                    </div>
-                    <div class="metric">
-                        <span class="metric-label">Timeframe</span>
-                        <span class="metric-value">{{ synergy.timeframe }}</span>
-                    </div>
-                    <div class="metric">
-                        <span class="metric-label">3-Year Net Benefit</span>
-                        <span class="metric-value {{ 'positive' if synergy.net_benefit_low > 0 else 'negative' }}">${{ "{:,.0f}".format(synergy.net_benefit_low) }} - ${{ "{:,.0f}".format(synergy.net_benefit_high) }}</span>
-                    </div>
+                    {# Check if this is a SynergyOpportunity (has annual_savings_low) or SeparationCost (has setup_cost_low) #}
+                    {% if synergy.annual_savings_low is defined %}
+                        {# SynergyOpportunity - show consolidation metrics #}
+                        <div class="metric">
+                            <span class="metric-label">Annual Savings</span>
+                            <span class="metric-value positive">${{ "{:,.0f}".format(synergy.annual_savings_low) }} - ${{ "{:,.0f}".format(synergy.annual_savings_high) }}</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Cost to Achieve</span>
+                            <span class="metric-value negative">${{ "{:,.0f}".format(synergy.cost_to_achieve_low) }} - ${{ "{:,.0f}".format(synergy.cost_to_achieve_high) }}</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Timeframe</span>
+                            <span class="metric-value">{{ synergy.timeframe }}</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">3-Year Net Benefit</span>
+                            <span class="metric-value {{ 'positive' if synergy.net_benefit_low > 0 else 'negative' }}">${{ "{:,.0f}".format(synergy.net_benefit_low) }} - ${{ "{:,.0f}".format(synergy.net_benefit_high) }}</span>
+                        </div>
+                    {% elif synergy.setup_cost_low is defined %}
+                        {# SeparationCost - show standup/TSA metrics #}
+                        <div class="metric">
+                            <span class="metric-label">Setup Cost</span>
+                            <span class="metric-value negative">${{ "{:,.0f}".format(synergy.setup_cost_low) }} - ${{ "{:,.0f}".format(synergy.setup_cost_high) }}</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">TSA Duration</span>
+                            <span class="metric-value">{{ synergy.tsa_duration_months }} months</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">TSA Monthly Cost</span>
+                            <span class="metric-value negative">${{ "{:,.0f}".format(synergy.tsa_monthly_cost) }}/mo</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Total Cost</span>
+                            <span class="metric-value negative">${{ "{:,.0f}".format(synergy.total_cost_low) }} - ${{ "{:,.0f}".format(synergy.total_cost_high) }}</span>
+                        </div>
+                    {% endif %}
                 </div>
-                {% if synergy.affected_items %}
+                {# Show affected items or systems #}
+                {% if synergy.affected_items is defined and synergy.affected_items %}
                 <div class="synergy-items">
                     <span class="items-label">Affected:</span>
                     {% for item in synergy.affected_items %}
                     <span class="item-chip">{{ item }}</span>
                     {% endfor %}
                 </div>
+                {% elif synergy.affected_systems is defined and synergy.affected_systems %}
+                <div class="synergy-items">
+                    <span class="items-label">Systems:</span>
+                    {% for system in synergy.affected_systems %}
+                    <span class="item-chip">{{ system }}</span>
+                    {% endfor %}
+                </div>
                 {% endif %}
+                {# Show confidence or criticality #}
+                {% if synergy.confidence is defined %}
                 <div class="synergy-confidence">
                     Confidence: <span class="badge badge-{{ 'low' if synergy.confidence == 'high' else 'medium' if synergy.confidence == 'medium' else 'high' }}">{{ synergy.confidence|upper }}</span>
                 </div>
+                {% elif synergy.criticality is defined %}
+                <div class="synergy-confidence">
+                    Criticality: <span class="badge badge-{{ 'critical' if synergy.criticality == 'critical' else 'high' if synergy.criticality == 'high' else 'medium' }}">{{ synergy.criticality|upper }}</span>
+                </div>
+                {% endif %}
+                {# Show notes #}
+                {% if synergy.notes %}
+                <div class="synergy-notes" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-muted); font-size: 0.875rem; color: var(--text-muted);">
+                    {{ synergy.notes }}
+                </div>
+                {% endif %}
             </div>
             {% endfor %}
         </div>

@@ -577,13 +577,24 @@ Work through your analysis, then call `complete_analysis` when done."""
 
 
 def get_organization_reasoning_prompt(inventory: dict, deal_context: dict) -> str:
+    """
+    Generate organization reasoning prompt with inventory and deal context.
+    Includes deal-type-specific conditioning for M&A lens guidance.
+    """
     import json
+    from prompts.shared.deal_type_conditioning import get_deal_type_conditioning
+
     inventory_str = json.dumps(inventory, indent=2)
     context_str = json.dumps(deal_context, indent=2)
 
     prompt = ORGANIZATION_REASONING_PROMPT
     prompt = prompt.replace("{inventory}", inventory_str)
     prompt = prompt.replace("{deal_context}", context_str)
+
+    # NEW: Inject deal-type conditioning at top of prompt
+    deal_type = deal_context.get('deal_type', 'acquisition')
+    conditioning = get_deal_type_conditioning(deal_type)
+    prompt = conditioning + "\n\n" + prompt
 
     # Inject cost estimation guidance before PE Concerns section
     cost_guidance = get_cost_estimation_guidance()

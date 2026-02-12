@@ -1,0 +1,57 @@
+{
+  "deal_type": "acquisition",
+  "description": "Golden test fixture for acquisition deal type validation",
+  "test_scenario": {
+    "target_name": "Target Company",
+    "buyer_name": "Acquiring Company",
+    "total_users": 1000,
+    "applications": 50,
+    "overlapping_apps": [
+      "Salesforce CRM",
+      "Microsoft 365",
+      "Workday HRIS"
+    ]
+  },
+  "expected_outputs": {
+    "synergy_count_min": 3,
+    "synergy_types": [
+      "consolidation",
+      "license_optimization"
+    ],
+    "tsa_costs": 0,
+    "cost_multipliers": {
+      "identity": 1.0,
+      "application": 1.0,
+      "infrastructure": 1.0,
+      "network": 1.0,
+      "cybersecurity": 1.0,
+      "org": 1.0
+    },
+    "findings_contain": [
+      "consolidate",
+      "migrate",
+      "decommission",
+      "integration",
+      "synergy"
+    ],
+    "findings_not_contain": [
+      "separate",
+      "standalone",
+      "tsa",
+      "build new",
+      "untangle"
+    ],
+    "cost_ratio_vs_baseline": 1.0,
+    "recommendations_focus": [
+      "consolidation",
+      "deduplication",
+      "license_reduction"
+    ]
+  },
+  "validation_rules": {
+    "no_separation_costs": true,
+    "no_tsa_recommendations": true,
+    "consolidation_opportunities_present": true,
+    "cost_savings_identified": true
+  }
+}

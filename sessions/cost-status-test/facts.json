@@ -1,0 +1,18 @@
+{
+  "metadata": {
+    "created_at": "2026-02-11T15:53:21.943250",
+    "version": "2.2",
+    "deal_id": "cost-status-test"
+  },
+  "summary": {
+    "total_facts": 0,
+    "total_gaps": 0,
+    "total_open_questions": 0,
+    "domains": []
+  },
+  "facts": [],
+  "gaps": [],
+  "open_questions": [],
+  "by_domain": {},
+  "discovery_complete": {}
+}

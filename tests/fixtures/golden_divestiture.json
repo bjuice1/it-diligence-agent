@@ -1,0 +1,68 @@
+{
+  "deal_type": "divestiture",
+  "description": "Golden test fixture for divestiture deal type validation",
+  "test_scenario": {
+    "target_name": "Divested Business Unit",
+    "buyer_name": "Acquiring Company",
+    "total_users": 1000,
+    "applications": 50,
+    "deeply_integrated_systems": [
+      "Custom ERP",
+      "Shared Data Warehouse",
+      "Integrated CRM",
+      "Financial Systems"
+    ],
+    "shared_databases": 5,
+    "colocated_infrastructure": true
+  },
+  "expected_outputs": {
+    "synergy_count": 0,
+    "separation_cost_count_min": 8,
+    "untangling_complexity": "high",
+    "tsa_costs_min": 600000,
+    "cost_multipliers": {
+      "identity": 3.0,
+      "application": 2.5,
+      "infrastructure": 2.8,
+      "network": 3.0,
+      "cybersecurity": 2.3,
+      "org": 2.0
+    },
+    "findings_contain": [
+      "untangle",
+      "disentangle",
+      "extraction",
+      "separation",
+      "data migration",
+      "complex integration"
+    ],
+    "findings_not_contain": [
+      "consolidate",
+      "decommission target",
+      "simple migration"
+    ],
+    "cost_ratio_vs_baseline_min": 2.5,
+    "cost_ratio_vs_baseline_max": 3.5,
+    "recommendations_focus": [
+      "untangling_strategy",
+      "data_separation",
+      "shared_database_migration",
+      "custom_integration_removal",
+      "extended_tsa"
+    ]
+  },
+  "validation_rules": {
+    "no_consolidation_synergies": true,
+    "highest_costs": true,
+    "deep_integration_identified": true,
+    "complex_separation_required": true,
+    "data_untangling_required": true,
+    "extended_timeline_expected": true
+  },
+  "complexity_factors": {
+    "shared_databases": "high_impact",
+    "custom_integrations": "high_impact",
+    "colocated_workloads": "high_impact",
+    "mixed_data": "high_impact"
+  }
+}

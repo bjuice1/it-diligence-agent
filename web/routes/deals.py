@@ -179,7 +179,7 @@ def create_deal():
         name: string (required)
         target_name: string (required)
         buyer_name: string (optional)
-        deal_type: string (default: acquisition)
+        deal_type: string (REQUIRED - acquisition, carveout, divestiture)
         industry: string (optional)
         sub_industry: string (optional)
     """
@@ -189,12 +189,26 @@ def create_deal():
     # Get validated user ID (handles sync if needed)
     user_id, tenant_id = get_validated_user_id()
 
+    # VALIDATION: Deal type is REQUIRED
+    deal_type = data.get('deal_type', '').strip()
+    if not deal_type:
+        return jsonify({
+            'error': 'Deal type is required. Please select Acquisition, Carve-Out, or Divestiture.'
+        }), 400
+
+    # VALIDATION: Deal type must be valid enum value
+    VALID_DEAL_TYPES = ['acquisition', 'carveout', 'divestiture']
+    if deal_type not in VALID_DEAL_TYPES:
+        return jsonify({
+            'error': f'Invalid deal type: {deal_type}. Must be one of: {", ".join(VALID_DEAL_TYPES)}.'
+        }), 400
+
     deal, error = service.create_deal(
         user_id=user_id,
         name=data.get('name'),
         target_name=data.get('target_name'),
         buyer_name=data.get('buyer_name'),
-        deal_type=data.get('deal_type', 'acquisition'),
+        deal_type=deal_type,
         industry=data.get('industry'),
         sub_industry=data.get('sub_industry'),
         tenant_id=tenant_id,
@@ -209,7 +223,7 @@ def create_deal():
 
     return jsonify({
         'deal': _deal_to_dict(deal),
-        'message': 'Deal created successfully'
+        'message': f'Deal created successfully as {deal_type.upper()}.'
     }), 201
 
 
@@ -249,6 +263,15 @@ def update_deal(deal_id):
                'sub_industry', 'status', 'context', 'settings']
     updates = {k: v for k, v in data.items() if k in allowed}
 
+    # Validate deal_type if it's being updated
+    if 'deal_type' in updates:
+        deal_type = updates['deal_type']
+        VALID_DEAL_TYPES = ['acquisition', 'carveout', 'divestiture']
+        if deal_type and deal_type not in VALID_DEAL_TYPES:
+            return jsonify({
+                'error': f'Invalid deal type: {deal_type}. Must be one of: {", ".join(VALID_DEAL_TYPES)}.'
+            }), 400
+
     deal, error = service.update_deal(
         deal_id=deal_id,
         user_id=user.id if user else None,
@@ -261,6 +284,54 @@ def update_deal(deal_id):
     return jsonify({
         'deal': _deal_to_dict(deal),
         'message': 'Deal updated successfully'
+    })
+
+
+@deals_bp.route('/api/deals/<deal_id>/update_type', methods=['POST'])
+@auth_optional
+@require_deal_access
+def update_deal_type(deal_id):
+    """
+    Update deal type and provide warning about re-analysis.
+
+    Body:
+        deal_type: string (required - acquisition, carveout, divestiture)
+    """
+    service = get_deal_service()
+    user = get_current_user()
+    data = request.get_json() or {}
+
+    new_deal_type = data.get('deal_type', '').strip()
+
+    # Validate
+    VALID_DEAL_TYPES = ['acquisition', 'carveout', 'divestiture']
+    if not new_deal_type or new_deal_type not in VALID_DEAL_TYPES:
+        return jsonify({
+            'error': f'Invalid deal type. Must be one of: {", ".join(VALID_DEAL_TYPES)}.'
+        }), 400
+
+    # Get current deal to log the change
+    deal = service.get_deal(deal_id)
+    if not deal:
+        return jsonify({'error': 'Deal not found'}), 404
+
+    old_type = deal.deal_type
+
+    # Update deal type
+    deal, error = service.update_deal(
+        deal_id=deal_id,
+        user_id=user.id if user else None,
+        deal_type=new_deal_type
+    )
+
+    if error:
+        return jsonify({'error': error}), 400
+
+    logger.info(f"Deal {deal_id} type changed from {old_type} to {new_deal_type}")
+
+    return jsonify({
+        'deal': _deal_to_dict(deal),
+        'message': f'Deal type changed from {old_type} to {new_deal_type}. Please re-run analysis to update recommendations.'
     })
 
 

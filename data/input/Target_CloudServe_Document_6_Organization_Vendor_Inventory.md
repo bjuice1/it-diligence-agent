@@ -280,13 +280,28 @@
 
 | Vendor Category | Annual Spend | % of Total |
 |---|---:|---:|
-| **Cloud infrastructure** | $4,885,000 | 60.3% |
-| **SaaS applications** | $1,670,000 | 20.6% |
-| **Security & compliance** | $627,000 | 7.7% |
-| **Development tools** | $550,000 | 6.8% |
-| **Data & analytics** | $317,500 | 3.9% |
-| **Professional services** | $725,000 | 8.9% |
-| **TOTAL** | **$8,774,500** | **100%** |
+| **Cloud infrastructure (AWS + CDN)** | $4,885,000 | 66.9% |
+| **SaaS applications** | $1,731,500 | 23.7% |
+| **Professional services & contractors** | $725,000 | 9.9% |
+| **TOTAL VENDOR SPEND** | **$7,341,500** | **100%** |
+
+---
+
+## 8A) Vendor Spend Reconciliation with Document 2
+
+> **Purpose:** Reconcile vendor spend summary with application inventory total costs.
+
+| Spend Category | Annual Amount | Source Document | Notes |
+|---|---:|---|---|
+| **SaaS application licenses** | $2,331,500 | Document 2 (app inventory) | All 38 applications |
+| **Internal platform (dev cost)** | ($600,000) | Internal development | 8 platform apps (not vendor spend) |
+| **Vendor-provided SaaS** | $1,731,500 | Vendor spend | 30 external vendor apps |
+| **Cloud infrastructure (AWS)** | $4,800,000 | Document 3 | AWS annual spend |
+| **CDN (Fastly)** | $85,000 | Document 3 | Edge delivery |
+| **Professional services** | $725,000 | Vendor contracts | Offshore + MSP |
+| **TOTAL IT SPEND** | **$7,341,500** | | All external vendor payments |
+
+> **Note:** AWS ($4.8M) represents 65% of total vendor spend. SaaS applications ($1.7M) represent 24% of vendor spend. Internal development costs ($600K estimated for 8 platform components) are not included in vendor spend.
 
 ---
 

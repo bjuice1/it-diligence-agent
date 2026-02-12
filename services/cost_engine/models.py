@@ -164,6 +164,9 @@ class CostEstimate:
     # Run rate delta (new ongoing costs minus current)
     run_rate_delta: float = 0.0
 
+    # TSA costs (carveout-specific)
+    tsa_costs: float = 0.0
+
     # Breakdown
     cost_breakdown: Dict[str, float] = field(default_factory=dict)
 
@@ -192,6 +195,7 @@ class CostEstimate:
             },
             'annual_licenses': self.annual_licenses,
             'run_rate_delta': self.run_rate_delta,
+            'tsa_costs': self.tsa_costs,
             'cost_breakdown': self.cost_breakdown,
             'assumptions': self.assumptions,
             'drivers_used': self.drivers_used,
@@ -533,3 +537,77 @@ def get_tower_summary() -> Dict[str, int]:
         tower = model.tower
         summary[tower] = summary.get(tower, 0) + 1
     return summary
+
+
+# =============================================================================
+# DEAL TYPE COST MULTIPLIERS
+# =============================================================================
+
+# Deal Type Cost Multipliers
+# Applied to base effort estimates based on deal structure
+
+DEAL_TYPE_MULTIPLIERS = {
+    'acquisition': {
+        # Acquisition = consolidation path (baseline)
+        'identity_separation': 1.0,        # Extend existing IAM
+        'application_migration': 1.0,      # Migrate to buyer infra
+        'infrastructure_consolidation': 1.0,
+        'network_integration': 1.0,
+        'cybersecurity_harmonization': 1.0,
+        'org_restructuring': 1.0
+    },
+    'carveout': {
+        # Carve-out = build standalone systems (HIGHER costs)
+        'identity_separation': 2.5,        # Build NEW IAM from scratch
+        'application_migration': 1.8,      # Standup new environments
+        'infrastructure_consolidation': 2.0,  # Build new datacenter/cloud
+        'network_integration': 2.2,        # New WAN/connectivity
+        'cybersecurity_harmonization': 1.9,   # New security stack
+        'org_restructuring': 1.6           # More disruption to target
+    },
+    'divestiture': {
+        # Divestiture = clean separation (HIGHEST costs)
+        'identity_separation': 3.0,        # Full identity extraction
+        'application_migration': 2.2,      # Extract from shared systems
+        'infrastructure_consolidation': 2.5,
+        'network_integration': 2.8,        # Complex untangling
+        'cybersecurity_harmonization': 2.3,
+        'org_restructuring': 2.0           # Maximum disruption
+    }
+}
+
+
+def get_deal_type_multiplier(deal_type: str, work_item_category: str) -> float:
+    """
+    Get cost multiplier for a work item category based on deal type.
+
+    Args:
+        deal_type: One of ['acquisition', 'carveout', 'divestiture']
+        work_item_category: Category key from DEAL_TYPE_MULTIPLIERS
+
+    Returns:
+        Multiplier (1.0 = baseline, >1.0 = higher complexity)
+
+    Raises:
+        ValueError: If deal_type or category invalid
+    """
+    if deal_type not in DEAL_TYPE_MULTIPLIERS:
+        raise ValueError(f"Invalid deal_type: {deal_type}. Must be one of {list(DEAL_TYPE_MULTIPLIERS.keys())}")
+
+    multipliers = DEAL_TYPE_MULTIPLIERS[deal_type]
+
+    # Map work item categories to multiplier keys
+    # (Work items may have different naming than multiplier keys)
+    category_mapping = {
+        'identity': 'identity_separation',
+        'application': 'application_migration',
+        'applications': 'application_migration',
+        'infrastructure': 'infrastructure_consolidation',
+        'network': 'network_integration',
+        'cybersecurity': 'cybersecurity_harmonization',
+        'organization': 'org_restructuring',
+        'org': 'org_restructuring'
+    }
+
+    multiplier_key = category_mapping.get(work_item_category.lower(), 'infrastructure_consolidation')
+    return multipliers.get(multiplier_key, 1.0)

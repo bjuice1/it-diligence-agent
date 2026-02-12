@@ -452,14 +452,14 @@
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label">Deal Type</label>
-                        <select class="form-input" name="deal_type">
-                            <option value="acquisition">Acquisition</option>
-                            <option value="merger">Merger</option>
-                            <option value="carve-out">Carve-out</option>
-                            <option value="investment">Investment</option>
-                            <option value="other">Other</option>
+                        <label class="form-label required">Deal Type</label>
+                        <select class="form-input" name="deal_type" id="modal-deal-type" required>
+                            <option value="" disabled selected>-- Select Deal Type --</option>
+                            <option value="acquisition">Acquisition (Integration)</option>
+                            <option value="carveout">Carve-Out (Separation)</option>
+                            <option value="divestiture">Divestiture (Clean Break)</option>
                         </select>
+                        <small class="form-hint" id="modal-deal-type-help" style="display: block; margin-top: 4px; font-size: 11px;"></small>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Industry</label>
@@ -490,6 +490,24 @@
 
     // Load deals on page load
     document.addEventListener('DOMContentLoaded', loadDeals);
+
+    // Dynamic help text for deal type in modal
+    const modalDealTypeSelect = document.getElementById('modal-deal-type');
+    const modalDealTypeHelp = document.getElementById('modal-deal-type-help');
+    if (modalDealTypeSelect && modalDealTypeHelp) {
+        const descriptions = {
+            'acquisition': 'System will recommend consolidation synergies',
+            'carveout': 'System will focus on separation costs and TSA exposure',
+            'divestiture': 'System will calculate extraction costs'
+        };
+
+        modalDealTypeSelect.addEventListener('change', function() {
+            const selectedValue = this.value;
+            if (descriptions[selectedValue]) {
+                modalDealTypeHelp.textContent = descriptions[selectedValue];
+            }
+        });
+    }
 
     async function loadDeals() {
         try {
@@ -543,8 +561,8 @@
                     <div>
                         <div class="deal-name">${escapeHtml(deal.name)}</div>
                         <div class="deal-meta">
-                            <span class="deal-type-badge">${deal.deal_type || 'Acquisition'}</span>
-                            <span>${deal.industry || 'Technology'}</span>
+                            <span class="deal-type-badge">${getDealTypeBadge(deal.deal_type)}</span>
+                            ${deal.industry ? `<span>${deal.industry}</span>` : ''}
                         </div>
                     </div>
                     <span class="deal-status ${deal.status}">${deal.status}</span>
@@ -595,6 +613,15 @@
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    function getDealTypeBadge(dealType) {
+        const badges = {
+            'acquisition': 'Acquisition',
+            'carveout': 'Carve-Out',
+            'divestiture': 'Divestiture'
+        };
+        return badges[dealType] || 'Acquisition';
     }
 
     function formatDate(dateStr) {
@@ -659,6 +686,26 @@
         const form = event.target;
         const formData = new FormData(form);
         const data = Object.fromEntries(formData.entries());
+
+        // Validate deal type is selected
+        if (!data.deal_type || data.deal_type === '') {
+            alert('Deal type is required. Please select Acquisition, Carve-Out, or Divestiture.');
+            return;
+        }
+
+        // Confirmation for carve-out/divestiture
+        if (data.deal_type === 'carveout' || data.deal_type === 'divestiture') {
+            const confirmed = confirm(
+                `You selected ${data.deal_type.toUpperCase()}.\n\n` +
+                'This will analyze the deal as a SEPARATION (not integration).\n' +
+                'System will calculate standalone build-out costs.\n\n' +
+                'Is this correct?'
+            );
+
+            if (!confirmed) {
+                return;
+            }
+        }
 
         try {
             const response = await fetch('/api/deals', {

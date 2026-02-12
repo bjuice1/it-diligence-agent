@@ -963,6 +963,18 @@ APP_MAPPINGS: Dict[str, AppMapping] = {
         is_saas=True,
         is_industry_standard=False,
     ),
+
+    # -------------------------------------------------------------------------
+    # Custom/Internal Applications
+    # -------------------------------------------------------------------------
+    "internal": AppMapping(
+        category="custom",
+        vendor="Internal",
+        description="Internally developed application",
+        aliases=["in-house", "custom", "proprietary"],
+        is_saas=False,
+        is_industry_standard=False,
+    ),
 }
 
 

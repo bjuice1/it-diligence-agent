@@ -375,7 +375,17 @@
         <p class="deal-subtitle">{{ deal.target_name }}{% if deal.buyer_name %} → {{ deal.buyer_name }}{% endif %}</p>
         <div class="deal-badges">
             <span class="deal-badge status">{{ deal.status }}</span>
-            <span class="deal-badge type">{{ deal.deal_type or 'Acquisition' }}</span>
+            <span class="deal-badge type">
+                {% if deal.deal_type == 'acquisition' %}
+                    Acquisition
+                {% elif deal.deal_type == 'carveout' %}
+                    Carve-Out
+                {% elif deal.deal_type == 'divestiture' %}
+                    Divestiture
+                {% else %}
+                    {{ deal.deal_type or 'Acquisition' }}
+                {% endif %}
+            </span>
             {% if deal.industry %}
             <span class="deal-badge type">{{ deal.industry }}</span>
             {% endif %}
@@ -509,7 +519,18 @@
             {% endif %}
             <div class="info-row">
                 <span class="info-label">Deal Type</span>
-                <span class="info-value">{{ deal.deal_type or 'Acquisition' }}</span>
+                <span class="info-value">
+                    {% if deal.deal_type == 'acquisition' %}
+                        Acquisition
+                    {% elif deal.deal_type == 'carveout' %}
+                        Carve-Out
+                    {% elif deal.deal_type == 'divestiture' %}
+                        Divestiture
+                    {% else %}
+                        {{ deal.deal_type or 'Acquisition' }}
+                    {% endif %}
+                    <button onclick="openEditDealTypeModal()" style="margin-left: 8px; padding: 2px 8px; font-size: 11px; background: var(--bg-surface-sunken); border: 1px solid var(--border-default); border-radius: 4px; cursor: pointer;">Edit</button>
+                </span>
             </div>
             <div class="info-row">
                 <span class="info-label">Industry</span>
@@ -546,4 +567,112 @@
         </div>
     </div>
 </div>
+
+<!-- Edit Deal Type Modal -->
+<div class="modal-overlay" id="editDealTypeModal" style="position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); display: none; align-items: center; justify-content: center; z-index: 100;">
+    <div style="background: var(--bg-surface); border-radius: var(--radius-xl); box-shadow: var(--shadow-xl); width: 100%; max-width: 500px; max-height: 90vh; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: var(--space-5); border-bottom: 1px solid var(--border-default);">
+            <h3 style="margin: 0; font-size: var(--text-lg); font-weight: var(--font-semibold);">Edit Deal Type</h3>
+            <button onclick="closeEditDealTypeModal()" style="background: none; border: none; font-size: var(--text-xl); cursor: pointer; color: var(--text-secondary);">&times;</button>
+        </div>
+        <div style="padding: var(--space-5);">
+            <div style="background: #fef3c7; border-left: 4px solid #d97706; padding: var(--space-3); margin-bottom: var(--space-4); border-radius: 4px;">
+                <strong>Warning:</strong> Changing deal type will affect how the system analyzes your data and generates recommendations. You may need to re-run analysis to update cost estimates and synergy calculations.
+            </div>
+            <form id="editDealTypeForm">
+                <div style="margin-bottom: var(--space-4);">
+                    <label style="display: block; font-size: var(--text-sm); font-weight: var(--font-medium); color: var(--text-primary); margin-bottom: var(--space-2);">
+                        New Deal Type:
+                    </label>
+                    <select id="new-deal-type" name="deal_type" style="width: 100%; padding: var(--space-2) var(--space-3); border: 1px solid var(--border-default); border-radius: var(--radius-md); font-size: var(--text-sm); background: var(--bg-surface);" required>
+                        <option value="acquisition" {{ 'selected' if deal.deal_type == 'acquisition' else '' }}>
+                            Acquisition (Integration)
+                        </option>
+                        <option value="carveout" {{ 'selected' if deal.deal_type == 'carveout' else '' }}>
+                            Carve-Out (Separation)
+                        </option>
+                        <option value="divestiture" {{ 'selected' if deal.deal_type == 'divestiture' else '' }}>
+                            Divestiture (Clean Separation)
+                        </option>
+                    </select>
+                    <small id="edit-deal-type-help" style="display: block; margin-top: var(--space-1); font-size: var(--text-xs); color: var(--text-muted);"></small>
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: var(--space-3); padding-top: var(--space-4); border-top: 1px solid var(--border-default);">
+                    <button type="button" onclick="closeEditDealTypeModal()" style="padding: var(--space-2) var(--space-4); background: var(--bg-surface); color: var(--text-primary); border: 1px solid var(--border-default); border-radius: var(--radius-md); font-size: var(--text-sm); font-weight: var(--font-medium); cursor: pointer;">
+                        Cancel
+                    </button>
+                    <button type="submit" style="padding: var(--space-2) var(--space-4); background: var(--accent); color: white; border: none; border-radius: var(--radius-md); font-size: var(--text-sm); font-weight: var(--font-medium); cursor: pointer;">
+                        Update Deal Type
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function openEditDealTypeModal() {
+        document.getElementById('editDealTypeModal').style.display = 'flex';
+        updateEditDealTypeHelp();
+    }
+
+    function closeEditDealTypeModal() {
+        document.getElementById('editDealTypeModal').style.display = 'none';
+    }
+
+    function updateEditDealTypeHelp() {
+        const select = document.getElementById('new-deal-type');
+        const help = document.getElementById('edit-deal-type-help');
+        const descriptions = {
+            'acquisition': 'System will recommend consolidation synergies (merge target into buyer infrastructure)',
+            'carveout': 'System will focus on separation costs and TSA exposure (build standalone infrastructure)',
+            'divestiture': 'System will calculate extraction costs (untangle from parent systems)'
+        };
+
+        if (descriptions[select.value]) {
+            help.textContent = descriptions[select.value];
+        }
+    }
+
+    // Update help text when selection changes
+    document.getElementById('new-deal-type').addEventListener('change', updateEditDealTypeHelp);
+
+    // Handle form submission
+    document.getElementById('editDealTypeForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const dealType = document.getElementById('new-deal-type').value;
+        const dealId = '{{ deal.id }}';
+
+        try {
+            const response = await fetch(`/api/deals/${dealId}/update_type`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ deal_type: dealType })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                alert(result.error || 'Failed to update deal type');
+                return;
+            }
+
+            // Reload page to reflect changes
+            window.location.reload();
+        } catch (error) {
+            console.error('Error updating deal type:', error);
+            alert('Failed to update deal type');
+        }
+    });
+
+    // Close modal on escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeEditDealTypeModal();
+        }
+    });
+</script>
 {% endblock %}

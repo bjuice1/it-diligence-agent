@@ -1,0 +1,61 @@
+{
+  "deal_type": "carveout",
+  "description": "Golden test fixture for carve-out deal type validation",
+  "test_scenario": {
+    "target_name": "Carved Out Division",
+    "buyer_name": "NewCo",
+    "total_users": 1000,
+    "applications": 50,
+    "shared_services": [
+      "SAP ERP",
+      "Corporate Network",
+      "Active Directory",
+      "SOC Services",
+      "Email Infrastructure"
+    ],
+    "parent_hosted_count": 8
+  },
+  "expected_outputs": {
+    "synergy_count": 0,
+    "separation_cost_count_min": 5,
+    "tsa_costs_min": 600000,
+    "tsa_duration_months": 12,
+    "cost_multipliers": {
+      "identity": 2.5,
+      "application": 1.8,
+      "infrastructure": 2.0,
+      "network": 2.2,
+      "cybersecurity": 1.7,
+      "org": 1.5
+    },
+    "findings_contain": [
+      "separate",
+      "standalone",
+      "tsa",
+      "build",
+      "replicate",
+      "extract"
+    ],
+    "findings_not_contain": [
+      "consolidate",
+      "decommission target",
+      "merge into buyer"
+    ],
+    "cost_ratio_vs_baseline_min": 1.5,
+    "cost_ratio_vs_baseline_max": 3.0,
+    "recommendations_focus": [
+      "separation_planning",
+      "tsa_negotiation",
+      "standalone_capability",
+      "service_replication"
+    ]
+  },
+  "validation_rules": {
+    "no_consolidation_synergies": true,
+    "tsa_costs_present": true,
+    "separation_costs_present": true,
+    "higher_costs_than_acquisition": true,
+    "standalone_infrastructure_required": true,
+    "parent_dependencies_identified": true
+  }
+}

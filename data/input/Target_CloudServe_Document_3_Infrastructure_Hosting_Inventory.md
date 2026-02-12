@@ -25,15 +25,15 @@
 
 | Account Name | Account ID | Purpose | Environment | Monthly Cost |
 |---|---|---|---|---:|
-| cloudserve-prod | 123456789012 | Production workloads | Production | $185,000 |
-| cloudserve-staging | 234567890123 | Staging environment | Non-Prod | $62,000 |
-| cloudserve-dev | 345678901234 | Development environment | Non-Prod | $28,000 |
-| cloudserve-shared-services | 456789012345 | Shared infra (VPN, DNS, Transit Gateway) | Shared | $38,000 |
-| cloudserve-data | 567890123456 | Data warehouse (Snowflake on AWS) | Production | $45,000 |
-| cloudserve-security | 678901234567 | Security tools (GuardDuty, WAF, logs) | Shared | $15,000 |
-| cloudserve-sandbox-1 | 789012345678 | Engineering sandbox | Non-Prod | $8,000 |
-| cloudserve-sandbox-2 | 890123456789 | Engineering sandbox | Non-Prod | $6,000 |
-| cloudserve-sandbox-3 | 901234567890 | Engineering sandbox | Non-Prod | $13,000 |
+| cloudserve-prod | 847293615028 | Production workloads | Production | $185,000 |
+| cloudserve-staging | 592814736401 | Staging environment | Non-Prod | $62,000 |
+| cloudserve-dev | 318947562093 | Development environment | Non-Prod | $28,000 |
+| cloudserve-shared-services | 724051938627 | Shared infra (VPN, DNS, Transit Gateway) | Shared | $38,000 |
+| cloudserve-data | 905362718445 | Data warehouse (Snowflake on AWS) | Production | $45,000 |
+| cloudserve-security | 461738205944 | Security tools (GuardDuty, WAF, logs) | Shared | $15,000 |
+| cloudserve-sandbox-1 | 287194503628 | Engineering sandbox | Non-Prod | $8,000 |
+| cloudserve-sandbox-2 | 639472801563 | Engineering sandbox | Non-Prod | $6,000 |
+| cloudserve-sandbox-3 | 174829365047 | Engineering sandbox | Non-Prod | $13,000 |
 
 ---
 

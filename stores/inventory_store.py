@@ -121,7 +121,13 @@ class InventoryStore:
                 "deal_id is required - provide in add_item() or store constructor"
             )
 
-        # Validate
+        # Validate entity (must not be None or empty)
+        if not entity or entity.strip() == "":
+            raise ValueError(
+                "entity is required and cannot be None or empty. Must be 'target' or 'buyer'."
+            )
+
+        # Validate inventory type
         if not validate_inventory_type(inventory_type):
             raise ValueError(f"Invalid inventory type: {inventory_type}")
 
@@ -825,6 +831,12 @@ class InventoryStore:
             MergeResult with import statistics
         """
         result = MergeResult()
+
+        # Validate entity (must not be None or empty)
+        if not entity or entity.strip() == "":
+            raise ValueError(
+                "entity is required and cannot be None or empty. Must be 'target' or 'buyer'."
+            )
 
         # Resolve deal_id
         effective_deal_id = deal_id or self.deal_id

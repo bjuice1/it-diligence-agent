@@ -251,16 +251,29 @@
                 </div>
             </div>
 
-            <div class="form-group">
-                <label class="form-label" for="deal-type">Deal Type</label>
-                <select id="deal-type" name="deal_type" class="form-select">
-                    <option value="acquisition">Acquisition</option>
-                    <option value="merger">Merger</option>
-                    <option value="carve-out">Carve-out</option>
-                    <option value="divestiture">Divestiture</option>
-                    <option value="investment">Investment</option>
-                    <option value="other">Other</option>
+            <div class="form-group required">
+                <label class="form-label" for="deal-type">
+                    Deal Type <span class="required">*</span>
+                    <i class="fa fa-info-circle" style="cursor: help;" title="Critical: Determines recommendation logic (consolidation vs separation)"></i>
+                </label>
+                <select id="deal-type" name="deal_type" class="form-select" required>
+                    <option value="" disabled selected>-- Select Deal Type (Required) --</option>
+                    <option value="acquisition"
+                            data-description="Buyer acquires target and integrates into existing infrastructure">
+                        Acquisition (Integration)
+                    </option>
+                    <option value="carveout"
+                            data-description="Target is separated from parent company and operates standalone">
+                        Carve-Out (Separation from Parent)
+                    </option>
+                    <option value="divestiture"
+                            data-description="Seller divests division/subsidiary to buyer (clean break)">
+                        Divestiture (Clean Separation)
+                    </option>
                 </select>
+                <small class="form-hint" id="deal-type-help">
+                    Select the type of transaction to ensure appropriate analysis recommendations
+                </small>
             </div>
         </div>
 
@@ -347,6 +360,23 @@
         });
     });
 
+    // Dynamic help text for deal type
+    const dealTypeSelect = document.getElementById('deal-type');
+    const dealTypeHelp = document.getElementById('deal-type-help');
+    const descriptions = {
+        'acquisition': 'System will recommend consolidation synergies (merge target infrastructure into buyer)',
+        'carveout': 'System will focus on separation costs and TSA exposure (build standalone infrastructure)',
+        'divestiture': 'System will calculate extraction costs (untangle from parent systems)'
+    };
+
+    dealTypeSelect.addEventListener('change', function() {
+        const selectedValue = this.value;
+        if (descriptions[selectedValue]) {
+            dealTypeHelp.textContent = descriptions[selectedValue];
+            dealTypeHelp.style.color = 'var(--text-secondary)';
+        }
+    });
+
     // Form submission
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -367,6 +397,28 @@
             formError.textContent = 'Please fill in all required fields.';
             formError.style.display = 'block';
             return;
+        }
+
+        // Validate deal type is selected
+        if (!data.deal_type || data.deal_type === '') {
+            formError.textContent = 'Deal type is required. Please select Acquisition, Carve-Out, or Divestiture.';
+            formError.style.display = 'block';
+            dealTypeSelect.focus();
+            return;
+        }
+
+        // Confirmation for carve-out/divestiture (high-risk types)
+        if (data.deal_type === 'carveout' || data.deal_type === 'divestiture') {
+            const confirmed = confirm(
+                `You selected ${data.deal_type.toUpperCase()}.\n\n` +
+                'This will analyze the deal as a SEPARATION (not integration).\n' +
+                'System will calculate standalone build-out costs.\n\n' +
+                'Is this correct?'
+            );
+
+            if (!confirmed) {
+                return;
+            }
         }
 
         // Show loading state

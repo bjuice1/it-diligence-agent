@@ -1,0 +1,25 @@
+{
+  "session_id": "cost-status-test",
+  "created_at": "2026-02-11T15:53:21.943242",
+  "updated_at": "2026-02-11T15:53:21.951747",
+  "deal_context": {
+    "target_name": "CloudServe",
+    "buyer_name": null,
+    "deal_type": "bolt_on",
+    "industry": null,
+    "sub_industry": null,
+    "secondary_industries": [],
+    "industry_confirmed": false,
+    "deal_size": null,
+    "integration_approach": null,
+    "timeline_pressure": null,
+    "custom_focus_areas": [],
+    "notes": null
+  },
+  "processed_documents": [],
+  "run_history": [],
+  "current_phase": "complete",
+  "facts_file": "facts.json",
+  "reasoning_file": "reasoning.json",
+  "narratives_file": "narratives.json"
+}

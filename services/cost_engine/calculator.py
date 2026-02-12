@@ -25,6 +25,7 @@ from .models import (
     COST_MODELS,
     SCENARIO_MULTIPLIERS,
     get_model,
+    get_deal_type_multiplier,
 )
 
 logger = logging.getLogger(__name__)
@@ -119,6 +120,7 @@ def calculate_cost(
     model: CostModel,
     drivers: DealDrivers,
     complexity_override: Optional[Complexity] = None,
+    deal_type: str = "acquisition"
 ) -> CostEstimate:
     """
     Calculate cost estimate for a single work item type.
@@ -127,6 +129,7 @@ def calculate_cost(
         model: The cost model definition
         drivers: Deal drivers (extracted values)
         complexity_override: Optional complexity override (else auto-assessed)
+        deal_type: One of ['acquisition', 'carveout', 'divestiture']
 
     Returns:
         CostEstimate with all three scenarios
@@ -168,6 +171,24 @@ def calculate_cost(
     # Apply complexity
     adjusted_cost = base_cost * complexity_multiplier
 
+    # Apply deal type multiplier
+    # Map work item type to domain category
+    domain_mapping = {
+        WorkItemType.IDENTITY_SEPARATION: 'identity',
+        WorkItemType.EMAIL_MIGRATION: 'application',
+        WorkItemType.WAN_SEPARATION: 'network',
+        WorkItemType.ENDPOINT_EDR: 'infrastructure',
+        WorkItemType.SECURITY_OPS: 'cybersecurity',
+        WorkItemType.ERP_STANDALONE: 'application',
+        WorkItemType.DC_HOSTING_EXIT: 'infrastructure',
+        WorkItemType.PMO_TRANSITION: 'org',
+    }
+
+    domain = domain_mapping.get(model.work_item_type, 'infrastructure')
+    deal_multiplier = get_deal_type_multiplier(deal_type, domain)
+
+    adjusted_cost = adjusted_cost * deal_multiplier
+
     # Calculate scenarios
     one_time_upside = adjusted_cost * SCENARIO_MULTIPLIERS[CostScenario.UPSIDE]
     one_time_base = adjusted_cost * SCENARIO_MULTIPLIERS[CostScenario.BASE]
@@ -188,6 +209,7 @@ def calculate_cost(
         'per_site': model.per_site_cost * sites if model.per_site_cost else 0,
         'per_server': model.per_server_cost * servers if model.per_server_cost else 0,
         'complexity_multiplier': complexity_multiplier,
+        'deal_type_multiplier': deal_multiplier,
         'annual_licenses': annual_licenses,
     }
 
@@ -201,6 +223,8 @@ def calculate_cost(
         assumptions.append(f"Site count: {sites}")
     if complexity != Complexity.MEDIUM:
         assumptions.append(f"Complexity: {complexity.value}")
+    if deal_type != 'acquisition' and deal_multiplier != 1.0:
+        assumptions.append(f"Deal type: {deal_type} ({deal_multiplier}x multiplier)")
 
     # Track drivers used
     drivers_used = {
@@ -232,6 +256,7 @@ def calculate_work_item_cost(
     work_item_type: str,
     drivers: DealDrivers,
     complexity_override: Optional[str] = None,
+    deal_type: str = "acquisition"
 ) -> Optional[CostEstimate]:
     """
     Calculate cost for a work item type by name.
@@ -240,6 +265,7 @@ def calculate_work_item_cost(
         work_item_type: Work item type string (e.g., "identity_separation")
         drivers: Deal drivers
         complexity_override: Optional complexity string ("low", "medium", "high")
+        deal_type: One of ['acquisition', 'carveout', 'divestiture']
 
     Returns:
         CostEstimate or None if model not found
@@ -256,7 +282,7 @@ def calculate_work_item_cost(
         except ValueError:
             logger.warning(f"Invalid complexity: {complexity_override}")
 
-    return calculate_cost(model, drivers, complexity)
+    return calculate_cost(model, drivers, complexity, deal_type)
 
 
 # =============================================================================
@@ -277,6 +303,7 @@ class DealCostSummary:
     total_one_time_stress: float = 0.0
     total_annual_licenses: float = 0.0
     total_run_rate_delta: float = 0.0
+    total_tsa_costs: float = 0.0
 
     # By tower
     tower_costs: Dict[str, Dict] = field(default_factory=dict)
@@ -303,6 +330,7 @@ class DealCostSummary:
                 },
                 'annual_licenses': self.total_annual_licenses,
                 'run_rate_delta': self.total_run_rate_delta,
+                'tsa_costs': self.total_tsa_costs,
             },
             'tower_costs': self.tower_costs,
             'estimates': [e.to_dict() for e in self.estimates],
@@ -316,6 +344,8 @@ def calculate_deal_costs(
     deal_id: str,
     drivers: DealDrivers,
     work_item_types: Optional[List[str]] = None,
+    deal_type: str = "acquisition",
+    inventory_store: Optional[Any] = None
 ) -> DealCostSummary:
     """
     Calculate costs for all applicable work items in a deal.
@@ -325,6 +355,8 @@ def calculate_deal_costs(
         drivers: Deal drivers (entity is read from drivers.entity)
         work_item_types: Optional list of work item types to include
                         (if None, calculates all that have required drivers)
+        deal_type: One of ['acquisition', 'carveout', 'divestiture']
+        inventory_store: Optional InventoryStore for TSA cost calculation
 
     Returns:
         DealCostSummary with all costs aggregated (entity-aware)
@@ -340,7 +372,7 @@ def calculate_deal_costs(
 
     # Calculate each work item
     for wit_str in types_to_calc:
-        estimate = calculate_work_item_cost(wit_str, drivers)
+        estimate = calculate_work_item_cost(wit_str, drivers, deal_type=deal_type)
         if estimate:
             summary.estimates.append(estimate)
 
@@ -367,6 +399,21 @@ def calculate_deal_costs(
             summary.tower_costs[tower]['annual_licenses'] += estimate.annual_licenses
             summary.tower_costs[tower]['items'].append(estimate.display_name)
 
+    # Add TSA costs for carveout deals
+    if deal_type == 'carveout' and inventory_store is not None:
+        from .drivers import TSACostDriver
+        tsa_driver = TSACostDriver()
+        tsa_duration = drivers.tsa_months_assumed or 12
+        tsa_cost = tsa_driver.estimate_monthly_tsa_cost(
+            inventory_store=inventory_store,
+            tsa_duration_months=tsa_duration
+        )
+        summary.total_tsa_costs = tsa_cost
+        summary.top_assumptions.insert(0, f"TSA costs: ${tsa_cost:,.0f} over {tsa_duration} months")
+        logger.info(f"Deal {deal_id} carveout TSA costs: ${tsa_cost:,.0f}")
+    elif deal_type == 'carveout':
+        logger.warning(f"Deal {deal_id} is carveout but no inventory_store provided - TSA costs not calculated")
+
     # Collect top assumptions
     all_assumptions = []
     for est in summary.estimates:
@@ -387,7 +434,7 @@ def calculate_deal_costs(
     summary.drivers_assumed = drivers.get_assumed_drivers()
 
     logger.info(
-        f"Deal {deal_id} costs for entity={drivers.entity}: "
+        f"Deal {deal_id} costs for entity={drivers.entity}, deal_type={deal_type}: "
         f"${summary.total_one_time_base:,.0f} base, "
         f"${summary.total_annual_licenses:,.0f}/yr licenses, "
         f"{len(summary.estimates)} work items"
@@ -489,13 +536,14 @@ def calculate_cost_with_volume_discount(
     model: CostModel,
     drivers: DealDrivers,
     apply_volume_discounts: bool = True,
+    deal_type: str = "acquisition"
 ) -> CostEstimate:
     """
     Calculate cost with volume discounts applied.
 
     Same as calculate_cost but applies volume discount curves to per-unit costs.
     """
-    estimate = calculate_cost(model, drivers)
+    estimate = calculate_cost(model, drivers, deal_type=deal_type)
 
     if not apply_volume_discounts:
         return estimate

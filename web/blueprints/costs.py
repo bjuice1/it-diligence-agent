@@ -12,7 +12,7 @@ Designed for PE/M&A deal teams to quickly understand cost implications.
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any, Tuple, Union
 from dataclasses import dataclass, field
 from flask import Blueprint, render_template, request, jsonify
 
@@ -107,6 +107,36 @@ class SynergyOpportunity:
 
 
 @dataclass
+class SeparationCost:
+    """Separation/standup cost for carveouts and divestitures.
+
+    See: specs/deal-type-awareness/02-synergy-engine-conditional-logic.md
+    """
+    name: str
+    category: str  # "standup", "tsa_service", "data_separation"
+    setup_cost_low: float
+    setup_cost_high: float
+    tsa_required: bool
+    tsa_duration_months: int
+    tsa_monthly_cost: float
+    timeframe: str
+    criticality: str  # "critical", "high", "medium", "low"
+    notes: str
+    affected_systems: List[str] = field(default_factory=list)
+    alternative_approaches: List[str] = field(default_factory=list)
+
+    @property
+    def total_cost_low(self) -> float:
+        """Total cost including setup + TSA fees."""
+        return self.setup_cost_low + (self.tsa_monthly_cost * self.tsa_duration_months)
+
+    @property
+    def total_cost_high(self) -> float:
+        """Total cost including setup + TSA fees."""
+        return self.setup_cost_high + (self.tsa_monthly_cost * self.tsa_duration_months)
+
+
+@dataclass
 class CostInsight:
     """Commentary/insight about costs."""
     category: str  # concern, opportunity, observation
@@ -119,10 +149,16 @@ class CostInsight:
 
 @dataclass
 class CostCenterData:
-    """Complete cost center data."""
+    """Complete cost center data.
+
+    Note: synergies field can contain either SynergyOpportunity (acquisitions)
+    or SeparationCost (carveouts/divestitures) objects.
+
+    See: specs/deal-type-awareness/02-synergy-engine-conditional-logic.md
+    """
     run_rate: RunRateCosts = None
     one_time: OneTimeCosts = None
-    synergies: List[SynergyOpportunity] = field(default_factory=list)
+    synergies: List[Union[SynergyOpportunity, SeparationCost]] = field(default_factory=list)
     insights: List[CostInsight] = field(default_factory=list)
     data_quality: Dict[str, str] = field(default_factory=dict)
 
@@ -456,13 +492,61 @@ def _gather_one_time_costs(entity: str = "target") -> OneTimeCosts:
     return one_time
 
 
-def _identify_synergies() -> List[SynergyOpportunity]:
-    """Identify cost synergy opportunities from buyer vs target inventory.
+def _get_current_deal_type() -> str:
+    """
+    Get deal_type for the current analysis session.
 
-    Synergies are found by:
-    1. Cross-matching buyer and target apps by category
-    2. Identifying duplicate platforms
-    3. Calculating consolidation savings
+    See: specs/deal-type-awareness/02-synergy-engine-conditional-logic.md
+
+    Returns:
+        deal_type string ("acquisition", "carveout", or "divestiture")
+        Defaults to "acquisition" if unable to determine
+    """
+    try:
+        from flask import session as flask_session
+        from web.context import load_deal_context
+
+        # Try to get from session context first
+        if 'deal_context' in flask_session:
+            deal_type = flask_session['deal_context'].get('deal_type')
+            if deal_type:
+                return deal_type
+
+        # Try to load from deal_context
+        deal_context = load_deal_context()
+        if deal_context and 'deal_type' in deal_context:
+            return deal_context['deal_type']
+
+        # Fallback: Try to get from database
+        deal_id = flask_session.get('current_deal_id')
+        if deal_id:
+            from web.database import db, Deal
+            deal = db.session.query(Deal).filter_by(id=deal_id).first()
+            if deal and deal.deal_type:
+                return deal.deal_type
+
+        # Ultimate fallback
+        logger.warning("Could not determine deal_type, defaulting to 'acquisition'")
+        return 'acquisition'
+
+    except Exception as e:
+        logger.warning(f"Error getting deal_type: {e}, defaulting to 'acquisition'")
+        return 'acquisition'
+
+
+def _calculate_consolidation_synergies() -> List[SynergyOpportunity]:
+    """
+    Calculate consolidation synergies for acquisitions.
+
+    Consolidation Model:
+      - Eliminate smaller contract (100% of cost saved)
+      - Renegotiate larger contract with volume discount (10-30% savings)
+      - Cost to achieve: Migration labor (50-200% of smaller contract)
+
+    See: specs/deal-type-awareness/02-synergy-engine-conditional-logic.md
+
+    Returns:
+        List of SynergyOpportunity objects for overlapping categories
     """
     synergies = []
 
@@ -470,98 +554,296 @@ def _identify_synergies() -> List[SynergyOpportunity]:
         from web.blueprints.inventory import get_inventory_store
         inv_store = get_inventory_store()
 
-        if len(inv_store) > 0:
-            # Fetch buyer and target apps separately
-            buyer_apps = inv_store.get_items(inventory_type="application", entity="buyer", status="active")
-            target_apps = inv_store.get_items(inventory_type="application", entity="target", status="active")
+        if len(inv_store) == 0:
+            return synergies
 
-            logger.info(f"Synergy matching: {len(buyer_apps)} buyer apps vs {len(target_apps)} target apps")
+        # Fetch buyer and target apps separately
+        buyer_apps = inv_store.get_items(inventory_type="application", entity="buyer", status="active")
+        target_apps = inv_store.get_items(inventory_type="application", entity="target", status="active")
 
-            # Group apps by category for both entities
-            buyer_by_category = {}
-            for app in buyer_apps:
-                cat = app.data.get('category', 'Other')
-                if cat not in buyer_by_category:
-                    buyer_by_category[cat] = []
-                buyer_by_category[cat].append(app)
+        logger.info(f"Consolidation synergy analysis: {len(buyer_apps)} buyer apps vs {len(target_apps)} target apps")
 
-            target_by_category = {}
-            for app in target_apps:
-                cat = app.data.get('category', 'Other')
-                if cat not in target_by_category:
-                    target_by_category[cat] = []
-                target_by_category[cat].append(app)
+        # Group apps by category for both entities
+        buyer_by_category = {}
+        for app in buyer_apps:
+            cat = app.data.get('category', 'Other')
+            if cat not in buyer_by_category:
+                buyer_by_category[cat] = []
+            buyer_by_category[cat].append(app)
 
-            # Find category overlaps (both buyer and target have apps in this category)
-            overlapping_categories = set(buyer_by_category.keys()) & set(target_by_category.keys())
+        target_by_category = {}
+        for app in target_apps:
+            cat = app.data.get('category', 'Other')
+            if cat not in target_by_category:
+                target_by_category[cat] = []
+            target_by_category[cat].append(app)
 
-            logger.info(f"Found {len(overlapping_categories)} overlapping categories for synergy analysis")
+        # Find category overlaps (both buyer and target have apps in this category)
+        overlapping_categories = set(buyer_by_category.keys()) & set(target_by_category.keys())
 
-            # Calculate consolidation synergies for each overlapping category
-            for category in overlapping_categories:
-                buyer_apps_in_cat = buyer_by_category[category]
-                target_apps_in_cat = target_by_category[category]
+        logger.info(f"Found {len(overlapping_categories)} overlapping categories for consolidation")
 
-                # Calculate total cost in this category
-                buyer_cost = sum(app.cost or 0 for app in buyer_apps_in_cat)
-                target_cost = sum(app.cost or 0 for app in target_apps_in_cat)
-                total_cost = buyer_cost + target_cost
+        # Calculate consolidation synergies for each overlapping category
+        for category in overlapping_categories:
+            buyer_apps_in_cat = buyer_by_category[category]
+            target_apps_in_cat = target_by_category[category]
 
-                # Skip if combined cost is too low (no meaningful synergy)
-                if total_cost < 100_000:
-                    continue
+            # Calculate total cost in this category
+            buyer_cost = sum(app.cost or 0 for app in buyer_apps_in_cat)
+            target_cost = sum(app.cost or 0 for app in target_apps_in_cat)
+            combined_cost = buyer_cost + target_cost
 
-                # Consolidation synergy calculation
-                # Assumption: Consolidating to one platform saves smaller contract + renegotiation discount
-                smaller_cost = min(buyer_cost, target_cost)
-                larger_cost = max(buyer_cost, target_cost)
+            # Skip if combined cost is too low (no meaningful synergy)
+            if combined_cost < 100_000:
+                continue
 
-                # Savings model:
-                # - Eliminate smaller contract entirely (100% of smaller)
-                # - Renegotiate larger contract with volume discount (10-30% of larger)
-                savings_low = smaller_cost + (larger_cost * 0.10)  # Conservative: 10% volume discount
-                savings_high = smaller_cost + (larger_cost * 0.30)  # Optimistic: 30% volume discount
+            # Consolidation synergy calculation
+            # Assumption: Consolidating to one platform saves smaller contract + renegotiation discount
+            smaller_cost = min(buyer_cost, target_cost)
+            larger_cost = max(buyer_cost, target_cost)
 
-                # Cost to achieve (migration labor, data conversion, etc.)
-                # Estimate based on complexity of migration
-                # Simple rule: 50-200% of smaller contract cost
-                cost_to_achieve_low = smaller_cost * 0.5
-                cost_to_achieve_high = smaller_cost * 2.0
+            # Savings model:
+            # - Eliminate smaller contract entirely (100% of smaller)
+            # - Renegotiate larger contract with volume discount (10-30% of larger)
+            savings_low = smaller_cost + (larger_cost * 0.10)  # Conservative: 10% volume discount
+            savings_high = smaller_cost + (larger_cost * 0.30)  # Optimistic: 30% volume discount
 
-                # Timeframe (based on category)
-                # Critical systems (ERP, CRM) take longer
-                critical_categories = ['crm', 'erp', 'finance', 'hr', 'hris']
-                if category.lower() in critical_categories:
-                    timeframe = "12-18 months"
-                    confidence = "medium"
-                else:
-                    timeframe = "6-12 months"
-                    confidence = "high"
+            # Cost to achieve (migration labor, data conversion, etc.)
+            # Estimate based on complexity of migration
+            # Simple rule: 50-200% of smaller contract cost
+            cost_to_achieve_low = smaller_cost * 0.5
+            cost_to_achieve_high = smaller_cost * 2.0
 
-                # Create synergy opportunity
-                synergies.append(SynergyOpportunity(
-                    name=f"{category.title()} Platform Consolidation",
-                    category="consolidation",
-                    annual_savings_low=round(savings_low, -3),  # Round to nearest $1K
-                    annual_savings_high=round(savings_high, -3),
-                    cost_to_achieve_low=round(cost_to_achieve_low, -3),
-                    cost_to_achieve_high=round(cost_to_achieve_high, -3),
-                    timeframe=timeframe,
-                    confidence=confidence,
-                    notes=f"Consolidate {len(buyer_apps_in_cat)} buyer + {len(target_apps_in_cat)} target apps in {category}",
-                    affected_items=[app.name for app in (buyer_apps_in_cat + target_apps_in_cat)]
-                ))
+            # Timeframe (based on category)
+            # Critical systems (ERP, CRM) take longer
+            critical_categories = ['crm', 'erp', 'finance', 'hr', 'hris']
+            if category.lower() in critical_categories:
+                timeframe = "12-18 months"
+                confidence = "medium"
+            else:
+                timeframe = "6-12 months"
+                confidence = "high"
 
-            logger.info(f"Identified {len(synergies)} consolidation synergies")
+            # Create synergy opportunity
+            synergies.append(SynergyOpportunity(
+                name=f"{category.title()} Platform Consolidation",
+                category="consolidation",
+                annual_savings_low=round(savings_low, -3),  # Round to nearest $1K
+                annual_savings_high=round(savings_high, -3),
+                cost_to_achieve_low=round(cost_to_achieve_low, -3),
+                cost_to_achieve_high=round(cost_to_achieve_high, -3),
+                timeframe=timeframe,
+                confidence=confidence,
+                notes=f"Consolidate {len(buyer_apps_in_cat)} buyer + {len(target_apps_in_cat)} target apps in {category}",
+                affected_items=[app.name for app in (buyer_apps_in_cat + target_apps_in_cat)]
+            ))
+
+        logger.info(f"Identified {len(synergies)} consolidation synergies")
 
     except Exception as e:
-        logger.warning(f"Could not identify synergies: {e}")
+        logger.warning(f"Could not calculate consolidation synergies: {e}")
 
     return synergies
 
 
-def _generate_insights(run_rate: RunRateCosts, one_time: OneTimeCosts, synergies: List[SynergyOpportunity]) -> List[CostInsight]:
-    """Generate cost insights and commentary."""
+def _calculate_separation_costs() -> List[SeparationCost]:
+    """
+    Calculate separation costs for carveouts and divestitures.
+
+    Separation Model:
+      - Identify systems target currently shares with parent
+      - Calculate cost to build/buy standalone alternative
+      - Estimate TSA duration and monthly cost
+
+    See: specs/deal-type-awareness/02-synergy-engine-conditional-logic.md
+
+    Returns:
+        List of SeparationCost objects for standup requirements
+    """
+    separation_costs = []
+
+    try:
+        from web.blueprints.inventory import get_inventory_store
+        inv_store = get_inventory_store()
+
+        if len(inv_store) == 0:
+            return separation_costs
+
+        # Get target's inventory (what needs to become standalone)
+        target_apps = inv_store.get_items(inventory_type="application", entity="target", status="active")
+
+        logger.info(f"Separation cost analysis: {len(target_apps)} target apps to evaluate")
+
+        # Critical systems that typically need standup for carveouts
+        critical_system_configs = {
+            'erp': {
+                'priority': 'critical',
+                'base_cost_range': (1_000_000, 5_000_000),
+                'tsa_duration': 18,
+                'timeframe': '12-18 months'
+            },
+            'crm': {
+                'priority': 'high',
+                'base_cost_range': (200_000, 1_000_000),
+                'tsa_duration': 12,
+                'timeframe': '6-12 months'
+            },
+            'hcm': {
+                'priority': 'critical',
+                'base_cost_range': (500_000, 2_000_000),
+                'tsa_duration': 18,
+                'timeframe': '12-18 months'
+            },
+            'finance': {
+                'priority': 'critical',
+                'base_cost_range': (300_000, 1_500_000),
+                'tsa_duration': 18,
+                'timeframe': '12-18 months'
+            },
+            'email': {
+                'priority': 'high',
+                'base_cost_range': (50_000, 300_000),
+                'tsa_duration': 6,
+                'timeframe': '3-6 months'
+            }
+        }
+
+        # Group target apps by category
+        target_by_category = {}
+        for app in target_apps:
+            cat = app.data.get('category', 'Other')
+            if cat not in target_by_category:
+                target_by_category[cat] = []
+            target_by_category[cat].append(app)
+
+        # For each critical category, determine if standup needed
+        for category, config in critical_system_configs.items():
+            if category in target_by_category:
+                # Target has systems in this category - check if standalone
+                apps_in_cat = target_by_category[category]
+
+                # Heuristic: If target has dedicated instance, assume standalone
+                # Otherwise, assume shared with parent and needs standup
+                is_shared = any('shared' in app.data.get('notes', '').lower() or
+                                'parent' in app.data.get('notes', '').lower()
+                                for app in apps_in_cat)
+
+                if is_shared or len(apps_in_cat) == 0:
+                    # Needs standup
+                    setup_cost_low, setup_cost_high = config['base_cost_range']
+                    tsa_duration = config['tsa_duration']
+
+                    # Estimate TSA monthly cost (10-15% of annual license cost)
+                    current_cost = sum(app.cost or 0 for app in apps_in_cat)
+                    tsa_monthly = (current_cost * 0.125) / 12 if current_cost > 0 else 10_000
+
+                    separation_costs.append(SeparationCost(
+                        name=f"Standalone {category.upper()} Implementation",
+                        category="standup",
+                        setup_cost_low=setup_cost_low,
+                        setup_cost_high=setup_cost_high,
+                        tsa_required=True,
+                        tsa_duration_months=tsa_duration,
+                        tsa_monthly_cost=tsa_monthly,
+                        timeframe=config['timeframe'],
+                        criticality=config['priority'],
+                        notes=f"Target currently shares {category.upper()} with parent. Requires standalone instance and {tsa_duration}-month TSA.",
+                        affected_systems=[app.name for app in apps_in_cat] if apps_in_cat else [f"Parent {category.upper()} (to be exited)"],
+                        alternative_approaches=["Buy new SaaS instance", "Extend TSA duration", "Acquire via bolt-on"]
+                    ))
+            else:
+                # Target doesn't have this category at all - likely relies on parent
+                setup_cost_low, setup_cost_high = config['base_cost_range']
+                tsa_duration = config['tsa_duration']
+                tsa_monthly = 15_000  # Default estimate
+
+                separation_costs.append(SeparationCost(
+                    name=f"Standalone {category.upper()} Implementation",
+                    category="standup",
+                    setup_cost_low=setup_cost_low,
+                    setup_cost_high=setup_cost_high,
+                    tsa_required=True,
+                    tsa_duration_months=tsa_duration,
+                    tsa_monthly_cost=tsa_monthly,
+                    timeframe=config['timeframe'],
+                    criticality=config['priority'],
+                    notes=f"No {category.upper()} found in target inventory. Likely relies on parent system. Standalone implementation required.",
+                    affected_systems=[f"Parent {category.upper()} (to be exited)"],
+                    alternative_approaches=["Buy SaaS solution", "Build custom", "Extend TSA", "Outsource to MSP"]
+                ))
+
+        # Sort by total cost (setup + TSA fees)
+        separation_costs.sort(key=lambda x: x.total_cost_high, reverse=True)
+
+        logger.info(f"Identified {len(separation_costs)} separation/standup requirements")
+
+    except Exception as e:
+        logger.warning(f"Could not calculate separation costs: {e}")
+
+    return separation_costs
+
+
+def _identify_synergies(deal_type: str = "acquisition") -> List[Union[SynergyOpportunity, SeparationCost]]:
+    """
+    Identify cost optimization opportunities based on deal type.
+
+    For acquisitions: Calculates consolidation synergies (eliminate duplicate systems)
+    For carveouts/divestitures: Calculates separation costs (standup standalone capabilities)
+
+    See: specs/deal-type-awareness/02-synergy-engine-conditional-logic.md
+    Also see: Doc 01 (deal-type-architecture.md) for entity semantics by deal type
+
+    Args:
+        deal_type: Deal structure - "acquisition", "carveout", or "divestiture"
+                   Defaults to "acquisition" for backward compatibility
+
+    Returns:
+        List of SynergyOpportunity (acquisitions) or SeparationCost (carveouts)
+        Empty list if inventory unavailable or no opportunities found
+
+    Raises:
+        ValueError: If deal_type is invalid (logs warning and defaults to acquisition)
+
+    Example:
+        # Acquisition: Returns consolidation synergies
+        synergies = _identify_synergies("acquisition")
+        # → [SynergyOpportunity(name="CRM Consolidation", annual_savings_low=380000, ...)]
+
+        # Carveout: Returns separation costs
+        costs = _identify_synergies("carveout")
+        # → [SeparationCost(name="Standalone CRM", setup_cost_low=500000, ...)]
+    """
+    # Validate and normalize deal_type
+    allowed_types = ['acquisition', 'carveout', 'divestiture', 'bolt_on', 'platform', 'spinoff', 'spin-off']
+    if deal_type not in allowed_types:
+        logger.warning(f"Unknown deal_type '{deal_type}', defaulting to 'acquisition'")
+        deal_type = 'acquisition'
+
+    # Normalize aliases to canonical values
+    if deal_type in ['bolt_on', 'platform']:
+        deal_type = 'acquisition'
+    elif deal_type in ['spinoff', 'spin-off']:
+        deal_type = 'carveout'
+
+    logger.info(f"Analyzing synergies/costs for deal_type='{deal_type}'")
+
+    # Branch based on deal type
+    if deal_type in ['carveout', 'divestiture']:
+        # Carveouts and divestitures: Calculate separation costs
+        return _calculate_separation_costs()
+    else:
+        # Acquisitions: Calculate consolidation synergies
+        return _calculate_consolidation_synergies()
+
+
+def _generate_insights(run_rate: RunRateCosts, one_time: OneTimeCosts, synergies: List[Union[SynergyOpportunity, SeparationCost]]) -> List[CostInsight]:
+    """Generate cost insights and commentary.
+
+    See: specs/deal-type-awareness/02-synergy-engine-conditional-logic.md
+
+    Args:
+        synergies: Can contain either SynergyOpportunity or SeparationCost objects
+    """
     insights = []
 
     # Headcount to non-headcount ratio
@@ -603,17 +885,33 @@ def _generate_insights(run_rate: RunRateCosts, one_time: OneTimeCosts, synergies
             related_costs=["integration"]
         ))
 
-    # Synergy opportunities
-    total_synergy = sum(s.annual_savings_high for s in synergies)
-    if total_synergy > 500_000:
-        insights.append(CostInsight(
-            category="opportunity",
-            title="Material Synergy Potential Identified",
-            description=f"{len(synergies)} consolidation opportunities identified with potential annual savings.",
-            impact=f"${total_synergy:,.0f}/year potential",
-            priority="high",
-            related_costs=["synergies"]
-        ))
+    # Synergy opportunities or separation costs (depends on deal type)
+    if synergies:
+        # Check if we have SynergyOpportunity or SeparationCost objects
+        if isinstance(synergies[0], SynergyOpportunity):
+            # Acquisition deal - show synergy opportunities
+            total_synergy = sum(s.annual_savings_high for s in synergies)
+            if total_synergy > 500_000:
+                insights.append(CostInsight(
+                    category="opportunity",
+                    title="Material Synergy Potential Identified",
+                    description=f"{len(synergies)} consolidation opportunities identified with potential annual savings.",
+                    impact=f"${total_synergy:,.0f}/year potential",
+                    priority="high",
+                    related_costs=["synergies"]
+                ))
+        elif isinstance(synergies[0], SeparationCost):
+            # Carveout/divestiture - show separation costs
+            total_separation = sum(s.total_cost_high for s in synergies)
+            if total_separation > 500_000:
+                insights.append(CostInsight(
+                    category="concern",
+                    title="Significant Separation Costs Identified",
+                    description=f"{len(synergies)} standalone systems required for carveout. Includes setup costs and TSA fees.",
+                    impact=f"${total_separation:,.0f} total cost",
+                    priority="high",
+                    related_costs=["separation"]
+                ))
 
     return insights
 
@@ -700,9 +998,14 @@ def _assess_data_quality_per_entity(
 def build_cost_center_data(entity: str = "target") -> CostCenterData:
     """Build complete cost center data from all sources.
 
+    See: specs/deal-type-awareness/02-synergy-engine-conditional-logic.md
+
     Args:
         entity: Entity filter ("target", "buyer", or "all")
     """
+
+    # Fetch deal_type from current deal (Doc 02: Synergy Engine Conditional Logic)
+    deal_type = _get_current_deal_type()
 
     # Gather run-rate costs
     run_rate = RunRateCosts(
@@ -716,8 +1019,8 @@ def build_cost_center_data(entity: str = "target") -> CostCenterData:
     # Gather one-time costs
     one_time = _gather_one_time_costs(entity=entity)
 
-    # Identify synergies
-    synergies = _identify_synergies()
+    # Identify synergies (pass deal_type to enable conditional branching)
+    synergies = _identify_synergies(deal_type=deal_type)
 
     # Generate insights
     insights = _generate_insights(run_rate, one_time, synergies)

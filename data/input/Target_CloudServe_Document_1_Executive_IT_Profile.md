@@ -44,19 +44,23 @@
 | **Development tools** | **12** (CI/CD, monitoring, APM, testing) |
 | **Total applications** | **38** |
 | **Hosting model** | 100% Cloud (AWS) |
-| **Annual app cost** | **$2,847,500** (SaaS subscriptions + licenses) |
+| **Annual app cost** | **$2,331,500** (SaaS subscriptions + licenses) |
 
 ### Application Categories
 
 | Category | Count | Annual Cost |
 |---|---:|---:|
-| Core SaaS Platform | 8 | $0 (internal development) |
-| CRM & Sales | 3 | $428,000 |
-| Finance & ERP | 4 | $380,000 |
-| HR & Collaboration | 5 | $312,000 |
-| Development & DevOps | 12 | $890,000 |
-| Security & Compliance | 4 | $520,000 |
-| Data & Analytics | 2 | $317,500 |
+| Infrastructure | 9 | $150,000 |
+| CRM | 3 | $428,000 |
+| ERP | 1 | $180,000 |
+| Finance | 4 | $200,000 |
+| HCM | 2 | $144,000 |
+| Collaboration | 3 | $168,000 |
+| DevOps | 9 | $170,000 |
+| Productivity | 3 | $36,000 |
+| Security | 5 | $598,000 |
+| Database | 1 | $285,000 |
+| BI/Analytics | 1 | $32,500 |
 
 ---
 
@@ -262,7 +266,7 @@
 | Fact | Value | Should Match In |
 |---|---:|---|
 | Total applications | 38 | Document 2 |
-| Total app cost | $2,847,500 | Document 2 |
+| Total app cost | $2,331,500 | Document 2 |
 | Cloud provider | AWS | Document 3 |
 | AWS accounts | 9 | Document 3 |
 | AWS annual spend | $4,800,000 | Document 3 |

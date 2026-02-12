@@ -438,6 +438,71 @@ class TestInventoryStore:
         assert not store.exists_active(item_id)
         assert len(store) == 0  # len() counts only active
 
+    def test_entity_validation(self):
+        """Test that entity field is validated and cannot be None or empty."""
+        import pytest
+        store = InventoryStore(deal_id="test-deal")
+
+        # Test add_item() rejects None entity
+        with pytest.raises(ValueError, match="entity is required"):
+            store.add_item(
+                inventory_type="application",
+                data={"name": "Test App"},
+                entity=None
+            )
+
+        # Test add_item() rejects empty string entity
+        with pytest.raises(ValueError, match="entity is required"):
+            store.add_item(
+                inventory_type="application",
+                data={"name": "Test App"},
+                entity=""
+            )
+
+        # Test add_item() rejects whitespace-only entity
+        with pytest.raises(ValueError, match="entity is required"):
+            store.add_item(
+                inventory_type="application",
+                data={"name": "Test App"},
+                entity="   "
+            )
+
+        # Test add_from_table() rejects None entity
+        with pytest.raises(ValueError, match="entity is required"):
+            store.add_from_table(
+                inventory_type="application",
+                rows=[{"name": "App1"}, {"name": "App2"}],
+                entity=None
+            )
+
+        # Test add_from_table() rejects empty string entity
+        with pytest.raises(ValueError, match="entity is required"):
+            store.add_from_table(
+                inventory_type="application",
+                rows=[{"name": "App1"}, {"name": "App2"}],
+                entity=""
+            )
+
+        # Verify valid entity values work correctly
+        item_id = store.add_item(
+            inventory_type="application",
+            data={"name": "Valid App"},
+            entity="target"
+        )
+        assert item_id is not None
+        item = store.get_item(item_id)
+        assert item.entity == "target"
+
+        # Verify buyer entity also works
+        item_id2 = store.add_item(
+            inventory_type="application",
+            data={"name": "Buyer App"},
+            entity="buyer"
+        )
+        assert item_id2 is not None
+        item2 = store.get_item(item_id2)
+        assert item2.entity == "buyer"
+
     def test_get_items_by_type(self):
         """Test filtering by inventory type."""
         store = InventoryStore(deal_id="test-deal")

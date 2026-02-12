@@ -821,3 +821,83 @@ def assumed_count(self) -> int:
 # Add these properties to DriverExtractionResult
 DriverExtractionResult.extracted_count = property(lambda self: self.drivers_extracted)
 DriverExtractionResult.assumed_count = property(lambda self: self.drivers_assumed)
+
+
+# =============================================================================
+# TSA COST DRIVER (CARVEOUT-SPECIFIC)
+# =============================================================================
+
+class TSACostDriver:
+    """
+    Calculate TSA costs for carve-out deals.
+
+    TSAs are interim service agreements where parent provides services
+    to carved-out entity during separation (6-24 months typical).
+    """
+
+    def estimate_monthly_tsa_cost(
+        self,
+        inventory_store,
+        tsa_duration_months: int = 12
+    ) -> float:
+        """
+        Estimate monthly TSA fees based on inventory complexity.
+
+        Typical TSA services:
+        - Datacenter hosting
+        - Network connectivity
+        - Shared application licenses
+        - IT support services
+
+        Industry benchmark: $50K-500K/month depending on scale
+
+        Args:
+            inventory_store: InventoryStore to check for shared services
+            tsa_duration_months: Duration of TSA (default 12 months)
+
+        Returns:
+            Total TSA cost over the duration
+        """
+        # Count critical shared services
+        shared_apps = 0
+        shared_infra = 0
+
+        try:
+            # Check for applications hosted on parent infrastructure
+            apps = inventory_store.get_items(inventory_type='application', entity='target')
+            for app in apps:
+                details = getattr(app, 'details', {}) or {}
+                hosting = details.get('hosting', '').lower()
+                if 'parent' in hosting or 'shared' in hosting or 'corporate' in hosting:
+                    shared_apps += 1
+
+            # Check for shared infrastructure
+            infra = inventory_store.get_items(inventory_type='infrastructure', entity='target')
+            for item in infra:
+                details = getattr(item, 'details', {}) or {}
+                ownership = details.get('ownership', '').lower()
+                if 'parent' in ownership or 'shared' in ownership:
+                    shared_infra += 1
+        except Exception as e:
+            logger.warning(f"Error counting shared services for TSA: {e}")
+            # Use conservative defaults if inventory unavailable
+            shared_apps = 5
+            shared_infra = 3
+
+        # Base cost per shared service
+        cost_per_app = 5000    # $5K/month per application
+        cost_per_infra = 10000 # $10K/month per infrastructure component
+
+        monthly_cost = (shared_apps * cost_per_app) + (shared_infra * cost_per_infra)
+
+        # Floor and ceiling
+        monthly_cost = max(50000, min(monthly_cost, 500000))
+
+        total_tsa_cost = monthly_cost * tsa_duration_months
+
+        logger.info(
+            f"TSA cost estimate: {shared_apps} shared apps, {shared_infra} shared infra, "
+            f"${monthly_cost:,.0f}/month × {tsa_duration_months} months = ${total_tsa_cost:,.0f}"
+        )
+
+        return total_tsa_cost

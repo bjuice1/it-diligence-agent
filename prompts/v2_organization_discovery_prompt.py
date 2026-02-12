@@ -206,8 +206,9 @@ Applications Manager | Applications | Manager | 5 | $125,000 - $165,000 | $893,0
 4. **CAPTURE NUMBERS**: Headcounts and tenure are critical - capture exactly when stated.
 5. **MAP BROADLY**: IT functions exist throughout the organization - don't stop at the IT department.
 6. **NO ASSUMPTIONS**: Do not infer organizational structure. If not stated, it's a gap.
+7. **NEVER INFER FTE/HEADCOUNT**: Do NOT calculate or estimate FTE-equivalents from cost. Only extract headcount/FTE if explicitly stated in the document. If a vendor has only cost, leave headcount empty.
 
-7. **EXHAUSTIVE TABLE EXTRACTION - CRITICAL**:
+8. **EXHAUSTIVE TABLE EXTRACTION - CRITICAL**:
    - If a "Team Summary" table has 7 rows, you MUST create 7 separate team entries
    - If a "Role & Compensation Breakdown" table has 25 rows, extract ALL 25 roles
    - Do NOT summarize, skip, or sample - extract EVERY SINGLE ROW from every table
