@@ -68,16 +68,23 @@ app.config['WTF_CSRF_SECRET_KEY'] = SECRET_KEY
 USE_DATABASE = os.environ.get('USE_DATABASE', 'false').lower() == 'true'
 
 # Check if db auth backend is used (requires database)
-AUTH_BACKEND = os.environ.get('AUTH_BACKEND', 'db').lower()
+# Default to 'simple' for Railway/cloud deployments without DB
+AUTH_BACKEND = os.environ.get('AUTH_BACKEND', 'simple').lower()
 
 # Initialize database if explicitly enabled OR if using db auth backend
 NEED_DATABASE = USE_DATABASE or AUTH_BACKEND == 'db'
 
 if NEED_DATABASE:
-    init_db(app)
-    # Create tables and run migrations (adds task_id column for UI resilience)
-    create_all_tables(app)
-    logger.info(f"Database initialized (USE_DATABASE={USE_DATABASE}, AUTH_BACKEND={AUTH_BACKEND})")
+    try:
+        init_db(app)
+        # Create tables and run migrations (adds task_id column for UI resilience)
+        create_all_tables(app)
+        logger.info(f"Database initialized (USE_DATABASE={USE_DATABASE}, AUTH_BACKEND={AUTH_BACKEND})")
+    except Exception as e:
+        logger.error(f"Database initialization failed: {e}")
+        logger.warning("Continuing without database - some features may be limited")
+        USE_DATABASE = False
+        NEED_DATABASE = False
 
 # =============================================================================
 # Phase 4: Session & Task Configuration
