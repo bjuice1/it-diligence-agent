@@ -7,8 +7,8 @@ restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
 
 [healthcheck]
-path = "/api/health"
-timeout = 60
+path = "/health"
+timeout = 100
 
 [[services]]
 name = "web"

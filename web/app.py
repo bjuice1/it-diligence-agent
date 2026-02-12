@@ -790,16 +790,30 @@ def welcome():
 
 @app.route('/health')
 def health_check():
-    """Health check endpoint for container orchestration and load balancers.
+    """Lightweight health check endpoint for container orchestration.
+
+    Returns minimal response to verify app is running.
+    Used by Railway, Docker, and other deployment platforms.
+    """
+    # Simple health check - just verify Flask is responding
+    return jsonify({
+        "status": "healthy",
+        "service": "it-diligence-agent",
+        "version": "2.4"
+    }), 200
+
+
+@app.route('/health/detailed')
+def health_check_detailed():
+    """Detailed health check with diagnostics (for debugging).
 
     Returns service health status and basic diagnostics.
-    Used by Railway, Docker, and other deployment platforms.
     """
     from config_v2 import OUTPUT_DIR, DATA_DIR
 
     health_status = {
         "status": "healthy",
-        "version": "1.0.0",
+        "version": "2.4",
         "service": "it-diligence-agent",
         "checks": {
             "api_key_configured": bool(os.environ.get('ANTHROPIC_API_KEY')),
