@@ -1620,12 +1620,105 @@ def _run_migrations():
         logger.warning(f"task_id migration failed (non-fatal): {e}")
         db.session.rollback()
 
-    # Migration 3: Add entity, risk_scope, cost_buildup_json to findings (Spec 04/05)
+    # Migration 3: Add cost_status column to facts (Audit1 Finding #1 - Cost Status)
+    try:
+        dialect = db.engine.dialect.name
+
+        # Check if column exists
+        if dialect == 'sqlite':
+            result = db.session.execute(db.text("PRAGMA table_info(facts)"))
+            cols = [row[1] for row in result.fetchall()]
+            cost_status_exists = 'cost_status' in cols
+        else:
+            result = db.session.execute(db.text("""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_name = 'facts' AND column_name = 'cost_status'
+            """))
+            cost_status_exists = result.fetchone() is not None
+
+        if not cost_status_exists:
+            logger.info("Adding facts.cost_status column...")
+
+            # Add column
+            db.session.execute(db.text("""
+                ALTER TABLE facts ADD COLUMN cost_status VARCHAR(20)
+            """))
+            db.session.commit()
+
+            # Add CHECK constraint
+            try:
+                if dialect == 'postgresql':
+                    db.session.execute(db.text("""
+                        ALTER TABLE facts ADD CONSTRAINT check_cost_status_values
+                        CHECK (cost_status IS NULL OR cost_status IN ('known', 'unknown', 'internal_no_cost', 'estimated'))
+                    """))
+                    db.session.commit()
+                    logger.info("Added CHECK constraint for cost_status")
+            except Exception as e:
+                logger.warning(f"CHECK constraint creation skipped: {e}")
+                db.session.rollback()
+
+            # Create indexes for PostgreSQL
+            try:
+                if dialect == 'postgresql':
+                    # Partial index for unknown costs
+                    db.session.execute(db.text("""
+                        CREATE INDEX IF NOT EXISTS idx_facts_cost_status_unknown
+                        ON facts (deal_id, domain, entity)
+                        WHERE cost_status = 'unknown' AND deleted_at IS NULL
+                    """))
+                    # General cost_status index
+                    db.session.execute(db.text("""
+                        CREATE INDEX IF NOT EXISTS idx_facts_cost_status
+                        ON facts (deal_id, cost_status)
+                        WHERE deleted_at IS NULL
+                    """))
+                    db.session.commit()
+                    logger.info("Created cost_status indexes")
+            except Exception as e:
+                logger.warning(f"Index creation failed: {e}")
+                db.session.rollback()
+
+            # Migrate existing data from JSON details
+            try:
+                if dialect == 'postgresql':
+                    # Extract from JSON if present
+                    db.session.execute(db.text("""
+                        UPDATE facts
+                        SET cost_status = details->>'cost_status'
+                        WHERE details ? 'cost_status'
+                          AND details->>'cost_status' IN ('known', 'unknown', 'internal_no_cost', 'estimated')
+                    """))
+                    # Infer from presence of cost fields
+                    db.session.execute(db.text("""
+                        UPDATE facts
+                        SET cost_status = CASE
+                            WHEN details ? 'cost' OR details ? 'annual_cost' THEN 'known'
+                            ELSE NULL
+                        END
+                        WHERE cost_status IS NULL
+                          AND domain = 'applications'
+                          AND deleted_at IS NULL
+                    """))
+                    db.session.commit()
+                    logger.info("Migrated existing cost_status data from JSON")
+            except Exception as e:
+                logger.warning(f"Data migration failed: {e}")
+                db.session.rollback()
+
+            logger.info("Migration complete: facts.cost_status added")
+        else:
+            logger.debug("facts.cost_status already exists")
+    except Exception as e:
+        logger.warning(f"cost_status migration failed (non-fatal): {e}")
+        db.session.rollback()
+
+    # Migration 4: Add entity, risk_scope, cost_buildup_json to findings (Spec 04/05)
     _add_column_if_missing('findings', 'entity', "VARCHAR(20) DEFAULT 'target'", logger)
     _add_column_if_missing('findings', 'risk_scope', "VARCHAR(50) DEFAULT ''", logger)
     _add_column_if_missing('findings', 'cost_buildup_json', "JSON DEFAULT NULL", logger)
 
-    # Migration 4: Add last_deal_id and last_deal_accessed_at to users (Session Persistence Fix - Spec 01)
+    # Migration 5: Add last_deal_id and last_deal_accessed_at to users (Session Persistence Fix - Spec 01)
     _add_column_if_missing('users', 'last_deal_id', "VARCHAR(36)", logger)
     _add_column_if_missing('users', 'last_deal_accessed_at', "TIMESTAMP", logger)
 
@@ -1649,7 +1742,7 @@ def _run_migrations():
         logger.warning(f"idx_users_last_deal index creation failed (non-fatal): {e}")
         db.session.rollback()
 
-    # Migration 5: Create flask_sessions table for SQLAlchemy session backend (Spec 04)
+    # Migration 6: Create flask_sessions table for SQLAlchemy session backend (Spec 04)
     _create_session_table(logger)
 
 
