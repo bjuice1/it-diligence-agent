@@ -1837,7 +1837,7 @@ def risk_detail(risk_id):
     affected_users_total = 0
     try:
         from web.blueprints.inventory import get_inventory_store
-        inv_store = get_inventory_store()
+        inv_store, _ = get_inventory_store()
         if len(inv_store) > 0:
             all_items = inv_store.get_items(entity="target", status="active")
             # Match fact items to inventory items by name
@@ -2764,7 +2764,7 @@ def get_organization_analysis():
         from web.blueprints.inventory import get_inventory_store
         from services.organization_bridge import build_organization_result_from_inventory_store
 
-        inv_store = get_inventory_store()
+        inv_store, _ = get_inventory_store()
         org_items = inv_store.get_items(inventory_type="organization", entity="target")
         if org_items:
             # Get target name
@@ -3575,7 +3575,7 @@ def applications_overview():
     # PRIMARY: InventoryStore (deduplicated, entity-scoped) — Spec 04
     try:
         from web.blueprints.inventory import get_inventory_store
-        inv_store = get_inventory_store()
+        inv_store, _ = get_inventory_store()
         debug_info['inventory_store_count'] = len(inv_store)
         if len(inv_store) > 0:
             # Check all apps vs entity-scoped apps
@@ -3717,7 +3717,7 @@ def infrastructure_overview():
     # PRIMARY: InventoryStore (deduplicated, entity-scoped) — Spec 04
     try:
         from web.blueprints.inventory import get_inventory_store
-        inv_store = get_inventory_store()
+        inv_store, _ = get_inventory_store()
         if len(inv_store) > 0:
             if requested_entity == 'all':
                 infra_items = inv_store.get_items(inventory_type="infrastructure", status="active")
@@ -3782,7 +3782,7 @@ def infrastructure_category(category):
     # First try InventoryStore (structured data from imports)
     try:
         from web.blueprints.inventory import get_inventory_store
-        inv_store = get_inventory_store()
+        inv_store, _ = get_inventory_store()
         if len(inv_store) > 0:
             infra_items = inv_store.get_items(inventory_type="infrastructure", entity="target", status="active")
             if infra_items:
