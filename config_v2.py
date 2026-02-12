@@ -49,7 +49,7 @@ MODEL_OUTPUT_CAPS = {
 # Iteration limits
 # Set HIGH - cost is minimal, missing items is unacceptable
 # 100 apps at 2-3 per iteration = 50 iterations, add buffer
-DISCOVERY_MAX_ITERATIONS = 100  # Never hit the limit - get everything
+DISCOVERY_MAX_ITERATIONS = 30  # Safety limit - agent should call complete_discovery before this
 REASONING_MAX_ITERATIONS = 60   # Reasoning needs fewer but still generous
 
 # Temperature - SET TO 0 FOR DETERMINISTIC OUTPUT
