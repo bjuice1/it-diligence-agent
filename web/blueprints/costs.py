@@ -261,7 +261,7 @@ def _gather_application_costs(entity: str = "target") -> CostCategory:
 
     try:
         from web.blueprints.inventory import get_inventory_store
-        inv_store = get_inventory_store()
+        inv_store, _ = get_inventory_store()
 
         if len(inv_store) > 0:
             if entity == "all":
@@ -329,7 +329,7 @@ def _gather_infrastructure_costs(entity: str = "target") -> CostCategory:
 
     try:
         from web.blueprints.inventory import get_inventory_store
-        inv_store = get_inventory_store()
+        inv_store, _ = get_inventory_store()
 
         if len(inv_store) > 0:
             if entity == "all":
@@ -552,7 +552,7 @@ def _calculate_consolidation_synergies() -> List[SynergyOpportunity]:
 
     try:
         from web.blueprints.inventory import get_inventory_store
-        inv_store = get_inventory_store()
+        inv_store, _ = get_inventory_store()
 
         if len(inv_store) == 0:
             return synergies
@@ -664,7 +664,7 @@ def _calculate_separation_costs() -> List[SeparationCost]:
 
     try:
         from web.blueprints.inventory import get_inventory_store
-        inv_store = get_inventory_store()
+        inv_store, _ = get_inventory_store()
 
         if len(inv_store) == 0:
             return separation_costs

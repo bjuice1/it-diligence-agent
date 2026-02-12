@@ -67,11 +67,10 @@ class InventoryItem:
     enrichment: Dict[str, Any] = field(default_factory=dict)
 
     # Enrichment Status (Doc 05: UI Enrichment Status)
-    is_enriched: bool = False                   # Has enrichment been applied
+    # NOTE: is_enriched and needs_investigation are @property methods below (computed from enrichment dict)
     enrichment_confidence: str = 'none'         # none | low | medium | high
     enrichment_method: str = 'none'             # none | deterministic | llm | manual
     extraction_quality: float = 0.0             # 0.0-1.0 from parser (Doc 02)
-    needs_investigation: bool = False           # Flagged for manual review
     entity_validated: bool = False              # Entity explicitly validated vs inferred
 
     # Status

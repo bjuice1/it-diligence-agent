@@ -8,6 +8,18 @@
         <div>
             <h1>Application Inventory</h1>
             <p>Structured data from document imports and ToltIQ exports</p>
+
+            <!-- Entity Switcher -->
+            <div class="entity-switcher" style="margin-top: 1rem;">
+                <a href="?entity=target"
+                   class="entity-tab {{ 'active' if current_entity == 'target' else '' }}">
+                    🎯 Target
+                </a>
+                <a href="?entity=buyer"
+                   class="entity-tab {{ 'active' if current_entity == 'buyer' else '' }}">
+                    🏢 Buyer
+                </a>
+            </div>
         </div>
         <div class="flex gap-2">
             <a href="{{ url_for('inventory.insights') }}" class="btn btn-primary">
@@ -23,7 +35,7 @@
 <!-- Stats Row -->
 <div class="metrics-row">
     <div class="metric-card">
-        <span class="metric-label">Total Items</span>
+        <span class="metric-label">Total Items ({{ current_entity|title }})</span>
         <span class="metric-value">{{ total_count }}</span>
     </div>
     <div class="metric-card">
@@ -33,6 +45,11 @@
     <div class="metric-card">
         <span class="metric-label">Annual IT Spend</span>
         <span class="metric-value" style="color: var(--accent);">${{ "{:,.0f}".format(total_cost) }}</span>
+        {% if cost_quality %}
+        <span class="metric-sublabel" style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-top: 0.25rem;">
+            {{ cost_quality.data_quality_pct }}% documented
+        </span>
+        {% endif %}
     </div>
     <div class="metric-card {{ 'metric-warning' if flagged_count > 0 else '' }}">
         <span class="metric-label">Need Investigation</span>
@@ -95,7 +112,23 @@
                     <td><strong>{{ app.name }}</strong></td>
                     <td>{{ app.data.get('vendor', '—') }}</td>
                     <td>{{ app.data.get('category', '—') }}</td>
-                    <td>{% if app.cost %}${{ "{:,.0f}".format(app.cost) }}{% else %}—{% endif %}</td>
+                    <td>
+                        {% if app.cost %}
+                            {% set cost_status = app.data.get('cost_status', 'unknown') %}
+                            <span class="cost-value">${{ "{:,.0f}".format(app.cost) }}</span>
+                            {% if cost_status == 'known' %}
+                                <span class="cost-badge cost-known" title="Cost from documents">✓</span>
+                            {% elif cost_status == 'estimated' %}
+                                <span class="cost-badge cost-estimated" title="Estimated cost">~</span>
+                            {% elif cost_status == 'internal_no_cost' %}
+                                <span class="cost-badge cost-internal" title="Internal/no cost">⊘</span>
+                            {% else %}
+                                <span class="cost-badge cost-unknown" title="Unknown cost">?</span>
+                            {% endif %}
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
                     <td>
                         {% set crit = app.data.get('criticality', '') %}
                         {% if crit %}
@@ -207,5 +240,44 @@
 .badge-low { background: rgba(22, 163, 74, 0.1); color: #16a34a; }
 .badge-warning { background: rgba(234, 179, 8, 0.1); color: #b45309; }
 .badge-success { background: rgba(22, 163, 74, 0.1); color: #16a34a; }
+
+/* Entity Switcher */
+.entity-switcher {
+    display: flex;
+    gap: 0.5rem;
+    border-bottom: 2px solid var(--border-default);
+}
+.entity-tab {
+    padding: 0.5rem 1rem;
+    text-decoration: none;
+    color: var(--text-muted);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s;
+    font-weight: 500;
+}
+.entity-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    font-weight: 600;
+}
+.entity-tab:hover {
+    color: var(--text-default);
+    background: var(--bg-surface-sunken);
+}
+
+/* Cost Status Badges */
+.cost-badge {
+    display: inline-block;
+    margin-left: 0.25rem;
+    font-size: 0.7rem;
+    padding: 0.125rem 0.375rem;
+    border-radius: 3px;
+    font-weight: 600;
+}
+.cost-known { background: rgba(22, 163, 74, 0.1); color: #16a34a; }
+.cost-estimated { background: rgba(234, 179, 8, 0.1); color: #b45309; }
+.cost-internal { background: rgba(107, 114, 128, 0.1); color: #6b7280; }
+.cost-unknown { background: rgba(220, 38, 38, 0.1); color: #dc2626; }
 </style>
 {% endblock %}

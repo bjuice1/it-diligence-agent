@@ -1641,7 +1641,7 @@ def dashboard():
         inventory_summary = None
         try:
             from web.blueprints.inventory import get_inventory_store
-            inv_store = get_inventory_store()
+            inv_store, _ = get_inventory_store()
             if len(inv_store) > 0:
                 apps = inv_store.get_items(inventory_type="application", entity="target", status="active")
                 inventory_summary = {

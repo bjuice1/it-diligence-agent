@@ -27,15 +27,29 @@ inventory_bp = Blueprint('inventory', __name__, url_prefix='/inventory')
 _inventory_stores: dict = {}
 
 
-def get_inventory_store() -> InventoryStore:
+def get_inventory_store(entity_filter: str = None) -> tuple:
     """Get or create the inventory store for the current deal.
 
     IMPORTANT: Inventory is now deal-scoped to prevent data leakage between deals.
     The store is created WITH deal_id and uses consistent deal-specific paths.
+
+    Args:
+        entity_filter: Optional entity filter ('target' or 'buyer').
+                      If provided, updates session. If None, uses session value.
+
+    Returns:
+        Tuple of (InventoryStore, current_entity) where current_entity is 'target' or 'buyer'
     """
     from flask import session
 
     current_deal_id = session.get('current_deal_id')
+
+    # Determine entity filter (from parameter, session, or default to 'target')
+    if entity_filter:
+        current_entity = entity_filter
+        session['inventory_entity_filter'] = entity_filter
+    else:
+        current_entity = session.get('inventory_entity_filter', 'target')
 
     # Use deal_id as key, or 'default' for no deal
     store_key = current_deal_id or 'default'
@@ -66,7 +80,7 @@ def get_inventory_store() -> InventoryStore:
                 except Exception as e:
                     logger.warning(f"Could not load inventory store: {e}")
 
-    return _inventory_stores[store_key]
+    return _inventory_stores[store_key], current_entity
 
 
 def save_inventory_store(store: InventoryStore) -> None:
@@ -105,24 +119,26 @@ def inventory_home():
     """Show inventory overview."""
     from flask import session
 
-    store = get_inventory_store()
+    # Get entity from query parameter (for entity switcher)
+    entity = request.args.get('entity', None)
+    store, current_entity = get_inventory_store(entity)
 
-    apps = store.get_items(inventory_type="application", entity="target", status="active")
-    infra = store.get_items(inventory_type="infrastructure", entity="target", status="active")
-    org = store.get_items(inventory_type="organization", entity="target", status="active")
-    vendors = store.get_items(inventory_type="vendor", entity="target", status="active")
+    apps = store.get_items(inventory_type="application", entity=current_entity, status="active")
+    infra = store.get_items(inventory_type="infrastructure", entity=current_entity, status="active")
+    org = store.get_items(inventory_type="organization", entity=current_entity, status="active")
+    vendors = store.get_items(inventory_type="vendor", entity=current_entity, status="active")
 
     # InventoryStore now loads from database automatically in __init__
     # No need for Facts fallback - duplicates are handled by content-hashed IDs
 
     # Calculate stats
     total_cost = sum(app.cost or 0 for app in apps)
-    flagged = [i for i in store.get_items(entity="target") if i.needs_investigation]
-    enriched = [i for i in store.get_items(entity="target") if i.is_enriched]
+    flagged = [i for i in store.get_items(entity=current_entity) if i.needs_investigation]
+    enriched = [i for i in store.get_items(entity=current_entity) if i.is_enriched]
     total_count = len(store) if len(store) > 0 else (len(apps) + len(infra) + len(org) + len(vendors))
 
     # Get cost quality metrics
-    cost_quality = store.get_cost_quality(inventory_type="application", entity="target")
+    cost_quality = store.get_cost_quality(inventory_type="application", entity=current_entity)
 
     return render_template('inventory/home.html',
         apps=apps,
@@ -134,6 +150,7 @@ def inventory_home():
         flagged_count=len(flagged),
         enriched_count=len(enriched),
         total_count=total_count,
+        current_entity=current_entity,
     )
 
 
@@ -160,7 +177,7 @@ def inventory_audit():
 @inventory_bp.route('/insights')
 def insights():
     """Show the 'So What' insights report."""
-    store = get_inventory_store()
+    store, _ = get_inventory_store()
 
     if len(store) == 0:
         flash("No inventory data loaded. Upload files first.", "warning")
@@ -216,7 +233,7 @@ def insights():
 @inventory_bp.route('/diagram')
 def diagram():
     """Show interactive data flow diagram."""
-    store = get_inventory_store()
+    store, _ = get_inventory_store()
     apps = store.get_items(inventory_type="application", entity="target", status="active")
 
     # Build Mermaid diagram
@@ -231,7 +248,7 @@ def diagram():
 @inventory_bp.route('/api/items')
 def api_items():
     """API endpoint for inventory items."""
-    store = get_inventory_store()
+    store, _ = get_inventory_store()
     inv_type = request.args.get('type', None)
     entity = request.args.get('entity', 'target')
 
@@ -246,9 +263,10 @@ def api_items():
 @inventory_bp.route('/api/summary')
 def api_summary():
     """API endpoint for inventory summary."""
-    store = get_inventory_store()
+    entity = request.args.get('entity', 'target')
+    store, _ = get_inventory_store()
 
-    apps = store.get_items(inventory_type="application", entity="target", status="active")
+    apps = store.get_items(inventory_type="application", entity=entity, status="active")
     infra = store.get_items(inventory_type="infrastructure", entity="target", status="active")
 
     # Get cost quality metrics
@@ -290,7 +308,7 @@ def upload_inventory():
     file.save(file_path)
 
     # Ingest into inventory store
-    store = get_inventory_store()
+    store, _ = get_inventory_store()
     try:
         result = ingest_file(file_path, store, entity="target")
 
@@ -320,7 +338,7 @@ def enrich_inventory():
         flash("No API key configured for enrichment", "error")
         return redirect(url_for('inventory.inventory_home'))
 
-    store = get_inventory_store()
+    store, _ = get_inventory_store()
 
     try:
         results = run_enrichment(
