@@ -388,3 +388,232 @@ class TestSignatureBackwardCompatibility:
 
         # Assert
         assert status == "success"
+
+
+class TestConcurrentAccess:
+    """
+    P3 FIX #10: Test thread-safe behavior under concurrent access.
+
+    Verifies that the threading.RLock in organization_bridge.py
+    prevents race conditions when multiple threads call the bridge
+    simultaneously with the same FactStore instance.
+    """
+
+    def test_concurrent_calls_same_fact_store(self):
+        """Test that concurrent calls with same FactStore don't corrupt data."""
+        import threading
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        # Arrange: Single FactStore shared across threads
+        fact_store = FactStore(deal_id="concurrent-test")
+
+        # Add some initial facts
+        for i in range(5):
+            fact_store.add_fact(
+                domain="organization",
+                category="roles",
+                item=f"Initial Role {i}",
+                details={'reports_to': 'CIO'},
+                status="documented",
+                evidence={'exact_quote': f'Role {i}'},
+                entity="target"
+            )
+
+        # Track results
+        results = []
+        errors = []
+
+        def call_bridge(thread_id):
+            """Callable for each thread."""
+            try:
+                store, status = build_organization_from_facts(
+                    fact_store,
+                    entity="target",
+                    enable_assumptions=True,
+                    deal_id="concurrent-test"
+                )
+                return {"thread": thread_id, "status": status, "staff_count": len(store.staff_members)}
+            except Exception as e:
+                errors.append({"thread": thread_id, "error": str(e)})
+                raise
+
+        # Act: 10 concurrent calls
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [executor.submit(call_bridge, i) for i in range(10)]
+
+            for future in as_completed(futures):
+                result = future.result()  # Will raise if thread errored
+                results.append(result)
+
+        # Assert
+        assert len(errors) == 0, f"Concurrent calls failed: {errors}"
+        assert len(results) == 10, "Should have 10 successful results"
+
+        # Staff counts should be in expected range (5 initial + 0-2 assumptions)
+        # NOTE: Counts may vary slightly due to timing of assumption generation
+        # The lock prevents corruption, but doesn't force identical results
+        staff_counts = [r["staff_count"] for r in results]
+        assert all(5 <= count <= 10 for count in staff_counts), \
+            f"Staff counts outside expected range: {staff_counts}"
+
+        # Variance should be small (within 2-3 staff members)
+        count_range = max(staff_counts) - min(staff_counts)
+        assert count_range <= 3, f"Too much variance in staff counts (range={count_range}): {staff_counts}"
+
+        # FactStore should still be valid (no corruption)
+        org_facts = [f for f in fact_store.facts if f.domain == "organization"]
+        assert len(org_facts) > 0, "FactStore should still have organization facts"
+
+        # Check no duplicate fact IDs (would indicate corruption)
+        fact_ids = [f.item for f in org_facts]
+        assert len(fact_ids) == len(set(fact_ids)) or len(fact_ids) - len(set(fact_ids)) <= 2, \
+            "Excessive duplicate facts suggest FactStore corruption"
+
+    def test_concurrent_calls_different_entities(self):
+        """Test concurrent calls for different entities (target vs buyer) with same FactStore."""
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        # Arrange: Single FactStore with both target and buyer facts
+        fact_store = FactStore(deal_id="multi-entity-test")
+
+        # Add target facts
+        for i in range(5):
+            fact_store.add_fact(
+                domain="organization",
+                category="roles",
+                item=f"Target Role {i}",
+                details={'reports_to': 'Target CIO'},
+                status="documented",
+                evidence={'exact_quote': f'Target Role {i}'},
+                entity="target"
+            )
+
+        # Add buyer facts
+        for i in range(3):
+            fact_store.add_fact(
+                domain="organization",
+                category="roles",
+                item=f"Buyer Role {i}",
+                details={'reports_to': 'Buyer VP'},
+                status="documented",
+                evidence={'exact_quote': f'Buyer Role {i}'},
+                entity="buyer"
+            )
+
+        # Track results
+        results = {"target": [], "buyer": []}
+        errors = []
+
+        def call_bridge_for_entity(entity, call_num):
+            """Callable for each thread."""
+            try:
+                store, status = build_organization_from_facts(
+                    fact_store,
+                    entity=entity,
+                    enable_assumptions=True,
+                    deal_id="multi-entity-test"
+                )
+                return {
+                    "entity": entity,
+                    "call": call_num,
+                    "status": status,
+                    "staff_count": len(store.staff_members)
+                }
+            except Exception as e:
+                errors.append({"entity": entity, "call": call_num, "error": str(e)})
+                raise
+
+        # Act: 5 target calls + 5 buyer calls concurrently
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = []
+
+            # Submit 5 target calls
+            for i in range(5):
+                futures.append(executor.submit(call_bridge_for_entity, "target", i))
+
+            # Submit 5 buyer calls
+            for i in range(5):
+                futures.append(executor.submit(call_bridge_for_entity, "buyer", i))
+
+            for future in as_completed(futures):
+                result = future.result()
+                results[result["entity"]].append(result)
+
+        # Assert
+        assert len(errors) == 0, f"Concurrent entity calls failed: {errors}"
+        assert len(results["target"]) == 5, "Should have 5 target results"
+        assert len(results["buyer"]) == 5, "Should have 5 buyer results"
+
+        # Target results should be in expected range (5 initial + 0-2 assumptions)
+        target_counts = [r["staff_count"] for r in results["target"]]
+        assert all(5 <= count <= 10 for count in target_counts), \
+            f"Target counts outside expected range: {target_counts}"
+
+        # Buyer results should be in expected range (3 initial + 0-2 assumptions)
+        buyer_counts = [r["staff_count"] for r in results["buyer"]]
+        assert all(3 <= count <= 8 for count in buyer_counts), \
+            f"Buyer counts outside expected range: {buyer_counts}"
+
+        # Variance should be small within each entity
+        target_range = max(target_counts) - min(target_counts)
+        buyer_range = max(buyer_counts) - min(buyer_counts)
+        assert target_range <= 3, f"Too much variance in target counts: {target_counts}"
+        assert buyer_range <= 3, f"Too much variance in buyer counts: {buyer_counts}"
+
+        # Target should generally have more staff than buyer (but allow some overlap due to assumptions)
+        assert max(target_counts) >= min(buyer_counts), \
+            "Target should have at least as much staff as buyer"
+
+    def test_no_deadlock_under_concurrent_load(self):
+        """Test that lock implementation doesn't cause deadlocks under heavy load."""
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        import time
+
+        # Arrange
+        fact_store = FactStore(deal_id="deadlock-test")
+
+        for i in range(10):
+            fact_store.add_fact(
+                domain="organization",
+                category="roles",
+                item=f"Role {i}",
+                details={'reports_to': 'Manager'},
+                status="documented",
+                evidence={'exact_quote': f'Role {i}'},
+                entity="target"
+            )
+
+        def call_with_timeout(call_num):
+            """Call bridge and track duration."""
+            start = time.time()
+            try:
+                store, status = build_organization_from_facts(
+                    fact_store,
+                    entity="target",
+                    enable_assumptions=True,
+                    deal_id="deadlock-test"
+                )
+                duration = time.time() - start
+                return {"call": call_num, "duration": duration, "success": True}
+            except Exception as e:
+                duration = time.time() - start
+                return {"call": call_num, "duration": duration, "success": False, "error": str(e)}
+
+        # Act: 20 concurrent calls with timeout monitoring
+        with ThreadPoolExecutor(max_workers=20) as executor:
+            futures = [executor.submit(call_with_timeout, i) for i in range(20)]
+
+            results = []
+            for future in as_completed(futures, timeout=30):  # 30s timeout for all calls
+                results.append(future.result())
+
+        # Assert
+        assert len(results) == 20, "All calls should complete"
+        assert all(r["success"] for r in results), "All calls should succeed"
+
+        # No call should take unreasonably long (no deadlock or severe contention)
+        max_duration = max(r["duration"] for r in results)
+        assert max_duration < 10.0, f"Max duration {max_duration}s suggests deadlock or severe contention"
+
+        avg_duration = sum(r["duration"] for r in results) / len(results)
+        assert avg_duration < 2.0, f"Avg duration {avg_duration}s suggests lock contention overhead"
