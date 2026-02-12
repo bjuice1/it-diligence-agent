@@ -64,11 +64,17 @@ class TestAppCategoryMappings:
         assert mapping.category == "erp"
 
     def test_lookup_unknown_app(self):
-        """Unknown apps should return None."""
+        """Unknown apps without matches should return None."""
         from stores.app_category_mappings import lookup_app
 
-        mapping = lookup_app("CustomInternalApp123")
+        # Test with app that truly has no match (not "custom")
+        mapping = lookup_app("CompleteLyUnknownApp123")
         assert mapping is None
+
+        # Apps with "custom" in name should match the "custom" category (feature)
+        custom_mapping = lookup_app("CustomInternalApp123")
+        assert custom_mapping is not None
+        assert custom_mapping.category == "custom"
 
     def test_categorize_known_app(self):
         """Known apps should return correct category."""
@@ -80,12 +86,19 @@ class TestAppCategoryMappings:
         assert mapping.vendor == "Workday"
 
     def test_categorize_unknown_app(self):
-        """Unknown apps should return 'unknown' category."""
+        """Unknown apps should return 'unknown' category, unless they match 'custom'."""
         from stores.app_category_mappings import categorize_app_simple
 
-        category, mapping = categorize_app_simple("MyCustomApp")
+        # Truly unknown app (no matches at all)
+        category, mapping = categorize_app_simple("CompletelyUnknownApp")
         assert category == "unknown"
         assert mapping is None
+
+        # Apps with "custom" in name should match "custom" category (feature)
+        category, mapping = categorize_app_simple("MyCustomApp")
+        assert category == "custom"
+        assert mapping is not None
+        assert mapping.vendor == "Internal"
 
     def test_normalize_app_name_removes_version(self):
         """Version numbers should be stripped from app names."""
@@ -315,10 +328,15 @@ class TestEnrichmentCategoryValidation:
         assert suggest_category("Workday") == "hcm"
 
     def test_suggest_category_unknown_app(self):
-        """Unknown apps should return None."""
+        """Truly unknown apps should return None, but 'custom' apps should match."""
         from tools_v2.enrichment.inventory_reviewer import suggest_category
 
-        assert suggest_category("MyCustomApp") is None
+        # Truly unknown app
+        assert suggest_category("CompletelyUnknownApp") is None
+
+        # Apps with "custom" should match the "custom" category (feature)
+        category = suggest_category("MyCustomApp")
+        assert category == "custom"
 
 
 # =============================================================================

@@ -185,7 +185,14 @@ def calculate_cost(
     }
 
     domain = domain_mapping.get(model.work_item_type, 'infrastructure')
-    deal_multiplier = get_deal_type_multiplier(deal_type, domain)
+
+    # Feature flag: DEAL_TYPE_AWARENESS_ENABLED
+    # If disabled, use 1.0 multiplier (no deal-type adjustment)
+    from config_v2 import DEAL_TYPE_AWARENESS_ENABLED
+    if DEAL_TYPE_AWARENESS_ENABLED:
+        deal_multiplier = get_deal_type_multiplier(deal_type, domain)
+    else:
+        deal_multiplier = 1.0  # Backward compatible: no multiplier
 
     adjusted_cost = adjusted_cost * deal_multiplier
 

@@ -827,6 +827,13 @@ def _identify_synergies(deal_type: str = "acquisition") -> List[Union[SynergyOpp
 
     logger.info(f"Analyzing synergies/costs for deal_type='{deal_type}'")
 
+    # Feature flag: DEAL_TYPE_AWARENESS_ENABLED
+    # If disabled, always use old behavior (consolidation synergies only)
+    from config_v2 import DEAL_TYPE_AWARENESS_ENABLED
+    if not DEAL_TYPE_AWARENESS_ENABLED:
+        logger.info("DEAL_TYPE_AWARENESS disabled - using consolidation logic for all deal types")
+        return _calculate_consolidation_synergies()
+
     # Branch based on deal type
     if deal_type in ['carveout', 'divestiture']:
         # Carveouts and divestitures: Calculate separation costs
