@@ -74,11 +74,11 @@ class TestVendorNormalization:
 
     def test_unmapped_app_uses_raw_vendor(self):
         """Test that unmapped apps use raw vendor from table."""
-        # CustomApp not in AppMapping
+        # UnknownApp not in AppMapping (avoid "custom", "internal" to prevent category match)
         table = ParsedTable(
             headers=["Application", "Vendor"],
             rows=[
-                {"application": "CustomInternalApp", "vendor": "In-House"},
+                {"application": "CompletelyUnknownApp", "vendor": "In-House"},
             ]
         )
 
@@ -93,16 +93,16 @@ class TestVendorNormalization:
         # Verify raw vendor was used (no mapping available)
         items = inv_store.get_items(inventory_type="application", status="active")
         assert len(items) == 1
-        assert items[0].name == "CustomInternalApp"
+        assert items[0].name == "CompletelyUnknownApp"
         assert items[0].data["vendor"] == "In-House", f"Expected 'In-House', got '{items[0].data['vendor']}'"
 
     def test_empty_vendor_no_mapping_omits_vendor_field(self):
         """Test that unmapped apps with no vendor omit vendor field (empty values removed)."""
-        # CustomApp not in AppMapping, no vendor in table
+        # UnknownApp not in AppMapping, no vendor in table (avoid "custom")
         table = ParsedTable(
             headers=["Application"],
             rows=[
-                {"application": "AnotherCustomApp"},
+                {"application": "AnotherUnknownApp"},
             ]
         )
 
@@ -117,7 +117,7 @@ class TestVendorNormalization:
         # Verify vendor field is omitted (empty values are filtered out)
         items = inv_store.get_items(inventory_type="application", status="active")
         assert len(items) == 1
-        assert items[0].name == "AnotherCustomApp"
+        assert items[0].name == "AnotherUnknownApp"
         assert "vendor" not in items[0].data, f"Expected vendor field to be omitted, but found: '{items[0].data.get('vendor', 'N/A')}'"
 
     def test_no_duplicates_with_inconsistent_vendor_data(self):

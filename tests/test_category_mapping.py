@@ -55,11 +55,18 @@ class TestDefaultFallback:
     """Verify unmapped apps default to 'unknown', not 'saas'."""
 
     def test_unmapped_app_is_unknown(self):
-        cat, mapping, conf, src = categorize_app("Totally Custom Internal Tool XYZ123")
+        # Use app name without "custom" or "internal" to avoid matching "custom" category
+        cat, mapping, conf, src = categorize_app("TotallyUnknownApp XYZ123")
         assert cat == "unknown"
         assert mapping is None
         assert conf == "none"
         assert src == "default"
+
+        # Apps with "custom" or "internal" should match "custom" category (feature)
+        cat, mapping, conf, src = categorize_app("Totally Custom Internal Tool XYZ123")
+        assert cat == "custom"
+        assert mapping is not None
+        assert conf == "medium"  # Partial match
 
     def test_saas_not_default(self):
         """No app should get 'saas' unless explicitly mapped."""
@@ -90,9 +97,16 @@ class TestCategoryProvenance:
 
     def test_no_match_none_confidence(self):
         """No match should yield none confidence and default source."""
-        cat, mapping, conf, src = categorize_app("XYZCorp Proprietary Tool v3.2")
+        # Use app without trigger words like "proprietary", "custom", "internal"
+        cat, mapping, conf, src = categorize_app("XYZCorp Enterprise Tool v3.2")
         assert conf == "none"
         assert src == "default"
+
+        # "Proprietary" should match "custom" category (in aliases)
+        cat, mapping, conf, src = categorize_app("XYZCorp Proprietary Tool v3.2")
+        assert cat == "custom"
+        assert mapping is not None
+        assert conf == "medium"  # Partial match on "proprietary" alias
 
 
 class TestBackwardsCompatibility:

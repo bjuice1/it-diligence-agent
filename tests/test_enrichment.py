@@ -257,7 +257,7 @@ class TestReviewWithMockLLM:
                     "confidence": "confident"
                 },
                 {
-                    "name": "Custom Portal",
+                    "name": "Unknown Portal",
                     "description": None,
                     "category": None,
                     "vendor_info": None,
@@ -277,7 +277,7 @@ class TestReviewWithMockLLM:
         )
         store.add_item(
             inventory_type="application",
-            data={"name": "Custom Portal"},
+            data={"name": "Unknown Portal"},
             entity="target",
             source_file="test.xlsx",
         )
@@ -300,8 +300,8 @@ class TestReviewWithMockLLM:
         assert sap_item is not None
         assert sap_item.is_enriched
 
-        # Check that Custom Portal was flagged
-        custom_item = next((i for i in items if i.data.get("name") == "Custom Portal"), None)
+        # Check that Unknown Portal was flagged
+        custom_item = next((i for i in items if i.data.get("name") == "Unknown Portal"), None)
         assert custom_item is not None
         assert custom_item.needs_investigation
 

@@ -368,20 +368,30 @@ class TestEnrichmentLocalLookup:
         assert review.needs_investigation is False
 
     def test_try_local_lookup_unknown_app(self):
-        """Unknown apps should return None from local lookup."""
+        """Truly unknown apps should return None, but 'custom' apps should match."""
         from tools_v2.enrichment.inventory_reviewer import _try_local_lookup
         from stores.inventory_item import InventoryItem
 
-        item = InventoryItem(
+        # Truly unknown app
+        unknown_item = InventoryItem(
             item_id="APP-002",
+            inventory_type="application",
+            entity="target",
+            data={"name": "CompletelyUnknownTool", "users": "50"},
+        )
+        review = _try_local_lookup(unknown_item)
+        assert review is None
+
+        # Apps with "custom" should match the "custom" category (feature)
+        custom_item = InventoryItem(
+            item_id="APP-003",
             inventory_type="application",
             entity="target",
             data={"name": "CustomInternalTool", "users": "50"},
         )
-
-        review = _try_local_lookup(item)
-
-        assert review is None
+        review = _try_local_lookup(custom_item)
+        assert review is not None
+        assert review.category == "custom"
 
     def test_try_local_lookup_empty_name(self):
         """Items with empty names should return None."""
