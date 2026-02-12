@@ -1,0 +1,910 @@
+{
+  "metadata": {
+    "test_scenario_name": "CloudServe Technologies Acquisition by ESG",
+    "version": "1.0",
+    "created": "2025-02-12",
+    "purpose": "Ground-truth validation data for automated IT DD analysis",
+    "document_count": {
+      "target": 6,
+      "buyer": 6,
+      "total": 12
+    },
+    "domains_covered": [
+      "infrastructure",
+      "network_security",
+      "applications",
+      "identity_access",
+      "organization",
+      "cybersecurity"
+    ]
+  },
+
+  "expected_inventory_counts": {
+    "target": {
+      "applications": {
+        "total": 38,
+        "breakdown": {
+          "platform_components": 8,
+          "business_applications": 18,
+          "development_tools": 12
+        },
+        "by_category": {
+          "infrastructure": 9,
+          "crm": 3,
+          "erp": 1,
+          "finance": 4,
+          "hcm": 2,
+          "collaboration": 3,
+          "devops": 9,
+          "productivity": 3,
+          "security": 5,
+          "database": 1,
+          "bi_analytics": 1
+        }
+      },
+      "infrastructure": {
+        "aws_accounts": 9,
+        "eks_clusters": 4,
+        "eks_total_nodes": 47,
+        "vpcs": 4,
+        "databases": 5,
+        "regions": 2
+      },
+      "organization": {
+        "total_it_headcount": 67,
+        "contractors": 8,
+        "total_personnel": 75,
+        "teams": 7,
+        "leadership": 7
+      },
+      "vendors": {
+        "total_vendors": 32,
+        "categories": {
+          "cloud_infrastructure": 2,
+          "saas_applications": 13,
+          "dev_devops": 11,
+          "security_compliance": 7,
+          "data_analytics": 2,
+          "professional_services": 3
+        }
+      },
+      "identity": {
+        "workforce_idp": "Okta",
+        "customer_idp": "Auth0",
+        "total_workforce_users": 412,
+        "mfa_enabled_users": 350,
+        "mfa_coverage_percent": 85,
+        "users_without_mfa": 62,
+        "sso_enabled_apps": 12,
+        "pam_covered_users": 15,
+        "privileged_users_total": 41
+      },
+      "security_tools": {
+        "edr": "CrowdStrike Falcon",
+        "cspm": "Wiz",
+        "code_scanning": "Snyk",
+        "compliance_automation": "Vanta",
+        "pam": "CyberArk"
+      }
+    },
+    "buyer": {
+      "note": "Buyer documents define standards and requirements, not inventory items"
+    }
+  },
+
+  "expected_key_metrics": {
+    "target_company": {
+      "company_name": "CloudServe Technologies",
+      "industry": "B2B SaaS",
+      "annual_revenue": 87000000,
+      "employees": 412,
+      "customers": 1847,
+      "it_budget": {
+        "total_annual": 14200000,
+        "percent_of_revenue": 16.3,
+        "cloud_infrastructure": 4800000,
+        "saas_tooling": 2100000,
+        "personnel_costs": 6900000,
+        "professional_services": 400000
+      },
+      "cloud_spend": {
+        "aws_annual": 4800000,
+        "aws_monthly": 400000,
+        "primary_region": "us-east-1",
+        "secondary_region": "eu-west-1"
+      },
+      "application_costs": {
+        "total_annual": 2331500,
+        "hosting_model": "100% Cloud"
+      },
+      "personnel": {
+        "it_headcount": 67,
+        "contractors": 8,
+        "total_cost_employees": 6900000,
+        "total_cost_contractors": 640000,
+        "avg_cost_per_fte": 103000
+      }
+    },
+    "buyer_company": {
+      "company_name": "Enterprise Solutions Group (ESG)",
+      "annual_revenue": 12400000000,
+      "employees": 24500,
+      "it_headcount": 2100,
+      "it_budget": 2100000000,
+      "cloud_strategy": "Azure-first",
+      "azure_spend": 650000000,
+      "aws_spend": 180000000
+    }
+  },
+
+  "expected_critical_risks": [
+    {
+      "risk_id": "RISK-001",
+      "domain": "cybersecurity",
+      "title": "SOC 2 Renewal Due in 4 Months",
+      "severity": "HIGH",
+      "description": "SOC 2 Type II certification renewal audit due in 4 months (2025-06). Delays could impact customer retention.",
+      "documents": ["Target_Doc_1", "Target_Doc_4"],
+      "estimated_cost": {
+        "min": 100000,
+        "max": 150000
+      }
+    },
+    {
+      "risk_id": "RISK-002",
+      "domain": "cybersecurity",
+      "title": "Wiz CSPM Contract Expiring in 2 Months",
+      "severity": "HIGH",
+      "description": "Cloud security posture management (CSPM) tool contract expires 2025-02, creating security visibility gap.",
+      "documents": ["Target_Doc_4", "Target_Doc_6"],
+      "annual_cost": 125000,
+      "action": "Urgent renewal or migration required"
+    },
+    {
+      "risk_id": "RISK-003",
+      "domain": "infrastructure",
+      "title": "Disaster Recovery Test Failed",
+      "severity": "HIGH",
+      "description": "Last DR test conducted 14 months ago (Q4 2023) failed to meet RTO target (12 hours actual vs. 8 hours target).",
+      "documents": ["Target_Doc_1", "Target_Doc_3"],
+      "root_causes": [
+        "Runbook outdated",
+        "DNS cutover delay",
+        "EKS scaling slow",
+        "Database replication lag"
+      ],
+      "estimated_fix_cost": {
+        "min": 50000,
+        "max": 100000
+      }
+    },
+    {
+      "risk_id": "RISK-004",
+      "domain": "infrastructure",
+      "title": "GDPR Data Residency Gap",
+      "severity": "HIGH",
+      "description": "All customer data stored in us-east-1. No EU region deployment. GDPR compliance risk.",
+      "documents": ["Target_Doc_1", "Target_Doc_3"],
+      "customer_impact": "21% of customers in EMEA",
+      "estimated_fix_cost": {
+        "min": 250000,
+        "max": 500000,
+        "description": "Deploy EU region infrastructure"
+      }
+    },
+    {
+      "risk_id": "RISK-005",
+      "domain": "organization",
+      "title": "CTO Key Person Risk",
+      "severity": "HIGH",
+      "description": "CTO (Sarah Chen) is co-founder with deep institutional knowledge. Retention critical for continuity.",
+      "documents": ["Target_Doc_1", "Target_Doc_6"],
+      "recommended_mitigation": "Retention bonus + equity acceleration",
+      "estimated_retention_cost": {
+        "min": 500000,
+        "max": 1000000
+      }
+    },
+    {
+      "risk_id": "RISK-006",
+      "domain": "identity_access",
+      "title": "MFA Coverage Gap",
+      "severity": "MEDIUM",
+      "description": "15% of workforce (62 users) not using MFA, primarily in sales/marketing/customer success.",
+      "documents": ["Target_Doc_4", "Target_Doc_5"],
+      "users_at_risk": 62,
+      "estimated_fix_cost": {
+        "min": 10000,
+        "max": 20000,
+        "description": "Policy enforcement + training"
+      }
+    },
+    {
+      "risk_id": "RISK-007",
+      "domain": "cybersecurity",
+      "title": "No ISO 27001 Certification",
+      "severity": "MEDIUM",
+      "description": "30% of enterprise customers require ISO 27001. Not currently certified.",
+      "documents": ["Target_Doc_4"],
+      "business_impact": "Customer retention and new sales risk",
+      "estimated_cost": {
+        "min": 200000,
+        "max": 300000,
+        "description": "Initial certification + ongoing maintenance"
+      }
+    },
+    {
+      "risk_id": "RISK-008",
+      "domain": "cybersecurity",
+      "title": "Vulnerability Remediation SLA Misses",
+      "severity": "MEDIUM",
+      "description": "87 open vulnerabilities (12 critical, 34 high). Remediation SLAs consistently missed.",
+      "documents": ["Target_Doc_4"],
+      "backlog": {
+        "critical": 12,
+        "high": 34,
+        "total": 87
+      },
+      "sla_performance": {
+        "critical_target_days": 7,
+        "critical_actual_days": 12,
+        "high_target_days": 30,
+        "high_actual_days": 45
+      }
+    }
+  ],
+
+  "expected_compliance_status": {
+    "target": {
+      "soc2_type2": {
+        "status": "CERTIFIED",
+        "last_audit": "2024-06",
+        "next_audit": "2025-06",
+        "months_until_renewal": 4,
+        "managed_by": "Vanta",
+        "cost": 85000
+      },
+      "iso27001": {
+        "status": "NOT_CERTIFIED",
+        "customer_requirement_percent": 30,
+        "gap": true
+      },
+      "gdpr": {
+        "status": "SELF_ASSESSED",
+        "formal_audit": false,
+        "gap": "No EU data residency"
+      },
+      "ccpa": {
+        "status": "SELF_ASSESSED",
+        "formal_audit": false
+      },
+      "pci_dss": {
+        "status": "NOT_APPLICABLE",
+        "reason": "No card data (Stripe handles)"
+      }
+    },
+    "buyer_requirements": {
+      "soc2_required": true,
+      "iso27001_required": true,
+      "gdpr_compliance_required": true,
+      "integration_timeline_days": 100
+    }
+  },
+
+  "expected_contract_expirations": [
+    {
+      "vendor": "Wiz",
+      "category": "Cloud Security (CSPM)",
+      "contract_end": "2025-02",
+      "months_until_expiration": 0,
+      "annual_cost": 125000,
+      "criticality": "HIGH",
+      "auto_renew": true,
+      "termination_notice_days": 30,
+      "alert": "URGENT - Expires in 2 months"
+    },
+    {
+      "vendor": "Datadog",
+      "category": "Observability",
+      "contract_end": "2025-03",
+      "months_until_expiration": 1,
+      "annual_cost": 312000,
+      "criticality": "HIGH",
+      "auto_renew": true,
+      "termination_notice_days": 30,
+      "alert": "Expires in 3 months"
+    },
+    {
+      "vendor": "Fastly",
+      "category": "CDN",
+      "contract_end": "2025-03",
+      "months_until_expiration": 1,
+      "annual_cost": 85000,
+      "auto_renew": true
+    }
+  ],
+
+  "expected_integration_gaps": [
+    {
+      "gap_id": "GAP-001",
+      "category": "Identity",
+      "title": "Okta to Azure AD Migration",
+      "target_state": "Okta (workforce IdP)",
+      "buyer_state": "Azure AD (workforce IdP)",
+      "complexity": "HIGH",
+      "estimated_cost": {
+        "min": 100000,
+        "max": 200000
+      },
+      "timeline_months": 6
+    },
+    {
+      "gap_id": "GAP-002",
+      "category": "Identity",
+      "title": "Auth0 to Azure AD B2C Migration",
+      "target_state": "Auth0 (customer IdP, embedded in platform)",
+      "buyer_state": "Azure AD B2C",
+      "complexity": "CRITICAL",
+      "estimated_cost": {
+        "min": 200000,
+        "max": 400000
+      },
+      "timeline_months": 12,
+      "note": "Deeply embedded in platform architecture"
+    },
+    {
+      "gap_id": "GAP-003",
+      "category": "Cloud",
+      "title": "AWS to Azure Migration Complexity",
+      "target_state": "100% AWS",
+      "buyer_state": "Azure-first (70% Azure, 25% AWS)",
+      "approach": "Run AWS workloads as-is for 12-18 months, then evaluate",
+      "keep_aws": true
+    },
+    {
+      "gap_id": "GAP-004",
+      "category": "Observability",
+      "title": "Datadog to Splunk Migration",
+      "target_state": "Datadog ($312K/year)",
+      "buyer_state": "Splunk Enterprise Security",
+      "estimated_savings": 312000,
+      "migration_cost": {
+        "min": 100000,
+        "max": 200000
+      }
+    },
+    {
+      "gap_id": "GAP-005",
+      "category": "Applications",
+      "title": "ERP Migration (NetSuite to SAP S/4HANA)",
+      "target_state": "Oracle NetSuite",
+      "buyer_state": "SAP S/4HANA",
+      "buyer_policy": "Replace within 24 months",
+      "estimated_cost": {
+        "min": 500000,
+        "max": 1000000
+      }
+    },
+    {
+      "gap_id": "GAP-006",
+      "category": "Applications",
+      "title": "CRM Migration (Salesforce to Dynamics 365)",
+      "target_state": "Salesforce ($245K/year)",
+      "buyer_state": "Microsoft Dynamics 365 Sales",
+      "buyer_policy": "Replace within 18 months",
+      "estimated_cost": {
+        "min": 300000,
+        "max": 600000
+      }
+    },
+    {
+      "gap_id": "GAP-007",
+      "category": "Collaboration",
+      "title": "Google Workspace to Microsoft 365",
+      "target_state": "Google Workspace",
+      "buyer_state": "Microsoft 365",
+      "estimated_savings": 82000,
+      "migration_complexity": "MEDIUM"
+    },
+    {
+      "gap_id": "GAP-008",
+      "category": "Compliance",
+      "title": "ISO 27001 Certification Required",
+      "target_state": "Not certified",
+      "buyer_state": "ISO 27001 required",
+      "urgency": "HIGH",
+      "estimated_cost": {
+        "min": 200000,
+        "max": 300000
+      }
+    }
+  ],
+
+  "expected_cost_estimates": {
+    "one_time_integration_costs": {
+      "security_remediation": {
+        "min": 250000,
+        "max": 500000,
+        "items": [
+          "ISO 27001 certification",
+          "GDPR/CCPA formal audits",
+          "Security gap closure"
+        ]
+      },
+      "compliance_certification": {
+        "min": 100000,
+        "max": 150000,
+        "items": [
+          "SOC 2 renewal acceleration"
+        ]
+      },
+      "dr_capability": {
+        "min": 75000,
+        "max": 125000,
+        "items": [
+          "DR runbook completion",
+          "DR testing and validation"
+        ]
+      },
+      "infrastructure_standardization": {
+        "min": 50000,
+        "max": 100000,
+        "items": [
+          "AWS account governance",
+          "Tagging and cost allocation"
+        ]
+      },
+      "identity_integration": {
+        "min": 300000,
+        "max": 600000,
+        "items": [
+          "Okta to Azure AD migration ($100K-200K)",
+          "Auth0 to Azure AD B2C migration ($200K-400K)"
+        ]
+      },
+      "eu_data_residency": {
+        "min": 250000,
+        "max": 500000,
+        "items": [
+          "Deploy EU region for GDPR compliance"
+        ]
+      },
+      "application_migrations": {
+        "min": 1500000,
+        "max": 3000000,
+        "items": [
+          "ERP (NetSuite to SAP)",
+          "CRM (Salesforce to Dynamics 365)",
+          "Collaboration (Google to M365)"
+        ]
+      },
+      "retention_bonuses": {
+        "min": 500000,
+        "max": 1000000,
+        "items": [
+          "CTO and key technical leaders"
+        ]
+      },
+      "total": {
+        "min": 3025000,
+        "max": 6475000
+      }
+    },
+    "annual_cost_savings_opportunities": {
+      "aws_reserved_instances": {
+        "min": 500000,
+        "max": 700000
+      },
+      "aws_savings_plans": {
+        "min": 200000,
+        "max": 300000
+      },
+      "s3_intelligent_tiering": {
+        "min": 80000,
+        "max": 120000
+      },
+      "rds_reserved_instances": {
+        "min": 300000,
+        "max": 450000
+      },
+      "instance_right_sizing": {
+        "min": 150000,
+        "max": 200000
+      },
+      "vendor_consolidation": {
+        "amount": 965000,
+        "items": [
+          "Datadog to Splunk ($312K)",
+          "Okta to Azure AD ($98K)",
+          "GitHub to GitLab ($156K)",
+          "Google Workspace to M365 ($82K)",
+          "Slack to Teams ($72K)",
+          "Salesforce consolidation ($245K)"
+        ]
+      },
+      "total_potential_savings": {
+        "min": 2195000,
+        "max": 2735000
+      }
+    }
+  },
+
+  "expected_vdr_requests": [
+    {
+      "vdr_id": "VDR-001",
+      "domain": "infrastructure",
+      "title": "Network Architecture Diagrams",
+      "description": "Complete network architecture diagrams showing VPC structure, connectivity, and data flows",
+      "priority": "HIGH",
+      "reason": "Gap identified in Document 3"
+    },
+    {
+      "vdr_id": "VDR-002",
+      "domain": "infrastructure",
+      "title": "DR Runbooks",
+      "description": "Current disaster recovery runbooks (even if outdated) to assess recovery capability",
+      "priority": "HIGH",
+      "reason": "Last DR test failed; runbooks outdated"
+    },
+    {
+      "vdr_id": "VDR-003",
+      "domain": "identity_access",
+      "title": "AWS IAM Policies Export",
+      "description": "Export of all AWS IAM roles, policies, and permission sets",
+      "priority": "MEDIUM",
+      "reason": "Security review and least privilege validation"
+    },
+    {
+      "vdr_id": "VDR-004",
+      "domain": "infrastructure",
+      "title": "12-Month AWS Cost Reports",
+      "description": "AWS Cost Explorer reports for last 12 months with service-level breakdown",
+      "priority": "MEDIUM",
+      "reason": "Understand cost trends and optimization opportunities"
+    },
+    {
+      "vdr_id": "VDR-005",
+      "domain": "cybersecurity",
+      "title": "Penetration Test Report",
+      "description": "Last penetration test report (conducted 6 months ago by Bishop Fox)",
+      "priority": "HIGH",
+      "reason": "Review findings and validate remediation status"
+    },
+    {
+      "vdr_id": "VDR-006",
+      "domain": "cybersecurity",
+      "title": "Vulnerability Scan Reports",
+      "description": "Last 3 months of vulnerability scan reports showing open vulnerabilities",
+      "priority": "MEDIUM",
+      "reason": "Assess security posture and backlog"
+    },
+    {
+      "vdr_id": "VDR-007",
+      "domain": "organization",
+      "title": "Vendor Contracts",
+      "description": "Full contracts for top 15 vendors (AWS, Salesforce, NetSuite, Datadog, etc.)",
+      "priority": "HIGH",
+      "reason": "Legal review, termination clauses, and cost validation"
+    },
+    {
+      "vdr_id": "VDR-008",
+      "domain": "organization",
+      "title": "Compensation Benchmarking",
+      "description": "Salary ranges vs. market data for retention planning",
+      "priority": "MEDIUM",
+      "reason": "Key person retention risk (CTO and senior engineers)"
+    },
+    {
+      "vdr_id": "VDR-009",
+      "domain": "identity_access",
+      "title": "Access Review Reports",
+      "description": "Last 4 quarters of access review results",
+      "priority": "MEDIUM",
+      "reason": "AWS and database access reviews are overdue"
+    },
+    {
+      "vdr_id": "VDR-010",
+      "domain": "infrastructure",
+      "title": "Infrastructure Incident Log",
+      "description": "Infrastructure incident log for last 12 months",
+      "priority": "MEDIUM",
+      "reason": "Assess reliability and identify failure patterns"
+    }
+  ],
+
+  "expected_cross_document_consistency": {
+    "validations": [
+      {
+        "fact": "Total applications",
+        "expected_value": 38,
+        "appears_in": ["Document 1", "Document 2"],
+        "should_match": true
+      },
+      {
+        "fact": "AWS accounts",
+        "expected_value": 9,
+        "appears_in": ["Document 1", "Document 3"],
+        "should_match": true
+      },
+      {
+        "fact": "AWS annual spend",
+        "expected_value": 4800000,
+        "appears_in": ["Document 1", "Document 3"],
+        "should_match": true
+      },
+      {
+        "fact": "IT headcount",
+        "expected_value": 67,
+        "appears_in": ["Document 1", "Document 6"],
+        "should_match": true
+      },
+      {
+        "fact": "SOC 2 renewal months",
+        "expected_value": 4,
+        "appears_in": ["Document 1", "Document 4"],
+        "should_match": true
+      },
+      {
+        "fact": "DR strategy",
+        "expected_value": "Warm standby",
+        "appears_in": ["Document 1", "Document 3"],
+        "should_match": true
+      },
+      {
+        "fact": "RPO/RTO",
+        "expected_value": "4h / 8h",
+        "appears_in": ["Document 1", "Document 3"],
+        "should_match": true
+      },
+      {
+        "fact": "MFA coverage",
+        "expected_value": "85%",
+        "appears_in": ["Document 4", "Document 5"],
+        "should_match": true
+      },
+      {
+        "fact": "Workforce IdP",
+        "expected_value": "Okta",
+        "appears_in": ["Document 1", "Document 5"],
+        "should_match": true
+      },
+      {
+        "fact": "Customer IdP",
+        "expected_value": "Auth0",
+        "appears_in": ["Document 1", "Document 5"],
+        "should_match": true
+      }
+    ],
+    "expected_inconsistencies": [],
+    "note": "All cross-document facts should be consistent. System should NOT flag inconsistencies."
+  },
+
+  "expected_work_items": {
+    "day_1": [
+      {
+        "title": "Renew Wiz CSPM contract",
+        "priority": "CRITICAL",
+        "cost": 125000,
+        "timeline_days": 30
+      },
+      {
+        "title": "Accelerate SOC 2 renewal audit",
+        "priority": "HIGH",
+        "cost_min": 100000,
+        "cost_max": 150000,
+        "timeline_days": 90
+      },
+      {
+        "title": "Execute retention agreements for CTO and key engineers",
+        "priority": "HIGH",
+        "cost_min": 500000,
+        "cost_max": 1000000,
+        "timeline_days": 30
+      }
+    ],
+    "day_100": [
+      {
+        "title": "Execute DR test and remediate failures",
+        "priority": "HIGH",
+        "cost_min": 50000,
+        "cost_max": 100000,
+        "timeline_days": 60
+      },
+      {
+        "title": "Deploy EU region for GDPR compliance",
+        "priority": "HIGH",
+        "cost_min": 250000,
+        "cost_max": 500000,
+        "timeline_days": 90
+      },
+      {
+        "title": "Initiate ISO 27001 certification",
+        "priority": "MEDIUM",
+        "cost_min": 200000,
+        "cost_max": 300000,
+        "timeline_days": 180
+      },
+      {
+        "title": "Enforce MFA for all users",
+        "priority": "MEDIUM",
+        "cost_min": 10000,
+        "cost_max": 20000,
+        "timeline_days": 30
+      }
+    ],
+    "post_100": [
+      {
+        "title": "Migrate Okta to Azure AD",
+        "priority": "MEDIUM",
+        "cost_min": 100000,
+        "cost_max": 200000,
+        "timeline_days": 180
+      },
+      {
+        "title": "Migrate Auth0 to Azure AD B2C",
+        "priority": "HIGH",
+        "cost_min": 200000,
+        "cost_max": 400000,
+        "timeline_days": 365,
+        "note": "Complex - embedded in platform"
+      },
+      {
+        "title": "Migrate NetSuite to SAP S/4HANA",
+        "priority": "MEDIUM",
+        "cost_min": 500000,
+        "cost_max": 1000000,
+        "timeline_days": 540
+      },
+      {
+        "title": "Migrate Salesforce to Dynamics 365",
+        "priority": "MEDIUM",
+        "cost_min": 300000,
+        "cost_max": 600000,
+        "timeline_days": 450
+      },
+      {
+        "title": "Implement AWS Reserved Instances and Savings Plans",
+        "priority": "MEDIUM",
+        "annual_savings_min": 1000000,
+        "annual_savings_max": 1650000,
+        "timeline_days": 60
+      }
+    ]
+  },
+
+  "expected_report_highlights": {
+    "executive_summary_should_mention": [
+      "67 IT staff supporting $87M revenue",
+      "100% AWS-based, cloud-native infrastructure",
+      "SOC 2 renewal in 4 months - critical deadline",
+      "Wiz CSPM contract expiring in 2 months",
+      "Disaster recovery test failed 14 months ago",
+      "GDPR data residency gap (no EU region)",
+      "CTO retention critical (co-founder with deep knowledge)",
+      "One-time integration costs: $3M-6.5M",
+      "Annual savings opportunities: $2.2M-2.7M"
+    ],
+    "top_5_risks_should_include": [
+      "SOC 2 renewal urgency",
+      "Wiz contract expiration",
+      "DR capability unproven",
+      "GDPR data residency",
+      "CTO retention risk"
+    ],
+    "cost_breakdown_should_show": {
+      "total_one_time_min": 3025000,
+      "total_one_time_max": 6475000,
+      "categories": [
+        "Security remediation",
+        "Compliance certification",
+        "Identity integration",
+        "Application migrations",
+        "Retention bonuses"
+      ]
+    }
+  },
+
+  "test_assertions": {
+    "inventory_counts": {
+      "description": "System should extract exact counts from deterministic parser",
+      "assertions": [
+        {
+          "test": "Target applications count",
+          "expected": 38,
+          "tolerance": 0,
+          "critical": true
+        },
+        {
+          "test": "Target AWS accounts",
+          "expected": 9,
+          "tolerance": 0,
+          "critical": true
+        },
+        {
+          "test": "Target IT headcount",
+          "expected": 67,
+          "tolerance": 0,
+          "critical": true
+        },
+        {
+          "test": "Target vendors",
+          "expected": 32,
+          "tolerance": 2,
+          "critical": false,
+          "note": "Vendor count may vary based on table parsing boundaries"
+        }
+      ]
+    },
+    "risk_detection": {
+      "description": "System should flag high-severity risks",
+      "assertions": [
+        {
+          "test": "SOC 2 renewal flagged",
+          "expected": true,
+          "severity": "HIGH"
+        },
+        {
+          "test": "Wiz expiration flagged",
+          "expected": true,
+          "severity": "HIGH"
+        },
+        {
+          "test": "DR test failure flagged",
+          "expected": true,
+          "severity": "HIGH"
+        },
+        {
+          "test": "GDPR gap flagged",
+          "expected": true,
+          "severity": "HIGH"
+        }
+      ]
+    },
+    "entity_separation": {
+      "description": "System must correctly separate Target vs Buyer entities",
+      "assertions": [
+        {
+          "test": "Target inventory items have entity=target",
+          "expected": true,
+          "critical": true
+        },
+        {
+          "test": "Buyer standards not counted as Target inventory",
+          "expected": true,
+          "critical": true
+        },
+        {
+          "test": "UI shows separate Target/Buyer counts",
+          "expected": true,
+          "critical": true
+        }
+      ]
+    },
+    "cost_accuracy": {
+      "description": "System should accurately aggregate costs",
+      "assertions": [
+        {
+          "test": "AWS annual spend",
+          "expected": 4800000,
+          "tolerance_percent": 0
+        },
+        {
+          "test": "Total application cost",
+          "expected": 2331500,
+          "tolerance_percent": 1
+        },
+        {
+          "test": "IT personnel cost",
+          "expected": 6900000,
+          "tolerance_percent": 0
+        },
+        {
+          "test": "One-time integration cost range",
+          "expected_min": 3025000,
+          "expected_max": 6475000,
+          "tolerance_percent": 5
+        }
+      ]
+    }
+  }
+}
