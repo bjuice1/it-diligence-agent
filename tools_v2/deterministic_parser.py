@@ -17,6 +17,8 @@ import re
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass, field
 import logging
+import unicodedata
+from difflib import SequenceMatcher
 
 # Import shared cost status utility
 from utils.cost_status_inference import infer_cost_status
@@ -112,6 +114,304 @@ def extract_document_entity(
     return high_conf_signals[0][1]
 
 
+# =============================================================================
+# TABLE PARSER ROBUSTNESS (Doc 02: Parser Enhancements)
+# =============================================================================
+
+def normalize_unicode(text: str) -> str:
+    """
+    Normalize Unicode text for robust string matching.
+
+    Handles:
+    - NFD decomposition (separate base + combining marks)
+    - Smart quotes → straight quotes
+    - Em-dashes/en-dashes → hyphens
+    - Ellipsis → three dots
+    - Non-breaking spaces → regular spaces
+    - Multiple spaces → single space
+
+    Args:
+        text: Raw text from PDF
+
+    Returns:
+        Normalized text
+    """
+    if not text:
+        return ""
+
+    # NFD normalization (decompose accented characters)
+    text = unicodedata.normalize('NFD', text)
+
+    # Smart quotes → straight quotes
+    text = text.replace('\u201c', '"').replace('\u201d', '"')  # " "
+    text = text.replace('\u2018', "'").replace('\u2019', "'")  # ' '
+
+    # Em-dash, en-dash → hyphen
+    text = text.replace('\u2014', '-').replace('\u2013', '-')
+
+    # Ellipsis → three dots
+    text = text.replace('\u2026', '...')
+
+    # Non-breaking space → regular space
+    text = text.replace('\u00a0', ' ')
+
+    # Normalize whitespace (multiple spaces → single)
+    text = re.sub(r'\s+', ' ', text).strip()
+
+    return text
+
+
+def expand_merged_cells(headers: List[str], rows: List[List[str]]) -> Tuple[List[str], List[List[str]]]:
+    """
+    Detect merged cells (empty strings after non-empty) and expand.
+
+    When Excel merged cells are converted to PDF, empty headers appear.
+    This expands them from the previous non-empty header.
+
+    Example:
+        Input:  ["Application", "", "Vendor"]
+        Output: ["Application", "Application", "Vendor"]
+
+    Args:
+        headers: Raw headers (may contain empty strings)
+        rows: Table rows (unchanged)
+
+    Returns:
+        (expanded_headers, rows)
+    """
+    expanded_headers = []
+    last_non_empty = None
+
+    for header in headers:
+        if header.strip():
+            last_non_empty = header
+            expanded_headers.append(header)
+        else:
+            # Empty header - likely merged cell
+            if last_non_empty:
+                expanded_headers.append(last_non_empty)
+            else:
+                # Edge case: first header is empty
+                expanded_headers.append("UNKNOWN_COL")
+
+    return expanded_headers, rows
+
+
+def detect_multi_row_headers(table: Dict) -> List[str]:
+    """
+    Detect if first N rows are headers (multi-row header pattern).
+
+    Heuristic: If row has mostly text and no numbers, likely header.
+
+    Args:
+        table: Table dict with 'headers' and 'rows'
+
+    Returns:
+        Combined header names
+    """
+    rows = table.get('rows', [])
+    if len(rows) < 2:
+        return table.get('headers', [])
+
+    # Check if first 2-3 rows are headers
+    header_rows = [table['headers']]
+
+    for i, row in enumerate(rows[:3]):  # Check up to 3 rows
+        # If >80% cells are text (not numbers), likely header
+        cells = list(row.values()) if isinstance(row, dict) else row
+        text_cells = sum(1 for c in cells if isinstance(c, str) and not c.replace('.', '').replace(',', '').isdigit())
+
+        if len(cells) > 0 and text_cells / len(cells) > 0.8:
+            header_rows.append(cells if isinstance(row, list) else list(row.values()))
+        else:
+            break  # First data row found
+
+    # Combine multi-row headers with " - "
+    if len(header_rows) > 1:
+        combined_headers = []
+        for col_idx in range(len(header_rows[0])):
+            col_parts = [row[col_idx] for row in header_rows if col_idx < len(row)]
+            combined = " - ".join(p for p in col_parts if p.strip())
+            combined_headers.append(combined)
+
+        return combined_headers
+
+    return table.get('headers', [])
+
+
+# Header synonyms for flexible matching
+HEADER_SYNONYMS = {
+    'application': [
+        'application', 'app', 'application name', 'system', 'system name',
+        'software', 'tool', 'product', 'app name', 'applications'
+    ],
+    'vendor': [
+        'vendor', 'supplier', 'provider', 'manufacturer', 'company', 'vendors'
+    ],
+    'users': [
+        'users', 'user count', '# users', 'number of users', 'seats',
+        'licenses', 'license count', 'user', '# of users'
+    ],
+    'category': [
+        'category', 'type', 'classification', 'domain', 'function', 'categories'
+    ],
+    'entity': [
+        'entity', 'company', 'organization', 'owner', 'entities'
+    ],
+    'version': [
+        'version', 'ver', 'release', 'v', 'versions'
+    ],
+    'cost': [
+        'cost', 'price', 'annual cost', 'yearly cost', 'spend', 'budget',
+        'costs', 'annual spend', 'yearly spend'
+    ],
+    'hosting': [
+        'hosting', 'deployment', 'location', 'environment', 'hosted by'
+    ],
+    'criticality': [
+        'criticality', 'critical', 'priority', 'importance', 'risk'
+    ]
+}
+
+
+def match_header(candidate: str, target_field: str) -> float:
+    """
+    Match header using synonym matching and fuzzy string similarity.
+
+    Args:
+        candidate: Raw header from document
+        target_field: Canonical field name (e.g., "application")
+
+    Returns:
+        Confidence score 0.0-1.0
+    """
+    candidate = normalize_unicode(candidate.lower())
+
+    # Check exact match
+    if candidate == target_field:
+        return 1.0
+
+    # Check synonym list
+    synonyms = HEADER_SYNONYMS.get(target_field, [])
+    if candidate in synonyms:
+        return 0.95
+
+    # Partial match (contains)
+    for synonym in synonyms:
+        if synonym in candidate or candidate in synonym:
+            return 0.7
+
+    # Fuzzy string similarity (Levenshtein-based)
+    similarity = SequenceMatcher(None, candidate, target_field).ratio()
+    if similarity > 0.8:
+        return similarity
+
+    return 0.0  # No match
+
+
+def map_headers_to_fields(headers: List[str]) -> Dict[str, Tuple[str, float]]:
+    """
+    Map raw headers to canonical field names.
+
+    Args:
+        headers: Raw headers from document
+
+    Returns:
+        {canonical_field: (raw_header, confidence)}
+    """
+    mapping = {}
+
+    for field in HEADER_SYNONYMS.keys():
+        best_match = None
+        best_score = 0.0
+
+        for header in headers:
+            score = match_header(header, field)
+            if score > best_score:
+                best_score = score
+                best_match = header
+
+        if best_match and best_score > 0.6:  # Minimum confidence threshold
+            mapping[field] = (best_match, best_score)
+
+    return mapping
+
+
+def join_multiline_cells(rows: List[Dict]) -> List[Dict]:
+    """
+    Join rows where first column is empty (likely continuation).
+
+    Heuristic: If first column empty but others have content, append to previous row.
+
+    Args:
+        rows: Parsed table rows
+
+    Returns:
+        Rows with multi-line cells joined
+    """
+    if not rows:
+        return rows
+
+    first_col = list(rows[0].keys())[0]  # Assume first column is key column
+    joined_rows = []
+    current_row = None
+
+    for row in rows:
+        # If first column empty, likely continuation
+        if not row.get(first_col, '').strip():
+            if current_row:
+                # Append to previous row
+                for key, value in row.items():
+                    if value.strip():
+                        current_row[key] = current_row.get(key, '') + ' ' + value
+        else:
+            # New row
+            if current_row:
+                joined_rows.append(current_row)
+            current_row = row.copy()
+
+    # Add last row
+    if current_row:
+        joined_rows.append(current_row)
+
+    return joined_rows
+
+
+def calculate_extraction_quality(
+    headers: List[str],
+    header_mapping: Dict[str, Tuple[str, float]],
+    rows: List[Dict]
+) -> float:
+    """
+    Calculate extraction quality score based on:
+    - Header match confidence
+    - Row completeness (% non-empty cells)
+
+    Args:
+        headers: Raw headers
+        header_mapping: Result from map_headers_to_fields()
+        rows: Parsed table rows
+
+    Returns:
+        Quality score 0.0-1.0 (higher is better)
+    """
+    # Header match quality (average confidence)
+    if header_mapping:
+        header_score = sum(conf for _, conf in header_mapping.values()) / len(header_mapping)
+    else:
+        header_score = 0.0
+
+    # Row completeness (% cells filled)
+    total_cells = sum(len(row) for row in rows)
+    filled_cells = sum(1 for row in rows for v in row.values() if v and v.strip())
+    completeness = filled_cells / total_cells if total_cells > 0 else 0.0
+
+    # Overall quality (weighted average)
+    quality = (header_score * 0.7) + (completeness * 0.3)
+
+    return quality
+
+
 @dataclass
 class ParsedTable:
     """Represents a parsed markdown table"""
@@ -121,6 +421,7 @@ class ParsedTable:
     source_section: str = ""
     raw_text: str = ""
     entity: Optional[str] = None  # "target" or "buyer" - extracted from document context
+    extraction_quality: float = 1.0  # 0.0-1.0 quality score (Doc 02: Parser Robustness)
 
 
 @dataclass
@@ -272,8 +573,16 @@ def parse_markdown_table(table_text: str) -> Optional[ParsedTable]:
         return None
 
     # Parse header row
-    headers = _split_row(lines[0])
-    headers = [_normalize_header(h) for h in headers]
+    raw_headers = _split_row(lines[0])
+
+    # DOC 02: Unicode normalization (em-dashes, smart quotes, etc.)
+    raw_headers = [normalize_unicode(h) for h in raw_headers]
+
+    # DOC 02: Expand merged cells (empty headers after non-empty)
+    raw_headers, _ = expand_merged_cells(raw_headers, [])
+
+    # Normalize headers for matching
+    headers = [_normalize_header(h) for h in raw_headers]
 
     # Skip separator row (lines[1])
 
@@ -291,7 +600,10 @@ def parse_markdown_table(table_text: str) -> Optional[ParsedTable]:
         row_dict = {}
         for header, value in zip(headers, cells):
             if header:  # Skip empty headers
-                row_dict[header] = _clean_cell_value(value)
+                # DOC 02: Unicode normalization for cell values
+                cleaned_value = _clean_cell_value(value)
+                cleaned_value = normalize_unicode(cleaned_value)
+                row_dict[header] = cleaned_value
 
         if any(v for v in row_dict.values()):  # Skip completely empty rows
             rows.append(row_dict)
@@ -299,15 +611,35 @@ def parse_markdown_table(table_text: str) -> Optional[ParsedTable]:
     if not rows:
         return None
 
+    # DOC 02: Join multi-line cells (continuation rows)
+    rows = join_multiline_cells(rows)
+
+    # DOC 02: Calculate header mapping for quality score
+    header_mapping = map_headers_to_fields(headers)
+
+    # DOC 02: Calculate extraction quality
+    quality = calculate_extraction_quality(headers, header_mapping, rows)
+
+    # Log quality warnings
+    if quality < 0.7:
+        logger.warning(
+            f"Low extraction quality ({quality:.2f}) for table. "
+            f"Headers: {headers[:5]}... Manual review may be needed."
+        )
+
     return ParsedTable(
         headers=headers,
         rows=rows,
-        raw_text=table_text
+        raw_text=table_text,
+        extraction_quality=quality
     )
 
 
 def _normalize_header(header: str) -> str:
     """Normalize a header name for consistent matching"""
+    # DOC 02: Unicode normalization first
+    header = normalize_unicode(header)
+
     # Remove markdown formatting
     header = re.sub(r'\*+', '', header)  # Remove bold/italic markers
     header = header.strip().lower()
