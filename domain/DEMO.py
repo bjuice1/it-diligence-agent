@@ -1,242 +1,310 @@
 """
-DOMAIN MODEL DEMONSTRATION
-==========================
+DOMAIN MODEL DEMONSTRATION - KERNEL FOUNDATION
+===============================================
 
-This file demonstrates how the new domain-first architecture solves
-the duplication crisis.
+This file demonstrates the NEW kernel foundation (Worker 1).
 
-Run this with: python -m domain.DEMO
+The kernel provides shared primitives for ALL domains:
+- Entity enum (target vs buyer)
+- Observation schema (with validation)
+- Normalization rules (fixes P0-3 collision bug)
+- Entity inference (infer target/buyer from context)
+- Fingerprint generation (stable deterministic IDs)
+- Extraction coordination (prevents double-counting)
+
+Run this with:
+    export ENABLE_DOMAIN_MODEL=true
+    python -m domain.DEMO_NEW
 """
 
-from domain.value_objects.entity import Entity
-from domain.value_objects.application_id import ApplicationId
-from domain.value_objects.money import Money
-from domain.entities.observation import Observation
-from domain.entities.application import Application
+from datetime import datetime
+
+# NEW KERNEL IMPORTS (Worker 1)
+from domain.kernel.entity import Entity
+from domain.kernel.observation import Observation
+from domain.kernel.normalization import NormalizationRules
+from domain.kernel.entity_inference import EntityInference
+from domain.kernel.fingerprint import FingerprintGenerator
+from domain.kernel.extraction import ExtractionCoordinator
+
+
+def demo_entity_enum():
+    """Demonstrate Entity enum (target vs buyer)."""
+    print("\n" + "="*70)
+    print("DEMO 1: Entity Enum - Single Source of Truth")
+    print("="*70)
+
+    # Create entities
+    target = Entity.TARGET
+    buyer = Entity.BUYER
+
+    print(f"\nTarget entity: {target}")
+    print(f"Buyer entity: {buyer}")
+    print(f"String conversion: '{str(target)}' and '{str(buyer)}'")
+
+    # Case-insensitive parsing
+    parsed = Entity.from_string("TARGET")
+    print(f"\nParsed from 'TARGET': {parsed}")
+    print(f"Matches Entity.TARGET: {parsed == Entity.TARGET}")
+
+
+def demo_p03_fix():
+    """Demonstrate P0-3 fix: SAP ERP vs SAP SuccessFactors no longer collide."""
+    print("\n" + "="*70)
+    print("DEMO 2: P0-3 Fix - Normalization Collision Bug FIXED")
+    print("="*70)
+
+    # The bug: "SAP ERP" and "SAP SuccessFactors" both normalized to "sap"
+    # The fix: Vendor-aware normalization with whitelist-based suffix removal
+
+    name1 = "SAP ERP"
+    name2 = "SAP SuccessFactors"
+
+    normalized1 = NormalizationRules.normalize_name(name1, "application")
+    normalized2 = NormalizationRules.normalize_name(name2, "application")
+
+    print(f"\n'{name1}' → '{normalized1}'")
+    print(f"'{name2}' → '{normalized2}'")
+    print(f"\n✅ Different normalized names: {normalized1 != normalized2}")
+    print("   (Old system: both → 'sap', causing collision)")
+
+    # More examples
+    examples = [
+        ("Salesforce CRM", "salesforce"),
+        ("Microsoft Dynamics 365", "microsoft dynamics 365"),
+        ("Oracle E-Business Suite", "oracle ebusiness suite"),
+    ]
+
+    print("\nMore normalization examples:")
+    for raw, expected in examples:
+        result = NormalizationRules.normalize_name(raw, "application")
+        print(f"  '{raw}' → '{result}'")
 
 
 def demo_stable_ids():
-    """Demonstrate stable ID generation."""
+    """Demonstrate stable ID generation with vendor in fingerprint."""
     print("\n" + "="*70)
-    print("DEMO 1: Stable ID Generation")
+    print("DEMO 3: Stable Deterministic IDs (Format: APP-TARGET-hash)")
     print("="*70)
 
     # Same name variants generate same ID
-    id1 = ApplicationId.generate("Salesforce", Entity.TARGET)
-    id2 = ApplicationId.generate("Salesforce CRM", Entity.TARGET)
-    id3 = ApplicationId.generate("SALESFORCE", Entity.TARGET)
+    name1 = "Salesforce"
+    name2 = "Salesforce CRM"  # Suffix removed
+    name3 = "SALESFORCE"      # Case normalized
 
-    print(f"\n'Salesforce' → {id1.value}")
-    print(f"'Salesforce CRM' → {id2.value}")
-    print(f"'SALESFORCE' → {id3.value}")
-    print(f"\nAll IDs match: {id1 == id2 == id3}")
+    id1 = FingerprintGenerator.generate(
+        normalized_name=NormalizationRules.normalize_name(name1, "application"),
+        original_name=name1,
+        entity=Entity.TARGET,
+        domain_prefix="APP"
+    )
+    id2 = FingerprintGenerator.generate(
+        normalized_name=NormalizationRules.normalize_name(name2, "application"),
+        original_name=name2,
+        entity=Entity.TARGET,
+        domain_prefix="APP"
+    )
+    id3 = FingerprintGenerator.generate(
+        normalized_name=NormalizationRules.normalize_name(name3, "application"),
+        original_name=name3,
+        entity=Entity.TARGET,
+        domain_prefix="APP"
+    )
+
+    print(f"\n'{name1}' → {id1}")
+    print(f"'{name2}' → {id2}")
+    print(f"'{name3}' → {id3}")
+    print(f"\n✅ All IDs match: {id1 == id2 == id3}")
 
     # Different entity = different ID
-    id_buyer = ApplicationId.generate("Salesforce", Entity.BUYER)
-    print(f"\nBuyer 'Salesforce' → {id_buyer.value}")
-    print(f"Different from Target: {id1 != id_buyer}")
-
-
-def demo_deduplication():
-    """Demonstrate how find_or_create prevents duplicates."""
-    print("\n" + "="*70)
-    print("DEMO 2: Automatic Deduplication (Conceptual)")
-    print("="*70)
-
-    # In real code, this would use ApplicationRepository.find_or_create()
-    # Here we simulate it manually
-
-    # First extraction: deterministic parser finds "Salesforce" in table
-    app_id = ApplicationId.generate("Salesforce", Entity.TARGET)
-
-    app = Application(
-        id=app_id,
-        entity=Entity.TARGET,
-        name="Salesforce"
-    )
-
-    # Add observation from table
-    table_obs = Observation.from_table(
-        source_document="inventory.xlsx",
-        extracted_data={"vendor": "Salesforce.com", "cost": 50000}
-    )
-    app.add_observation(table_obs)
-
-    print(f"\n1. Parser created: {app}")
-    print(f"   Observations: {app.observation_count}")
-    print(f"   Vendor: {app.vendor}")
-    print(f"   Cost: {app.cost.format() if app.cost else 'None'}")
-
-    # Second extraction: LLM finds "Salesforce CRM" in prose
-    # With OLD architecture: creates duplicate
-    # With NEW architecture: find_or_create returns SAME app
-
-    # Generate ID from "Salesforce CRM"
-    llm_app_id = ApplicationId.generate("Salesforce CRM", Entity.TARGET)
-
-    print(f"\n2. LLM tries to create from 'Salesforce CRM'")
-    print(f"   Generated ID: {llm_app_id.value}")
-    print(f"   Matches existing: {llm_app_id == app_id}")
-
-    # Since IDs match, find_or_create would return existing app
-    # We just add the LLM observation to the SAME app
-
-    llm_obs = Observation.from_llm(
-        source_document="diligence.pdf",
-        extracted_data={"users": 100, "criticality": "high"},
-        confidence=0.8
-    )
-    app.add_observation(llm_obs)
-
-    print(f"\n3. Added LLM observation to EXISTING app (no duplicate!)")
-    print(f"   Observations: {app.observation_count}")
-    print(f"   Has table data: {app.has_table_data}")
-    print(f"   Has LLM data: {app.has_llm_data}")
-
-    print(f"\nFINAL RESULT: 1 app with {app.observation_count} observations")
-    print(f"  OLD ARCHITECTURE: Would have created 2 apps")
-    print(f"  NEW ARCHITECTURE: Single app, no duplicates ✓")
-
-
-def demo_data_quality():
-    """Demonstrate data quality scoring and observation ranking."""
-    print("\n" + "="*70)
-    print("DEMO 3: Data Quality & Observation Ranking")
-    print("="*70)
-
-    app = Application(
-        id=ApplicationId.generate("SAP ERP", Entity.TARGET),
-        entity=Entity.TARGET,
-        name="SAP ERP"
-    )
-
-    # Low confidence LLM observation
-    low_confidence_obs = Observation.from_llm(
-        source_document="notes.txt",
-        extracted_data={"vendor": "SAP??", "cost": "~100k"},  # Uncertain data
-        confidence=0.5
-    )
-    app.add_observation(low_confidence_obs)
-
-    print(f"\nAfter low-confidence observation:")
-    print(f"  Vendor: {app.vendor}")
-    print(f"  Data quality: {app.data_quality_score:.2f}")
-
-    # High confidence table observation (should override)
-    high_confidence_obs = Observation.from_table(
-        source_document="contracts.xlsx",
-        extracted_data={"vendor": "SAP SE", "cost": 125000}  # Precise data
-    )
-    app.add_observation(high_confidence_obs)
-
-    print(f"\nAfter high-confidence table observation:")
-    print(f"  Vendor: {app.vendor}  (table data won!)")
-    print(f"  Cost: {app.cost.format() if app.cost else 'None'}")
-    print(f"  Data quality: {app.data_quality_score:.2f}  (improved!)")
-
-
-def demo_entity_isolation():
-    """Demonstrate target/buyer entity isolation."""
-    print("\n" + "="*70)
-    print("DEMO 4: Entity Isolation (Target vs Buyer)")
-    print("="*70)
-
-    # Same app name, different entities = different IDs
-    target_app = Application(
-        id=ApplicationId.generate("Workday", Entity.TARGET),
-        entity=Entity.TARGET,
-        name="Workday"
-    )
-
-    buyer_app = Application(
-        id=ApplicationId.generate("Workday", Entity.BUYER),
+    id_buyer = FingerprintGenerator.generate(
+        normalized_name=NormalizationRules.normalize_name(name1, "application"),
+        original_name=name1,
         entity=Entity.BUYER,
-        name="Workday"
+        domain_prefix="APP"
     )
 
-    print(f"\nTarget Workday: {target_app.id.value}")
-    print(f"Buyer Workday:  {buyer_app.id.value}")
-    print(f"IDs are different: {target_app.id != buyer_app.id}")
-    print(f"\nDuplication check: {target_app.is_duplicate_of(buyer_app)}")
-    print(f"  → False (different entities cannot be duplicates)")
+    print(f"\nBuyer '{name1}' → {id_buyer}")
+    print(f"✅ Different from Target: {id1 != id_buyer}")
+
+    # Parse ID back
+    parsed = FingerprintGenerator.parse_domain_id(id1)
+    print(f"\nParsed ID components:")
+    print(f"  Domain: {parsed['domain_prefix']}")
+    print(f"  Entity: {parsed['entity']}")
+    print(f"  Hash: {parsed['hash']}")
 
 
-def demo_value_objects():
-    """Demonstrate value object immutability and validation."""
+def demo_entity_inference():
+    """Demonstrate entity inference from context."""
     print("\n" + "="*70)
-    print("DEMO 5: Value Object Safety")
+    print("DEMO 4: Entity Inference - Infer Target vs Buyer from Context")
     print("="*70)
 
-    # Money value object
-    cost1 = Money.from_float(50000, status="known")
-    cost2 = Money.from_float(25000, status="estimated")
+    contexts = [
+        "Target Company - IT Landscape",
+        "Our Current Infrastructure",
+        "Acquisition Target Applications",
+        "Buyer Systems Overview",
+        "Applications Inventory",  # Ambiguous - defaults to target
+    ]
 
-    print(f"\nCost 1: {cost1.format()} ({cost1.status})")
-    print(f"Cost 2: {cost2.format()} ({cost2.status})")
+    print("\nInferring entity from document context:")
+    for context in contexts:
+        entity, confidence = EntityInference.infer_with_confidence(context)
+        print(f"  '{context}'")
+        print(f"    → {entity} (confidence: {confidence:.1f})")
 
-    total = cost1 + cost2
-    print(f"Total:  {total.format()} ({total.status})")
 
-    # Try to modify (will fail - frozen dataclass)
+def demo_observation_schema():
+    """Demonstrate comprehensive observation schema with validation."""
+    print("\n" + "="*70)
+    print("DEMO 5: Observation Schema - Validated, Entity-Aware")
+    print("="*70)
+
+    # Create valid observation
+    obs = Observation(
+        source_type="table",
+        confidence=0.95,
+        evidence="Page 5, Applications table, row 3",
+        extracted_at=datetime.now(),
+        deal_id="deal-abc123",
+        entity=Entity.TARGET,
+        data={
+            "name": "Salesforce",
+            "cost": 50000,
+            "users": 100,
+            "vendor": "Salesforce"
+        }
+    )
+
+    print(f"\n✅ Valid observation created:")
+    print(f"   Source: {obs.source_type}")
+    print(f"   Confidence: {obs.confidence}")
+    print(f"   Entity: {obs.entity}")
+    print(f"   Deal: {obs.deal_id}")
+    print(f"   Data: {obs.data}")
+
+    # Priority scoring (for conflict resolution)
+    print(f"\n   Priority score: {obs.get_priority_score()}")
+    print(f"   (manual=4, table=3, llm_prose=2, llm_assumption=1)")
+
+    # Validation prevents bad data
+    print("\n⚠️  Validation catches errors:")
     try:
-        total.amount = 100000
-        print("ERROR: Money was mutable!")
-    except Exception as e:
-        print(f"\n✓ Money is immutable (as expected)")
-        print(f"  Attempted modification raised: {type(e).__name__}")
-
-    # Entity validation
-    try:
-        entity = Entity.from_string("invalid")
-        print("ERROR: Invalid entity accepted!")
+        bad_obs = Observation(
+            source_type="table",
+            confidence=1.5,  # ❌ Invalid! Must be 0.0-1.0
+            evidence="test",
+            extracted_at=datetime.now(),
+            deal_id="deal-123",
+            entity=Entity.TARGET,
+            data={}
+        )
     except ValueError as e:
-        print(f"\n✓ Entity validates input")
-        print(f"  Rejected 'invalid': {e}")
+        print(f"   ❌ Caught: {e}")
+
+    try:
+        missing_entity = Observation(
+            source_type="table",
+            confidence=0.9,
+            evidence="test",
+            extracted_at=datetime.now(),
+            deal_id="deal-123",
+            entity=None,  # ❌ Invalid! Entity required
+            data={}
+        )
+    except (ValueError, TypeError) as e:
+        print(f"   ❌ Caught: Entity must be provided")
+
+
+def demo_extraction_coordinator():
+    """Demonstrate extraction coordination (prevents double-counting)."""
+    print("\n" + "="*70)
+    print("DEMO 6: Extraction Coordination - Prevents Double-Counting")
+    print("="*70)
+
+    coordinator = ExtractionCoordinator()
+
+    # Scenario: Multiple domains extract from same document
+    doc_id = "IT_Landscape.pdf"
+
+    # Application domain extracts "Salesforce"
+    coordinator.mark_extracted(doc_id, "application", "salesforce")
+    print(f"\n✅ Application domain extracted 'Salesforce' from {doc_id}")
+
+    # Check if already extracted
+    already = coordinator.already_extracted(doc_id, "application", "salesforce")
+    print(f"   Already extracted by application? {already}")
+
+    # Infrastructure domain tries to extract same app
+    already_by_any = coordinator.already_extracted_by_any_domain(doc_id, "salesforce")
+    extracting_domain = coordinator.get_extracting_domain(doc_id, "salesforce")
+
+    print(f"\n⚠️  Infrastructure domain checks before extracting 'Salesforce':")
+    print(f"   Already extracted by any domain? {already_by_any}")
+    print(f"   Extracting domain: {extracting_domain}")
+    print(f"   ✅ Infrastructure skips (prevents duplicate)")
+
+    # Stats
+    print(f"\n📊 Extraction stats:")
+    print(f"   Total items extracted from {doc_id}: {coordinator.get_extracted_count(doc_id)}")
+    print(f"   By application domain: {coordinator.get_extracted_count(doc_id, 'application')}")
+
+
+def demo_p02_fix():
+    """Demonstrate P0-2 fix: Circuit breaker for reconciliation."""
+    print("\n" + "="*70)
+    print("DEMO 7: P0-2 Fix - Circuit Breaker for O(n²) Reconciliation")
+    print("="*70)
+
+    from domain.kernel.repository import DomainRepository
+
+    print(f"\n✅ Circuit breaker constant:")
+    print(f"   MAX_ITEMS_FOR_RECONCILIATION = {DomainRepository.MAX_ITEMS_FOR_RECONCILIATION}")
+    print(f"\n   If repository has > 500 items:")
+    print(f"     - Reconciliation skipped (would be O(n²) → too slow)")
+    print(f"     - Uses database fuzzy search instead (O(n log n))")
+    print(f"     - Prevents 5+ minute reconciliation times")
+
+    print(f"\n   Old system: No limit → 1000 items = 500,000 comparisons")
+    print(f"   New system: Circuit breaker → skips to DB search")
 
 
 def main():
-    """Run all demos."""
-    print("\n" + "╔" + "="*68 + "╗")
-    print("║" + " "*15 + "DOMAIN MODEL DEMONSTRATION" + " "*27 + "║")
-    print("╚" + "="*68 + "╝")
+    """Run all demonstrations."""
+    print("\n" + "="*70)
+    print("🎯 KERNEL FOUNDATION DEMONSTRATION")
+    print("   Worker 1 - Shared Primitives for All Domains")
+    print("="*70)
 
+    demo_entity_enum()
+    demo_p03_fix()
     demo_stable_ids()
-    demo_deduplication()
-    demo_data_quality()
-    demo_entity_isolation()
-    demo_value_objects()
+    demo_entity_inference()
+    demo_observation_schema()
+    demo_extraction_coordinator()
+    demo_p02_fix()
 
     print("\n" + "="*70)
-    print("SUMMARY: How This Fixes The Duplication Crisis")
+    print("✅ KERNEL DEMONSTRATION COMPLETE")
     print("="*70)
-    print("""
-OLD ARCHITECTURE (Current):
-  Deterministic Parser → InventoryStore (ID: I-APP-abc123)
-  LLM Discovery → FactStore → Promotion → InventoryStore (ID: I-APP-def456)
-  RESULT: 2 Salesforce entries (143 apps, should be ~60)
-
-NEW ARCHITECTURE (This Demo):
-  Deterministic Parser → Application (ID: app_a3f291cd_target)
-  LLM Discovery → SAME Application.add_observation()
-  RESULT: 1 Salesforce with 2 observations (correct count!)
-
-KEY INNOVATIONS:
-  ✓ Stable, deterministic IDs (same name → same ID)
-  ✓ Single source of truth (Application, not FactStore + InventoryStore)
-  ✓ Observations are PART OF Application (composition, not separate store)
-  ✓ Repository.find_or_create() enforces deduplication
-  ✓ Database UNIQUE constraint prevents duplicates at lowest level
-
-MIGRATION PATH:
-  Week 1: Domain model (THIS CODE)
-  Week 2: PostgreSQL repository implementation
-  Week 3: Update analysis pipeline to use domain model
-  Week 4: Update UI to read from ApplicationRepository
-  Week 5-6: Testing, migration, cutover
-""")
-
-    print("="*70)
+    print("\nNext: Worker 2 will build Application domain using these primitives")
+    print("      Worker 3 will build Infrastructure domain")
+    print("      Worker 4 will build Organization domain")
+    print("\nAll domains will use THE SAME kernel primitives (single source of truth)")
+    print("="*70 + "\n")
 
 
 if __name__ == "__main__":
-    main()
+    from domain.guards import ExperimentalGuard
+
+    # Require experimental mode
+    try:
+        ExperimentalGuard.require_experimental_mode()
+        main()
+    except RuntimeError as e:
+        print(f"\n⚠️  {e}\n")
+        print("To run this demo:")
+        print("  export ENABLE_DOMAIN_MODEL=true")
+        print("  python -m domain.DEMO_NEW\n")
