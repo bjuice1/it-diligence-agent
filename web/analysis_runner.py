@@ -987,41 +987,31 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable, app=None) -> D
         session.overlaps_by_domain = {}
 
     # =========================================================================
-    # PHASE 3.7: FACT PROMOTION (Convert facts to inventory items)
+    # PHASE 3.7: FACT PROMOTION - DISABLED (Architectural Issue #1)
     # =========================================================================
-    progress_callback({"phase": AnalysisPhase.OVERLAP_GENERATION})  # Reuse progress phase
+    # ROLLBACK REASON: Promotion creates duplicates when combined with deterministic parser.
+    # Both pipelines write to InventoryStore with different fingerprints, causing
+    # double-counting (61 facts + 60 parser items = 143 total, should be ~60-70).
+    #
+    # ROOT CAUSE: Two parallel pipelines without reconciliation:
+    #   1. Deterministic parser (agents_v2/base_discovery_agent.py:229) → InventoryStore
+    #   2. LLM facts → promote_facts_to_inventory() → InventoryStore
+    #
+    # SOLUTION: Keep deterministic parser ONLY until proper reconciliation is built.
+    # See architectural analysis for long-term fix (domain-first redesign).
+    #
+    # TODO: Implement unified ingestion service that reconciles both sources.
+    # =========================================================================
 
-    logger.info("Starting Phase 3.7: Fact Promotion")
+    # DISABLED CODE (previously lines 989-1022):
+    # try:
+    #     from tools_v2.inventory_integration import promote_facts_to_inventory
+    #     for entity_val in ["target", "buyer"]:
+    #         promotion_stats = promote_facts_to_inventory(...)
+    # except Exception as e:
+    #     logger.error(f"Error in fact promotion: {e}")
 
-    try:
-        from tools_v2.inventory_integration import promote_facts_to_inventory
-
-        # Promote LLM-extracted facts to inventory items for both entities
-        for entity_val in ["target", "buyer"]:
-            promotion_stats = promote_facts_to_inventory(
-                fact_store=session.fact_store,
-                inventory_store=inventory_store,
-                entity=entity_val,
-            )
-            if promotion_stats["promoted"] > 0 or promotion_stats["matched"] > 0:
-                logger.info(
-                    f"[PROMOTION] {entity_val}: {promotion_stats['promoted']} new items, "
-                    f"{promotion_stats['matched']} matched to existing"
-                )
-
-        # Save inventory after promotion
-        if hasattr(session, '_inventory_store') and session._inventory_store:
-            try:
-                session._inventory_store.save()
-                logger.info(f"[PROMOTION] Saved {len(session._inventory_store)} inventory items after promotion")
-            except Exception as e:
-                logger.warning(f"Failed to save inventory after promotion: {e}")
-
-    except Exception as e:
-        logger.error(f"Error in fact promotion: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        # Non-fatal - continue to reasoning
+    logger.info("[PROMOTION] SKIPPED - Using deterministic parser output only (architectural fix pending)")
 
     # =========================================================================
     # PHASE 4: REASONING (PARALLEL)
