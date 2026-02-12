@@ -987,6 +987,43 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable, app=None) -> D
         session.overlaps_by_domain = {}
 
     # =========================================================================
+    # PHASE 3.7: FACT PROMOTION (Convert facts to inventory items)
+    # =========================================================================
+    progress_callback({"phase": AnalysisPhase.OVERLAP_GENERATION})  # Reuse progress phase
+
+    logger.info("Starting Phase 3.7: Fact Promotion")
+
+    try:
+        from tools_v2.inventory_integration import promote_facts_to_inventory
+
+        # Promote LLM-extracted facts to inventory items for both entities
+        for entity_val in ["target", "buyer"]:
+            promotion_stats = promote_facts_to_inventory(
+                fact_store=session.fact_store,
+                inventory_store=inventory_store,
+                entity=entity_val,
+            )
+            if promotion_stats["promoted"] > 0 or promotion_stats["matched"] > 0:
+                logger.info(
+                    f"[PROMOTION] {entity_val}: {promotion_stats['promoted']} new items, "
+                    f"{promotion_stats['matched']} matched to existing"
+                )
+
+        # Save inventory after promotion
+        if hasattr(session, '_inventory_store') and session._inventory_store:
+            try:
+                session._inventory_store.save()
+                logger.info(f"[PROMOTION] Saved {len(session._inventory_store)} inventory items after promotion")
+            except Exception as e:
+                logger.warning(f"Failed to save inventory after promotion: {e}")
+
+    except Exception as e:
+        logger.error(f"Error in fact promotion: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        # Non-fatal - continue to reasoning
+
+    # =========================================================================
     # PHASE 4: REASONING (PARALLEL)
     # =========================================================================
     progress_callback({"phase": AnalysisPhase.REASONING})
