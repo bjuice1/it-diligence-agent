@@ -375,3 +375,54 @@ class ApplicationRepository(DomainRepository[Application]):
     def __repr__(self) -> str:
         """String representation for debugging."""
         return f"ApplicationRepository({len(self._applications)} applications)"
+
+    # Helper methods required by kernel.DomainRepository (ABC)
+
+    def _get_item_name(self, item: Application) -> str:
+        """
+        Get item name for similarity search.
+
+        Args:
+            item: Application
+
+        Returns:
+            Normalized name
+        """
+        return item.name_normalized
+
+    def _get_item_id(self, item: Application) -> str:
+        """
+        Get item ID for deduplication check.
+
+        Args:
+            item: Application
+
+        Returns:
+            Application ID
+        """
+        return item.id
+
+    def _is_duplicate(self, item1: Application, item2: Application, threshold: float) -> bool:
+        """
+        Check if two applications are duplicates.
+
+        Args:
+            item1: First application
+            item2: Second application
+            threshold: Similarity threshold
+
+        Returns:
+            True if duplicates
+        """
+        return item1.is_duplicate_of(item2, threshold)
+
+    def _merge_items(self, target: Application, source: Application) -> None:
+        """
+        Merge source application into target.
+
+        Args:
+            target: Application to merge into
+            source: Application to merge from
+        """
+        target.merge(source)
+        self.save(target)
