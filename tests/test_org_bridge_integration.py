@@ -337,6 +337,63 @@ class TestP0Fixes:
         # Assert - old assumptions restored
         assert len(fact_store.facts) == original_count
 
+    def test_p0_fix_list_identity_preserved_on_rollback(self):
+        """Test that list identity is preserved during rollback (P0-1 fix)."""
+        # Arrange
+        fact_store = FactStore(deal_id="test-deal")
+
+        # Add some observed facts
+        for i in range(3):
+            fact_store.add_fact(
+                domain="organization",
+                category="roles",
+                item=f"Observed Role {i}",
+                details={'observed': True},
+                status="documented",
+                evidence={'exact_quote': f'Role {i}'},
+                entity="target"
+            )
+
+        # Add old assumptions
+        for i in range(2):
+            fact_store.add_fact(
+                domain="organization",
+                category="leadership",
+                item=f"Old Assumption {i}",
+                details={'data_source': 'assumed'},
+                status="documented",
+                evidence={'exact_quote': 'Old'},
+                entity="target"
+            )
+
+        # Capture external reference to facts list BEFORE rollback
+        facts_list_ref = fact_store.facts
+        original_list_id = id(fact_store.facts)
+
+        # Mock assumption merge to fail (triggers rollback path)
+        with patch('services.organization_bridge._merge_assumptions_into_fact_store') as mock_merge:
+            mock_merge.side_effect = ValueError("Simulated merge failure")
+
+            # Act - trigger rollback by attempting to build with assumptions
+            try:
+                build_organization_from_facts(
+                    fact_store,
+                    entity="target",
+                    enable_assumptions=True,
+                    company_profile={'industry': 'technology', 'headcount': 50}
+                )
+            except Exception:
+                pass  # Expected to fail
+
+        # Assert - list identity is preserved (critical for thread safety)
+        assert id(fact_store.facts) == original_list_id, \
+            "FactStore.facts list was replaced during rollback, breaking external references"
+        assert facts_list_ref is fact_store.facts, \
+            "External reference to facts list became stale after rollback"
+
+        # Assert - facts are intact (observed + old assumptions restored)
+        assert len(fact_store.facts) == 5  # 3 observed + 2 old assumptions
+
 
 class TestSignatureBackwardCompatibility:
     """Test backward compatibility of new signature (P0 fix #7)."""

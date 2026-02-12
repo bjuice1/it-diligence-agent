@@ -264,13 +264,14 @@ def build_organization_from_facts(
                                     f"Rollback may be incomplete."
                                 )
 
-                            # Remove failed merge attempts
-                            fact_store.facts = [
+                            # Remove failed merge attempts (use in-place modification to preserve list identity)
+                            facts_to_keep = [
                                 f for f in fact_store.facts
                                 if not (f.domain == "organization" and
                                         f.entity == entity and
                                         (f.details or {}).get('data_source') == 'assumed')
                             ]
+                            fact_store.facts[:] = facts_to_keep
 
                             # Restore backup
                             fact_store.facts.extend(old_assumptions_backup)
@@ -1143,6 +1144,17 @@ def _remove_old_assumptions_from_fact_store(
         Number of assumptions removed
     """
     original_count = len(fact_store.facts)
+
+    # Defensive check: warn if any org facts have None details (prevents silent filter bugs)
+    none_details_count = sum(
+        1 for f in fact_store.facts
+        if f.domain == "organization" and f.entity == entity and f.details is None
+    )
+    if none_details_count > 0:
+        logger.warning(
+            f"Found {none_details_count} organization facts for {entity} with details=None. "
+            f"These facts may not be filtered correctly. This indicates a data integrity issue."
+        )
 
     # In-place removal to preserve list identity (thread-safe with lock)
     # Using list comprehension + slice assignment instead of reassignment
