@@ -5,8 +5,25 @@
 PORT=${PORT:-8080}
 
 echo "Starting IT Diligence Agent on port $PORT"
-echo "Workers: 1 (for Railway)"
-echo "Timeout: 300s"
+
+# Run database migrations before starting app
+echo "Running database migrations..."
+if [ -n "$DATABASE_URL" ]; then
+    python -c "
+from web.app import app
+from web.database import create_all_tables
+import logging
+logging.basicConfig(level=logging.INFO)
+try:
+    create_all_tables(app)
+    print('✅ Database migrations complete')
+except Exception as e:
+    print(f'⚠️  Migration warning: {e}')
+    print('Continuing with startup...')
+"
+fi
+
+echo "Starting gunicorn..."
 
 # Start gunicorn with detailed logging
 exec gunicorn \
