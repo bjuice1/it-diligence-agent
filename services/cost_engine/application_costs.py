@@ -320,3 +320,165 @@ def get_complexity_multiplier(complexity: str) -> float:
 def get_deployment_multiplier(deployment_type: str) -> float:
     """Get multiplier for deployment type."""
     return DEPLOYMENT_TYPE_MULTIPLIERS.get(deployment_type.lower(), 1.0)
+
+
+# =============================================================================
+# PER-APPLICATION COST CALCULATION (Doc 04)
+# =============================================================================
+
+def calculate_application_cost(
+    app: 'InventoryItem',
+    deal_type: str,
+    tsa_duration_months: int = 12
+) -> 'ApplicationCost':
+    """
+    Calculate migration cost for single application using multi-tier model.
+
+    Args:
+        app: InventoryItem from inventory store
+        deal_type: 'acquisition' | 'carveout' | 'divestiture'
+        tsa_duration_months: TSA duration for carveouts (default 12)
+
+    Returns:
+        ApplicationCost with detailed breakdown
+    """
+    from services.cost_engine.models import ApplicationCost, get_deal_type_multiplier
+    from stores.app_category_mappings import get_category_cost_multiplier
+
+    # Classify complexity
+    complexity = classify_complexity(app)
+    complexity_multiplier = get_complexity_multiplier(complexity)
+
+    # Get category multiplier
+    category = app.data.get('category', 'unknown')
+    category_multiplier = get_category_cost_multiplier(category)
+
+    # Get deployment multiplier
+    deployment_type = detect_deployment_type(app)
+    deployment_multiplier = get_deployment_multiplier(deployment_type)
+
+    # Get deal type multiplier (from existing deal-type awareness system)
+    deal_multiplier = get_deal_type_multiplier(deal_type, 'application')
+
+    # Base cost calculation
+    base_cost = 20000  # $20K base per app
+    one_time_base = int(
+        base_cost *
+        complexity_multiplier *
+        category_multiplier *
+        deployment_multiplier *
+        deal_multiplier
+    )
+
+    # Integration costs
+    integration_costs_dict = calculate_integration_costs(app)
+    integration_total = integration_costs_dict['total_integration_cost']
+
+    # TSA costs (carveouts only)
+    tsa_result = calculate_tsa_cost(app, deal_type, tsa_duration_months)
+    tsa_total = tsa_result['total_tsa_cost']
+    tsa_monthly = tsa_result['tsa_monthly_cost']
+
+    # Total
+    one_time_total = one_time_base + integration_total
+    grand_total = one_time_total + tsa_total
+
+    return ApplicationCost(
+        app_name=app.data.get('name', 'Unknown'),
+        app_id=app.item_id,
+        complexity=complexity,
+        category=category,
+        deployment_type=deployment_type,
+        one_time_base=one_time_base,
+        integration_costs=integration_costs_dict,
+        integration_total=integration_total,
+        tsa_monthly=tsa_monthly,
+        tsa_total=tsa_total,
+        one_time_total=one_time_total,
+        grand_total=grand_total,
+        cost_breakdown={
+            'base_cost': base_cost,
+            'complexity': complexity,
+            'complexity_multiplier': complexity_multiplier,
+            'category': category,
+            'category_multiplier': category_multiplier,
+            'deployment_type': deployment_type,
+            'deployment_multiplier': deployment_multiplier,
+            'deal_type': deal_type,
+            'deal_multiplier': deal_multiplier,
+            'one_time_base': one_time_base,
+            **integration_costs_dict,
+            'tsa_monthly': tsa_monthly,
+            'tsa_total': tsa_total,
+            'tsa_duration_months': tsa_duration_months
+        }
+    )
+
+
+# =============================================================================
+# AGGREGATE INVENTORY COST CALCULATION (Doc 04)
+# =============================================================================
+
+def calculate_application_costs_from_inventory(
+    inventory_store: 'InventoryStore',
+    deal_type: str = 'acquisition',
+    entity: str = 'target',
+    tsa_duration_months: int = 12
+) -> 'ApplicationCostSummary':
+    """
+    Calculate total application migration costs from inventory.
+
+    Args:
+        inventory_store: InventoryStore instance
+        deal_type: 'acquisition' | 'carveout' | 'divestiture'
+        entity: 'target' | 'buyer'
+        tsa_duration_months: TSA duration for carveouts (default 12)
+
+    Returns:
+        ApplicationCostSummary with per-app breakdown and totals
+    """
+    from services.cost_engine.models import ApplicationCostSummary
+
+    # Get all applications for entity
+    apps = inventory_store.get_items(
+        inventory_type='application',
+        entity=entity,
+        status='active'
+    )
+
+    if not apps:
+        return ApplicationCostSummary(
+            total_one_time=0,
+            total_tsa=0,
+            total_integration=0,
+            app_costs=[],
+            app_count=0,
+            deal_type=deal_type,
+            entity=entity
+        )
+
+    app_costs = []
+
+    for app in apps:
+        # Calculate cost for this application
+        app_cost = calculate_application_cost(
+            app=app,
+            deal_type=deal_type,
+            tsa_duration_months=tsa_duration_months
+        )
+        app_costs.append(app_cost)
+
+    # Aggregate
+    total_one_time = sum(ac.one_time_total for ac in app_costs)
+    total_tsa = sum(ac.tsa_total for ac in app_costs)
+    total_integration = sum(ac.integration_total for ac in app_costs)
+
+    return ApplicationCostSummary(
+        total_one_time=total_one_time,
+        total_tsa=total_tsa,
+        total_integration=total_integration,
+        app_costs=app_costs,
+        app_count=len(apps),
+        deal_type=deal_type,
+        entity=entity
+    )

@@ -396,6 +396,14 @@ EXPORT_HTML = True
 # Set to 'true' to enable deal type awareness
 DEAL_TYPE_AWARENESS_ENABLED = os.getenv('DEAL_TYPE_AWARENESS', 'true').lower() == 'true'
 
+# Application Inventory-Based Costing (Doc 04: Cost Engine Inventory Integration)
+# Controls whether application costs are calculated from InventoryStore (rich, per-app)
+# or from DealDrivers count-based approach (legacy $5K/app flat rate)
+#
+# Set to 'false' to use legacy count-based costing (DealDrivers.applications * $5K)
+# Set to 'true' to use inventory-based costing (per-app with complexity/category/deployment multipliers)
+APPLICATION_INVENTORY_COSTING_ENABLED = os.getenv('APPLICATION_INVENTORY_COSTING', 'true').lower() == 'true'
+
 
 # =============================================================================
 # ENVIRONMENT VALIDATION

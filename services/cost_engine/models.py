@@ -22,6 +22,61 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
+# APPLICATION COST DATA MODELS (Doc 04: Inventory Integration)
+# =============================================================================
+
+@dataclass
+class ApplicationCost:
+    """Cost estimate for single application (Doc 04)."""
+    app_name: str
+    app_id: str
+    complexity: str                    # simple/medium/complex/critical
+    category: str                      # erp, crm, collaboration, etc.
+    deployment_type: str               # saas, on_prem, hybrid, custom
+
+    # Costs
+    one_time_base: float              # Base migration cost (before integration)
+    integration_costs: Dict[str, float] = field(default_factory=dict)  # Breakdown of integration costs
+    integration_total: float = 0.0    # Sum of integration costs
+    tsa_monthly: float = 0.0           # Monthly TSA (carveouts only)
+    tsa_total: float = 0.0             # Total TSA over duration
+    one_time_total: float = 0.0        # Base + integration
+    grand_total: float = 0.0           # One-time + TSA
+
+    # Transparency
+    cost_breakdown: Dict[str, Any] = field(default_factory=dict)  # All multipliers and drivers
+
+
+@dataclass
+class ApplicationCostSummary:
+    """Aggregate application costs for a deal (Doc 04)."""
+    total_one_time: float           # Sum of all one-time costs
+    total_tsa: float                # Sum of all TSA costs
+    total_integration: float        # Sum of all integration costs
+    app_costs: List[ApplicationCost] = field(default_factory=list)  # Per-app breakdown
+    app_count: int = 0
+    deal_type: str = "acquisition"
+    entity: str = "target"
+
+    @property
+    def grand_total(self) -> float:
+        """Total cost (one-time + TSA)."""
+        return self.total_one_time + self.total_tsa
+
+    def get_apps_by_complexity(self) -> Dict[str, List[ApplicationCost]]:
+        """Group apps by complexity tier for reporting."""
+        from collections import defaultdict
+        by_complexity = defaultdict(list)
+        for app_cost in self.app_costs:
+            by_complexity[app_cost.complexity].append(app_cost)
+        return dict(by_complexity)
+
+    def get_top_cost_apps(self, n: int = 10) -> List[ApplicationCost]:
+        """Get N most expensive applications."""
+        return sorted(self.app_costs, key=lambda ac: ac.grand_total, reverse=True)[:n]
+
+
+# =============================================================================
 # ENUMS
 # =============================================================================
 
