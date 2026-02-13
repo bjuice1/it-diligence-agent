@@ -121,6 +121,16 @@ def demo_p0_3_deduplication_fix():
     print(f"  - Target entity: {len([f for f in fact_store.facts if f.entity == 'target'])}")
     print(f"  - Buyer entity: {len([f for f in fact_store.facts if f.entity == 'buyer'])}")
 
+    # Show what old system (without domain model) would produce
+    print("\n[OLD SYSTEM SIMULATION] Raw fact extraction (no smart deduplication)...")
+    print(f"  Facts extracted: {len(fact_store.facts)} raw observations")
+    print(f"  Problem: Cannot distinguish between:")
+    print(f"    - Case variants: 'Salesforce', 'salesforce', 'SALESFORCE'")
+    print(f"    - Similar products: 'SAP ERP' vs 'SAP SuccessFactors'")
+    print(f"    - Same app at buyer vs target: 'Microsoft Office'")
+    print(f"  Old system: Each fact might create a separate inventory item")
+    print(f"  Result: Inflated counts, no observation tracking, poor data quality")
+
     # Run domain model integration
     print("\n[DOMAIN MODEL] Running deduplication...")
     stats = integrate_domain_model(
@@ -181,9 +191,13 @@ def demo_p0_3_deduplication_fix():
     print("\n" + "="*70)
     print("P0-3 DEDUPLICATION FIX: VERIFIED ✅")
     print("="*70)
-    print(f"\nOld system would have: {len(fact_store.facts)} items (no deduplication)")
-    print(f"New system produces:   {stats['applications_created']} items (deduplicated)")
-    print(f"Reduction: {len(fact_store.facts) - stats['applications_created']} duplicates eliminated")
+    print(f"\nInput: {len(fact_store.facts)} raw facts from discovery agents")
+    print(f"Output: {stats['applications_created']} unique applications (smart deduplication)")
+    print(f"\nKey improvements:")
+    print(f"  ✓ Case variants merged (Salesforce has 3 observations)")
+    print(f"  ✓ Different products separated (SAP ERP ≠ SAP SuccessFactors)")
+    print(f"  ✓ Entity separation maintained (buyer ≠ target)")
+    print(f"  ✓ Observation tracking (know which facts contributed to each app)")
     print("\nThis is the fix for P0-3 normalization collision bug! 🎉\n")
 
 

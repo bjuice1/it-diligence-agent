@@ -259,15 +259,34 @@ def integrate_domain_model(
     Returns:
         Dict with integration statistics
     """
-    from domain.adapters.fact_store_adapter import FactStoreAdapter
-    from domain.adapters.inventory_adapter import InventoryAdapter
-    from domain.applications.repository import ApplicationRepository
-    from domain.infrastructure.repository import InfrastructureRepository
-    from domain.organization.repository import PersonRepository
-    from domain.kernel.entity import Entity
+    # Import domain model packages with error handling
+    try:
+        from domain.adapters.fact_store_adapter import FactStoreAdapter
+        from domain.adapters.inventory_adapter import InventoryAdapter
+        from domain.applications.repository import ApplicationRepository
+        from domain.infrastructure.repository import InfrastructureRepository
+        from domain.organization.repository import PersonRepository
+        from domain.kernel.entity import Entity
+    except ImportError as e:
+        logger.error("\n" + "="*60)
+        logger.error("DOMAIN MODEL INTEGRATION - IMPORT ERROR")
+        logger.error("="*60)
+        logger.error(f"Cannot import domain model packages: {e}")
+        logger.error("The domain model integration requires the 'domain' package.")
+        logger.error("Run without --use-domain-model flag or install missing packages.")
+        logger.error("="*60 + "\n")
+        # Return empty stats - graceful degradation
+        return {
+            "applications_created": 0,
+            "infrastructure_created": 0,
+            "people_created": 0,
+            "applications_synced": 0,
+            "infrastructure_synced": 0,
+            "people_synced": 0,
+        }
 
     logger.info("\n" + "="*60)
-    logger.info("DOMAIN MODEL INTEGRATION (Experimental)")
+    logger.info("DOMAIN MODEL INTEGRATION")
     logger.info("="*60)
 
     stats = {
