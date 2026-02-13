@@ -293,8 +293,8 @@ login_manager.login_view = 'auth.login'
 login_manager.login_message = 'Please log in to access this page.'
 login_manager.login_message_category = 'info'
 
-# Phase 3: Feature flag for auth backend
-AUTH_BACKEND = os.environ.get('AUTH_BACKEND', 'db').lower()
+# Phase 3: Feature flag for auth backend (already set at line 72, don't override)
+# AUTH_BACKEND is set earlier in the file to avoid database queries before init
 
 @login_manager.user_loader
 def load_user(user_id):
