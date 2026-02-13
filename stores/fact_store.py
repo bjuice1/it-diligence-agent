@@ -629,6 +629,9 @@ class FactStore:
             self.facts.append(fact)
             self._fact_index[fact_id] = fact  # Update index
 
+            # DIAGNOSTIC: Log fact addition with current count
+            logger.info(f"[FACT STORE] Added fact {fact_id} to store (total facts: {len(self.facts)}), domain={fact.domain}, category={fact.category}, entity={fact.entity}, item='{fact.item}'")
+
             # P1 FIX #5: Update assumed facts index for O(1) idempotency checks
             if fact.domain == "organization" and (fact.details or {}).get('data_source') == 'assumed':
                 if entity not in self._assumed_fact_keys_by_entity:

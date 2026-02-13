@@ -24,6 +24,15 @@ from difflib import SequenceMatcher
 from utils.cost_status_inference import infer_cost_status
 from utils.cost_status_inference import normalize_numeric  # For test verification
 
+# Import duplicate detection (P0 deduplication fix)
+from tools_v2.discovery_tools import _check_fact_duplicate
+
+# Import duplicate detection config
+try:
+    from config_v2 import ENABLE_DUPLICATE_DETECTION
+except ImportError:
+    ENABLE_DUPLICATE_DETECTION = True  # Default to enabled
+
 logger = logging.getLogger(__name__)
 
 
@@ -970,8 +979,21 @@ def _app_table_to_facts(
             print(f"[VENDOR FIX] Normalized '{item_name}': '{details.get('vendor', 'N/A')}' → '{canonical_vendor}'")
             logger.info(f"Vendor normalized: {item_name} | Table: '{details.get('vendor', 'N/A')}' → Canonical: '{canonical_vendor}'")
 
-        # Add to FactStore
+        # Add to FactStore (with duplicate detection - P0 fix)
         try:
+            # P0 FIX: Check for duplicates before adding (deterministic parser was bypassing this)
+            if ENABLE_DUPLICATE_DETECTION:
+                duplicate = _check_fact_duplicate(
+                    fact_store=fact_store,
+                    domain="applications",
+                    category=category,
+                    item=item_name,
+                    entity=entity
+                )
+                if duplicate:
+                    logger.info(f"[DETERMINISTIC PARSER] Skipping duplicate: {item_name} (matches {duplicate['fact_id']})")
+                    continue  # Skip this row, it's a duplicate
+
             fact_id = fact_store.add_fact(
                 domain="applications",
                 category=category,
@@ -1108,6 +1130,19 @@ def _infra_table_to_facts(
         }
 
         try:
+            # P0 FIX: Check for duplicates before adding
+            if ENABLE_DUPLICATE_DETECTION:
+                duplicate = _check_fact_duplicate(
+                    fact_store=fact_store,
+                    domain="infrastructure",
+                    category=category,
+                    item=item_name,
+                    entity=entity
+                )
+                if duplicate:
+                    logger.info(f"[DETERMINISTIC PARSER] Skipping duplicate: {item_name} (matches {duplicate['fact_id']})")
+                    continue
+
             fact_id = fact_store.add_fact(
                 domain="infrastructure",
                 category=category,
@@ -1192,11 +1227,25 @@ def _contract_table_to_facts(
         }
 
         try:
+            # P0 FIX: Check for duplicates before adding
+            contract_item = f"{item_name} Contract"
+            if ENABLE_DUPLICATE_DETECTION:
+                duplicate = _check_fact_duplicate(
+                    fact_store=fact_store,
+                    domain="organization",
+                    category="outsourcing",
+                    item=contract_item,
+                    entity=entity
+                )
+                if duplicate:
+                    logger.info(f"[DETERMINISTIC PARSER] Skipping duplicate: {contract_item} (matches {duplicate['fact_id']})")
+                    continue
+
             # Contracts could go to applications (SaaS) or organization (vendor management)
             fact_id = fact_store.add_fact(
                 domain="organization",
                 category="outsourcing",
-                item=f"{item_name} Contract",
+                item=contract_item,
                 details=details,
                 status="documented",
                 evidence=evidence,
@@ -1362,6 +1411,19 @@ def _org_table_to_facts(
         }
 
         try:
+            # P0 FIX: Check for duplicates before adding
+            if ENABLE_DUPLICATE_DETECTION:
+                duplicate = _check_fact_duplicate(
+                    fact_store=fact_store,
+                    domain="organization",
+                    category=category,
+                    item=item_name,
+                    entity=entity
+                )
+                if duplicate:
+                    logger.info(f"[DETERMINISTIC PARSER] Skipping duplicate: {item_name} (matches {duplicate['fact_id']})")
+                    continue
+
             fact_id = fact_store.add_fact(
                 domain="organization",
                 category=category,

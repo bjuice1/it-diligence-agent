@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from stores.fact_store import FactStore
 
 # Import config values
+_config_import_success = False
 try:
     from config_v2 import (
         DUPLICATE_SIMILARITY_THRESHOLD,
@@ -26,17 +27,25 @@ try:
         ENABLE_DUPLICATE_DETECTION,
         ENABLE_FACT_VALIDATION
     )
-except ImportError:
+    _config_import_success = True
+except ImportError as e:
     # Fallback defaults if config not available
     DUPLICATE_SIMILARITY_THRESHOLD = 0.85
     MIN_EVIDENCE_QUOTE_LENGTH = 10
     ENABLE_DUPLICATE_DETECTION = True
     ENABLE_FACT_VALIDATION = False
+    _config_import_error = str(e)
 
 # Import shared cost status utility
 from utils.cost_status_inference import infer_cost_status, normalize_numeric
 
 logger = logging.getLogger(__name__)
+
+# DIAGNOSTIC: Log config import status
+if _config_import_success:
+    logger.info(f"[CONFIG] Successfully loaded config: ENABLE_DUPLICATE_DETECTION={ENABLE_DUPLICATE_DETECTION}, threshold={DUPLICATE_SIMILARITY_THRESHOLD}")
+else:
+    logger.error(f"[CONFIG] Failed to import from config_v2: {_config_import_error}, using fallback defaults: ENABLE_DUPLICATE_DETECTION={ENABLE_DUPLICATE_DETECTION}")
 
 # =============================================================================
 # DOMAIN CONFIGURATION
@@ -381,6 +390,16 @@ def _check_fact_duplicate(
         Duplicates are only checked within the same entity.
         The same item can exist for both target and buyer.
     """
+    # DIAGNOSTIC: Log entry to duplicate check
+    logger.info(f"[DEDUP CHECK] Checking for duplicates: item='{item}', entity={entity}, domain={domain}, category={category}")
+    logger.info(f"[DEDUP CHECK] fact_store.facts contains {len(fact_store.facts)} facts")
+
+    # DIAGNOSTIC: Log facts in same domain/category/entity
+    matching_context = [f for f in fact_store.facts if f.domain == domain and f.category == category and f.entity == entity]
+    logger.info(f"[DEDUP CHECK] Found {len(matching_context)} facts with same domain/category/entity")
+    if matching_context:
+        logger.info(f"[DEDUP CHECK] Existing items in this context: {[f.item for f in matching_context[:5]]}")
+
     # Get facts from same domain, category, AND entity
     for fact in fact_store.facts:
         if fact.domain != domain:
@@ -400,14 +419,18 @@ def _check_fact_duplicate(
 
         # Exact match
         if existing_item == new_item:
+            # DIAGNOSTIC: Log exact match detection
+            logger.info(f"[DEDUP CHECK] EXACT MATCH FOUND: '{item}' matches existing fact {fact.fact_id}")
             return fact.to_dict()
 
         # Fuzzy match
         similarity = SequenceMatcher(None, existing_item, new_item).ratio()
         if similarity >= threshold:
-            logger.info(f"Duplicate detected: '{item}' similar to '{fact.item}' ({similarity:.2f}) [entity={entity}]")
+            logger.info(f"[DEDUP CHECK] FUZZY MATCH FOUND: '{item}' similar to '{fact.item}' ({similarity:.2f}) [entity={entity}]")
             return fact.to_dict()
 
+    # DIAGNOSTIC: Log when no duplicate found
+    logger.info(f"[DEDUP CHECK] NO DUPLICATE FOUND for '{item}'")
     return None
 
 
@@ -618,13 +641,23 @@ def _execute_create_inventory_entry(
 
         # Check for duplicates (if enabled) - also check entity to allow same item for both
         if ENABLE_DUPLICATE_DETECTION:
+            # DIAGNOSTIC: Log that duplicate detection is enabled
+            logger.info(f"[CREATE FACT] Duplicate detection ENABLED, checking for '{item}'")
             duplicate = _check_fact_duplicate(fact_store, domain, category, item, entity=entity)
             if duplicate:
+                # DIAGNOSTIC: Log that creation was blocked
+                logger.info(f"[CREATE FACT] BLOCKED by duplicate detection: {duplicate['fact_id']}")
                 return {
                     "status": "duplicate",
                     "fact_id": duplicate["fact_id"],
                     "message": f"Similar fact already exists: {duplicate['fact_id']} - {duplicate['item']}"
                 }
+            else:
+                # DIAGNOSTIC: Log that no duplicate was found, proceeding
+                logger.info(f"[CREATE FACT] No duplicate found, proceeding to create fact")
+        else:
+            # DIAGNOSTIC: Log that duplicate detection is disabled
+            logger.warning(f"[CREATE FACT] Duplicate detection DISABLED (ENABLE_DUPLICATE_DETECTION={ENABLE_DUPLICATE_DETECTION})")
 
         # =================================================================
         # COST STATUS INFERENCE (for applications domain)
