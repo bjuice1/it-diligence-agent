@@ -226,6 +226,13 @@ ENABLE_DUPLICATE_DETECTION = True  # Check for duplicate facts/gaps
 PARALLEL_DISCOVERY = True          # Run discovery agents in parallel
 PARALLEL_REASONING = True          # Run reasoning agents in parallel
 
+# Domain Model Integration (Phase 2)
+# Feature flag for gradual rollout of new DDD-based domain models
+# When enabled: Uses domain model repositories (ApplicationRepository, etc.) with deduplication
+# When disabled: Uses legacy InventoryStore (current production behavior)
+# Default: false (production safety - new code is experimental)
+ENABLE_DOMAIN_MODEL = os.getenv('ENABLE_DOMAIN_MODEL', 'false').lower() == 'true'
+
 # Organization Assumption Feature Flags (spec 11 - adaptive org extraction)
 ENABLE_ORG_ASSUMPTIONS = os.getenv('ENABLE_ORG_ASSUMPTIONS', 'false').lower() == 'true'  # Master switch for adaptive extraction - DISABLED for production/demo
 ENABLE_BUYER_ORG_ASSUMPTIONS = os.getenv('ENABLE_BUYER_ORG_ASSUMPTIONS', 'false').lower() == 'false'  # Generate assumptions for buyer entity too?
