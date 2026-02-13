@@ -456,3 +456,205 @@ def _generate_json_report(deal, sections: List[str]) -> str:
         json.dump(report, f, indent=2)
 
     return str(file_path)
+
+
+@shared_task(bind=True, name='web.tasks.process_document')
+def process_document_task(
+    self,
+    doc_id: str,
+    file_path: str,
+    filename: str,
+    deal_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Process a single document as a background Celery task.
+
+    This replaces the threading-based DocumentProcessor for production.
+    Extracts facts, classifies into tiers, and persists to database.
+
+    Args:
+        doc_id: Document ID from registry
+        file_path: Path to the uploaded file
+        filename: Original filename
+        deal_id: Deal ID for database persistence
+
+    Returns:
+        Dict with processing results
+    """
+    from web.database import db, Fact, Document
+    from tools_v2.document_processor import ContentExtractor
+    from tools_v2.incremental_extractor import IncrementalExtractor
+    from tools_v2.tier_classifier import TierClassifier, Tier
+    from stores.fact_store import FactStore
+    from tools_v2.fact_merger import FactMerger
+    import time
+
+    logger.info(f"Processing document: {filename} (doc_id={doc_id})")
+
+    # Update progress
+    self.update_state(
+        state='PROGRESS',
+        meta={
+            'progress': 0,
+            'phase': 'extracting',
+            'message': f'Extracting content from {filename}...'
+        }
+    )
+
+    start_time = time.time()
+    result = {
+        'doc_id': doc_id,
+        'filename': filename,
+        'facts_extracted': 0,
+        'facts_added': 0,
+        'facts_updated': 0,
+        'pending_review': 0,
+        'errors': []
+    }
+
+    try:
+        # Stage 1: Extract content
+        extractor = ContentExtractor()
+        extraction = extractor.extract(file_path)
+
+        if not extraction.success:
+            raise Exception(f"Content extraction failed: {extraction.error}")
+
+        logger.info(f"Extracted {extraction.word_count} words from {extraction.page_count} pages")
+
+        self.update_state(
+            state='PROGRESS',
+            meta={
+                'progress': 20,
+                'phase': 'analyzing',
+                'message': f'Analyzing content ({extraction.word_count} words)...'
+            }
+        )
+
+        # Stage 2: Extract facts using IncrementalExtractor
+        # NOTE: We need a FactStore instance. Since we're in Celery worker,
+        # we'll create a temporary one and persist results to DB at the end.
+        fact_store = FactStore(deal_id=deal_id)
+
+        fact_extractor = IncrementalExtractor(fact_store=fact_store)
+        context = fact_extractor.build_context()
+
+        extracted_facts = fact_extractor.extract_facts_from_content(
+            content=extraction.content,
+            source_document=filename,
+            context=context
+        )
+
+        result['facts_extracted'] = len(extracted_facts)
+        logger.info(f"Extracted {len(extracted_facts)} facts")
+
+        self.update_state(
+            state='PROGRESS',
+            meta={
+                'progress': 50,
+                'phase': 'classifying',
+                'message': f'Classifying {len(extracted_facts)} facts...'
+            }
+        )
+
+        # Stage 3: Classify facts into review tiers
+        fact_merger = FactMerger(fact_store)
+        classifier = TierClassifier(fact_store=fact_store, fact_merger=fact_merger)
+
+        facts_as_dicts = [f.to_dict() for f in extracted_facts]
+        classified, stats = classifier.classify_batch(facts_as_dicts)
+
+        tier1_count = len(classified.get(Tier.AUTO_APPLY, []))
+        tier2_count = len(classified.get(Tier.BATCH_REVIEW, []))
+        tier3_count = len(classified.get(Tier.INDIVIDUAL_REVIEW, []))
+
+        logger.info(f"Classified: {tier1_count} auto-apply, {tier2_count} batch, {tier3_count} individual")
+
+        self.update_state(
+            state='PROGRESS',
+            meta={
+                'progress': 70,
+                'phase': 'persisting',
+                'message': 'Saving to database...'
+            }
+        )
+
+        # Stage 4: Persist auto-eligible facts to database
+        tier1_items = classified.get(Tier.AUTO_APPLY, [])
+        auto_eligible_facts = [
+            item["fact"] for item in tier1_items
+            if item.get("classification", {}).get("auto_apply_eligible", False)
+        ]
+
+        facts_added = 0
+        if auto_eligible_facts and deal_id:
+            # Persist to database
+            for fact_dict in auto_eligible_facts:
+                try:
+                    db_fact = Fact(
+                        id=fact_dict.get('fact_id'),
+                        deal_id=deal_id,
+                        domain=fact_dict.get('domain', 'general'),
+                        category=fact_dict.get('category', ''),
+                        entity=fact_dict.get('entity', 'target'),
+                        item=fact_dict.get('item', ''),
+                        status=fact_dict.get('status', 'documented'),
+                        details=fact_dict.get('details', {}),
+                        evidence=fact_dict.get('evidence', {}),
+                        source_document=filename,
+                        source_quote=fact_dict.get('evidence', {}).get('exact_quote', ''),
+                        confidence_score=fact_dict.get('confidence_score', 0.5),
+                    )
+                    db.session.add(db_fact)
+                    facts_added += 1
+                except Exception as e:
+                    logger.warning(f"Failed to persist fact: {e}")
+                    result['errors'].append(f"Fact persistence error: {str(e)}")
+
+            db.session.commit()
+            logger.info(f"Persisted {facts_added} auto-eligible facts to database")
+
+        result['facts_added'] = facts_added
+        result['pending_review'] = tier2_count + tier3_count + (tier1_count - facts_added)
+
+        # Stage 5: Update document record in database
+        if deal_id:
+            doc_record = Document.query.filter_by(deal_id=deal_id, filename=filename).first()
+            if doc_record:
+                doc_record.status = 'processed'
+                doc_record.facts_count = facts_added
+                doc_record.processed_at = datetime.utcnow()
+                db.session.commit()
+
+        # Complete
+        elapsed_ms = int((time.time() - start_time) * 1000)
+        logger.info(f"Document processing complete: {filename} ({elapsed_ms}ms)")
+
+        self.update_state(
+            state='PROGRESS',
+            meta={
+                'progress': 100,
+                'phase': 'complete',
+                'message': f'Processing complete: {facts_added} facts added, {result["pending_review"]} pending review'
+            }
+        )
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Document processing failed for {filename}: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+
+        # Update document status to failed
+        if deal_id:
+            try:
+                doc_record = Document.query.filter_by(deal_id=deal_id, filename=filename).first()
+                if doc_record:
+                    doc_record.status = 'failed'
+                    doc_record.error_message = str(e)
+                    db.session.commit()
+            except Exception as db_err:
+                logger.error(f"Failed to update document status: {db_err}")
+
+        raise  # Re-raise so Celery marks task as FAILURE

@@ -6598,13 +6598,20 @@ def api_backfill_documents():
 @app.route('/api/documents/upload', methods=['POST'])
 @auth_optional
 def api_upload_documents():
-    """Upload new documents for incremental analysis."""
+    """
+    Upload new documents for incremental analysis.
+
+    PRODUCTION MODE: Uses Celery for background processing (requires Redis).
+    FALLBACK MODE: If Celery unavailable, queues in-process (dev only).
+    """
     from tools_v2.document_registry import DocumentRegistry, ChangeType
-    from tools_v2.fact_merger import FactMerger
-    from tools_v2.document_processor import DocumentProcessor, ProcessingPriority
+    from web.celery_app import is_celery_available
     from config_v2 import OUTPUT_DIR
 
     s = get_session()
+
+    # Get current deal_id from session
+    current_deal_id = session.get('current_deal_id')
 
     # Registry file path for persistence
     registry_file = OUTPUT_DIR / "document_registry.json"
@@ -6619,20 +6626,6 @@ def api_upload_documents():
             except Exception as e:
                 logger.warning(f"Failed to load document registry: {e}")
 
-    if not hasattr(s, 'fact_merger'):
-        s.fact_merger = FactMerger(s.fact_store)
-
-    if not hasattr(s, 'document_processor'):
-        s.document_processor = DocumentProcessor(
-            document_registry=s.document_registry,
-            fact_store=s.fact_store,
-            fact_merger=s.fact_merger
-        )
-        # Load pending changes from file
-        s.document_processor.load_pending_changes()
-        # Start background worker
-        s.document_processor.start_worker()
-
     if 'files' not in request.files:
         return jsonify({"status": "error", "message": "No files provided"}), 400
 
@@ -6642,6 +6635,26 @@ def api_upload_documents():
     # Create uploads directory if needed
     uploads_dir = DATA_DIR / "uploads"
     uploads_dir.mkdir(parents=True, exist_ok=True)
+
+    # Check if Celery is available (production) or fallback to threading (dev)
+    use_celery = is_celery_available()
+    if use_celery:
+        logger.info("Using Celery for document processing (production mode)")
+    else:
+        logger.warning("Celery not available - falling back to threading (dev mode only)")
+        # Initialize threading-based processor as fallback
+        from tools_v2.fact_merger import FactMerger
+        from tools_v2.document_processor import DocumentProcessor
+        if not hasattr(s, 'fact_merger'):
+            s.fact_merger = FactMerger(s.fact_store)
+        if not hasattr(s, 'document_processor'):
+            s.document_processor = DocumentProcessor(
+                document_registry=s.document_registry,
+                fact_store=s.fact_store,
+                fact_merger=s.fact_merger
+            )
+            s.document_processor.load_pending_changes()
+            s.document_processor.start_worker()
 
     for file in files:
         if file.filename:
@@ -6664,21 +6677,38 @@ def api_upload_documents():
             )
 
             # Queue for processing if new or updated
+            task_id = None
             if change_type in [ChangeType.NEW, ChangeType.UPDATED]:
-                priority = ProcessingPriority.NORMAL
-                s.document_processor.queue_document(
-                    doc_id=record.doc_id,
-                    filename=file.filename,
-                    file_path=str(file_path),
-                    priority=priority
-                )
+                if use_celery:
+                    # PRODUCTION: Dispatch to Celery worker
+                    from web.tasks import process_document_task
+                    task = process_document_task.delay(
+                        doc_id=record.doc_id,
+                        file_path=str(file_path),
+                        filename=file.filename,
+                        deal_id=current_deal_id
+                    )
+                    task_id = task.id
+                    logger.info(f"Queued document {file.filename} to Celery (task_id={task_id})")
+                else:
+                    # FALLBACK: Use threading (dev only)
+                    from tools_v2.document_processor import ProcessingPriority
+                    s.document_processor.queue_document(
+                        doc_id=record.doc_id,
+                        filename=file.filename,
+                        file_path=str(file_path),
+                        priority=ProcessingPriority.NORMAL
+                    )
+                    logger.info(f"Queued document {file.filename} to threading processor (dev mode)")
 
             results.append({
                 "filename": file.filename,
                 "doc_id": record.doc_id,
                 "change_type": change_type.value,
                 "version": record.version,
-                "queued": change_type in [ChangeType.NEW, ChangeType.UPDATED]
+                "queued": change_type in [ChangeType.NEW, ChangeType.UPDATED],
+                "task_id": task_id,  # Only set if using Celery
+                "processing_mode": "celery" if use_celery else "threading"
             })
 
     # Save document registry to file for persistence
@@ -6690,24 +6720,41 @@ def api_upload_documents():
     return jsonify({
         "status": "success",
         "documents": results,
-        "message": f"Registered {len(results)} documents"
+        "message": f"Registered {len(results)} documents",
+        "processing_mode": "celery" if use_celery else "threading"
     })
 
 
 @app.route('/api/documents/processing/status')
 def processing_status():
-    """Get processing status for all documents in queue."""
+    """Get processing status for all documents in queue (supports both Celery and threading)."""
+    from web.celery_app import is_celery_available
+
     s = get_session()
 
+    # If using Celery, return Celery-based status
+    # (Note: Full implementation would track task_ids per document)
+    if is_celery_available():
+        # For now, return empty queue - proper implementation would store
+        # task_id mappings in document registry or database
+        return jsonify({
+            "queue": [],
+            "stats": {"mode": "celery", "message": "Celery mode - check individual task status"},
+            "processing_mode": "celery"
+        })
+
+    # Fallback: threading mode
     if not hasattr(s, 'document_processor'):
-        return jsonify({"queue": [], "stats": {}})
+        return jsonify({"queue": [], "stats": {}, "processing_mode": "none"})
 
     all_status = s.document_processor.get_all_status()
     stats = s.document_processor.get_queue_stats()
+    stats["mode"] = "threading"
 
     return jsonify({
         "queue": all_status,
-        "stats": stats
+        "stats": stats,
+        "processing_mode": "threading"
     })
 
 
