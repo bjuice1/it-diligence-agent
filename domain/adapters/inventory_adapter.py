@@ -17,6 +17,7 @@ from stores.inventory_store import InventoryStore
 from domain.kernel.entity import Entity
 from domain.applications.application import Application
 from domain.infrastructure.infrastructure import Infrastructure
+from domain.organization.person import Person
 
 logger = logging.getLogger(__name__)
 
@@ -176,6 +177,62 @@ class InventoryAdapter:
 
         return item_ids
 
+    def sync_people(
+        self,
+        people: List['Person'],
+        inventory_store: InventoryStore,
+        source_fact_ids: Optional[Dict[str, List[str]]] = None
+    ) -> List[str]:
+        """
+        Sync people from domain model to InventoryStore.
+
+        Args:
+            people: List of Person aggregates
+            inventory_store: Target InventoryStore for UI
+            source_fact_ids: Optional mapping of person.id → List[fact_id]
+
+        Returns:
+            List of inventory item IDs created/updated
+        """
+        logger.info(f"Syncing {len(people)} people to InventoryStore")
+
+        item_ids = []
+
+        for person in people:
+            # Convert person to inventory data
+            data = self._person_to_inventory_data(person)
+
+            # Entity string
+            entity_str = self._entity_to_string(person.entity)
+
+            # Source fact IDs (if provided)
+            fact_ids = source_fact_ids.get(person.id, []) if source_fact_ids else []
+
+            # Add to inventory (organization domain)
+            item_id = inventory_store.add_item(
+                inventory_type="organization",
+                data=data,
+                entity=entity_str,
+                deal_id=person.deal_id,
+                source_file="domain_model",
+                source_type="domain_model"
+            )
+
+            # Update source_fact_ids if provided
+            if fact_ids:
+                item = inventory_store.get_item(item_id)
+                if item:
+                    item.source_fact_ids = fact_ids
+                    inventory_store.update_item(item_id, {"source_fact_ids": fact_ids})
+
+            item_ids.append(item_id)
+            self.stats["people_synced"] = self.stats.get("people_synced", 0) + 1
+            self.stats["items_added"] += 1
+
+        logger.info(f"Synced {len(people)} people ({len(item_ids)} inventory items)")
+
+        return item_ids
+
     def _application_to_inventory_data(self, app: Application) -> Dict[str, Any]:
         """
         Convert Application aggregate to InventoryStore data dict.
@@ -293,6 +350,56 @@ class InventoryAdapter:
         # Add highest confidence
         if infra.observations:
             data["confidence"] = max(obs.confidence for obs in infra.observations)
+        else:
+            data["confidence"] = 0.5
+
+        return data
+
+    def _person_to_inventory_data(self, person: 'Person') -> Dict[str, Any]:
+        """
+        Convert Person aggregate to InventoryStore data dict.
+
+        Args:
+            person: Person aggregate
+
+        Returns:
+            Dict compatible with InventoryStore
+        """
+        data = {
+            "name": person.name,
+            "vendor": None,  # People always have vendor=None
+            "domain_id": person.id,  # Store domain ID for reverse lookup
+        }
+
+        # Aggregate data from observations
+        observations_by_priority = sorted(
+            person.observations,
+            key=lambda obs: obs.get_priority_score(),
+            reverse=True
+        )
+
+        # Extract common fields from highest priority observations
+        for obs in observations_by_priority:
+            obs_data = obs.data
+
+            # Role/title
+            if "role" in obs_data and "role" not in data:
+                data["role"] = obs_data["role"]
+
+            # Department
+            if "department" in obs_data and "department" not in data:
+                data["department"] = obs_data["department"]
+
+            # Title
+            if "title" in obs_data and "title" not in data:
+                data["title"] = obs_data["title"]
+
+        # Add observation count
+        data["observation_count"] = len(person.observations)
+
+        # Add highest confidence
+        if person.observations:
+            data["confidence"] = max(obs.confidence for obs in person.observations)
         else:
             data["confidence"] = 0.5
 
