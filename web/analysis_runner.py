@@ -1014,6 +1014,45 @@ def run_analysis(task: AnalysisTask, progress_callback: Callable, app=None) -> D
     logger.info("[PROMOTION] SKIPPED - Using deterministic parser output only (architectural fix pending)")
 
     # =========================================================================
+    # PHASE 3.8: DOMAIN MODEL INTEGRATION (Optional)
+    # =========================================================================
+    # If enabled, run domain model deduplication on extracted facts
+    # Converts FactStore → Domain Model (smart dedup) → InventoryStore
+
+    from config_v2 import USE_DOMAIN_MODEL_DEFAULT
+    use_domain_model = task.use_domain_model if hasattr(task, 'use_domain_model') else USE_DOMAIN_MODEL_DEFAULT
+
+    if use_domain_model:
+        progress_callback({"phase": AnalysisPhase.DISCOVERY_COMPLETE})  # Reuse existing phase
+        logger.info("Starting Phase 3.8: Domain Model Integration")
+
+        try:
+            from main_v2 import integrate_domain_model
+
+            dm_stats = integrate_domain_model(
+                fact_store=session.fact_store,
+                inventory_store=session._inventory_store,
+                domains=None  # Auto-detect from facts
+            )
+
+            logger.info(f"Domain Model Integration complete:")
+            logger.info(f"  Applications: {dm_stats['applications_created']} created, {dm_stats['applications_synced']} synced")
+            logger.info(f"  Infrastructure: {dm_stats['infrastructure_created']} created, {dm_stats['infrastructure_synced']} synced")
+            logger.info(f"  People: {dm_stats['people_created']} created, {dm_stats['people_synced']} synced")
+
+            progress_callback({
+                "phase": AnalysisPhase.DISCOVERY_COMPLETE,
+                "domain_model_stats": dm_stats,
+            })
+
+        except Exception as e:
+            logger.error(f"Domain model integration failed: {e}")
+            logger.error(traceback.format_exc())
+            # Graceful degradation - continue without domain model
+    else:
+        logger.info("[DOMAIN MODEL] SKIPPED - Not enabled (set USE_DOMAIN_MODEL_DEFAULT=true to enable)")
+
+    # =========================================================================
     # PHASE 4: REASONING (PARALLEL)
     # =========================================================================
     progress_callback({"phase": AnalysisPhase.REASONING})

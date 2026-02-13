@@ -226,6 +226,9 @@ ENABLE_DUPLICATE_DETECTION = True  # Check for duplicate facts/gaps
 PARALLEL_DISCOVERY = True          # Run discovery agents in parallel
 PARALLEL_REASONING = True          # Run reasoning agents in parallel
 
+# Domain Model Integration (P0-3 deduplication fix)
+USE_DOMAIN_MODEL_DEFAULT = os.getenv('USE_DOMAIN_MODEL', 'false').lower() == 'true'  # Enable smart deduplication via domain model
+
 # Organization Assumption Feature Flags (spec 11 - adaptive org extraction)
 ENABLE_ORG_ASSUMPTIONS = os.getenv('ENABLE_ORG_ASSUMPTIONS', 'false').lower() == 'true'  # Master switch for adaptive extraction - DISABLED for production/demo
 ENABLE_BUYER_ORG_ASSUMPTIONS = os.getenv('ENABLE_BUYER_ORG_ASSUMPTIONS', 'false').lower() == 'false'  # Generate assumptions for buyer entity too?
