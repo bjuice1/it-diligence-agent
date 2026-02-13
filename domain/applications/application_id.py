@@ -129,7 +129,11 @@ class ApplicationId:
             raise ValueError("Cannot generate ApplicationId from empty name")
 
         if not vendor:
-            raise ValueError("Cannot generate ApplicationId without vendor (P0-3 fix requires vendor)")
+            raise ValueError(
+                "Cannot generate ApplicationId without vendor. "
+                "Applications REQUIRE vendor for P0-3 fix (prevents SAP ERP vs SAP SuccessFactors collision). "
+                "Note: Infrastructure/Organization can use vendor=None, but Applications must have vendor."
+            )
 
         if not isinstance(entity, Entity):
             raise ValueError(f"entity must be Entity enum, got {type(entity)}")
@@ -138,10 +142,10 @@ class ApplicationId:
         name_normalized = NormalizationRules.normalize_name(name, "application")
 
         # Generate fingerprint using kernel generator (consistent ID format)
-        # CRITICAL: Includes vendor to prevent P0-3 collision
+        # CRITICAL: Includes vendor to prevent P0-3 collision (Applications REQUIRE this)
         fingerprint = FingerprintGenerator.generate(
             name_normalized=name_normalized,
-            vendor=vendor,
+            vendor=vendor,  # Applications require vendor (not None)
             entity=entity,
             domain_prefix="APP"
         )

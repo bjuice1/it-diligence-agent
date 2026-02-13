@@ -1,13 +1,15 @@
 """
 Fingerprint generation - Shared across ALL domains.
 
-CRITICAL: Fixes P0-3 collision (includes vendor in hash).
+CRITICAL: Fixes P0-3 collision (includes vendor in hash when provided).
 All domains use THIS fingerprint strategy.
 
 Created: 2026-02-12 (Worker 1 - Kernel Foundation, Task-005)
+Updated: 2026-02-12 (P0-BLOCKER fix: vendor now optional for Infrastructure/Organization)
 """
 
 import hashlib
+from typing import Optional
 from domain.kernel.entity import Entity
 
 
@@ -22,7 +24,7 @@ class FingerprintGenerator:
     @staticmethod
     def generate(
         name_normalized: str,
-        vendor: str,
+        vendor: Optional[str],
         entity: Entity,
         domain_prefix: str
     ) -> str:
@@ -31,13 +33,13 @@ class FingerprintGenerator:
 
         Strategy (fixes P0-3 collision):
         - Include normalized name
-        - Include vendor (prevents "SAP ERP" vs "SAP SuccessFactors" collision)
+        - Include vendor (OPTIONAL - prevents "SAP ERP" vs "SAP SuccessFactors" collision)
         - Include entity (target vs buyer)
         - Hash to 8 characters (collision probability ~1 in 4 billion)
 
         Args:
             name_normalized: Normalized name (from NormalizationRules)
-            vendor: Vendor name (e.g., "SAP", "Microsoft")
+            vendor: Vendor name (e.g., "SAP", "Microsoft") - OPTIONAL (None for infrastructure/org)
             entity: Entity (target or buyer)
             domain_prefix: Domain prefix ("APP", "INFRA", "ORG")
 
@@ -45,6 +47,7 @@ class FingerprintGenerator:
             Domain ID: "{domain_prefix}-{entity_upper}-{hash8}"
 
         Examples:
+            # Applications: WITH vendor (P0-3 fix)
             generate("salesforce", "Salesforce", Entity.TARGET, "APP")
               → "APP-TARGET-a3f291c2"
 
@@ -54,15 +57,25 @@ class FingerprintGenerator:
             generate("sap successfactors", "SAP", Entity.TARGET, "APP")
               → "APP-TARGET-c9a7e2f5"  # Different from plain "sap"!
 
+            # Infrastructure: WITHOUT vendor (on-prem has no vendor)
+            generate("on-prem data center", None, Entity.TARGET, "INFRA")
+              → "INFRA-TARGET-e8a9f2b1"
+
+            # Organization: WITHOUT vendor (people have no vendor)
+            generate("john smith", None, Entity.TARGET, "ORG")
+              → "ORG-TARGET-f3b8c9d2"
+
             # Same name, different entity → different ID
             generate("salesforce", "Salesforce", Entity.BUYER, "APP")
               → "APP-BUYER-d1a3f291"  # Different from TARGET
         """
         # Vendor normalization (lowercase, strip)
+        # CRITICAL: Vendor is OPTIONAL - empty string if not provided
         vendor_normalized = vendor.lower().strip() if vendor else ""
 
         # Combine components for fingerprinting
-        # CRITICAL: Include vendor to prevent collisions (P0-3 fix)
+        # CRITICAL: Include vendor to prevent collisions (P0-3 fix for Applications)
+        # For domains without vendor (Infrastructure/Organization), vendor_normalized = ""
         fingerprint_input = f"{name_normalized}|{vendor_normalized}|{entity.value}"
 
         # Hash to 8 characters

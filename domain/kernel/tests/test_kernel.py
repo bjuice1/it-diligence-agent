@@ -355,6 +355,74 @@ class TestFingerprint:
         assert not FingerprintGenerator.is_valid_domain_id("invalid")
         assert not FingerprintGenerator.is_valid_domain_id("APP-TARGET")  # Missing hash
 
+    def test_generate_without_vendor_infrastructure(self):
+        """Test vendor=None works (P0-BLOCKER FIX - Infrastructure/Organization use case)."""
+        # On-prem infrastructure has no vendor
+        id_infra = FingerprintGenerator.generate(
+            "on-prem data center",
+            None,  # ← CRITICAL: vendor=None for infrastructure
+            Entity.TARGET,
+            "INFRA"
+        )
+
+        # Should generate valid ID
+        assert id_infra.startswith("INFRA-TARGET-")
+        assert len(id_infra.split("-")) == 3  # Format: INFRA-TARGET-{hash}
+        assert len(id_infra.split("-")[2]) == 8  # Hash is 8 characters
+
+    def test_generate_without_vendor_organization(self):
+        """Test vendor=None works for Organization (people have no vendor)."""
+        # People have no vendor
+        id_person = FingerprintGenerator.generate(
+            "john smith",
+            None,  # ← CRITICAL: vendor=None for people
+            Entity.TARGET,
+            "ORG"
+        )
+
+        # Should generate valid ID
+        assert id_person.startswith("ORG-TARGET-")
+        assert FingerprintGenerator.is_valid_domain_id(id_person)
+
+    def test_generate_vendor_none_vs_vendor_different_ids(self):
+        """Test vendor=None vs vendor='X' produce different IDs (important for cloud vs on-prem)."""
+        # On-prem (no vendor)
+        id_onprem = FingerprintGenerator.generate(
+            "data center",
+            None,  # No vendor
+            Entity.TARGET,
+            "INFRA"
+        )
+
+        # Cloud (with vendor)
+        id_cloud = FingerprintGenerator.generate(
+            "data center",
+            "AWS",  # Has vendor
+            Entity.TARGET,
+            "INFRA"
+        )
+
+        # Should be DIFFERENT (vendor matters even when it's None)
+        assert id_onprem != id_cloud
+
+    def test_generate_vendor_none_stable_ids(self):
+        """Test vendor=None produces stable IDs (same input → same output)."""
+        # Generate same ID twice
+        id1 = FingerprintGenerator.generate("on-prem server", None, Entity.TARGET, "INFRA")
+        id2 = FingerprintGenerator.generate("on-prem server", None, Entity.TARGET, "INFRA")
+
+        # Should be identical (stable)
+        assert id1 == id2
+
+    def test_generate_vendor_empty_string_vs_none(self):
+        """Test vendor='' (empty string) vs vendor=None behave the same."""
+        # vendor="" should normalize to same as vendor=None
+        id_none = FingerprintGenerator.generate("test", None, Entity.TARGET, "INFRA")
+        id_empty = FingerprintGenerator.generate("test", "", Entity.TARGET, "INFRA")
+
+        # Should be SAME (both normalize to empty vendor)
+        assert id_none == id_empty
+
 
 class TestExtractionCoordinator:
     """Test extraction coordinator (prevents double-counting)."""
