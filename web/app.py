@@ -200,19 +200,9 @@ if not session_configured:
     logger.info("Using cookie sessions for local development")
 
 # Check if Celery is available for background tasks
+# NOTE: Celery import MUST happen AFTER database initialization to avoid
+# circular import issues where FlaskTask tries to access db before init_app()
 USE_CELERY = os.environ.get('USE_CELERY', 'false').lower() == 'true'
-
-if USE_CELERY:
-    try:
-        from web.celery_app import celery, is_celery_available
-        if is_celery_available():
-            logger.info("Celery tasks enabled")
-        else:
-            logger.warning("Celery broker not available, tasks will run synchronously")
-            USE_CELERY = False
-    except Exception as e:
-        logger.warning(f"Celery not available: {e}")
-        USE_CELERY = False
 
 # =============================================================================
 # Phase 5: Cloud Storage Setup
@@ -228,6 +218,22 @@ try:
 except Exception as e:
     logger.warning(f"Storage initialization failed: {e}")
     storage = None
+
+# =============================================================================
+# Phase 5.5: Celery Setup (AFTER database init to avoid circular imports)
+# =============================================================================
+
+if USE_CELERY:
+    try:
+        from web.celery_app import celery, is_celery_available
+        if is_celery_available():
+            logger.info("Celery tasks enabled")
+        else:
+            logger.warning("Celery broker not available, tasks will run synchronously")
+            USE_CELERY = False
+    except Exception as e:
+        logger.warning(f"Celery not available: {e}")
+        USE_CELERY = False
 
 # =============================================================================
 # Phase 2: Authentication Setup
