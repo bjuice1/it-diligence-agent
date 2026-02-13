@@ -326,6 +326,10 @@ app.register_blueprint(costs_bp)
 from web.blueprints.pe_reports import pe_reports_bp
 app.register_blueprint(pe_reports_bp)
 
+# TEMPORARY: Register schema fix blueprint (DELETE AFTER USE)
+from web.blueprints.schema_fix import schema_fix_bp
+app.register_blueprint(schema_fix_bp)
+
 # Phase 3: Register CLI commands for user management
 from web.cli import register_cli
 register_cli(app)
