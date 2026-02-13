@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IT DD Agent V2 - Architecture & Data Flow</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #2d3436 0%, #1e272e 100%);
+            color: #dfe6e9;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(45, 52, 54, 0.8);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 3em;
+            background: linear-gradient(135deg, #74b9ff, #a29bfe, #fd79a8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #b2bec3;
+            font-size: 1.3em;
+            margin-bottom: 50px;
+        }
+
+        .section {
+            margin: 60px 0;
+            padding: 30px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            border-left: 5px solid;
+        }
+
+        .section.blue { border-left-color: #74b9ff; }
+        .section.purple { border-left-color: #a29bfe; }
+        .section.pink { border-left-color: #fd79a8; }
+        .section.green { border-left-color: #55efc4; }
+        .section.orange { border-left-color: #ffeaa7; }
+        .section.red { border-left-color: #ff7675; }
+
+        h2 {
+            font-size: 2.2em;
+            margin-bottom: 20px;
+            color: #74b9ff;
+        }
+
+        h3 {
+            font-size: 1.6em;
+            margin: 30px 0 15px 0;
+            color: #a29bfe;
+        }
+
+        h4 {
+            font-size: 1.3em;
+            margin: 20px 0 10px 0;
+            color: #fd79a8;
+        }
+
+        .diagram {
+            background: #1e272e;
+            padding: 30px;
+            border-radius: 10px;
+            margin: 25px 0;
+            overflow-x: auto;
+            border: 2px solid rgba(116, 185, 255, 0.3);
+        }
+
+        pre {
+            font-family: 'Courier New', monospace;
+            font-size: 0.85em;
+            line-height: 1.4;
+            color: #55efc4;
+            white-space: pre;
+            overflow-x: auto;
+        }
+
+        .highlight {
+            background: linear-gradient(135deg, #fdcb6e, #e17055);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            color: #2d3436;
+        }
+
+        .callout {
+            background: rgba(116, 185, 255, 0.1);
+            border-left: 4px solid #74b9ff;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+
+        .callout.warning {
+            background: rgba(255, 224, 167, 0.1);
+            border-left-color: #ffeaa7;
+        }
+
+        .callout.success {
+            background: rgba(85, 239, 196, 0.1);
+            border-left-color: #55efc4;
+        }
+
+        .callout.info {
+            background: rgba(162, 155, 254, 0.1);
+            border-left-color: #a29bfe;
+        }
+
+        ul, ol {
+            margin: 15px 0 15px 30px;
+        }
+
+        li {
+            margin: 8px 0;
+            color: #dfe6e9;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 25px 0;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        th {
+            background: rgba(116, 185, 255, 0.2);
+            padding: 15px;
+            text-align: left;
+            color: #74b9ff;
+            font-weight: 600;
+        }
+
+        td {
+            padding: 12px 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        tr:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: bold;
+            margin: 0 5px;
+        }
+
+        .badge.blue { background: #74b9ff; color: #2d3436; }
+        .badge.purple { background: #a29bfe; color: #2d3436; }
+        .badge.green { background: #55efc4; color: #2d3436; }
+        .badge.orange { background: #ffeaa7; color: #2d3436; }
+        .badge.pink { background: #fd79a8; color: #2d3436; }
+
+        .key-point {
+            font-size: 1.1em;
+            color: #fdcb6e;
+            font-weight: 600;
+            margin: 15px 0;
+        }
+
+        code {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #55efc4;
+            font-family: 'Courier New', monospace;
+        }
+
+        .flow-arrow {
+            text-align: center;
+            font-size: 2em;
+            color: #a29bfe;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 IT Due Diligence Agent V2</h1>
+        <div class="subtitle">Architecture, Data Flow, and Technical Deep Dive</div>
+
+        <!-- EXECUTIVE OVERVIEW -->
+        <div class="section blue">
+            <h2>📊 Executive Overview</h2>
+            <p class="key-point">A cloud-native AI system that analyzes IT infrastructure documents and produces investment-grade due diligence reports in 2-3 minutes.</p>
+
+            <div class="callout success">
+                <h4>Key Innovation: Domain Model Deduplication</h4>
+                <p>Solves the "3 Salesforces problem" - automatically merges case variants and naming inconsistencies while keeping different products separate (e.g., SAP ERP vs SAP SuccessFactors).</p>
+                <ul>
+                    <li><strong>Before:</strong> "Salesforce", "salesforce", "SALESFORCE" → 3 separate inventory items ❌</li>
+                    <li><strong>After:</strong> 1 Salesforce application with 3 observations ✅</li>
+                </ul>
+            </div>
+
+            <h3>Technology At-a-Glance</h3>
+            <table>
+                <tr>
+                    <th>Layer</th>
+                    <th>Technology</th>
+                    <th>Purpose</th>
+                </tr>
+                <tr>
+                    <td><span class="badge blue">Hosting</span></td>
+                    <td>Railway.app</td>
+                    <td>Cloud platform (auto-scaling, zero config)</td>
+                </tr>
+                <tr>
+                    <td><span class="badge purple">Backend</span></td>
+                    <td>Python 3.11 + Flask + Gunicorn</td>
+                    <td>Web server and application logic</td>
+                </tr>
+                <tr>
+                    <td><span class="badge green">AI Models</span></td>
+                    <td>Claude 3.5 Haiku + Sonnet 4</td>
+                    <td>Fast extraction + accurate analysis</td>
+                </tr>
+                <tr>
+                    <td><span class="badge orange">Database</span></td>
+                    <td>PostgreSQL 15 + Redis 7</td>
+                    <td>Persistent storage + caching</td>
+                </tr>
+                <tr>
+                    <td><span class="badge pink">Document Parser</span></td>
+                    <td>PyMuPDF + pdfplumber</td>
+                    <td>Extract text and tables from PDFs</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- SYSTEM ARCHITECTURE -->
+        <div class="section purple">
+            <h2>🏗️ System Architecture</h2>
+
+            <div class="diagram">
+<pre>
+┌─────────────────────────────────────────────────────────────────┐
+│                        USER (Web Browser)                        │
+└────────────────────────────────┬────────────────────────────────┘
+                                 │ HTTPS
+                                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     RAILWAY CLOUD PLATFORM                       │
+│                                                                   │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │              WEB SERVICE (Flask + Gunicorn)                │  │
+│  │                                                             │  │
+│  │  ┌─────────────┐  ┌──────────────┐  ┌─────────────────┐  │  │
+│  │  │   Flask UI  │  │  Discovery   │  │   Domain Model  │  │  │
+│  │  │  (Routes &  │─>│   Agents     │─>│  (Deduplication)│  │  │
+│  │  │  Templates) │  │  (Haiku LLM) │  │   Repository    │  │  │
+│  │  └─────────────┘  └──────────────┘  └─────────────────┘  │  │
+│  │         │                 │                    │           │  │
+│  │         ▼                 ▼                    ▼           │  │
+│  │  ┌──────────────────────────────────────────────────────┐ │  │
+│  │  │           FactStore → InventoryStore                 │ │  │
+│  │  │         (In-Memory Data Structures)                  │ │  │
+│  │  └──────────────────────────────────────────────────────┘ │  │
+│  └────────────────────────┬──────────────────────────────────┘  │
+│                           │                                      │
+│         ┌─────────────────┼─────────────────┐                   │
+│         │                 │                 │                   │
+│         ▼                 ▼                 ▼                   │
+│  ┌─────────────┐  ┌─────────────┐  ┌──────────────────┐       │
+│  │  PostgreSQL │  │    Redis    │  │  Anthropic API   │       │
+│  │  (Database) │  │   (Cache)   │  │  (Claude Sonnet  │       │
+│  │             │  │             │  │   & Haiku LLMs)  │       │
+│  └─────────────┘  └─────────────┘  └──────────────────┘       │
+│         │                 │                 │                   │
+│         │ Persistent      │ Session        │ LLM Calls         │
+│         │ Storage         │ Storage        │ (External)        │
+└─────────┴─────────────────┴─────────────────┴───────────────────┘
+</pre>
+            </div>
+
+            <div class="callout info">
+                <h4>Why This Architecture?</h4>
+                <ul>
+                    <li><strong>Railway hosting:</strong> Zero-config deployment, auto-scaling, managed databases</li>
+                    <li><strong>In-memory stores:</strong> Fast processing without database I/O during analysis</li>
+                    <li><strong>Parallel agents:</strong> 6 domain experts work simultaneously (6x faster)</li>
+                    <li><strong>Domain model:</strong> Deduplication logic separate from agents (single responsibility)</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- DATA FLOW PIPELINE -->
+        <div class="section pink">
+            <h2>🔄 End-to-End Data Flow</h2>
+
+            <h3>From PDF Upload to Analysis Report (2-3 minutes)</h3>
+
+            <div class="diagram">
+<pre>
+USER UPLOADS PDF
+      │
+      ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 1: Document Preprocessing (10 seconds)                     │
+│  • PyMuPDF extracts text + tables                               │
+│  • Deterministic parser identifies structured sections          │
+│  • Text chunked for LLM context limits                          │
+└────────────────────────────────┬────────────────────────────────┘
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 2: Parallel Discovery (30-60 seconds)                      │
+│                                                                  │
+│  Applications Agent   ┐                                         │
+│  Infrastructure Agent │                                         │
+│  Cybersecurity Agent  ├─> All run SIMULTANEOUSLY               │
+│  Network Agent        │    (NOT sequentially!)                 │
+│  Identity Agent       │                                         │
+│  Organization Agent   ┘                                         │
+│                                                                  │
+│  Each agent:                                                    │
+│  1. Reads document text                                         │
+│  2. Calls LLM with domain-specific prompt                       │
+│  3. LLM responds with structured tool calls                     │
+│  4. Agent stores facts in FactStore                             │
+│  5. DONE (no iteration, no "coming up for air")                │
+└────────────────────────────────┬────────────────────────────────┘
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 3: Domain Model Deduplication (5 seconds)                  │
+│  • Takes raw facts from FactStore                               │
+│  • Applies fingerprinting logic                                 │
+│  • Merges duplicates (Salesforce + salesforce → 1 item)         │
+│  • Outputs to InventoryStore                                    │
+└────────────────────────────────┬────────────────────────────────┘
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 4: Parallel Reasoning (60-90 seconds)                      │
+│                                                                  │
+│  Applications Reasoner   ┐                                      │
+│  Infrastructure Reasoner │                                      │
+│  Cybersecurity Reasoner  ├─> All run SIMULTANEOUSLY            │
+│  Network Reasoner        │                                      │
+│  Identity Reasoner       │                                      │
+│  Organization Reasoner   ┘                                      │
+│                                                                  │
+│  Each reasoner:                                                 │
+│  1. Reads facts from FactStore                                  │
+│  2. Reads deduplicated inventory                                │
+│  3. Identifies risks, gaps, work items                          │
+│  4. Stores findings in FindingsStore                            │
+│  5. DONE (no iteration)                                         │
+└────────────────────────────────┬────────────────────────────────┘
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 5: Output Generation (10 seconds)                          │
+│  • Compiles facts + findings                                    │
+│  • Generates HTML report                                        │
+│  • Generates Excel workbook                                     │
+│  • Displays in UI                                               │
+└─────────────────────────────────────────────────────────────────┘
+</pre>
+            </div>
+
+            <p class="key-point">⚡ Total Time: 2-3 minutes for complete analysis</p>
+        </div>
+
+        <!-- EXTRACTION METHOD -->
+        <div class="section green">
+            <h2>🔍 Extraction Method: Hybrid Approach</h2>
+
+            <div class="callout warning">
+                <h4>Common Misconception</h4>
+                <p><strong>WRONG:</strong> "We use only Python code with fuzzy matching, no LLM"</p>
+                <p><strong>RIGHT:</strong> "We use a <span class="highlight">hybrid approach</span> - deterministic parsing for tables, LLM for prose"</p>
+            </div>
+
+            <h3>PATH 1: Deterministic Parser (Structured Data)</h3>
+            <div class="diagram">
+<pre>
+INPUT: PDF with Application Inventory Table
+┌────────────────────────────────────────────┐
+│ Application Name │ Vendor     │ Users     │
+│ Salesforce       │ Salesforce │ 1,200     │
+│ SAP ERP          │ SAP        │ 500       │
+└────────────────────────────────────────────┘
+         │
+         ▼ Deterministic Parser (Python + Regex)
+         │ • Detects markdown table structure
+         │ • Fuzzy matches headers ("App Name" ≈ "Application Name")
+         │ • Extracts rows with 100% accuracy
+         │ • NO LLM INVOLVED → Zero hallucination risk
+         ▼
+OUTPUT: FactStore
+  Fact 1: Application("Salesforce", vendor="Salesforce", users=1200)
+  Fact 2: Application("SAP ERP", vendor="SAP", users=500)
+</pre>
+            </div>
+
+            <h3>PATH 2: LLM-Based Discovery (Unstructured Text)</h3>
+            <div class="diagram">
+<pre>
+INPUT: Prose paragraph
+"The company uses Salesforce for CRM with approximately
+1,200 users across sales and marketing departments.
+SAP ERP handles financial operations."
+         │
+         ▼ Claude Haiku LLM
+         │ • Understands context and relationships
+         │ • Extracts entities + attributes
+         │ • Uses structured tool calls (not free text)
+         ▼
+OUTPUT: FactStore
+  Fact 1: Application("Salesforce", category="CRM", users=1200)
+  Fact 2: Application("SAP ERP", category="ERP")
+</pre>
+            </div>
+
+            <h3>Why Hybrid?</h3>
+            <table>
+                <tr>
+                    <th>Data Type</th>
+                    <th>Method</th>
+                    <th>Reason</th>
+                </tr>
+                <tr>
+                    <td>Tables</td>
+                    <td><span class="badge blue">Deterministic</span></td>
+                    <td>Already structured → parsing is reliable & free</td>
+                </tr>
+                <tr>
+                    <td>Prose</td>
+                    <td><span class="badge purple">LLM</span></td>
+                    <td>Requires understanding context & relationships</td>
+                </tr>
+                <tr>
+                    <td>Numbers</td>
+                    <td><span class="badge blue">Deterministic</span></td>
+                    <td>Critical accuracy (costs, user counts)</td>
+                </tr>
+                <tr>
+                    <td>Descriptions</td>
+                    <td><span class="badge purple">LLM</span></td>
+                    <td>Natural language understanding needed</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- DOMAIN MODEL MAGIC -->
+        <div class="section orange">
+            <h2>✨ The Domain Model: Solving the "3 Salesforces" Problem</h2>
+
+            <h3>The Problem (Before Domain Model)</h3>
+            <div class="diagram">
+<pre>
+PDF mentions:
+  Page 1: "Salesforce" (vendor: Salesforce)
+  Page 3: "salesforce" (vendor: Salesforce)
+  Page 7: "SALESFORCE" (vendor: Salesforce)
+
+Old System Output:
+  ❌ 3 separate inventory items
+  ❌ Inflated application count
+  ❌ No way to track observation quality
+  ❌ Can't distinguish real duplicates from case variants
+</pre>
+            </div>
+
+            <h3>The Solution (Domain Model Deduplication)</h3>
+            <div class="diagram">
+<pre>
+┌─────────────────────────────────────────────────────────────────┐
+│                     DOMAIN MODEL PROCESS                         │
+│                                                                   │
+│  For each Fact:                                                  │
+│    1. Create Aggregate (Application/Infra/Person)               │
+│    2. Generate Fingerprint (normalized name + vendor)           │
+│    3. Check Repository: Does this already exist?                │
+│       ├─ YES → Add observation to existing item                 │
+│       └─ NO  → Create new item                                  │
+│                                                                   │
+│  Example:                                                        │
+│    Input: 3 facts ("Salesforce", "salesforce", "SALESFORCE")    │
+│    Fingerprint: "salesforce-salesforce-saas"                    │
+│    Output: 1 Application with observation_count=3               │
+│                                                                   │
+│    Input: "SAP ERP" and "SAP SuccessFactors"                   │
+│    Fingerprints: Different! (different products)                │
+│    Output: 2 separate Applications                              │
+└─────────────────────────────────────────────────────────────────┘
+</pre>
+            </div>
+
+            <div class="callout success">
+                <h4>✅ Result</h4>
+                <table>
+                    <tr>
+                        <th>Scenario</th>
+                        <th>Before</th>
+                        <th>After</th>
+                        <th>Impact</th>
+                    </tr>
+                    <tr>
+                        <td>Case variants</td>
+                        <td>3 items</td>
+                        <td>1 item (3 obs)</td>
+                        <td>Accurate counts</td>
+                    </tr>
+                    <tr>
+                        <td>Different products</td>
+                        <td>1 item (collision)</td>
+                        <td>2 separate items</td>
+                        <td>No false merging</td>
+                    </tr>
+                    <tr>
+                        <td>Entity separation</td>
+                        <td>Mixed buyer/target</td>
+                        <td>Separate by entity</td>
+                        <td>Clean data</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- CROSS-DOMAIN COORDINATION -->
+        <div class="section red">
+            <h2>🔗 Cross-Domain Coordination</h2>
+
+            <h3>Current Architecture: Synthesis Phase</h3>
+
+            <div class="diagram">
+<pre>
+PHASE 1-2: Discovery + Reasoning (PARALLEL - NO COORDINATION)
+├─ Applications Agent     → Findings + Work Items + Costs
+├─ Infrastructure Agent   → Findings + Work Items + Costs
+├─ Cybersecurity Agent    → Findings + Work Items + Costs
+├─ Network Agent          → Findings + Work Items + Costs
+├─ Identity Agent         → Findings + Work Items + Costs
+└─ Organization Agent     → Findings + Work Items + Costs
+
+      ↓ (Each agent works independently)
+
+PHASE 3: Synthesis (CONSOLIDATION LAYER)
+└─ Narrative Synthesis Agent
+   ├─ Reads ALL domain findings
+   ├─ Identifies cross-domain themes
+   ├─ De-duplicates overlapping work items
+   └─ Produces executive narrative
+
+PHASE 4: Cost Rollup (SPECIALIZED AGENT)
+└─ Cost Synthesis Agent
+   ├─ Aggregates costs across domains
+   ├─ Applies cost models
+   └─ Produces cost estimate ranges
+</pre>
+            </div>
+
+            <h3>How Synthesis Prevents Duplicates</h3>
+            <div class="callout info">
+                <h4>Example: SAP Migration</h4>
+                <ul>
+                    <li><strong>Applications Agent:</strong> "Migrate SAP to cloud" (Work Item #1)</li>
+                    <li><strong>Infrastructure Agent:</strong> "SAP server migration to AWS" (Work Item #2)</li>
+                    <li><strong>Network Agent:</strong> "Configure networking for SAP cloud" (Work Item #3)</li>
+                </ul>
+                <p><strong>Synthesis Agent:</strong> Identifies these are the SAME project, consolidates into 1 work item with 3 contributing domains.</p>
+            </div>
+
+            <h3>Cost Ownership: Hybrid Approach</h3>
+            <table>
+                <tr>
+                    <th>Role</th>
+                    <th>Responsibility</th>
+                    <th>Example</th>
+                </tr>
+                <tr>
+                    <td><span class="badge blue">Domain Agents</span></td>
+                    <td>Provide complexity context</td>
+                    <td>"SAP migration is HIGH complexity due to 50 custom modules"</td>
+                </tr>
+                <tr>
+                    <td><span class="badge green">Cost Engine</span></td>
+                    <td>Apply standardized models</td>
+                    <td>Base cost = $200K, High complexity = 1.5x multiplier</td>
+                </tr>
+                <tr>
+                    <td><span class="badge orange">Cost Synthesis</span></td>
+                    <td>Consolidate & validate</td>
+                    <td>Final range: $250K - $350K (no double-counting)</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- DEPLOYMENT ARCHITECTURE -->
+        <div class="section blue">
+            <h2>🚀 Deployment Architecture (Railway)</h2>
+
+            <div class="diagram">
+<pre>
+LOCAL DEVELOPMENT          GITHUB              RAILWAY
+────────────────────────────────────────────────────────
+
+┌──────────────┐        ┌──────────┐        ┌──────────┐
+│   VS Code    │        │  GitHub  │        │ Railway  │
+│              │        │   Repo   │        │ Platform │
+│ ┌──────────┐ │ push   │          │ hook   │          │
+│ │ main_v2  │ ├───────>│  domain- ├───────>│  Build   │
+│ │ web/     │ │        │ model-v2 │        │  Deploy  │
+│ │ domain/  │ │        │ (branch) │        │          │
+│ └──────────┘ │        └──────────┘        └────┬─────┘
+└──────────────┘                                  │
+                                                  ▼
+                                        ┌──────────────────┐
+                                        │   Production     │
+                                        │  ┌────────────┐  │
+                                        │  │ Web Service│  │
+                                        │  └────────────┘  │
+                                        │  ┌────────────┐  │
+                                        │  │ PostgreSQL │  │
+                                        │  └────────────┘  │
+                                        │  ┌────────────┐  │
+                                        │  │   Redis    │  │
+                                        │  └────────────┘  │
+                                        └──────────────────┘
+                                                  │
+                                                  ▼
+                                            PUBLIC URL
+</pre>
+            </div>
+
+            <div class="callout success">
+                <h4>Deployment Benefits</h4>
+                <ul>
+                    <li><strong>Auto-deploy on git push:</strong> GitHub webhook triggers Railway build</li>
+                    <li><strong>Zero-config databases:</strong> PostgreSQL and Redis provisioned automatically</li>
+                    <li><strong>Auto-scaling:</strong> Railway handles traffic spikes automatically</li>
+                    <li><strong>Branch deployments:</strong> domain-model-v2 branch isolated from main</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- STAKEHOLDER Q&A -->
+        <div class="section purple">
+            <h2>💬 Stakeholder Questions & Answers</h2>
+
+            <h3>Q: "How do you extract data from PDFs?"</h3>
+            <div class="callout">
+                <p><strong>A:</strong> "We use a <span class="highlight">hybrid approach</span>:</p>
+                <ul>
+                    <li><strong>For structured data (tables):</strong> Deterministic Python parser with fuzzy matching. 100% accuracy, zero hallucinations - perfect for critical numbers.</li>
+                    <li><strong>For unstructured text:</strong> Claude Haiku LLM to understand context. Like a junior analyst reading and highlighting key facts.</li>
+                </ul>
+                <p>This combination gives us both <strong>accuracy</strong> (deterministic) and <strong>intelligence</strong> (LLM).</p>
+            </div>
+
+            <h3>Q: "How does the analysis work? Is it iterative?"</h3>
+            <div class="callout">
+                <p><strong>A:</strong> "No, it's a <span class="highlight">two-phase pipeline</span>:</p>
+                <ul>
+                    <li><strong>Phase 1 - Discovery:</strong> 6 domain experts extract facts in parallel (30-60 sec)</li>
+                    <li><strong>Phase 2 - Reasoning:</strong> Same 6 experts analyze facts in parallel (60-90 sec)</li>
+                    <li><strong>Between phases:</strong> Domain model deduplicates data automatically</li>
+                </ul>
+                <p><strong>Total time: 2-3 minutes</strong> for complete analysis.</p>
+            </div>
+
+            <h3>Q: "How do you prevent duplicate work items across domains?"</h3>
+            <div class="callout">
+                <p><strong>A:</strong> "Our <span class="highlight">Synthesis Agent</span> (Phase 3) consolidates findings:</p>
+                <ul>
+                    <li>Reads all 6 domain reports simultaneously</li>
+                    <li>Identifies overlapping work items (e.g., SAP migration mentioned by 3 domains)</li>
+                    <li>Consolidates into single work item with all contributing domains noted</li>
+                    <li>Produces unified executive narrative</li>
+                </ul>
+            </div>
+
+            <h3>Q: "Who owns cost estimates?"</h3>
+            <div class="callout">
+                <p><strong>A:</strong> "<span class="highlight">Hybrid ownership</span>:</p>
+                <ul>
+                    <li><strong>Domain agents:</strong> Provide complexity context ("SAP migration is HIGH complexity")</li>
+                    <li><strong>Cost engine:</strong> Applies standardized models (base costs + industry benchmarks)</li>
+                    <li><strong>Cost Synthesis Agent:</strong> Consolidates and validates (prevents double-counting)</li>
+                </ul>
+                <p><strong>Result:</strong> Domain expertise + methodology + validation = accurate estimates</p>
+            </div>
+        </div>
+
+        <!-- TECHNICAL SPECS -->
+        <div class="section pink">
+            <h2>📋 Technical Specifications</h2>
+
+            <h3>Performance Metrics</h3>
+            <table>
+                <tr>
+                    <th>Metric</th>
+                    <th>Value</th>
+                    <th>Notes</th>
+                </tr>
+                <tr>
+                    <td>End-to-end analysis time</td>
+                    <td>2-3 minutes</td>
+                    <td>For typical 20-50 page document</td>
+                </tr>
+                <tr>
+                    <td>Discovery phase</td>
+                    <td>30-60 seconds</td>
+                    <td>6 agents running in parallel</td>
+                </tr>
+                <tr>
+                    <td>Deduplication</td>
+                    <td>5 seconds</td>
+                    <td>Domain model fingerprinting</td>
+                </tr>
+                <tr>
+                    <td>Reasoning phase</td>
+                    <td>60-90 seconds</td>
+                    <td>6 agents running in parallel</td>
+                </tr>
+                <tr>
+                    <td>Cost per analysis</td>
+                    <td>~$0.50</td>
+                    <td>Haiku for discovery (cheap), Sonnet for reasoning</td>
+                </tr>
+            </table>
+
+            <h3>Key Technical Facts</h3>
+            <table>
+                <tr>
+                    <th>Aspect</th>
+                    <th>Reality</th>
+                </tr>
+                <tr>
+                    <td>Extraction Method</td>
+                    <td>Hybrid: Deterministic parser + Claude Haiku LLM</td>
+                </tr>
+                <tr>
+                    <td>LLM Usage</td>
+                    <td>YES, but only for unstructured text</td>
+                </tr>
+                <tr>
+                    <td>Table Parsing</td>
+                    <td>100% deterministic Python (zero LLM)</td>
+                </tr>
+                <tr>
+                    <td>Agent Architecture</td>
+                    <td>Two-phase pipeline, NOT iterative loop</td>
+                </tr>
+                <tr>
+                    <td>Discovery Phase</td>
+                    <td>Single-pass, parallel (6 agents)</td>
+                </tr>
+                <tr>
+                    <td>Reasoning Phase</td>
+                    <td>Single-pass, parallel (6 agents)</td>
+                </tr>
+                <tr>
+                    <td>Deduplication</td>
+                    <td>Domain Model runs BETWEEN phases</td>
+                </tr>
+                <tr>
+                    <td>Model: Discovery</td>
+                    <td>Claude 3.5 Haiku (fast & cheap)</td>
+                </tr>
+                <tr>
+                    <td>Model: Reasoning</td>
+                    <td>Claude Sonnet 4 (accurate)</td>
+                </tr>
+                <tr>
+                    <td>Temperature</td>
+                    <td>0.0 (discovery), 0.1 (reasoning)</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- FOOTER -->
+        <div style="margin-top: 80px; text-align: center; color: #636e72; font-size: 0.9em;">
+            <p>IT Due Diligence Agent V2 | Architecture Documentation</p>
+            <p>Generated: February 2026 | Deployed on Railway.app</p>
+        </div>
+    </div>
+</body>
+</html>
