@@ -287,9 +287,33 @@ def build_applications_inventory(fact_store: FactStore) -> Tuple[ApplicationsInv
         logger.warning(f"No applications facts found in fact store (has {total_facts} facts in other domains)")
         return inventory, "no_app_facts"
 
-    # Build application items from facts
-    applications = []
+    # DEDUPLICATION: Group facts by normalized (name, entity) to prevent duplicates
+    from collections import defaultdict
+
+    def normalize_app_name(name: str) -> str:
+        """Normalize app name for deduplication."""
+        if not name:
+            return ""
+        normalized = name.lower().strip()
+        # Remove common suffixes
+        normalized = normalized.replace(' inc.', '').replace(' llc', '').replace(' corp', '')
+        normalized = normalized.replace('.com', '').replace('.io', '')
+        return normalized
+
+    # Group facts by (normalized_name, entity)
+    fact_groups = defaultdict(list)
     for fact in app_facts:
+        name = fact.item or normalize_detail(fact.details or {}, 'vendor') or 'Unknown Application'
+        key = (normalize_app_name(name), fact.entity or 'target')
+        fact_groups[key].append(fact)
+
+    logger.info(f"Deduplicated {len(app_facts)} facts into {len(fact_groups)} unique applications")
+
+    # Build application items from facts (one per unique app)
+    applications = []
+    for (normalized_name, entity), facts in fact_groups.items():
+        # Use first fact as primary, merge data from others
+        fact = facts[0]  # Primary fact (could use highest confidence instead)
         details = fact.details or {}
 
         app = ApplicationItem(
